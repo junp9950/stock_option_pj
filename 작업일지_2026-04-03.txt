@@ -1,0 +1,105 @@
+작업일지 2026-04-03
+==================================================
+프로젝트: futures-options-analyzer
+경로: C:\Users\Bat\Desktop\stock\futures-options-analyzer
+==================================================
+
+[ 작업 배경 ]
+선물·옵션 수급 기반 익일 종목 선별 시스템 MVP 개발 중.
+가격/지수 데이터는 이미 FinanceDataReader로 실데이터 연결 완료.
+이번 세션에서는 외국인/기관 순매수 · 공매도를 실데이터로 연결하고,
+fallback 상태를 UI/API에 명확히 드러내는 작업을 진행함.
+
+
+[ 완료 작업 ]
+
+1. 외국인/기관 순매수 실데이터 연결 (backend/collector/spot.py)
+   - _pykrx_investor_flow(code, yyyymmdd) 함수 추가
+   - 사용 API: pykrx.stock.get_market_net_purchases_of_equities_by_investor
+   - 컬럼 파싱: '외국인합계' / '기관합계' / '개인' (안전한 다중 키 탐색)
+   - pykrx 실패 시 (0.0, 0.0, 0.0) 반환 → 기존 fallback 구조 유지
+   - 전체 collect_spot_data 예외 발생 시 demo 데이터 fallback도 유지
+
+2. 공매도 실데이터 연결 (backend/collector/short_selling.py)
+   - _pykrx_short(code, yyyymmdd) 함수 추가
+   - 사용 API: get_shorting_volume_by_date + get_shorting_balance_by_date
+   - 컬럼 파싱: '공매도'(거래량), '비중'(비율), '공매도잔고금액' / '잔고금액' / '공매도잔고'(잔고)
+   - pykrx 실패 시 None 반환 → index 기반 demo 값으로 fallback
+   - 종목별 독립 fallback (한 종목 실패해도 다른 종목 영향 없음)
+
+3. 데이터 소스 현황 API 추가 (backend/api/routes.py)
+   - GET /api/data-sources 엔드포인트 신설
+   - 각 항목별 source / status / note 반환
+   - status 종류:
+       real              → 실데이터 안정 연결
+       real_with_fallback → 실데이터 시도, 실패 시 fallback
+       fallback          → 현재 demo/0값 적재 중
+
+4. 데이터 소스 현황 UI 표시 (frontend/src/components/DataSourcesBanner.jsx)
+   - 대시보드 상단에 접이식(<details>) 테이블로 표시
+   - 상태별 색상: 초록(real) / 주황(real_with_fallback) / 빨강(fallback)
+   - App.jsx에 DataSourcesBanner 컴포넌트 삽입
+
+5. API 서비스 함수 추가 (frontend/src/services/api.js)
+   - api.getDataSources() 추가
+
+
+[ 현재 데이터 소스 상태 ]
+
+항목                      소스                          상태
+---------------------------------------------------------
+spot_price               FinanceDataReader             실제
+stock_name               FinanceDataReader/StockListing 실제
+market_cap               FinanceDataReader/StockListing 실제
+trading_value            FinanceDataReader/StockListing 실제
+kospi200_index           FinanceDataReader/KS200        실제
+foreign_institution_net  pykrx                         실제(fallback가능)
+short_selling            pykrx                         실제(fallback가능)
+futures_investor_flow    -                             fallback (0값)
+options_investor_flow    -                             fallback (0값)
+open_interest            -                             fallback (0값)
+program_trading          -                             fallback (demo값)
+kospi200_futures_price   -                             fallback (지수값 대체)
+
+
+[ 테스트 결과 ]
+pytest tests/ → 5 passed (기존 상태 유지)
+
+
+[ 다음 우선순위 ]
+1. 선물 투자자별 수급 실데이터 연결
+   - pykrx get_market_trading_volume_by_investor 계열 시도 필요
+   - 실패 시 fallback 유지
+2. 옵션/미결제약정 실데이터 연결
+3. 프로그램매매 실데이터 연결
+4. 텔레그램 실제 전송 연결
+5. KOSPI200 선물 종가 실데이터 연결
+
+
+[ 주요 제약 사항 (계속 유효) ]
+- pykrx는 일부 함수만 정상 동작 (KRX JSON LOGOUT 문제)
+- pykrx 사용 시 setuptools<81 필요
+- 실데이터 실패 시 시스템 전체가 죽지 않도록 모든 pykrx 호출은 try/except로 감쌈
+- Python 3.13 venv (.venv) 기준으로 실행
+
+
+[ 실행 명령 ]
+
+백엔드:
+  cd C:\Users\Bat\Desktop\stock\futures-options-analyzer
+  $env:PYTHONPATH="."
+  .\.venv\Scripts\python.exe -m uvicorn backend.main:app --reload
+
+프론트:
+  cd C:\Users\Bat\Desktop\stock\futures-options-analyzer\frontend
+  npm run dev -- --host 127.0.0.1 --port 5173
+
+테스트:
+  .\.venv\Scripts\python.exe -m pytest
+
+수동 파이프라인:
+  Invoke-RestMethod -Method POST "http://127.0.0.1:8000/api/jobs/run-daily?trading_date=2026-04-03"
+
+데이터 소스 확인:
+  http://127.0.0.1:8000/api/data-sources
+==================================================
