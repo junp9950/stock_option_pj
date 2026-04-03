@@ -140,12 +140,15 @@ select{background:#21262d;border:1px solid #30363d;color:#c9d1d9;padding:6px 10p
       <option value="change_pct">등락률 순</option>
       <option value="close_price">종가 순</option>
       <option value="short_ratio">공매도% 순</option>
+      <option value="rsi_14">RSI 순</option>
+      <option value="volume_surge">거래량배수 순</option>
       <option value="ma_score">MA위치 순</option>
     </select>
     <label style="display:flex;align-items:center;gap:4px;cursor:pointer;font-size:13px">
       <input type="checkbox" id="scr-showall" onchange="loadScreener()"> 필터 무시 (전종목)
     </label>
     <button class="btn btn-gray btn-sm" onclick="loadScreener()">⟳ 새로고침</button>
+    <button class="btn btn-gray btn-sm" onclick="exportCsv()">↓ CSV</button>
     <span class="ts" id="scr-info"></span>
   </div>
   <div class="content">
@@ -160,11 +163,13 @@ select{background:#21262d;border:1px solid #30363d;color:#c9d1d9;padding:6px 10p
         <th onclick="setScrSort('institution_net_buy')">기관<span class="sort-icon">↕</span></th>
         <th onclick="setScrSort('foreign_net_buy')">외국인<span class="sort-icon">↕</span></th>
         <th onclick="setScrSort('short_ratio')">공매도%<span class="sort-icon">↕</span></th>
-        <th onclick="setScrSort('ma_score')">MA위치<span class="sort-icon">↕</span></th>
+        <th onclick="setScrSort('rsi_14')">RSI<span class="sort-icon">↕</span></th>
+        <th onclick="setScrSort('volume_surge')">거래량배수<span class="sort-icon">↕</span></th>
+        <th onclick="setScrSort('ma_score')">MA<span class="sort-icon">↕</span></th>
         <th>태그</th>
         <th>상세</th>
       </tr></thead>
-      <tbody id="scr-body"><tr><td colspan="12" style="color:#8b949e;text-align:center;padding:20px">로딩 중…</td></tr></tbody>
+      <tbody id="scr-body"><tr><td colspan="15" style="color:#8b949e;text-align:center;padding:20px">로딩 중…</td></tr></tbody>
     </table>
   </div>
 </div>
@@ -321,7 +326,7 @@ function renderScreener(){
     return scrSortAsc?(av>bv?1:-1):(av<bv?1:-1);
   });
   document.getElementById('scr-info').textContent=`${data.length}/${scrData.length}종목`;
-  if(!data.length){document.getElementById('scr-body').innerHTML='<tr><td colspan="12" style="color:#8b949e;text-align:center;padding:16px">검색 결과 없음</td></tr>';return;}
+  if(!data.length){document.getElementById('scr-body').innerHTML='<tr><td colspan="15" style="color:#8b949e;text-align:center;padding:16px">검색 결과 없음</td></tr>';return;}
   document.getElementById('scr-body').innerHTML=data.map((i,idx)=>`<tr>
     <td style="color:#8b949e">${idx+1}</td>
     <td><b>${i.name}</b><br><span class="ts">${i.code} · <span style="color:${i.market==='KOSPI'?'#58a6ff':'#39d0d0'}">${i.market||'KOSPI'}</span></span></td>
@@ -332,6 +337,8 @@ function renderScreener(){
     <td>${fmt(i.institution_net_buy)}</td>
     <td>${fmt(i.foreign_net_buy)}</td>
     <td style="color:${(i.short_ratio||0)<=4?'#3fb950':(i.short_ratio||0)<=10?'#d29922':'#f85149'}">${(i.short_ratio||0).toFixed(1)}%</td>
+    <td style="color:${i.rsi_14!=null?(i.rsi_14<30?'#58a6ff':i.rsi_14>70?'#f85149':'#c9d1d9'):'#444'}">${i.rsi_14!=null?Math.round(i.rsi_14):'—'}</td>
+    <td style="color:${(i.volume_surge||1)>=2?'#3fb950':(i.volume_surge||1)<0.8?'#f85149':'#c9d1d9'}">${(i.volume_surge||1).toFixed(1)}x</td>
     <td>${scoreBar(i.ma_score||0,2)}</td>
     <td>${tagHtml(i.tags)}</td>
     <td><button class="btn btn-gray btn-sm" onclick="showStockDetail('${i.code}','${i.name}')">상세</button></td>
@@ -381,6 +388,30 @@ async function loadLogs(){
     <td><span class="log-${l.status==='completed'?'ok':l.status==='started'?'run':'err'}">${l.status}</span></td>
     <td class="ts">${l.message}</td>
   </tr>`).join('');
+}
+
+function exportCsv(){
+  if(!scrData.length){showToast('내보낼 데이터가 없습니다.',true);return;}
+  const q=document.getElementById('scr-search').value.toLowerCase();
+  const mkt=document.getElementById('scr-market').value;
+  const data=[...scrData].filter(i=>{
+    if(q&&!i.name.toLowerCase().includes(q)&&!i.code.includes(q))return false;
+    if(mkt&&i.market!==mkt)return false;
+    return true;
+  });
+  const headers=['순위','코드','종목명','시장','총점','종목점수','시장점수','종가','등락%','기관순매수','외국인순매수','공매도%','RSI','거래량배수','MA점수','연속매수일'];
+  const rows=data.map((i,idx)=>[
+    idx+1,i.code,i.name,i.market,i.total_score,i.stock_score,i.market_score,i.close_price,i.change_pct,
+    (i.institution_net_buy/1e8).toFixed(2),(i.foreign_net_buy/1e8).toFixed(2),
+    (i.short_ratio||0).toFixed(1),i.rsi_14!=null?Math.round(i.rsi_14):'',
+    (i.volume_surge||1).toFixed(2),i.ma_score||0,i.consecutive_days||0,
+  ]);
+  const csv=[headers,...rows].map(r=>r.join(',')).join('\n');
+  const blob=new Blob(['\uFEFF'+csv],{type:'text/csv;charset=utf-8'});
+  const url=URL.createObjectURL(blob);
+  const a=document.createElement('a');a.href=url;a.download='screener_'+new Date().toISOString().slice(0,10)+'.csv';
+  a.click();URL.revokeObjectURL(url);
+  showToast(`CSV 내보내기 완료 (${data.length}종목)`);
 }
 
 async function loadBacktestSummary(){

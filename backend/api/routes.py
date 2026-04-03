@@ -200,18 +200,24 @@ def get_screener(
             )
         )
     }
-    # 시그널 상세에서 ma_position 점수 추출
+    # 시그널 상세에서 ma_position, rsi_14, volume_surge 추출
     signal_details_raw = list(db.scalars(
         select(StockSignalDetail).where(
             StockSignalDetail.trading_date == target_date,
             StockSignalDetail.stock_code.in_(codes),
-            StockSignalDetail.key.in_(["ma_position", "short_trend"]),
+            StockSignalDetail.key.in_(["ma_position", "rsi_14", "volume_surge"]),
         )
     ))
     ma_scores: dict[str, float] = {}
+    rsi_values: dict[str, float | None] = {}
+    volume_surges: dict[str, float] = {}
     for d in signal_details_raw:
         if d.key == "ma_position":
             ma_scores[d.stock_code] = d.normalized_score
+        elif d.key == "rsi_14":
+            rsi_values[d.stock_code] = d.raw_value
+        elif d.key == "volume_surge":
+            volume_surges[d.stock_code] = d.raw_value if d.raw_value is not None else 1.0
 
     recent_raw = list(
         db.scalars(
@@ -268,6 +274,8 @@ def get_screener(
                 tags=_build_tags(inst, foreign, indiv, co_days, inst_days, foreign_days),
                 short_ratio=short.short_ratio if short else 0.0,
                 ma_score=ma_scores.get(ss.stock_code, 0.0),
+                rsi_14=rsi_values.get(ss.stock_code),
+                volume_surge=volume_surges.get(ss.stock_code, 1.0),
             )
         )
 
