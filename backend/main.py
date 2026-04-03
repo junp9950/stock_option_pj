@@ -124,6 +124,12 @@ select{background:#21262d;border:1px solid #30363d;color:#c9d1d9;padding:6px 10p
     </tr></thead>
     <tbody id="rec-body"><tr><td colspan="9" style="color:#8b949e;text-align:center;padding:20px">로딩 중…</td></tr></tbody>
   </table>
+
+  <!-- 전일 대비 상승 종목 -->
+  <div style="margin-top:16px">
+    <div style="font-size:12px;text-transform:uppercase;color:#8b949e;margin-bottom:8px;letter-spacing:.06em">전일 대비 시그널 상승 TOP 5</div>
+    <div id="trending-stocks" style="display:flex;gap:8px;flex-wrap:wrap"></div>
+  </div>
 </div>
 
 <!-- 전종목 스크리너 탭 -->
@@ -145,6 +151,7 @@ select{background:#21262d;border:1px solid #30363d;color:#c9d1d9;padding:6px 10p
       <option value="rsi_14">RSI 순</option>
       <option value="volume_surge">거래량배수 순</option>
       <option value="ma_score">MA위치 순</option>
+      <option value="signal_confluence">신호합류 순</option>
     </select>
     <label style="display:flex;align-items:center;gap:4px;cursor:pointer;font-size:13px">
       <input type="checkbox" id="scr-showall" onchange="loadScreener()"> 필터 무시 (전종목)
@@ -169,10 +176,11 @@ select{background:#21262d;border:1px solid #30363d;color:#c9d1d9;padding:6px 10p
         <th onclick="setScrSort('rsi_14')">RSI<span class="sort-icon">↕</span></th>
         <th onclick="setScrSort('volume_surge')">거래량배수<span class="sort-icon">↕</span></th>
         <th onclick="setScrSort('ma_score')">MA<span class="sort-icon">↕</span></th>
+        <th onclick="setScrSort('signal_confluence')">합류<span class="sort-icon">↕</span></th>
         <th>태그</th>
         <th>상세</th>
       </tr></thead>
-      <tbody id="scr-body"><tr><td colspan="16" style="color:#8b949e;text-align:center;padding:20px">로딩 중…</td></tr></tbody>
+      <tbody id="scr-body"><tr><td colspan="17" style="color:#8b949e;text-align:center;padding:20px">로딩 중…</td></tr></tbody>
     </table>
   </div>
 </div>
@@ -257,12 +265,13 @@ function switchTab(id) {
 
 async function loadAll() {
   try {
-    const [sig, recs, scr, hist, dq] = await Promise.all([
+    const [sig, recs, scr, hist, dq, trending] = await Promise.all([
       fetch(API+'/market-signal').then(r=>r.ok?r.json():null).catch(()=>null),
       fetch(API+'/recommendations').then(r=>r.ok?r.json():null).catch(()=>null),
       fetch(API+'/screener').then(r=>r.ok?r.json():null).catch(()=>null),
       fetch(API+'/market-signal/history?limit=7').then(r=>r.ok?r.json():null).catch(()=>null),
       fetch(API+'/data-quality').then(r=>r.ok?r.json():null).catch(()=>null),
+      fetch(API+'/screener/trending?top_n=5').then(r=>r.ok?r.json():null).catch(()=>null),
     ]);
     document.getElementById('err-bar').style.display='none';
 
@@ -295,6 +304,17 @@ async function loadAll() {
       document.getElementById('dq-score').innerHTML=`<span style="color:${color}">${score}%</span>`;
       const c=dq.checks||{};
       document.getElementById('dq-note').textContent=`현물${(c.spot_coverage*100||0).toFixed(0)}% 수급${(c.flow_coverage*100||0).toFixed(0)}% 선물${c.futures_real?'✓':'✗'}`;
+    }
+    if(trending && trending.length){
+      document.getElementById('trending-stocks').innerHTML=trending.map(t=>`
+        <div style="background:#161b22;border:1px solid #30363d;border-radius:6px;padding:8px 14px;min-width:140px;cursor:pointer" onclick="showStockDetail('${t.code}','${t.name}')">
+          <div style="font-size:13px;font-weight:700">${t.name}</div>
+          <div class="ts">${t.code}</div>
+          <div style="color:#3fb950;font-weight:600;margin-top:4px">+${t.delta.toFixed(2)} ↑</div>
+          <div class="ts">${t.today_score.toFixed(2)} (전: ${t.prev_score.toFixed(2)})</div>
+        </div>`).join('');
+    } else if(document.getElementById('trending-stocks')) {
+      document.getElementById('trending-stocks').innerHTML='<span class="ts">이전 거래일 데이터 없음</span>';
     }
     if(hist && hist.length){
       const sorted=[...hist].sort((a,b)=>a.trading_date>b.trading_date?1:-1);
@@ -337,7 +357,7 @@ function renderScreener(){
     return scrSortAsc?(av>bv?1:-1):(av<bv?1:-1);
   });
   document.getElementById('scr-info').textContent=`${data.length}/${scrData.length}종목`;
-  if(!data.length){document.getElementById('scr-body').innerHTML='<tr><td colspan="16" style="color:#8b949e;text-align:center;padding:16px">검색 결과 없음</td></tr>';return;}
+  if(!data.length){document.getElementById('scr-body').innerHTML='<tr><td colspan="17" style="color:#8b949e;text-align:center;padding:16px">검색 결과 없음</td></tr>';return;}
   document.getElementById('scr-body').innerHTML=data.map((i,idx)=>`<tr>
     <td style="color:#8b949e">${idx+1}</td>
     <td><b>${i.name}</b><br><span class="ts">${i.code} · <span style="color:${i.market==='KOSPI'?'#58a6ff':'#39d0d0'}">${i.market||'KOSPI'}</span></span></td>
@@ -352,6 +372,7 @@ function renderScreener(){
     <td style="color:${i.rsi_14!=null?(i.rsi_14<30?'#58a6ff':i.rsi_14>70?'#f85149':'#c9d1d9'):'#444'}">${i.rsi_14!=null?Math.round(i.rsi_14):'—'}</td>
     <td style="color:${(i.volume_surge||1)>=2?'#3fb950':(i.volume_surge||1)<0.8?'#f85149':'#c9d1d9'}">${(i.volume_surge||1).toFixed(1)}x</td>
     <td>${scoreBar(i.ma_score||0,2)}</td>
+    <td style="color:${(i.signal_confluence||0)>=7?'#3fb950':(i.signal_confluence||0)>=5?'#58a6ff':'#8b949e'};font-weight:600">${i.signal_confluence||0}</td>
     <td>${tagHtml(i.tags)}</td>
     <td><button class="btn btn-gray btn-sm" onclick="showStockDetail('${i.code}','${i.name}')">상세</button></td>
   </tr>`).join('');

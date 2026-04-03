@@ -200,17 +200,18 @@ def get_screener(
             )
         )
     }
-    # 시그널 상세에서 ma_position, rsi_14, volume_surge 추출
+    # 시그널 상세에서 ma_position, rsi_14, volume_surge 및 confluence 추출
     signal_details_raw = list(db.scalars(
         select(StockSignalDetail).where(
             StockSignalDetail.trading_date == target_date,
             StockSignalDetail.stock_code.in_(codes),
-            StockSignalDetail.key.in_(["ma_position", "rsi_14", "volume_surge"]),
+            StockSignalDetail.is_enabled.is_(True),
         )
     ))
     ma_scores: dict[str, float] = {}
     rsi_values: dict[str, float | None] = {}
     volume_surges: dict[str, float] = {}
+    confluence_counts: dict[str, int] = {}
     for d in signal_details_raw:
         if d.key == "ma_position":
             ma_scores[d.stock_code] = d.normalized_score
@@ -218,6 +219,9 @@ def get_screener(
             rsi_values[d.stock_code] = d.raw_value
         elif d.key == "volume_surge":
             volume_surges[d.stock_code] = d.raw_value if d.raw_value is not None else 1.0
+        # Count positive signals for confluence
+        if d.normalized_score > 0:
+            confluence_counts[d.stock_code] = confluence_counts.get(d.stock_code, 0) + 1
 
     recent_raw = list(
         db.scalars(
@@ -277,6 +281,7 @@ def get_screener(
                 rsi_14=rsi_values.get(ss.stock_code),
                 volume_surge=volume_surges.get(ss.stock_code, 1.0),
                 market_cap=stock.market_cap or 0.0,
+                signal_confluence=confluence_counts.get(ss.stock_code, 0),
             )
         )
 
@@ -502,6 +507,37 @@ def get_market_signal_details(trading_date: date | None = None, db: Session = De
         }
         for d in details
     ]
+
+
+@router.get("/screener/trending")
+def get_trending_stocks(top_n: int = 10, db: Session = Depends(get_db)):
+    """전일 대비 종목 점수가 가장 많이 상승한 종목 (최근 2 거래일 비교)."""
+    target_date = latest_trading_day()
+    prev_date = latest_trading_day(target_date - timedelta(days=1))
+
+    today_signals = {s.stock_code: s.score for s in db.scalars(
+        select(StockSignal).where(StockSignal.trading_date == target_date)
+    )}
+    prev_signals = {s.stock_code: s.score for s in db.scalars(
+        select(StockSignal).where(StockSignal.trading_date == prev_date)
+    )}
+
+    common_codes = set(today_signals) & set(prev_signals)
+    changes = []
+    for code in common_codes:
+        delta = today_signals[code] - prev_signals[code]
+        if delta > 0:
+            stock = db.scalar(select(Stock).where(Stock.code == code))
+            changes.append({
+                "code": code,
+                "name": stock.name if stock else code,
+                "today_score": today_signals[code],
+                "prev_score": prev_signals[code],
+                "delta": round(delta, 3),
+            })
+
+    changes.sort(key=lambda x: x["delta"], reverse=True)
+    return changes[:top_n]
 
 
 @router.get("/data-quality")
