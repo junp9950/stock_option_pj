@@ -1,0 +1,101 @@
+:root {
+  font-family: "Segoe UI", "Noto Sans KR", sans-serif;
+  color: #102136;
+  background: linear-gradient(180deg, #f6f8fb 0%, #eef4ff 100%);
+}
+
+* {
+  box-sizing: border-box;
+}
+
+body {
+  margin: 0;
+}
+
+.app-shell {
+  padding: 24px;
+  max-width: 1200px;
+  margin: 0 auto;
+}
+
+.hero {
+  background: linear-gradient(135deg, #14304f 0%, #2a5f9e 60%, #e3edf9 100%);
+  color: white;
+  border-radius: 24px;
+  padding: 24px;
+  margin-bottom: 20px;
+}
+
+.grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+  gap: 16px;
+}
+
+.card {
+  background: white;
+  border-radius: 18px;
+  padding: 18px;
+  box-shadow: 0 10px 30px rgba(17, 35, 69, 0.08);
+}
+
+.badge-up {
+  color: #c22b2b;
+  font-weight: 700;
+}
+
+.badge-down {
+  color: #1f63b7;
+  font-weight: 700;
+}
+
+.badge-neutral {
+  color: #5d6879;
+  font-weight: 700;
+}
+
+table {
+  width: 100%;
+  border-collapse: collapse;
+}
+
+th,
+td {
+  text-align: left;
+  padding: 10px 8px;
+  border-bottom: 1px solid #edf1f5;
+}
+
+input,
+button {
+  font: inherit;
+}
+
+.toolbar {
+  display: flex;
+  gap: 12px;
+  margin: 16px 0;
+  flex-wrap: wrap;
+}
+
+.toolbar input {
+  padding: 10px 12px;
+  border-radius: 10px;
+  border: 1px solid #ccd8e7;
+}
+
+.toolbar button {
+  padding: 10px 14px;
+  border: none;
+  border-radius: 10px;
+  background: #14304f;
+  color: white;
+  cursor: pointer;
+}
+
+@media (max-width: 640px) {
+  .app-shell {
+    padding: 16px;
+  }
+}
+
