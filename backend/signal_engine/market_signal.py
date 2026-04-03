@@ -47,6 +47,34 @@ def calculate_market_signal(db: Session, trading_date: date) -> MarketSignal:
         )
     )
 
+    # 최근 10일 프로그램매매 데이터 (차익 압력 계산용)
+    recent_programs = list(
+        db.scalars(
+            select(ProgramTradingDaily)
+            .where(ProgramTradingDaily.trading_date <= trading_date)
+            .order_by(desc(ProgramTradingDaily.trading_date))
+            .limit(10)
+        )
+    )
+
+    # 최근 10일 베이시스 데이터 (Z-score 계산용)
+    recent_index = list(
+        db.scalars(
+            select(IndexDaily)
+            .where(IndexDaily.trading_date <= trading_date)
+            .order_by(desc(IndexDaily.trading_date))
+            .limit(10)
+        )
+    )
+    recent_futures_price = list(
+        db.scalars(
+            select(FuturesDailyPrice)
+            .where(FuturesDailyPrice.trading_date <= trading_date)
+            .order_by(desc(FuturesDailyPrice.trading_date))
+            .limit(10)
+        )
+    )
+
     db.execute(delete(MarketSignalDetail).where(MarketSignalDetail.trading_date == trading_date))
     db.execute(delete(MarketSignal).where(MarketSignal.trading_date == trading_date))
     db.commit()
@@ -61,8 +89,29 @@ def calculate_market_signal(db: Session, trading_date: date) -> MarketSignal:
     futures_5d = sum(item.foreign_net_contracts for item in previous_futures)
     previous_direction = previous_futures[1].foreign_net_contracts if len(previous_futures) > 1 else 0.0
     turn_value = 2.0 if previous_direction < 0 < futures.foreign_net_contracts else -2.0 if previous_direction > 0 > futures.foreign_net_contracts else 0.0
-    basis_trend = basis - 0.6
-    arbitrage_pressure_score = 0.0
+
+    # 베이시스 추세: 최근 5일 평균 vs 당일
+    basis_values = []
+    idx_by_date = {r.trading_date: r.close_price for r in recent_index}
+    fp_by_date = {r.trading_date: r.close_price for r in recent_futures_price}
+    for date_key in sorted(set(idx_by_date) & set(fp_by_date)):
+        basis_values.append(fp_by_date[date_key] - idx_by_date[date_key])
+    basis_5d_avg = sum(basis_values[-5:]) / len(basis_values[-5:]) if len(basis_values) >= 2 else basis
+    basis_trend = basis - basis_5d_avg  # 당일 베이시스 - 5일 평균 베이시스
+
+    # 차익잔고 압력: 최근 5일 차익 프로그램매매 누적 순매수
+    # 차익매수 누적이 크면 → 이후 청산 시 매도압력 → 음수 점수
+    # 차익매도 누적이 크면 → 이후 청산 시 매수압력 → 양수 점수
+    arb_programs_available = any(p.arbitrage_net_buy != 0 for p in recent_programs)
+    if arb_programs_available:
+        arb_5d_net = sum(p.arbitrage_net_buy for p in recent_programs[:5])  # 원 단위
+        arb_5d_100m = arb_5d_net / 100_000_000  # 100억원 단위
+        # 누적 매수이면 향후 매도압력(음수), 누적 매도이면 향후 매수압력(양수)
+        arbitrage_pressure_score = _bucket_score(-arb_5d_100m, [(-500, 2), (-100, 1), (100, 0), (500, -1), (float("inf"), -2)])
+        arbitrage_pressure_raw: float | None = arb_5d_100m
+    else:
+        arbitrage_pressure_score = 0.0
+        arbitrage_pressure_raw = None
 
     # OI-based metrics: disabled when data unavailable (call_oi=0 and put_oi=0)
     oi_available = open_interest.call_oi > 0 or open_interest.put_oi > 0
@@ -84,14 +133,15 @@ def calculate_market_signal(db: Session, trading_date: date) -> MarketSignal:
         ("oi_pcr", oi_pcr, _bucket_score(oi_pcr, [(0.6, -2), (0.8, -1), (1.0, 0), (1.2, 1), (float("inf"), 2)]) if oi_pcr is not None else 0.0, "미결제약정 PCR"),
         ("call_put_oi_change", call_put_oi_delta, _bucket_score(call_put_oi_delta, [(-10000, -2), (-1000, -1), (1000, 0), (10000, 1), (float("inf"), 2)]) if call_put_oi_delta is not None else 0.0, "콜/풋 OI 변화"),
         ("program_non_arbitrage", program_net_buy_100m, _bucket_score(program_net_buy_100m, [(-3000, -2), (-500, -1), (500, 0), (3000, 1), (float("inf"), 2)]) if program_net_buy_100m is not None else 0.0, "비차익 순매수"),
-        ("arbitrage_pressure", None, arbitrage_pressure_score, "차익잔고 압력 TODO"),
+        ("arbitrage_pressure", arbitrage_pressure_raw, arbitrage_pressure_score, "차익잔고 압력 (5일 누적, 음수=매수누적=매도압력)"),
     ]
 
     oi_note = None if oi_available else "실데이터 미수집: OI 지표 비활성화"
     program_note = None if program_available else "실데이터 미수집: 프로그램매매 지표 비활성화"
+    arbitrage_note = None if arb_programs_available else "차익 프로그램매매 데이터 미수집: 비활성화"
     enabled = {
         key: key not in (
-            "arbitrage_pressure",
+            *([] if arb_programs_available else ["arbitrage_pressure"]),
             *([] if oi_available else ["volume_pcr", "oi_pcr", "call_put_oi_change"]),
             *([] if program_available else ["program_non_arbitrage"]),
         )
@@ -109,7 +159,7 @@ def calculate_market_signal(db: Session, trading_date: date) -> MarketSignal:
         elif key == "program_non_arbitrage":
             detail_note = None if is_enabled else program_note
         elif key == "arbitrage_pressure":
-            detail_note = "차익잔고 압력 직접 데이터 미수집 (MVP)"
+            detail_note = None if is_enabled else arbitrage_note
         else:
             detail_note = None
         db.add(
