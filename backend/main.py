@@ -477,13 +477,29 @@ async function showStockDetail(code, name){
   document.getElementById('modal-title').textContent=name+' ('+code+') 시그널 상세';
   document.getElementById('modal-body').innerHTML='<div style="color:#8b949e;padding:20px;text-align:center">로딩 중…</div>';
   document.getElementById('modal-bg').classList.add('show');
-  const data=await fetch(API+'/stock/'+code+'/signals').then(r=>r.ok?r.json():null).catch(()=>null);
+  const [data, hist] = await Promise.all([
+    fetch(API+'/stock/'+code+'/signals').then(r=>r.ok?r.json():null).catch(()=>null),
+    fetch(API+'/stock/'+code+'/history?limit=10').then(r=>r.ok?r.json():null).catch(()=>null),
+  ]);
   if(!data){document.getElementById('modal-body').innerHTML='<div style="color:#f85149">데이터 없음</div>';return;}
-  document.getElementById('modal-body').innerHTML=`<table>
+
+  let histHtml='';
+  if(hist&&hist.history&&hist.history.length>1){
+    const scores=hist.history.map(h=>h.score);
+    const maxS=Math.max(...scores)||1;
+    const bars=hist.history.map(h=>{
+      const w=Math.max(2,(h.score/maxS)*80);
+      const color=h.score>=5?'#3fb950':h.score>=2?'#58a6ff':'#8b949e';
+      return `<div style="display:flex;align-items:center;gap:6px;margin:2px 0"><span class="ts" style="width:85px">${h.date}</span><div style="height:10px;width:${w}px;background:${color};border-radius:2px"></div><span class="ts">${h.score.toFixed(2)}</span></div>`;
+    }).join('');
+    histHtml=`<div style="margin-bottom:16px"><div style="font-size:11px;text-transform:uppercase;color:#8b949e;margin-bottom:6px">점수 이력</div>${bars}</div>`;
+  }
+
+  document.getElementById('modal-body').innerHTML=histHtml+`<table>
     <thead><tr><th>지표</th><th>실측값</th><th>정규화 점수</th><th>설명</th><th>비고</th></tr></thead>
     <tbody>${data.map(d=>`<tr style="opacity:${d.is_enabled?1:.5}">
       <td><b>${d.key}</b></td>
-      <td>${d.raw_value!=null?Number(d.raw_value).toLocaleString():'—'}</td>
+      <td>${d.raw_value!=null?(typeof d.raw_value==='number'&&Math.abs(d.raw_value)>1000?d.raw_value.toLocaleString():d.raw_value.toFixed(2)):'—'}</td>
       <td>${scoreBar(d.normalized_score,2)}</td>
       <td>${d.interpretation}</td>
       <td class="ts">${d.note||''}</td>

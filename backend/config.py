@@ -58,16 +58,17 @@ class AppConfig:
     )
     stock_signal_weights: dict[str, float] = field(
         default_factory=lambda: {
-            "foreign_strength": 0.13,
-            "institution_strength": 0.13,
-            "co_buy": 0.10,
-            "volume_surge": 0.08,
-            "short_ratio_change": 0.06,
-            "short_trend": 0.05,
-            "ma_position": 0.10,
-            "momentum_5d": 0.08,
+            "foreign_strength": 0.12,
+            "institution_strength": 0.12,
+            "co_buy": 0.09,
+            "volume_surge": 0.07,
+            "short_ratio_change": 0.05,
+            "short_trend": 0.04,
+            "ma_position": 0.09,
+            "momentum_5d": 0.07,
             "rsi_14": 0.08,
-            "bollinger": 0.07,
+            "bollinger": 0.06,
+            "macd": 0.09,
             "consecutive_buy": 0.07,
             "program_buy": 0.05,
         }

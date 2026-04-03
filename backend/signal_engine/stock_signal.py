@@ -66,6 +66,60 @@ def _calc_ma_score(prices: list[float]) -> float:
     return sum(scores) / len(scores) if scores else 0.0
 
 
+def _calc_ema(prices: list[float], period: int) -> float | None:
+    """지수이동평균(EMA) 계산. prices는 오래된 것부터 순서."""
+    if len(prices) < period:
+        return None
+    k = 2.0 / (period + 1)
+    ema = sum(prices[:period]) / period  # SMA as initial EMA
+    for price in prices[period:]:
+        ema = price * k + ema * (1 - k)
+    return ema
+
+
+def _calc_macd_score(prices: list[float]) -> tuple[float, float | None]:
+    """MACD(12,26,9) 점수 계산. prices는 최신 순.
+    Returns (score, macd_value).
+    MACD > 0 and increasing → +2.0
+    MACD > 0               → +1.0
+    MACD ≈ 0               →  0.0
+    MACD < 0               → -1.0
+    MACD < 0 and decreasing → -2.0
+    """
+    if len(prices) < 35:  # 최소 26+9일 필요
+        return 0.0, None
+    p = list(reversed(prices[:35]))  # 오래된 것부터
+    ema12 = _calc_ema(p, 12)
+    ema26 = _calc_ema(p, 26)
+    if ema12 is None or ema26 is None:
+        return 0.0, None
+    macd = ema12 - ema26
+
+    # 이전 마지막 MACD (1일 전)
+    if len(prices) >= 36:
+        p_prev = list(reversed(prices[1:36]))
+        ema12_prev = _calc_ema(p_prev, 12)
+        ema26_prev = _calc_ema(p_prev, 26)
+        if ema12_prev is not None and ema26_prev is not None:
+            macd_prev = ema12_prev - ema26_prev
+        else:
+            macd_prev = macd
+    else:
+        macd_prev = macd
+
+    trend = macd - macd_prev  # 양수 = MACD 상승 중
+
+    if macd > 0 and trend > 0:
+        return 2.0, macd
+    if macd > 0:
+        return 1.0, macd
+    if abs(macd) < 0.3:
+        return 0.0, macd
+    if macd < 0 and trend < 0:
+        return -2.0, macd
+    return -1.0, macd
+
+
 def _calc_bollinger_score(prices: list[float], period: int = 20, multiplier: float = 2.0) -> float:
     """볼린저 밴드 위치 점수 계산.
     prices는 최신 순. 현재가의 밴드 내 위치:
@@ -308,6 +362,9 @@ def calculate_stock_signals(db: Session, trading_date: date) -> list[StockSignal
         # 볼린저 밴드 위치 (20일)
         bb_score = _calc_bollinger_score(close_prices, period=20)
 
+        # MACD(12,26,9)
+        macd_score, macd_val = _calc_macd_score(close_prices)
+
         # 연속 동반매수 일수
         flow_hist = flow_history.get(stock.code, [])
         consecutive_buy_score = _calc_consecutive_buy(flow_hist)
@@ -323,6 +380,7 @@ def calculate_stock_signals(db: Session, trading_date: date) -> list[StockSignal
             ("momentum_5d", close_prices[0] if close_prices else None, momentum_score, "5일 가격 모멘텀"),
             ("rsi_14", rsi_val, rsi_score, "RSI(14) — 과매도/과매수"),
             ("bollinger", close_prices[0] if close_prices else None, bb_score, "볼린저 밴드 위치 (20일)"),
+            ("macd", macd_val, macd_score, "MACD(12,26) — 상승추세"),
             ("consecutive_buy", None, consecutive_buy_score, "기관+외국인 연속 동반매수"),
             ("program_buy", None, 0.0, "종목별 프로그램 순매수 TODO"),
         ]

@@ -313,6 +313,26 @@ def get_recommendation_history(db: Session = Depends(get_db)) -> list[Recommenda
     return responses
 
 
+@router.get("/stock/{code}/history")
+def get_stock_signal_history(code: str, limit: int = 10, db: Session = Depends(get_db)):
+    """종목 시그널 점수 이력 (최근 N일)."""
+    signals = list(db.scalars(
+        select(StockSignal)
+        .where(StockSignal.stock_code == code)
+        .order_by(desc(StockSignal.trading_date))
+        .limit(limit)
+    ))
+    stock = db.scalar(select(Stock).where(Stock.code == code))
+    return {
+        "code": code,
+        "name": stock.name if stock else code,
+        "history": [
+            {"date": s.trading_date.isoformat(), "score": s.score}
+            for s in reversed(signals)
+        ],
+    }
+
+
 @router.get("/stock/{code}/signals")
 def get_stock_signal_details(code: str, trading_date: date | None = None, db: Session = Depends(get_db)):
     target_date = trading_date or latest_trading_day()
