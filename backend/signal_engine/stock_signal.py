@@ -186,11 +186,18 @@ def calculate_stock_signals(db: Session, trading_date: date) -> list[StockSignal
         if not all([price, flow, short]):
             continue
 
-        volume_base = max(price.volume, 1)
-        foreign_strength = flow.foreign_net_buy / volume_base
-        institution_strength = flow.institution_net_buy / volume_base
+        # 20일 평균 거래량으로 거래량 급증 계산
+        vols_20d = [p.volume for p in price_hist[:20] if p.volume > 0]
+        avg_vol_20d = sum(vols_20d) / len(vols_20d) if vols_20d else price.volume or 1.0
+        volume_surge = price.volume / max(avg_vol_20d, 1)
+
+        # 거래대금 대비 수급 강도 (won 단위)
+        # trading_value가 0이면 volume*price 추정치 사용
+        tv = price.trading_value if price.trading_value > 0 else (price.volume * price.close_price)
+        tv = max(tv, 1)
+        foreign_strength = flow.foreign_net_buy / tv * 100  # 거래대금 대비 % (외국인)
+        institution_strength = flow.institution_net_buy / tv * 100  # 거래대금 대비 %  (기관)
         co_buy = 2.0 if flow.foreign_net_buy > 0 and flow.institution_net_buy > 0 else 0.0
-        volume_surge = price.volume / 1_800_000
 
         # 공매도 비율 (pykrx: 0~100%)
         short_ratio_pct = short.short_ratio
@@ -218,10 +225,10 @@ def calculate_stock_signals(db: Session, trading_date: date) -> list[StockSignal
         consecutive_buy_score = _calc_consecutive_buy(flow_hist)
 
         details = [
-            ("foreign_strength", foreign_strength, _threshold_score(foreign_strength, 700, 300), "외국인 순매수 강도"),
-            ("institution_strength", institution_strength, _threshold_score(institution_strength, 400, 200), "기관 순매수 강도"),
+            ("foreign_strength", foreign_strength, _threshold_score(foreign_strength, 10.0, 3.0), "외국인 순매수 강도 (거래대금 대비%)"),
+            ("institution_strength", institution_strength, _threshold_score(institution_strength, 8.0, 2.5), "기관 순매수 강도 (거래대금 대비%)"),
             ("co_buy", co_buy, co_buy, "외국인/기관 동반 매수"),
-            ("volume_surge", volume_surge, 2.0 if volume_surge >= 2.0 else 1.0 if volume_surge >= 1.5 else 0.0, "거래량 급증"),
+            ("volume_surge", volume_surge, 2.0 if volume_surge >= 3.0 else 1.0 if volume_surge >= 1.8 else 0.0 if volume_surge >= 0.8 else -1.0, "거래량 급증 (20일 평균 대비)"),
             ("short_ratio_change", short_ratio_pct, short_ratio_score, "공매도 비율 수준"),
             ("short_trend", None, short_trend_score, "공매도 비율 감소 추세"),
             ("ma_position", close_prices[0] if close_prices else None, ma_score, "20일/60일 이동평균 위치"),
