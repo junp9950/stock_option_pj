@@ -12,7 +12,8 @@ from backend.api.schemas import HealthResponse, JobResponse, MarketSignalRespons
 from backend.backtest.backtester import run_backtest
 from backend.db.database import get_db
 from backend.db.models import BacktestResult, MarketSignal, Recommendation, Setting, SpotDailyPrice, SpotInvestorFlow, Stock, StockSignal, StockSignalDetail
-from backend.services.daily_pipeline import run_daily_pipeline
+from backend.db.seed import refresh_universe
+from backend.services.daily_pipeline import run_backfill_pipeline, run_daily_pipeline
 from backend.utils.dates import latest_trading_day
 
 
@@ -339,6 +340,14 @@ def update_settings(payload: dict[str, object], db: Session = Depends(get_db)):
     return {"status": "ok"}
 
 
+@router.post("/universe/refresh")
+def refresh_universe_endpoint(db: Session = Depends(get_db)):
+    """FDR로 유니버스를 최신 KOSPI 시총 상위 30종목으로 갱신."""
+    added = refresh_universe(db)
+    total = db.query(Stock).count()
+    return {"status": "ok", "added": added, "total": total}
+
+
 @router.post("/jobs/run-daily", response_model=JobResponse)
 def run_daily_job(trading_date: date | None = None, db: Session = Depends(get_db)) -> JobResponse:
     result = run_daily_pipeline(db, trading_date)
@@ -347,8 +356,15 @@ def run_daily_job(trading_date: date | None = None, db: Session = Depends(get_db
 
 @router.post("/jobs/backfill")
 def run_backfill(start_date: date | None = None, end_date: date | None = None, db: Session = Depends(get_db)):
-    result = run_daily_pipeline(db, end_date or start_date or latest_trading_day())
-    return {"status": "ok", "result": result}
+    """start_date ~ end_date 범위 전체 파이프라인 순차 실행.
+    둘 다 없으면 오늘 하루만 실행. end_date만 있으면 그날 하루만 실행.
+    """
+    s = start_date or latest_trading_day()
+    e = end_date or s
+    if s > e:
+        s, e = e, s
+    results = run_backfill_pipeline(db, s, e)
+    return {"status": "ok", "days_processed": len(results), "results": results}
 
 
 @router.post("/backtest/run")

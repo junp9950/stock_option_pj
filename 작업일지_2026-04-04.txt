@@ -1,0 +1,112 @@
+작업일지 2026-04-04
+==================================================
+프로젝트: futures-options-analyzer
+==================================================
+
+[ 이번 세션 완료 작업 ]
+
+A. 공매도 비율 정규화 수정 (backend/signal_engine/stock_signal.py)
+   - 기존 버그: short_ratio를 0~5 범위로 가정 → 실제 pykrx는 0~100(%) 단위 반환
+     → short_ratio_change = max(0, 4 - ratio) 로직이 항상 0 또는 음수 반환
+   - 수정: 0~100% 기준 버킷 스코어링으로 교체
+       ≤ 1%  → +2.0 (매우 양호)
+       ≤ 4%  → +1.0 (양호)
+       ≤ 10% →  0.0 (중립)
+       ≤ 20% → -1.0 (주의)
+       > 20% → -2.0 (위험)
+
+B. Backfill 범위 날짜 순회 구현
+   - 기존 버그: start_date 무시, end_date 하루만 실행
+   - backend/services/daily_pipeline.py: run_backfill_pipeline(db, start, end) 추가
+     → start ~ end 날짜를 1일씩 순회하며 파이프라인 실행
+     → 날짜별 오류 발생해도 다음 날짜 계속 진행
+   - backend/api/routes.py: /jobs/backfill 엔드포인트 수정
+     → start_date ~ end_date 범위 처리, s > e 자동 swap
+     → 응답에 days_processed 필드 추가
+
+C. 텔레그램 실제 전송 연결 (backend/notification/telegram_bot.py)
+   - 기존: 함수 껍데기만 있었음 (전송 미구현)
+   - 수정: requests로 Bot API 직접 호출 (send_message_sync)
+   - asyncio 환경 대응: uvicorn 내 이미 실행 중인 루프에서는 threading으로 우회
+   - 설정: 환경변수 TELEGRAM_BOT_TOKEN, TELEGRAM_CHAT_ID 설정 시 자동 활성화
+   - 미설정 시: "not configured" 로그만 남기고 스킵 (기존 동작 유지)
+   - 파이프라인 완료 후 자동 전송 (daily_pipeline.py에 연결)
+
+D. 유니버스 확장 (backend/db/seed.py)
+   - 기존: 하드코딩 5종목
+   - 수정: FDR StockListing("KOSPI")로 시총 상위 30종목 자동 구성
+   - _fetch_top_stocks(n=30): FDR 실패 시 기존 5종목 fallback 유지
+   - refresh_universe(db): 신규 종목 추가 + 기존 종목 시총/종목명 업데이트 (삭제 없음)
+   - POST /api/universe/refresh 엔드포인트 신설
+   - 스케줄러에서 매주 월요일 08:00 자동 갱신
+
+E. 스케줄러 개선 (backend/scheduler.py)
+   - 기존: 매일 16:00 파이프라인 1개만
+   - 수정:
+     → 매일 15:35 KST 파이프라인 실행 (장마감 15:30 + 5분 여유)
+     → 매주 월요일 08:00 유니버스 갱신 (시총 상위 30종목 재구성)
+   - 각 job에 try/except 추가 → 오류 시 다음 실행에 영향 없음
+
+
+[ 테스트 결과 ]
+pytest tests/ → 5 passed
+
+
+[ 현재 전체 데이터 소스 상태 ]
+
+항목                      소스                           상태
+------------------------------------------------------------------
+spot_price               FinanceDataReader              실제
+stock_name               FinanceDataReader/StockListing  실제
+market_cap               FinanceDataReader/StockListing  실제
+trading_value            FinanceDataReader/StockListing  실제
+kospi200_index           FinanceDataReader/KS200         실제
+foreign/institution_net  pykrx                          실제(fallback가능)
+short_selling            pykrx                          실제(fallback가능)
+futures_investor_flow    KRX JSON API (MDCSTAT12301)    실제(fallback가능)
+options_oi               pykrx 전종목시세                실제(fallback가능)
+program_trading          KRX JSON API (MDCSTAT22901)    실제(fallback가능)
+kospi200_futures_price   pykrx → 지수 fallback           실제(fallback가능)
+차익잔고 압력             -                              TODO (항상 0)
+
+
+[ 환경변수 설정 방법 ]
+텔레그램 전송 활성화:
+  $env:TELEGRAM_BOT_TOKEN="봇토큰"
+  $env:TELEGRAM_CHAT_ID="채팅ID"
+  → 파이프라인 완료 후 자동 전송
+
+유니버스 수동 갱신:
+  Invoke-RestMethod -Method POST "http://127.0.0.1:8000/api/universe/refresh"
+
+
+[ 다음 우선순위 ]
+1. 차익잔고 압력 구현 (arbitrage_pressure 지표 실데이터 연결)
+2. 백테스트 수익률 계산 구현 (backtester.py 실제 로직)
+3. 공매도 잔고 누적 추세 지표 추가
+4. 텔레그램 메시지 포맷 개선 (수급 정보 포함)
+
+
+[ 실행 명령 ]
+
+백엔드:
+  cd C:\Users\Bat\Desktop\stock\futures-options-analyzer
+  $env:PYTHONPATH="."
+  .\.venv\Scripts\python.exe -m uvicorn backend.main:app --reload
+
+프론트:
+  cd frontend
+  npm run dev -- --host 127.0.0.1 --port 5173
+
+테스트:
+  .\.venv\Scripts\python.exe -m pytest
+
+수동 파이프라인:
+  Invoke-RestMethod -Method POST "http://127.0.0.1:8000/api/jobs/run-daily?trading_date=2026-04-04"
+
+Backfill (범위):
+  Invoke-RestMethod -Method POST "http://127.0.0.1:8000/api/jobs/backfill?start_date=2026-03-31&end_date=2026-04-04"
+
+유니버스 갱신:
+  Invoke-RestMethod -Method POST "http://127.0.0.1:8000/api/universe/refresh"
+==================================================

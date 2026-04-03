@@ -63,7 +63,16 @@ def calculate_stock_signals(db: Session, trading_date: date) -> list[StockSignal
         institution_strength = flow.institution_net_buy / volume_base
         co_buy = 2.0 if flow.foreign_net_buy > 0 and flow.institution_net_buy > 0 else 0.0
         volume_surge = price.volume / 1_800_000
-        short_ratio_change = max(0.0, 4.0 - short.short_ratio)
+        # short_ratio는 pykrx에서 0~100(%) 단위로 수신. 4% 이하면 양호, 1% 이하면 매우 양호.
+        # fallback(demo) 데이터는 0~5 범위였으나 실데이터 기준으로 통일.
+        short_ratio_pct = short.short_ratio  # 0~100 기준
+        short_ratio_score = (
+            2.0 if short_ratio_pct <= 1.0
+            else 1.0 if short_ratio_pct <= 4.0
+            else 0.0 if short_ratio_pct <= 10.0
+            else -1.0 if short_ratio_pct <= 20.0
+            else -2.0
+        )
         ma_position = 2.0 if price.change_pct > 0 else 0.0
 
         details = [
@@ -71,7 +80,7 @@ def calculate_stock_signals(db: Session, trading_date: date) -> list[StockSignal
             ("institution_strength", institution_strength, _threshold_score(institution_strength, 400, 200), "기관 순매수 강도"),
             ("co_buy", co_buy, co_buy, "외국인/기관 동반 매수"),
             ("volume_surge", volume_surge, 2.0 if volume_surge >= 2.0 else 1.0 if volume_surge >= 1.5 else 0.0, "거래량 급증"),
-            ("short_ratio_change", short_ratio_change, 2.0 if short_ratio_change >= 2.5 else 1.0 if short_ratio_change >= 1.0 else 0.0, "공매도 비율 개선"),
+            ("short_ratio_change", short_ratio_pct, short_ratio_score, "공매도 비율 개선"),
             ("ma_position", ma_position, ma_position, "20일선/60일선 상회 대체"),
             ("program_buy", None, 0.0, "종목별 프로그램 순매수 TODO"),
         ]
