@@ -111,6 +111,11 @@ select{background:#21262d;border:1px solid #30363d;color:#c9d1d9;padding:6px 10p
     <div class="card"><h3>추천 종목</h3><div class="val" id="rec-cnt">—</div><div class="note">상위 점수 기준</div></div>
     <div class="card"><h3>전종목 스크리닝</h3><div class="val" id="scr-cnt">—</div><div class="note">시총·거래대금 필터 후</div></div>
   </div>
+  <!-- 시장 시그널 히스토리 -->
+  <div style="margin-bottom:20px">
+    <div style="font-size:12px;text-transform:uppercase;color:#8b949e;margin-bottom:8px;letter-spacing:.06em">시장 시그널 히스토리</div>
+    <div id="sig-history" style="display:flex;gap:8px;flex-wrap:wrap"></div>
+  </div>
   <table>
     <thead><tr>
       <th>#</th><th>종목</th><th>총점</th><th>종가</th><th>등락</th>
@@ -244,10 +249,11 @@ function switchTab(id) {
 
 async function loadAll() {
   try {
-    const [sig, recs, scr] = await Promise.all([
+    const [sig, recs, scr, hist] = await Promise.all([
       fetch(API+'/market-signal').then(r=>r.ok?r.json():null).catch(()=>null),
       fetch(API+'/recommendations').then(r=>r.ok?r.json():null).catch(()=>null),
       fetch(API+'/screener').then(r=>r.ok?r.json():null).catch(()=>null),
+      fetch(API+'/market-signal/history?limit=7').then(r=>r.ok?r.json():null).catch(()=>null),
     ]);
     document.getElementById('err-bar').style.display='none';
 
@@ -274,6 +280,15 @@ async function loadAll() {
       </tr>`).join(''):empty;
     }
     if(scr) document.getElementById('scr-cnt').textContent=scr.length;
+    if(hist && hist.length){
+      const sorted=[...hist].sort((a,b)=>a.trading_date>b.trading_date?1:-1);
+      document.getElementById('sig-history').innerHTML=sorted.map(h=>`
+        <div style="background:#161b22;border:1px solid #30363d;border-radius:6px;padding:8px 14px;text-align:center;min-width:100px">
+          <div class="ts">${h.trading_date}</div>
+          <div class="signal-${h.signal}" style="font-weight:700;font-size:15px">${h.signal}</div>
+          <div class="ts" style="color:${h.score>0?'#3fb950':h.score<0?'#f85149':'#d29922'}">${h.score.toFixed(1)}</div>
+        </div>`).join('');
+    }
   } catch(e) {
     document.getElementById('err-bar').style.display='block';
   }

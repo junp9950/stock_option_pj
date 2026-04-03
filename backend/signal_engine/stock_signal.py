@@ -66,6 +66,51 @@ def _calc_ma_score(prices: list[float]) -> float:
     return sum(scores) / len(scores) if scores else 0.0
 
 
+def _calc_rsi(prices: list[float], period: int = 14) -> float | None:
+    """RSI(14) 계산. prices는 최신 순. 데이터 부족 시 None 반환."""
+    if len(prices) < period + 1:
+        return None
+    # 오래된 것부터 순서 재정렬
+    p = list(reversed(prices[:period + 1]))
+    gains = []
+    losses = []
+    for i in range(1, len(p)):
+        diff = p[i] - p[i - 1]
+        if diff > 0:
+            gains.append(diff)
+            losses.append(0.0)
+        else:
+            gains.append(0.0)
+            losses.append(-diff)
+    avg_gain = sum(gains) / period
+    avg_loss = sum(losses) / period
+    if avg_loss == 0:
+        return 100.0
+    rs = avg_gain / avg_loss
+    return 100.0 - (100.0 / (1.0 + rs))
+
+
+def _rsi_score(rsi: float | None) -> float:
+    """RSI 값을 점수로 변환.
+    RSI < 30 (과매도)  → +2.0 (매수 기회)
+    RSI < 40           → +1.0
+    RSI < 60           →  0.0 (중립)
+    RSI < 70           → -1.0
+    RSI >= 70 (과매수) → -2.0
+    """
+    if rsi is None:
+        return 0.0
+    if rsi < 30:
+        return 2.0
+    if rsi < 40:
+        return 1.0
+    if rsi < 60:
+        return 0.0
+    if rsi < 70:
+        return -1.0
+    return -2.0
+
+
 def _calc_momentum_5d(prices: list[float]) -> float:
     """최근 5일 가격 모멘텀 점수 (최신 순).
     5거래일 전 대비 현재 수익률 기준:
@@ -220,6 +265,10 @@ def calculate_stock_signals(db: Session, trading_date: date) -> list[StockSignal
         # 5일 모멘텀
         momentum_score = _calc_momentum_5d(close_prices)
 
+        # RSI(14)
+        rsi_val = _calc_rsi(close_prices, period=14)
+        rsi_score = _rsi_score(rsi_val)
+
         # 연속 동반매수 일수
         flow_hist = flow_history.get(stock.code, [])
         consecutive_buy_score = _calc_consecutive_buy(flow_hist)
@@ -233,6 +282,7 @@ def calculate_stock_signals(db: Session, trading_date: date) -> list[StockSignal
             ("short_trend", None, short_trend_score, "공매도 비율 감소 추세"),
             ("ma_position", close_prices[0] if close_prices else None, ma_score, "20일/60일 이동평균 위치"),
             ("momentum_5d", close_prices[0] if close_prices else None, momentum_score, "5일 가격 모멘텀"),
+            ("rsi_14", rsi_val, rsi_score, "RSI(14) — 과매도/과매수"),
             ("consecutive_buy", None, consecutive_buy_score, "기관+외국인 연속 동반매수"),
             ("program_buy", None, 0.0, "종목별 프로그램 순매수 TODO"),
         ]

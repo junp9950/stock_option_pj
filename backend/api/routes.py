@@ -63,8 +63,8 @@ def get_market_signal(trading_date: date | None = None, db: Session = Depends(ge
 
 
 @router.get("/market-signal/history")
-def get_market_signal_history(db: Session = Depends(get_db)) -> list[MarketSignalResponse]:
-    signals = list(db.scalars(select(MarketSignal).order_by(desc(MarketSignal.trading_date)).limit(5)))
+def get_market_signal_history(limit: int = 10, db: Session = Depends(get_db)) -> list[MarketSignalResponse]:
+    signals = list(db.scalars(select(MarketSignal).order_by(desc(MarketSignal.trading_date)).limit(limit)))
     return [
         MarketSignalResponse(trading_date=item.trading_date.isoformat(), score=item.score, signal=item.signal)
         for item in signals
