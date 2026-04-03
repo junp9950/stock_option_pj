@@ -5,7 +5,7 @@ from datetime import date, timedelta
 import json
 
 from fastapi import APIRouter, Depends, HTTPException
-from sqlalchemy import desc, select
+from sqlalchemy import desc, func, select
 from sqlalchemy.orm import Session
 
 from backend.api.schemas import HealthResponse, JobResponse, MarketSignalResponse, RecommendationItem, RecommendationResponse
@@ -339,21 +339,38 @@ def get_stock_signal_details(code: str, trading_date: date | None = None, db: Se
 
 
 @router.get("/data-sources")
-def get_data_sources():
-    """각 데이터 항목의 현재 소스 상태를 반환한다."""
+def get_data_sources(db: Session = Depends(get_db)):
+    """각 데이터 항목의 현재 소스 상태 및 최근 수집 현황을 반환한다."""
+    from backend.db.models import (
+        DerivativesFuturesDaily, FuturesDailyPrice, IndexDaily,
+        OpenInterestDaily, ProgramTradingDaily, ShortSellingDaily, SpotDailyPrice, SpotInvestorFlow
+    )
+    target_date = latest_trading_day()
+
+    # 최근 수집 결과를 DB에서 실제로 확인
+    spot_count = db.scalar(select(func.count()).select_from(SpotDailyPrice).where(SpotDailyPrice.trading_date == target_date)) or 0
+    flow_count = db.scalar(select(func.count()).select_from(SpotInvestorFlow).where(
+        SpotInvestorFlow.trading_date == target_date, SpotInvestorFlow.foreign_net_buy != 0
+    )) or 0
+    short_row = db.scalar(select(ShortSellingDaily).where(ShortSellingDaily.trading_date == target_date))
+    idx_row = db.scalar(select(IndexDaily).where(IndexDaily.trading_date == target_date))
+    futures_row = db.scalar(select(DerivativesFuturesDaily).where(DerivativesFuturesDaily.trading_date == target_date))
+    program_row = db.scalar(select(ProgramTradingDaily).where(ProgramTradingDaily.trading_date == target_date))
+    oi_row = db.scalar(select(OpenInterestDaily).where(OpenInterestDaily.trading_date == target_date))
+    fp_row = db.scalar(select(FuturesDailyPrice).where(FuturesDailyPrice.trading_date == target_date))
+
+    def _status(condition: bool, real_label: str = "real") -> str:
+        return real_label if condition else "fallback"
+
     return {
-        "spot_price": {"source": "FinanceDataReader", "status": "real"},
-        "stock_name": {"source": "FinanceDataReader/StockListing", "status": "real"},
-        "market_cap": {"source": "FinanceDataReader/StockListing", "status": "real"},
-        "trading_value": {"source": "FinanceDataReader/StockListing", "status": "real"},
-        "kospi200_index": {"source": "FinanceDataReader/KS200", "status": "real"},
-        "foreign_institution_net_buy": {"source": "pykrx", "status": "real_with_fallback", "note": "pykrx 실패 시 0으로 적재"},
-        "short_selling": {"source": "pykrx", "status": "real_with_fallback", "note": "pykrx 실패 시 demo 값 적재"},
-        "futures_investor_flow": {"source": "fallback", "status": "fallback", "note": "0으로 적재 중"},
-        "options_investor_flow": {"source": "fallback", "status": "fallback", "note": "0으로 적재 중"},
-        "open_interest": {"source": "fallback", "status": "fallback", "note": "0으로 적재 중"},
-        "program_trading": {"source": "fallback", "status": "fallback", "note": "demo 값 적재 중"},
-        "kospi200_futures_price": {"source": "fallback", "status": "fallback", "note": "KOSPI200 지수로 대체 중"},
+        "spot_price": {"source": "FinanceDataReader", "status": _status(spot_count > 0), "note": f"오늘 {spot_count}종목 수집"},
+        "investor_flow": {"source": "pykrx", "status": _status(flow_count > 0, "real_with_fallback"), "note": f"외국인/기관 비제로 {flow_count}종목 (0이면 pykrx 실패)"},
+        "short_selling": {"source": "pykrx", "status": "real_with_fallback", "note": f"공매도 데이터 {'수집됨' if short_row else '없음'}"},
+        "kospi200_index": {"source": "FinanceDataReader/KS200", "status": _status(idx_row is not None), "note": f"종가: {idx_row.close_price:.2f}" if idx_row else "없음"},
+        "futures_investor_flow": {"source": "KRX JSON API", "status": _status(futures_row is not None and futures_row.foreign_net_contracts != 0, "real_with_fallback"), "note": f"외국인 선물: {futures_row.foreign_net_contracts:.0f}계약" if futures_row else "없음"},
+        "program_trading": {"source": "KRX JSON API", "status": _status(program_row is not None and (program_row.non_arbitrage_net_buy != 0 or program_row.arbitrage_net_buy != 0), "real_with_fallback"), "note": f"비차익 {program_row.non_arbitrage_net_buy/1e8:.0f}억" if program_row else "없음"},
+        "open_interest": {"source": "pykrx", "status": _status(oi_row is not None and (oi_row.call_oi > 0 or oi_row.put_oi > 0), "real_with_fallback"), "note": f"콜OI={oi_row.call_oi:.0f} 풋OI={oi_row.put_oi:.0f}" if oi_row else "없음"},
+        "kospi200_futures_price": {"source": "pykrx → 지수 fallback", "status": _status(fp_row is not None, "real_with_fallback"), "note": f"종가: {fp_row.close_price:.2f}" if fp_row else "없음"},
     }
 
 

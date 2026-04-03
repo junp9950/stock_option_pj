@@ -66,6 +66,42 @@ def _calc_ma_score(prices: list[float]) -> float:
     return sum(scores) / len(scores) if scores else 0.0
 
 
+def _calc_bollinger_score(prices: list[float], period: int = 20, multiplier: float = 2.0) -> float:
+    """볼린저 밴드 위치 점수 계산.
+    prices는 최신 순. 현재가의 밴드 내 위치:
+      하단 밑 (과매도)   → +2.0
+      하단~중간 20%      → +1.0
+      중간 ±20%          →  0.0
+      중간~상단 20%      → -1.0
+      상단 위 (과매수)   → -2.0
+    """
+    if len(prices) < period:
+        return 0.0
+    subset = prices[:period]
+    ma = sum(subset) / period
+    variance = sum((p - ma) ** 2 for p in subset) / period
+    std = variance ** 0.5
+    if std == 0:
+        return 0.0
+    current = prices[0]
+    upper = ma + multiplier * std
+    lower = ma - multiplier * std
+    band_width = upper - lower
+    if band_width == 0:
+        return 0.0
+    # Position within band: 0 = lower, 1 = upper
+    position = (current - lower) / band_width
+    if position < 0:
+        return 2.0  # Below lower band (oversold)
+    if position < 0.3:
+        return 1.0
+    if position < 0.7:
+        return 0.0
+    if position <= 1.0:
+        return -1.0
+    return -2.0  # Above upper band (overbought)
+
+
 def _calc_rsi(prices: list[float], period: int = 14) -> float | None:
     """RSI(14) 계산. prices는 최신 순. 데이터 부족 시 None 반환."""
     if len(prices) < period + 1:
@@ -269,6 +305,9 @@ def calculate_stock_signals(db: Session, trading_date: date) -> list[StockSignal
         rsi_val = _calc_rsi(close_prices, period=14)
         rsi_score = _rsi_score(rsi_val)
 
+        # 볼린저 밴드 위치 (20일)
+        bb_score = _calc_bollinger_score(close_prices, period=20)
+
         # 연속 동반매수 일수
         flow_hist = flow_history.get(stock.code, [])
         consecutive_buy_score = _calc_consecutive_buy(flow_hist)
@@ -283,6 +322,7 @@ def calculate_stock_signals(db: Session, trading_date: date) -> list[StockSignal
             ("ma_position", close_prices[0] if close_prices else None, ma_score, "20일/60일 이동평균 위치"),
             ("momentum_5d", close_prices[0] if close_prices else None, momentum_score, "5일 가격 모멘텀"),
             ("rsi_14", rsi_val, rsi_score, "RSI(14) — 과매도/과매수"),
+            ("bollinger", close_prices[0] if close_prices else None, bb_score, "볼린저 밴드 위치 (20일)"),
             ("consecutive_buy", None, consecutive_buy_score, "기관+외국인 연속 동반매수"),
             ("program_buy", None, 0.0, "종목별 프로그램 순매수 TODO"),
         ]
