@@ -66,6 +66,49 @@ def _calc_ma_score(prices: list[float]) -> float:
     return sum(scores) / len(scores) if scores else 0.0
 
 
+def _calc_momentum_5d(prices: list[float]) -> float:
+    """최근 5일 가격 모멘텀 점수 (최신 순).
+    5거래일 전 대비 현재 수익률 기준:
+      +3% 초과  → +2.0
+      +1% 초과  → +1.0
+      -1% 이상  →  0.0
+      -3% 이상  → -1.0
+      -3% 미만  → -2.0
+    """
+    if len(prices) < 5:
+        return 0.0
+    current, base = prices[0], prices[4]
+    if base <= 0:
+        return 0.0
+    ret = (current - base) / base * 100
+    if ret > 3.0:
+        return 2.0
+    if ret > 1.0:
+        return 1.0
+    if ret >= -1.0:
+        return 0.0
+    if ret >= -3.0:
+        return -1.0
+    return -2.0
+
+
+def _calc_consecutive_buy(flows: list) -> float:
+    """최신 순 SpotInvestorFlow 리스트에서 기관+외국인 동반 매수 연속일 점수."""
+    count = 0
+    for f in flows:
+        if f.institution_net_buy > 0 and f.foreign_net_buy > 0:
+            count += 1
+        else:
+            break
+    if count >= 3:
+        return 2.0
+    if count >= 2:
+        return 1.0
+    if count >= 1:
+        return 0.5
+    return 0.0
+
+
 def _calc_short_trend_score(short_ratios: list[float]) -> float:
     """공매도 비율 추세 점수 계산 (최신 순, 최소 3개 필요).
     최근 1일과 5일 전 비율을 비교해 개선/악화 판단.
@@ -117,6 +160,17 @@ def calculate_stock_signals(db: Session, trading_date: date) -> list[StockSignal
     for s in all_shorts:
         short_history.setdefault(s.stock_code, []).append(s)
 
+    # 수급 히스토리 일괄 조회 (10일치, 연속 매수 계산용)
+    flow_start = trading_date - timedelta(days=20)
+    all_flows_hist = list(db.scalars(
+        select(SpotInvestorFlow).where(
+            SpotInvestorFlow.trading_date.between(flow_start, trading_date)
+        ).order_by(SpotInvestorFlow.stock_code, desc(SpotInvestorFlow.trading_date))
+    ))
+    flow_history: dict[str, list[SpotInvestorFlow]] = {}
+    for f in all_flows_hist:
+        flow_history.setdefault(f.stock_code, []).append(f)
+
     for stock in stocks:
         price_hist = prices_history.get(stock.code, [])
         price = next((p for p in price_hist if p.trading_date == trading_date), None)
@@ -156,6 +210,13 @@ def calculate_stock_signals(db: Session, trading_date: date) -> list[StockSignal
         close_prices = [p.close_price for p in price_hist]
         ma_score = _calc_ma_score(close_prices)
 
+        # 5일 모멘텀
+        momentum_score = _calc_momentum_5d(close_prices)
+
+        # 연속 동반매수 일수
+        flow_hist = flow_history.get(stock.code, [])
+        consecutive_buy_score = _calc_consecutive_buy(flow_hist)
+
         details = [
             ("foreign_strength", foreign_strength, _threshold_score(foreign_strength, 700, 300), "외국인 순매수 강도"),
             ("institution_strength", institution_strength, _threshold_score(institution_strength, 400, 200), "기관 순매수 강도"),
@@ -164,6 +225,8 @@ def calculate_stock_signals(db: Session, trading_date: date) -> list[StockSignal
             ("short_ratio_change", short_ratio_pct, short_ratio_score, "공매도 비율 수준"),
             ("short_trend", None, short_trend_score, "공매도 비율 감소 추세"),
             ("ma_position", close_prices[0] if close_prices else None, ma_score, "20일/60일 이동평균 위치"),
+            ("momentum_5d", close_prices[0] if close_prices else None, momentum_score, "5일 가격 모멘텀"),
+            ("consecutive_buy", None, consecutive_buy_score, "기관+외국인 연속 동반매수"),
             ("program_buy", None, 0.0, "종목별 프로그램 순매수 TODO"),
         ]
 
