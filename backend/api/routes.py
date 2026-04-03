@@ -151,8 +151,14 @@ def get_recommendations(trading_date: date | None = None, db: Session = Depends(
 
 
 @router.get("/screener")
-def get_screener(trading_date: date | None = None, db: Session = Depends(get_db)) -> list[RecommendationItem]:
-    """전체 종목 점수 스크리너 — 점수 높은 순 정렬."""
+def get_screener(
+    trading_date: date | None = None,
+    show_all: bool = False,
+    db: Session = Depends(get_db),
+) -> list[RecommendationItem]:
+    """전체 종목 점수 스크리너 — 점수 높은 순 정렬.
+    show_all=true이면 시총/거래대금 필터 무시하고 전종목 반환.
+    """
     from backend.config import get_config
     target_date = trading_date or latest_trading_day()
     config = get_config()
@@ -229,7 +235,7 @@ def get_screener(trading_date: date | None = None, db: Session = Depends(get_db)
         price = prices_map.get(ss.stock_code)
         if stock is None or price is None:
             continue
-        if stock.market_cap < config.min_market_cap or price.trading_value < config.min_trading_value:
+        if not show_all and (stock.market_cap < config.min_market_cap or price.trading_value < config.min_trading_value):
             continue
 
         flow = flows_map.get(ss.stock_code)

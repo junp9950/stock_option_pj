@@ -131,10 +131,16 @@ select{background:#21262d;border:1px solid #30363d;color:#c9d1d9;padding:6px 10p
     </select>
     <select id="scr-sort" onchange="renderScreener()">
       <option value="total_score">총점 순</option>
+      <option value="stock_score">종목점수 순</option>
       <option value="change_pct">등락률 순</option>
       <option value="close_price">종가 순</option>
       <option value="short_ratio">공매도% 순</option>
+      <option value="ma_score">MA위치 순</option>
     </select>
+    <label style="display:flex;align-items:center;gap:4px;cursor:pointer;font-size:13px">
+      <input type="checkbox" id="scr-showall" onchange="loadScreener()"> 필터 무시 (전종목)
+    </label>
+    <button class="btn btn-gray btn-sm" onclick="loadScreener()">⟳ 새로고침</button>
     <span class="ts" id="scr-info"></span>
   </div>
   <div class="content">
@@ -274,8 +280,9 @@ async function loadAll() {
 }
 
 async function loadScreener() {
-  const r = await fetch(API+'/screener').catch(()=>null);
-  if(!r||!r.ok){document.getElementById('scr-body').innerHTML='<tr><td colspan="11" style="color:#f85149;text-align:center;padding:20px">로드 실패</td></tr>';return;}
+  const showAll = document.getElementById('scr-showall')?.checked ? '&show_all=true' : '';
+  const r = await fetch(API+'/screener?'+showAll).catch(()=>null);
+  if(!r||!r.ok){document.getElementById('scr-body').innerHTML='<tr><td colspan="12" style="color:#f85149;text-align:center;padding:20px">로드 실패</td></tr>';return;}
   scrData = await r.json();
   renderScreener();
 }
@@ -299,7 +306,7 @@ function renderScreener(){
     return scrSortAsc?(av>bv?1:-1):(av<bv?1:-1);
   });
   document.getElementById('scr-info').textContent=`${data.length}/${scrData.length}종목`;
-  if(!data.length){document.getElementById('scr-body').innerHTML='<tr><td colspan="11" style="color:#8b949e;text-align:center;padding:16px">검색 결과 없음</td></tr>';return;}
+  if(!data.length){document.getElementById('scr-body').innerHTML='<tr><td colspan="12" style="color:#8b949e;text-align:center;padding:16px">검색 결과 없음</td></tr>';return;}
   document.getElementById('scr-body').innerHTML=data.map((i,idx)=>`<tr>
     <td style="color:#8b949e">${idx+1}</td>
     <td><b>${i.name}</b><br><span class="ts">${i.code} · <span style="color:${i.market==='KOSPI'?'#58a6ff':'#39d0d0'}">${i.market||'KOSPI'}</span></span></td>
