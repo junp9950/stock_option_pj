@@ -15,8 +15,43 @@ from backend.utils.logger import get_logger
 logger = get_logger(__name__)
 
 
-def _pykrx_investor_flow(code: str, yyyymmdd: str) -> tuple[float, float, float]:
-    """pykrx로 외국인/기관/개인 순매수(원) 조회. 실패 시 (0, 0, 0) 반환."""
+def _pykrx_investor_flow_batch(yyyymmdd: str) -> dict[str, tuple[float, float, float]]:
+    """pykrx로 당일 전종목 외국인/기관/개인 순매수(원) 일괄 조회.
+    반환: {종목코드: (foreign_net, institution_net, individual_net)}
+    실패 시 빈 dict 반환.
+    """
+    try:
+        from pykrx import stock as pykrx_stock  # noqa: PLC0415
+        df = pykrx_stock.get_market_net_purchases_of_equities_by_investor(
+            yyyymmdd, yyyymmdd
+        )
+        if df is None or df.empty:
+            return {}
+
+        result: dict[str, tuple[float, float, float]] = {}
+
+        def _col(row: pd.Series, *keys: str) -> float:
+            for k in keys:
+                if k in row.index:
+                    return float(row[k])
+            return 0.0
+
+        for code, row in df.iterrows():
+            code_str = str(code).zfill(6)
+            result[code_str] = (
+                _col(row, "외국인합계", "외국인"),
+                _col(row, "기관합계", "기관"),
+                _col(row, "개인"),
+            )
+        logger.info("pykrx batch investor flow: %d stocks fetched for %s", len(result), yyyymmdd)
+        return result
+    except Exception as exc:  # noqa: BLE001
+        logger.debug("pykrx batch investor flow failed: %s", exc)
+        return {}
+
+
+def _pykrx_investor_flow_single(code: str, yyyymmdd: str) -> tuple[float, float, float]:
+    """pykrx로 단일 종목 외국인/기관/개인 순매수(원) 조회. 실패 시 (0, 0, 0) 반환."""
     try:
         from pykrx import stock as pykrx_stock  # noqa: PLC0415
         df = pykrx_stock.get_market_net_purchases_of_equities_by_investor(
@@ -80,7 +115,7 @@ def _fallback_spot_row(db: Session, trading_date: date) -> None:
 def collect_spot_data(db: Session, trading_date: date) -> None:
     """Collect spot market data.
 
-    Source: pykrx spot APIs where available.
+    Source: FinanceDataReader for prices, pykrx (batch) for investor flow.
     Fallback: demo data generation for local/offline runs.
     """
 
@@ -90,6 +125,13 @@ def collect_spot_data(db: Session, trading_date: date) -> None:
         listing = _load_listing_snapshot()
         date_text = trading_date.isoformat()
         yyyymmdd = trading_date.strftime("%Y%m%d")
+
+        # pykrx 전종목 수급 일괄 조회 (한 번만 호출)
+        batch_flows = _pykrx_investor_flow_batch(yyyymmdd)
+        batch_ok = len(batch_flows) > 0
+        if not batch_ok:
+            logger.warning("pykrx batch investor flow failed — will use single-stock fallback per stock")
+
         for stock in get_universe(db):
             price_df = fdr.DataReader(stock.code, date_text, date_text)
             if price_df.empty:
@@ -117,7 +159,15 @@ def collect_spot_data(db: Session, trading_date: date) -> None:
                     change_pct=round(float(row["Change"]) * 100, 4),
                 )
             )
-            foreign_net, institution_net, individual_net = _pykrx_investor_flow(stock.code, yyyymmdd)
+
+            # 수급 데이터: 배치 결과 우선, 없으면 단건 fallback
+            if batch_ok and stock.code in batch_flows:
+                foreign_net, institution_net, individual_net = batch_flows[stock.code]
+            elif not batch_ok:
+                foreign_net, institution_net, individual_net = _pykrx_investor_flow_single(stock.code, yyyymmdd)
+            else:
+                foreign_net, institution_net, individual_net = 0.0, 0.0, 0.0
+
             db.add(
                 SpotInvestorFlow(
                     trading_date=trading_date,

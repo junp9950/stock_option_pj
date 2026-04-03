@@ -17,7 +17,7 @@ DEFAULT_STOCKS = [
     {"code": "105560", "name": "KB금융", "market": "KOSPI", "market_cap": 30_000_000_000_000},
 ]
 
-_TOP_N = 30  # FDR 시총 상위 N종목
+_TOP_N = 100  # FDR 시총 상위 N종목
 
 
 def _fetch_top_stocks(n: int = _TOP_N) -> list[dict]:
