@@ -11,7 +11,7 @@ from sqlalchemy.orm import Session
 from backend.api.schemas import HealthResponse, JobResponse, MarketSignalResponse, RecommendationItem, RecommendationResponse
 from backend.backtest.backtester import run_backtest
 from backend.db.database import get_db
-from backend.db.models import BacktestResult, MarketSignal, Recommendation, Setting, SpotDailyPrice, SpotInvestorFlow, Stock, StockSignal, StockSignalDetail
+from backend.db.models import BacktestResult, JobLog, MarketSignal, MarketSignalDetail, Recommendation, Setting, SpotDailyPrice, SpotInvestorFlow, Stock, StockSignal, StockSignalDetail
 from backend.db.seed import refresh_universe
 from backend.services.daily_pipeline import run_backfill_pipeline, run_daily_pipeline
 from backend.utils.dates import latest_trading_day
@@ -370,4 +370,52 @@ def run_backfill(start_date: date | None = None, end_date: date | None = None, d
 @router.post("/backtest/run")
 def trigger_backtest(db: Session = Depends(get_db)):
     return run_backtest(db)
+
+
+@router.get("/jobs/logs")
+def get_job_logs(limit: int = 50, db: Session = Depends(get_db)):
+    """최근 파이프라인 실행 이력."""
+    logs = list(db.scalars(select(JobLog).order_by(desc(JobLog.created_at)).limit(limit)))
+    return [
+        {
+            "id": l.id,
+            "trading_date": l.trading_date.isoformat() if l.trading_date else None,
+            "stage": l.stage,
+            "status": l.status,
+            "message": l.message,
+            "created_at": l.created_at.isoformat(),
+        }
+        for l in logs
+    ]
+
+
+@router.get("/market-signal/details")
+def get_market_signal_details(trading_date: date | None = None, db: Session = Depends(get_db)):
+    """시장 시그널 지표별 상세 점수."""
+    target_date = trading_date or latest_trading_day()
+    details = list(db.scalars(
+        select(MarketSignalDetail).where(MarketSignalDetail.trading_date == target_date)
+    ))
+    return [
+        {
+            "key": d.key,
+            "raw_value": d.raw_value,
+            "normalized_score": d.normalized_score,
+            "interpretation": d.interpretation,
+            "is_enabled": d.is_enabled,
+            "source": d.source,
+            "note": d.note,
+        }
+        for d in details
+    ]
+
+
+@router.get("/universe")
+def get_universe(db: Session = Depends(get_db)):
+    """현재 유니버스 종목 목록."""
+    stocks = list(db.scalars(select(Stock).where(Stock.is_active.is_(True)).order_by(desc(Stock.market_cap))))
+    return [
+        {"code": s.code, "name": s.name, "market": s.market, "market_cap": s.market_cap}
+        for s in stocks
+    ]
 
