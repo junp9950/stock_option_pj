@@ -98,6 +98,7 @@ select{background:#21262d;border:1px solid #30363d;color:#c9d1d9;padding:6px 10p
   <div class="tab active" onclick="switchTab('dash')">대시보드</div>
   <div class="tab" onclick="switchTab('screener')">전종목 스크리너</div>
   <div class="tab" onclick="switchTab('signal')">시장 시그널 상세</div>
+  <div class="tab" onclick="switchTab('backtest')">백테스트</div>
   <div class="tab" onclick="switchTab('sources')">데이터 소스</div>
   <div class="tab" onclick="switchTab('logs')">실행 이력</div>
 </div>
@@ -132,6 +133,7 @@ select{background:#21262d;border:1px solid #30363d;color:#c9d1d9;padding:6px 10p
       <option value="total_score">총점 순</option>
       <option value="change_pct">등락률 순</option>
       <option value="close_price">종가 순</option>
+      <option value="short_ratio">공매도% 순</option>
     </select>
     <span class="ts" id="scr-info"></span>
   </div>
@@ -142,17 +144,31 @@ select{background:#21262d;border:1px solid #30363d;color:#c9d1d9;padding:6px 10p
         <th onclick="setScrSort('name')">종목<span class="sort-icon">↕</span></th>
         <th onclick="setScrSort('total_score')">총점<span class="sort-icon">↕</span></th>
         <th onclick="setScrSort('stock_score')">종목점수<span class="sort-icon">↕</span></th>
-        <th onclick="setScrSort('market_score')">시장점수<span class="sort-icon">↕</span></th>
         <th onclick="setScrSort('close_price')">종가<span class="sort-icon">↕</span></th>
         <th onclick="setScrSort('change_pct')">등락<span class="sort-icon">↕</span></th>
         <th onclick="setScrSort('institution_net_buy')">기관<span class="sort-icon">↕</span></th>
         <th onclick="setScrSort('foreign_net_buy')">외국인<span class="sort-icon">↕</span></th>
+        <th onclick="setScrSort('short_ratio')">공매도%<span class="sort-icon">↕</span></th>
+        <th onclick="setScrSort('ma_score')">MA위치<span class="sort-icon">↕</span></th>
         <th>태그</th>
         <th>상세</th>
       </tr></thead>
-      <tbody id="scr-body"><tr><td colspan="11" style="color:#8b949e;text-align:center;padding:20px">로딩 중…</td></tr></tbody>
+      <tbody id="scr-body"><tr><td colspan="12" style="color:#8b949e;text-align:center;padding:20px">로딩 중…</td></tr></tbody>
     </table>
   </div>
+</div>
+
+<!-- 백테스트 탭 -->
+<div id="panel-backtest" class="panel content">
+  <div style="display:flex;align-items:center;gap:12px;margin-bottom:16px">
+    <button class="btn" onclick="runBacktest(this)">▶ 백테스트 실행 (T+1)</button>
+    <span class="ts" id="bt-status"></span>
+  </div>
+  <div class="grid" id="bt-cards" style="margin-bottom:16px"></div>
+  <table>
+    <thead><tr><th>날짜</th><th>평균수익률(T+1)</th><th>승률</th><th>종목수</th></tr></thead>
+    <tbody id="bt-body"><tr><td colspan="4" style="color:#8b949e;text-align:center;padding:20px">백테스트 실행 버튼을 눌러 결과를 확인하세요</td></tr></tbody>
+  </table>
 </div>
 
 <!-- 시장 시그널 상세 탭 -->
@@ -210,13 +226,14 @@ const tagHtml = tags => (tags||[]).map(t=>{
 }).join('');
 
 function switchTab(id) {
-  document.querySelectorAll('.tab').forEach((t,i)=>t.classList.toggle('active',['dash','screener','signal','sources','logs'][i]===id));
+  document.querySelectorAll('.tab').forEach((t,i)=>t.classList.toggle('active',['dash','screener','signal','backtest','sources','logs'][i]===id));
   document.querySelectorAll('.panel').forEach(p=>p.classList.remove('active'));
   document.getElementById('panel-'+id).classList.add('active');
   if(id==='screener')loadScreener();
   if(id==='signal')loadSignalDetail();
   if(id==='sources')loadSources();
   if(id==='logs')loadLogs();
+  if(id==='backtest')loadBacktestSummary();
 }
 
 async function loadAll() {
@@ -288,11 +305,12 @@ function renderScreener(){
     <td><b>${i.name}</b><br><span class="ts">${i.code} · <span style="color:${i.market==='KOSPI'?'#58a6ff':'#39d0d0'}">${i.market||'KOSPI'}</span></span></td>
     <td>${scoreBar(i.total_score)}</td>
     <td>${scoreBar(i.stock_score)}</td>
-    <td>${scoreBar(i.market_score)}</td>
     <td style="font-weight:600">${fmtKrw(i.close_price)}</td>
     <td style="color:${i.change_pct>=0?'#3fb950':'#f85149'};font-weight:600">${fmtP(i.change_pct)}</td>
     <td>${fmt(i.institution_net_buy)}</td>
     <td>${fmt(i.foreign_net_buy)}</td>
+    <td style="color:${(i.short_ratio||0)<=4?'#3fb950':(i.short_ratio||0)<=10?'#d29922':'#f85149'}">${(i.short_ratio||0).toFixed(1)}%</td>
+    <td>${scoreBar(i.ma_score||0,2)}</td>
     <td>${tagHtml(i.tags)}</td>
     <td><button class="btn btn-gray btn-sm" onclick="showStockDetail('${i.code}','${i.name}')">상세</button></td>
   </tr>`).join('');
@@ -341,6 +359,52 @@ async function loadLogs(){
     <td><span class="log-${l.status==='completed'?'ok':l.status==='started'?'run':'err'}">${l.status}</span></td>
     <td class="ts">${l.message}</td>
   </tr>`).join('');
+}
+
+async function loadBacktestSummary(){
+  const d=await fetch(API+'/backtest/summary').then(r=>r.ok?r.json():null).catch(()=>null);
+  if(!d||d.run_id==null){
+    document.getElementById('bt-cards').innerHTML='<div class="card"><h3>백테스트 결과</h3><div class="val" style="font-size:16px;color:#8b949e">실행 기록 없음</div><div class="note">버튼을 눌러 백테스트를 실행하세요</div></div>';
+    document.getElementById('bt-status').textContent='';
+    return;
+  }
+  const m=d.metrics||{};
+  const pct=v=>v!=null?(v*100).toFixed(3)+'%':'—';
+  document.getElementById('bt-cards').innerHTML=`
+    <div class="card"><h3>T+1 평균수익률</h3><div class="val" style="color:${(m.avg_return_1d||0)>=0?'#3fb950':'#f85149'};font-size:22px">${pct(m.avg_return_1d)}</div><div class="note">수수료·슬리피지 차감</div></div>
+    <div class="card"><h3>승률</h3><div class="val" style="font-size:22px">${m.win_rate_1d!=null?(m.win_rate_1d*100).toFixed(1)+'%':'—'}</div></div>
+    <div class="card"><h3>샤프 추정</h3><div class="val" style="font-size:22px">${m.sharpe_approx!=null?m.sharpe_approx.toFixed(2):'—'}</div><div class="note">연환산 근사</div></div>
+    <div class="card"><h3>누적수익률</h3><div class="val" style="font-size:22px;color:${(m.cumulative_return||0)>=0?'#3fb950':'#f85149'}">${m.cumulative_return!=null?(m.cumulative_return*100).toFixed(2)+'%':'—'}</div></div>
+    <div class="card"><h3>총 거래수</h3><div class="val" style="font-size:22px">${m.total_trades!=null?Math.round(m.total_trades):'—'}</div></div>
+    <div class="card"><h3>분석 기간</h3><div class="val" style="font-size:14px;color:#c9d1d9">${d.period||'—'}</div></div>`;
+  document.getElementById('bt-status').textContent=d.period?' ('+d.period+')':'';
+}
+
+async function runBacktest(btn){
+  btn.disabled=true;btn.textContent='실행 중…';
+  try{
+    const r=await fetch(API+'/backtest/run?lookback_days=90',{method:'POST'});
+    const d=await r.json();
+    const m=d.metrics||{};
+    const pct=v=>v!=null?(v*100).toFixed(3)+'%':'—';
+    document.getElementById('bt-cards').innerHTML=`
+      <div class="card"><h3>T+1 평균수익률</h3><div class="val" style="color:${(m.avg_return_1d||0)>=0?'#3fb950':'#f85149'};font-size:22px">${pct(m.avg_return_1d)}</div><div class="note">수수료·슬리피지 차감</div></div>
+      <div class="card"><h3>승률</h3><div class="val" style="font-size:22px">${m.win_rate_1d!=null?(m.win_rate_1d*100).toFixed(1)+'%':'—'}</div></div>
+      <div class="card"><h3>샤프 추정</h3><div class="val" style="font-size:22px">${m.sharpe_approx!=null?m.sharpe_approx.toFixed(2):'—'}</div><div class="note">연환산 근사</div></div>
+      <div class="card"><h3>누적수익률</h3><div class="val" style="font-size:22px;color:${(m.cumulative_return||0)>=0?'#3fb950':'#f85149'}">${m.cumulative_return!=null?(m.cumulative_return*100).toFixed(2)+'%':'—'}</div></div>
+      <div class="card"><h3>총 거래수</h3><div class="val" style="font-size:22px">${m.total_trades!=null?Math.round(m.total_trades):'—'}</div></div>
+      <div class="card"><h3>기간</h3><div class="val" style="font-size:14px;color:#c9d1d9">${d.period||'—'}</div></div>`;
+    const daily=d.daily_results||[];
+    document.getElementById('bt-body').innerHTML=daily.length?daily.map(r=>`<tr>
+      <td>${r.date}</td>
+      <td style="color:${r.avg_return_pct>=0?'#3fb950':'#f85149'}">${r.avg_return_pct>=0?'+':''}${r.avg_return_pct}%</td>
+      <td>${r.win_rate_pct}%</td>
+      <td>${r.count}</td>
+    </tr>`).join(''):'<tr><td colspan="4" style="color:#8b949e;text-align:center;padding:20px">추천 기록 없음 (파이프라인을 먼저 실행하세요)</td></tr>';
+    document.getElementById('bt-status').textContent=' ('+d.period+')';
+    showToast(`백테스트 완료: 평균수익 ${(m.avg_return_1d*100).toFixed(3)}%, 승률 ${(m.win_rate_1d*100).toFixed(1)}%`);
+  }catch(e){showToast('백테스트 실패: '+e.message,true);}
+  finally{btn.disabled=false;btn.textContent='▶ 백테스트 실행 (T+1)';}
 }
 
 async function showStockDetail(code, name){

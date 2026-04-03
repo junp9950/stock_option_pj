@@ -28,6 +28,8 @@ class RecommendationItem(BaseModel):
     individual_net_buy: float = 0.0
     consecutive_days: int = 0
     tags: list[str] = []
+    short_ratio: float = 0.0
+    ma_score: float = 0.0
 
 
 class RecommendationResponse(BaseModel):

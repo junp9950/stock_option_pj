@@ -1,8 +1,8 @@
 from __future__ import annotations
 
-from datetime import date
+from datetime import date, timedelta
 
-from sqlalchemy import select
+from sqlalchemy import select, desc
 from sqlalchemy.orm import Session
 
 from backend.config import get_config
@@ -27,6 +27,65 @@ def _threshold_score(value: float, high: float, medium: float) -> float:
     return 0.0
 
 
+def _calc_ma_score(prices: list[float]) -> float:
+    """가격 리스트(최신 순)로 MA 위치 점수 계산.
+    20일 이동평균 대비 현재가 위치:
+      +5% 초과  → +2.0
+      0% 초과   → +1.0
+      -5% 이상  →  0.0
+      -5% 미만  → -1.0
+      -10% 미만 → -2.0
+    60일선도 계산해 평균.
+    """
+    if not prices:
+        return 0.0
+    current = prices[0]
+
+    def _ma_score_single(ma_val: float) -> float:
+        if ma_val <= 0:
+            return 0.0
+        diff_pct = (current - ma_val) / ma_val * 100
+        if diff_pct > 5.0:
+            return 2.0
+        if diff_pct > 0.0:
+            return 1.0
+        if diff_pct >= -5.0:
+            return 0.0
+        if diff_pct >= -10.0:
+            return -1.0
+        return -2.0
+
+    scores = []
+    if len(prices) >= 20:
+        ma20 = sum(prices[:20]) / 20
+        scores.append(_ma_score_single(ma20))
+    if len(prices) >= 60:
+        ma60 = sum(prices[:60]) / 60
+        scores.append(_ma_score_single(ma60))
+
+    return sum(scores) / len(scores) if scores else 0.0
+
+
+def _calc_short_trend_score(short_ratios: list[float]) -> float:
+    """공매도 비율 추세 점수 계산 (최신 순, 최소 3개 필요).
+    최근 1일과 5일 전 비율을 비교해 개선/악화 판단.
+    """
+    if len(short_ratios) < 3:
+        return 0.0
+    current = short_ratios[0]
+    past = sum(short_ratios[1:min(6, len(short_ratios))]) / min(5, len(short_ratios) - 1)
+    change = past - current  # 개선이면 양수
+    if change > 2.0:
+        return 2.0
+    if change > 0.5:
+        return 1.0
+    if change >= -0.5:
+        return 0.0
+    if change >= -2.0:
+        return -1.0
+    return -2.0
+
+
 def calculate_stock_signals(db: Session, trading_date: date) -> list[StockSignal]:
     config = get_config()
     stocks = list(db.scalars(select(Stock).where(Stock.is_active.is_(True)).order_by(Stock.code)))
@@ -36,25 +95,40 @@ def calculate_stock_signals(db: Session, trading_date: date) -> list[StockSignal
     db.query(StockSignal).filter(StockSignal.trading_date == trading_date).delete()
     db.commit()
 
+    # 가격 히스토리 일괄 조회 (60일치)
+    history_start = trading_date - timedelta(days=90)
+    all_prices = list(db.scalars(
+        select(SpotDailyPrice).where(
+            SpotDailyPrice.trading_date.between(history_start, trading_date)
+        ).order_by(SpotDailyPrice.stock_code, desc(SpotDailyPrice.trading_date))
+    ))
+    prices_history: dict[str, list[SpotDailyPrice]] = {}
+    for p in all_prices:
+        prices_history.setdefault(p.stock_code, []).append(p)
+
+    # 공매도 히스토리 일괄 조회 (10일치)
+    short_start = trading_date - timedelta(days=20)
+    all_shorts = list(db.scalars(
+        select(ShortSellingDaily).where(
+            ShortSellingDaily.trading_date.between(short_start, trading_date)
+        ).order_by(ShortSellingDaily.stock_code, desc(ShortSellingDaily.trading_date))
+    ))
+    short_history: dict[str, list[ShortSellingDaily]] = {}
+    for s in all_shorts:
+        short_history.setdefault(s.stock_code, []).append(s)
+
     for stock in stocks:
-        price = db.scalar(
-            select(SpotDailyPrice).where(
-                SpotDailyPrice.trading_date == trading_date,
-                SpotDailyPrice.stock_code == stock.code,
-            )
-        )
+        price_hist = prices_history.get(stock.code, [])
+        price = next((p for p in price_hist if p.trading_date == trading_date), None)
         flow = db.scalar(
             select(SpotInvestorFlow).where(
                 SpotInvestorFlow.trading_date == trading_date,
                 SpotInvestorFlow.stock_code == stock.code,
             )
         )
-        short = db.scalar(
-            select(ShortSellingDaily).where(
-                ShortSellingDaily.trading_date == trading_date,
-                ShortSellingDaily.stock_code == stock.code,
-            )
-        )
+        short_hist = short_history.get(stock.code, [])
+        short = next((s for s in short_hist if s.trading_date == trading_date), None)
+
         if not all([price, flow, short]):
             continue
 
@@ -63,9 +137,9 @@ def calculate_stock_signals(db: Session, trading_date: date) -> list[StockSignal
         institution_strength = flow.institution_net_buy / volume_base
         co_buy = 2.0 if flow.foreign_net_buy > 0 and flow.institution_net_buy > 0 else 0.0
         volume_surge = price.volume / 1_800_000
-        # short_ratio는 pykrx에서 0~100(%) 단위로 수신. 4% 이하면 양호, 1% 이하면 매우 양호.
-        # fallback(demo) 데이터는 0~5 범위였으나 실데이터 기준으로 통일.
-        short_ratio_pct = short.short_ratio  # 0~100 기준
+
+        # 공매도 비율 (pykrx: 0~100%)
+        short_ratio_pct = short.short_ratio
         short_ratio_score = (
             2.0 if short_ratio_pct <= 1.0
             else 1.0 if short_ratio_pct <= 4.0
@@ -73,15 +147,23 @@ def calculate_stock_signals(db: Session, trading_date: date) -> list[StockSignal
             else -1.0 if short_ratio_pct <= 20.0
             else -2.0
         )
-        ma_position = 2.0 if price.change_pct > 0 else 0.0
+
+        # 공매도 추세: 최근 비율이 감소 중인지
+        short_ratios = [s.short_ratio for s in short_hist]
+        short_trend_score = _calc_short_trend_score(short_ratios)
+
+        # 이동평균 위치 (20일/60일)
+        close_prices = [p.close_price for p in price_hist]
+        ma_score = _calc_ma_score(close_prices)
 
         details = [
             ("foreign_strength", foreign_strength, _threshold_score(foreign_strength, 700, 300), "외국인 순매수 강도"),
             ("institution_strength", institution_strength, _threshold_score(institution_strength, 400, 200), "기관 순매수 강도"),
             ("co_buy", co_buy, co_buy, "외국인/기관 동반 매수"),
             ("volume_surge", volume_surge, 2.0 if volume_surge >= 2.0 else 1.0 if volume_surge >= 1.5 else 0.0, "거래량 급증"),
-            ("short_ratio_change", short_ratio_pct, short_ratio_score, "공매도 비율 개선"),
-            ("ma_position", ma_position, ma_position, "20일선/60일선 상회 대체"),
+            ("short_ratio_change", short_ratio_pct, short_ratio_score, "공매도 비율 수준"),
+            ("short_trend", None, short_trend_score, "공매도 비율 감소 추세"),
+            ("ma_position", close_prices[0] if close_prices else None, ma_score, "20일/60일 이동평균 위치"),
             ("program_buy", None, 0.0, "종목별 프로그램 순매수 TODO"),
         ]
 
@@ -92,7 +174,7 @@ def calculate_stock_signals(db: Session, trading_date: date) -> list[StockSignal
         for key, raw_value, normalized_score, interpretation in details:
             is_enabled = enabled[key]
             if is_enabled:
-                weighted_score += normalized_score * normalized_weights[key]
+                weighted_score += normalized_score * normalized_weights.get(key, 0.0)
             db.add(
                 StockSignalDetail(
                     trading_date=trading_date,
@@ -117,4 +199,3 @@ def calculate_stock_signals(db: Session, trading_date: date) -> list[StockSignal
 
     db.commit()
     return results
-

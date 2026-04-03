@@ -11,7 +11,7 @@ from sqlalchemy.orm import Session
 from backend.api.schemas import HealthResponse, JobResponse, MarketSignalResponse, RecommendationItem, RecommendationResponse
 from backend.backtest.backtester import run_backtest
 from backend.db.database import get_db
-from backend.db.models import BacktestResult, JobLog, MarketSignal, MarketSignalDetail, Recommendation, Setting, SpotDailyPrice, SpotInvestorFlow, Stock, StockSignal, StockSignalDetail
+from backend.db.models import BacktestResult, BacktestRun, JobLog, MarketSignal, MarketSignalDetail, Recommendation, Setting, ShortSellingDaily, SpotDailyPrice, SpotInvestorFlow, Stock, StockSignal, StockSignalDetail
 from backend.db.seed import refresh_universe
 from backend.services.daily_pipeline import run_backfill_pipeline, run_daily_pipeline
 from backend.utils.dates import latest_trading_day
@@ -185,6 +185,27 @@ def get_screener(trading_date: date | None = None, db: Session = Depends(get_db)
             )
         )
     }
+    shorts_map = {
+        s.stock_code: s
+        for s in db.scalars(
+            select(ShortSellingDaily).where(
+                ShortSellingDaily.trading_date == target_date,
+                ShortSellingDaily.stock_code.in_(codes),
+            )
+        )
+    }
+    # 시그널 상세에서 ma_position 점수 추출
+    signal_details_raw = list(db.scalars(
+        select(StockSignalDetail).where(
+            StockSignalDetail.trading_date == target_date,
+            StockSignalDetail.stock_code.in_(codes),
+            StockSignalDetail.key.in_(["ma_position", "short_trend"]),
+        )
+    ))
+    ma_scores: dict[str, float] = {}
+    for d in signal_details_raw:
+        if d.key == "ma_position":
+            ma_scores[d.stock_code] = d.normalized_score
 
     recent_raw = list(
         db.scalars(
@@ -212,6 +233,7 @@ def get_screener(trading_date: date | None = None, db: Session = Depends(get_db)
             continue
 
         flow = flows_map.get(ss.stock_code)
+        short = shorts_map.get(ss.stock_code)
         inst = flow.institution_net_buy if flow else 0.0
         foreign = flow.foreign_net_buy if flow else 0.0
         indiv = flow.individual_net_buy if flow else 0.0
@@ -238,6 +260,8 @@ def get_screener(trading_date: date | None = None, db: Session = Depends(get_db)
                 individual_net_buy=indiv,
                 consecutive_days=co_days,
                 tags=_build_tags(inst, foreign, indiv, co_days, inst_days, foreign_days),
+                short_ratio=short.short_ratio if short else 0.0,
+                ma_score=ma_scores.get(ss.stock_code, 0.0),
             )
         )
 
@@ -368,8 +392,26 @@ def run_backfill(start_date: date | None = None, end_date: date | None = None, d
 
 
 @router.post("/backtest/run")
-def trigger_backtest(db: Session = Depends(get_db)):
-    return run_backtest(db)
+def trigger_backtest(lookback_days: int = 60, db: Session = Depends(get_db)):
+    """T+1 백테스트 실행 (lookback_days: 최근 몇일치 추천 기록 사용, 기본 60일)."""
+    return run_backtest(db, lookback_days=lookback_days)
+
+
+@router.get("/backtest/summary")
+def get_backtest_summary(db: Session = Depends(get_db)):
+    """가장 최근 백테스트 실행 결과 요약."""
+    from backend.db.models import BacktestRun
+    latest_run = db.scalar(select(BacktestRun).order_by(desc(BacktestRun.created_at)))
+    if latest_run is None:
+        return {"run_id": None, "period": None, "metrics": {}}
+    results = list(db.scalars(select(BacktestResult).where(BacktestResult.run_id == latest_run.id)))
+    metrics = {r.metric: r.value for r in results}
+    return {
+        "run_id": latest_run.id,
+        "period": latest_run.period_label,
+        "note": latest_run.note,
+        "metrics": metrics,
+    }
 
 
 @router.get("/jobs/logs")
