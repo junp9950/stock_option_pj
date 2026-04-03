@@ -32,6 +32,7 @@ class RecommendationItem(BaseModel):
     ma_score: float = 0.0
     rsi_14: float | None = None
     volume_surge: float = 1.0
+    market_cap: float = 0.0
 
 
 class RecommendationResponse(BaseModel):

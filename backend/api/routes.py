@@ -276,6 +276,7 @@ def get_screener(
                 ma_score=ma_scores.get(ss.stock_code, 0.0),
                 rsi_14=rsi_values.get(ss.stock_code),
                 volume_surge=volume_surges.get(ss.stock_code, 1.0),
+                market_cap=stock.market_cap or 0.0,
             )
         )
 
@@ -481,6 +482,44 @@ def get_market_signal_details(trading_date: date | None = None, db: Session = De
         }
         for d in details
     ]
+
+
+@router.get("/data-quality")
+def get_data_quality(db: Session = Depends(get_db)):
+    """오늘 데이터 수집 품질 요약 (실데이터 비율)."""
+    from backend.db.models import (
+        DerivativesFuturesDaily, IndexDaily, OpenInterestDaily,
+        ProgramTradingDaily, ShortSellingDaily, SpotDailyPrice, SpotInvestorFlow, Stock
+    )
+    target_date = latest_trading_day()
+    total_stocks = db.scalar(select(func.count()).select_from(Stock).where(Stock.is_active.is_(True))) or 1
+
+    spot_count = db.scalar(select(func.count()).select_from(SpotDailyPrice).where(SpotDailyPrice.trading_date == target_date)) or 0
+    flow_nonzero = db.scalar(select(func.count()).select_from(SpotInvestorFlow).where(
+        SpotInvestorFlow.trading_date == target_date, SpotInvestorFlow.foreign_net_buy != 0
+    )) or 0
+    short_count = db.scalar(select(func.count()).select_from(ShortSellingDaily).where(ShortSellingDaily.trading_date == target_date)) or 0
+
+    futures_row = db.scalar(select(DerivativesFuturesDaily).where(DerivativesFuturesDaily.trading_date == target_date))
+    program_row = db.scalar(select(ProgramTradingDaily).where(ProgramTradingDaily.trading_date == target_date))
+    oi_row = db.scalar(select(OpenInterestDaily).where(OpenInterestDaily.trading_date == target_date))
+    idx_row = db.scalar(select(IndexDaily).where(IndexDaily.trading_date == target_date))
+
+    checks = {
+        "spot_coverage": spot_count / total_stocks,
+        "flow_coverage": flow_nonzero / total_stocks,
+        "short_coverage": short_count / total_stocks,
+        "futures_real": 1.0 if futures_row and futures_row.foreign_net_contracts != 0 else 0.0,
+        "program_real": 1.0 if program_row and (program_row.non_arbitrage_net_buy != 0 or program_row.arbitrage_net_buy != 0) else 0.0,
+        "oi_real": 1.0 if oi_row and (oi_row.call_oi > 0 or oi_row.put_oi > 0) else 0.0,
+        "index_real": 1.0 if idx_row else 0.0,
+    }
+    overall = sum(checks.values()) / len(checks)
+    return {
+        "trading_date": target_date.isoformat(),
+        "overall_score": round(overall * 100, 1),
+        "checks": checks,
+    }
 
 
 @router.get("/universe")

@@ -110,6 +110,7 @@ select{background:#21262d;border:1px solid #30363d;color:#c9d1d9;padding:6px 10p
     <div class="card"><h3>기준일</h3><div class="val" id="date" style="font-size:20px">—</div></div>
     <div class="card"><h3>추천 종목</h3><div class="val" id="rec-cnt">—</div><div class="note">상위 점수 기준</div></div>
     <div class="card"><h3>전종목 스크리닝</h3><div class="val" id="scr-cnt">—</div><div class="note">시총·거래대금 필터 후</div></div>
+    <div class="card"><h3>데이터 품질</h3><div class="val" id="dq-score" style="font-size:24px">—</div><div class="note" id="dq-note">데이터 수집 현황</div></div>
   </div>
   <!-- 시장 시그널 히스토리 -->
   <div style="margin-bottom:20px">
@@ -139,6 +140,7 @@ select{background:#21262d;border:1px solid #30363d;color:#c9d1d9;padding:6px 10p
       <option value="stock_score">종목점수 순</option>
       <option value="change_pct">등락률 순</option>
       <option value="close_price">종가 순</option>
+      <option value="market_cap">시총 순</option>
       <option value="short_ratio">공매도% 순</option>
       <option value="rsi_14">RSI 순</option>
       <option value="volume_surge">거래량배수 순</option>
@@ -162,6 +164,7 @@ select{background:#21262d;border:1px solid #30363d;color:#c9d1d9;padding:6px 10p
         <th onclick="setScrSort('change_pct')">등락<span class="sort-icon">↕</span></th>
         <th onclick="setScrSort('institution_net_buy')">기관<span class="sort-icon">↕</span></th>
         <th onclick="setScrSort('foreign_net_buy')">외국인<span class="sort-icon">↕</span></th>
+        <th onclick="setScrSort('market_cap')">시총<span class="sort-icon">↕</span></th>
         <th onclick="setScrSort('short_ratio')">공매도%<span class="sort-icon">↕</span></th>
         <th onclick="setScrSort('rsi_14')">RSI<span class="sort-icon">↕</span></th>
         <th onclick="setScrSort('volume_surge')">거래량배수<span class="sort-icon">↕</span></th>
@@ -169,7 +172,7 @@ select{background:#21262d;border:1px solid #30363d;color:#c9d1d9;padding:6px 10p
         <th>태그</th>
         <th>상세</th>
       </tr></thead>
-      <tbody id="scr-body"><tr><td colspan="15" style="color:#8b949e;text-align:center;padding:20px">로딩 중…</td></tr></tbody>
+      <tbody id="scr-body"><tr><td colspan="16" style="color:#8b949e;text-align:center;padding:20px">로딩 중…</td></tr></tbody>
     </table>
   </div>
 </div>
@@ -254,11 +257,12 @@ function switchTab(id) {
 
 async function loadAll() {
   try {
-    const [sig, recs, scr, hist] = await Promise.all([
+    const [sig, recs, scr, hist, dq] = await Promise.all([
       fetch(API+'/market-signal').then(r=>r.ok?r.json():null).catch(()=>null),
       fetch(API+'/recommendations').then(r=>r.ok?r.json():null).catch(()=>null),
       fetch(API+'/screener').then(r=>r.ok?r.json():null).catch(()=>null),
       fetch(API+'/market-signal/history?limit=7').then(r=>r.ok?r.json():null).catch(()=>null),
+      fetch(API+'/data-quality').then(r=>r.ok?r.json():null).catch(()=>null),
     ]);
     document.getElementById('err-bar').style.display='none';
 
@@ -285,6 +289,13 @@ async function loadAll() {
       </tr>`).join(''):empty;
     }
     if(scr) document.getElementById('scr-cnt').textContent=scr.length;
+    if(dq){
+      const score=dq.overall_score;
+      const color=score>=80?'#3fb950':score>=50?'#d29922':'#f85149';
+      document.getElementById('dq-score').innerHTML=`<span style="color:${color}">${score}%</span>`;
+      const c=dq.checks||{};
+      document.getElementById('dq-note').textContent=`현물${(c.spot_coverage*100||0).toFixed(0)}% 수급${(c.flow_coverage*100||0).toFixed(0)}% 선물${c.futures_real?'✓':'✗'}`;
+    }
     if(hist && hist.length){
       const sorted=[...hist].sort((a,b)=>a.trading_date>b.trading_date?1:-1);
       document.getElementById('sig-history').innerHTML=sorted.map(h=>`
@@ -326,7 +337,7 @@ function renderScreener(){
     return scrSortAsc?(av>bv?1:-1):(av<bv?1:-1);
   });
   document.getElementById('scr-info').textContent=`${data.length}/${scrData.length}종목`;
-  if(!data.length){document.getElementById('scr-body').innerHTML='<tr><td colspan="15" style="color:#8b949e;text-align:center;padding:16px">검색 결과 없음</td></tr>';return;}
+  if(!data.length){document.getElementById('scr-body').innerHTML='<tr><td colspan="16" style="color:#8b949e;text-align:center;padding:16px">검색 결과 없음</td></tr>';return;}
   document.getElementById('scr-body').innerHTML=data.map((i,idx)=>`<tr>
     <td style="color:#8b949e">${idx+1}</td>
     <td><b>${i.name}</b><br><span class="ts">${i.code} · <span style="color:${i.market==='KOSPI'?'#58a6ff':'#39d0d0'}">${i.market||'KOSPI'}</span></span></td>
@@ -336,6 +347,7 @@ function renderScreener(){
     <td style="color:${i.change_pct>=0?'#3fb950':'#f85149'};font-weight:600">${fmtP(i.change_pct)}</td>
     <td>${fmt(i.institution_net_buy)}</td>
     <td>${fmt(i.foreign_net_buy)}</td>
+    <td class="ts">${i.market_cap>=1e12?((i.market_cap/1e12).toFixed(1)+'조'):i.market_cap>=1e8?((i.market_cap/1e8).toFixed(0)+'억'):'—'}</td>
     <td style="color:${(i.short_ratio||0)<=4?'#3fb950':(i.short_ratio||0)<=10?'#d29922':'#f85149'}">${(i.short_ratio||0).toFixed(1)}%</td>
     <td style="color:${i.rsi_14!=null?(i.rsi_14<30?'#58a6ff':i.rsi_14>70?'#f85149':'#c9d1d9'):'#444'}">${i.rsi_14!=null?Math.round(i.rsi_14):'—'}</td>
     <td style="color:${(i.volume_surge||1)>=2?'#3fb950':(i.volume_surge||1)<0.8?'#f85149':'#c9d1d9'}">${(i.volume_surge||1).toFixed(1)}x</td>
@@ -399,9 +411,10 @@ function exportCsv(){
     if(mkt&&i.market!==mkt)return false;
     return true;
   });
-  const headers=['순위','코드','종목명','시장','총점','종목점수','시장점수','종가','등락%','기관순매수','외국인순매수','공매도%','RSI','거래량배수','MA점수','연속매수일'];
+  const headers=['순위','코드','종목명','시장','시총(억)','총점','종목점수','시장점수','종가','등락%','기관순매수','외국인순매수','공매도%','RSI','거래량배수','MA점수','연속매수일'];
   const rows=data.map((i,idx)=>[
-    idx+1,i.code,i.name,i.market,i.total_score,i.stock_score,i.market_score,i.close_price,i.change_pct,
+    idx+1,i.code,i.name,i.market,i.market_cap?(i.market_cap/1e8).toFixed(0):'',
+    i.total_score,i.stock_score,i.market_score,i.close_price,i.change_pct,
     (i.institution_net_buy/1e8).toFixed(2),(i.foreign_net_buy/1e8).toFixed(2),
     (i.short_ratio||0).toFixed(1),i.rsi_14!=null?Math.round(i.rsi_14):'',
     (i.volume_surge||1).toFixed(2),i.ma_score||0,i.consecutive_days||0,
