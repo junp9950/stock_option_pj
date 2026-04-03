@@ -16,5 +16,6 @@ export const api = {
   runDaily: (date) =>
     fetch(`${API_BASE}/jobs/run-daily${date ? `?trading_date=${date}` : ""}`, { method: "POST" }).then((r) => r.json()),
   getDataSources: () => request("/data-sources"),
+  getScreener: (date) => request(`/screener${date ? `?trading_date=${date}` : ""}`),
 };
 

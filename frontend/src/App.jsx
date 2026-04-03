@@ -13,6 +13,7 @@ export default function App() {
     selectedDate,
     marketSignal,
     recommendations,
+    screenerItems,
     history,
     isLoading,
     error,
@@ -41,7 +42,7 @@ export default function App() {
 
       <LoadingState loading={isLoading} error={error} />
       <DataSourcesBanner />
-      <Dashboard marketSignal={marketSignal} recommendations={recommendations} history={history} />
+      <Dashboard marketSignal={marketSignal} recommendations={recommendations} screenerItems={screenerItems} history={history} />
       <div className="grid" style={{ marginTop: 16 }}>
         <Derivatives />
         <StockDetail />

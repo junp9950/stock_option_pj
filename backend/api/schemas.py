@@ -22,6 +22,12 @@ class RecommendationItem(BaseModel):
     stock_score: float
     close_price: float
     change_pct: float
+    market: str = "KOSPI"
+    institution_net_buy: float = 0.0
+    foreign_net_buy: float = 0.0
+    individual_net_buy: float = 0.0
+    consecutive_days: int = 0
+    tags: list[str] = []
 
 
 class RecommendationResponse(BaseModel):

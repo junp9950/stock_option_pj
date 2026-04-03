@@ -61,11 +61,18 @@ def calculate_market_signal(db: Session, trading_date: date) -> MarketSignal:
     futures_5d = sum(item.foreign_net_contracts for item in previous_futures)
     previous_direction = previous_futures[1].foreign_net_contracts if len(previous_futures) > 1 else 0.0
     turn_value = 2.0 if previous_direction < 0 < futures.foreign_net_contracts else -2.0 if previous_direction > 0 > futures.foreign_net_contracts else 0.0
-    volume_pcr = open_interest.put_oi / max(open_interest.call_oi, 1)
-    oi_pcr = (open_interest.put_oi + 5_000) / max(open_interest.call_oi + 10_000, 1)
     basis_trend = basis - 0.6
-    call_put_oi_delta = open_interest.call_oi - open_interest.put_oi
     arbitrage_pressure_score = 0.0
+
+    # OI-based metrics: disabled when data unavailable (call_oi=0 and put_oi=0)
+    oi_available = open_interest.call_oi > 0 or open_interest.put_oi > 0
+    volume_pcr = open_interest.put_oi / max(open_interest.call_oi, 1) if oi_available else None
+    oi_pcr = (open_interest.put_oi + 5_000) / max(open_interest.call_oi + 10_000, 1) if oi_available else None
+    call_put_oi_delta = open_interest.call_oi - open_interest.put_oi if oi_available else None
+
+    # Program trading: disabled when data unavailable (both values are 0)
+    program_available = program.non_arbitrage_net_buy != 0 or program.arbitrage_net_buy != 0
+    program_net_buy_100m = program.non_arbitrage_net_buy / 100_000_000 if program_available else None
 
     details = [
         ("foreign_futures_daily", futures.foreign_net_contracts, _bucket_score(futures.foreign_net_contracts, [(-10000, -2), (-3000, -1), (3000, 0), (10000, 1), (float("inf"), 2)]), "외국인 선물 당일 순매수"),
@@ -73,14 +80,23 @@ def calculate_market_signal(db: Session, trading_date: date) -> MarketSignal:
         ("foreign_turn", turn_value, turn_value, "외국인 선물 방향 전환"),
         ("basis_level", basis, _bucket_score(basis, [(-1.5, -2), (-0.5, -1), (0.5, 0), (1.5, 1), (float("inf"), 2)]), "베이시스 수준"),
         ("basis_trend", basis_trend, _bucket_score(basis_trend, [(-0.5, -2), (-0.1, -1), (0.1, 0), (0.5, 1), (float("inf"), 2)]), "베이시스 추세"),
-        ("volume_pcr", volume_pcr, _bucket_score(volume_pcr, [(0.5, -2), (0.7, -1), (1.0, 0), (1.3, 1), (float("inf"), 2)]), "거래량 PCR"),
-        ("oi_pcr", oi_pcr, _bucket_score(oi_pcr, [(0.6, -2), (0.8, -1), (1.0, 0), (1.2, 1), (float("inf"), 2)]), "미결제약정 PCR"),
-        ("call_put_oi_change", call_put_oi_delta, _bucket_score(call_put_oi_delta, [(-10000, -2), (-1000, -1), (1000, 0), (10000, 1), (float("inf"), 2)]), "콜/풋 OI 변화"),
-        ("program_non_arbitrage", program.non_arbitrage_net_buy / 100_000_000, _bucket_score(program.non_arbitrage_net_buy / 100_000_000, [(-3000, -2), (-500, -1), (500, 0), (3000, 1), (float("inf"), 2)]), "비차익 순매수"),
+        ("volume_pcr", volume_pcr, _bucket_score(volume_pcr, [(0.5, -2), (0.7, -1), (1.0, 0), (1.3, 1), (float("inf"), 2)]) if volume_pcr is not None else 0.0, "거래량 PCR"),
+        ("oi_pcr", oi_pcr, _bucket_score(oi_pcr, [(0.6, -2), (0.8, -1), (1.0, 0), (1.2, 1), (float("inf"), 2)]) if oi_pcr is not None else 0.0, "미결제약정 PCR"),
+        ("call_put_oi_change", call_put_oi_delta, _bucket_score(call_put_oi_delta, [(-10000, -2), (-1000, -1), (1000, 0), (10000, 1), (float("inf"), 2)]) if call_put_oi_delta is not None else 0.0, "콜/풋 OI 변화"),
+        ("program_non_arbitrage", program_net_buy_100m, _bucket_score(program_net_buy_100m, [(-3000, -2), (-500, -1), (500, 0), (3000, 1), (float("inf"), 2)]) if program_net_buy_100m is not None else 0.0, "비차익 순매수"),
         ("arbitrage_pressure", None, arbitrage_pressure_score, "차익잔고 압력 TODO"),
     ]
 
-    enabled = {key: key != "arbitrage_pressure" for key, *_ in details}
+    oi_note = None if oi_available else "실데이터 미수집: OI 지표 비활성화"
+    program_note = None if program_available else "실데이터 미수집: 프로그램매매 지표 비활성화"
+    enabled = {
+        key: key not in (
+            "arbitrage_pressure",
+            *([] if oi_available else ["volume_pcr", "oi_pcr", "call_put_oi_change"]),
+            *([] if program_available else ["program_non_arbitrage"]),
+        )
+        for key, *_ in details
+    }
     normalized_weights = _normalize_weights(config.market_signal_weights, enabled)
     weighted_score = 0.0
 
@@ -88,6 +104,14 @@ def calculate_market_signal(db: Session, trading_date: date) -> MarketSignal:
         is_enabled = enabled[key]
         if is_enabled:
             weighted_score += normalized_score * normalized_weights[key]
+        if key in ("volume_pcr", "oi_pcr", "call_put_oi_change"):
+            detail_note = None if is_enabled else oi_note
+        elif key == "program_non_arbitrage":
+            detail_note = None if is_enabled else program_note
+        elif key == "arbitrage_pressure":
+            detail_note = "차익잔고 압력 직접 데이터 미수집 (MVP)"
+        else:
+            detail_note = None
         db.add(
             MarketSignalDetail(
                 trading_date=trading_date,
@@ -97,7 +121,7 @@ def calculate_market_signal(db: Session, trading_date: date) -> MarketSignal:
                 interpretation=interpretation,
                 is_enabled=is_enabled,
                 source="computed" if is_enabled else "fallback",
-                note=None if is_enabled else "Fallback disabled: direct arbitrage pressure data unavailable in MVP",
+                note=detail_note,
             )
         )
 

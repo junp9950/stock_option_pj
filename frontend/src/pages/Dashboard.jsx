@@ -3,11 +3,12 @@ import MarketGauge from "../components/MarketGauge";
 import SignalCard from "../components/SignalCard";
 import StockTable from "../components/StockTable";
 
-export default function Dashboard({ marketSignal, recommendations, history }) {
+export default function Dashboard({ marketSignal, recommendations, screenerItems, history }) {
+  const tableItems = screenerItems && screenerItems.length > 0 ? screenerItems : recommendations;
   return (
     <div className="grid">
       <MarketGauge marketSignal={marketSignal} />
-      <SignalCard title="추천 종목 수" value={recommendations.length} subtitle="상위 점수 기준" />
+      <SignalCard title="스크리닝 종목 수" value={tableItems.length} subtitle="시가총액·거래대금 필터 후" />
       <SignalCard title="기준일" value={marketSignal?.trading_date ?? "-"} />
       <div className="card" style={{ minHeight: 260 }}>
         <h3>최근 시장 점수 추이</h3>
@@ -21,7 +22,7 @@ export default function Dashboard({ marketSignal, recommendations, history }) {
         </ResponsiveContainer>
       </div>
       <div style={{ gridColumn: "1 / -1" }}>
-        <StockTable items={recommendations} />
+        <StockTable items={tableItems} />
       </div>
     </div>
   );

@@ -1,7 +1,7 @@
 # Futures Options Analyzer
 
 선물·옵션 수급 기반 익일 종목 선별 시스템의 로컬 실행용 MVP입니다.  
-이 프로젝트는 로컬 PC(Windows)에서 백엔드와 프론트엔드를 각각 개발 서버로 실행하는 흐름을 기준으로 작성되었습니다.
+로컬 PC(Windows)에서 백엔드와 프론트엔드를 각각 개발 서버로 실행합니다.
 
 이 시스템은 투자 참고용 보조 도구이며, 실제 투자 손익에 대한 책임은 사용자에게 있다.
 
@@ -9,51 +9,50 @@
 
 - FastAPI 백엔드
 - SQLite 단일 파일 DB
-- 데모 데이터 기반 일일 파이프라인
-- 시장 시그널 / 종목 시그널 / 추천 종목 API
-- React + Vite 대시보드
+- 실데이터(pykrx / KRX JSON API / FinanceDataReader) + fallback 구조
+- 시장 시그널 / 종목 시그널 / 전종목 스크리너 / 추천 종목 API
+- React + Vite 대시보드 (다크 테마 종목 테이블, 태그/수급 표시)
 - pytest 기본 테스트
 
-## 현재 MVP fallback
+## 데이터 소스 현황
 
-- 외부 데이터 수집이 안 되는 환경에서도 데모 데이터로 실행됩니다.
-- `차익잔고 압력`, `종목별 프로그램 순매수`는 MVP에서 비활성화되며, 가중치는 재정규화됩니다.
-- KRX OTP 크롤링 베이스 클래스는 포함되어 있으나, 실제 파라미터 매핑은 이후 확장 대상입니다.
+| 항목 | 소스 | 상태 |
+|------|------|------|
+| 주가/거래량 | FinanceDataReader | 실제 |
+| 종목명/시총/거래대금 | FinanceDataReader | 실제 |
+| KOSPI200 지수 | FinanceDataReader/KS200 | 실제 |
+| 외국인/기관 순매수 | pykrx | 실제 (fallback 가능) |
+| 공매도 | pykrx | 실제 (fallback 가능) |
+| 선물 투자자별 수급 | KRX JSON API (MDCSTAT12301) | 실제 (fallback 가능) |
+| 옵션 미결제약정 | pykrx 전종목시세 | 실제 (fallback 가능) |
+| 프로그램매매 | KRX JSON API (MDCSTAT22901) | 실제 (fallback 가능) |
+| KOSPI200 선물 종가 | pykrx → 지수 fallback | 실제 (fallback 가능) |
+| 차익잔고 압력 | - | TODO |
+
+> KRX JSON API는 사내망 등 일부 환경에서 LOGOUT을 반환합니다. 이 경우 해당 항목은 0으로 fallback되고 시장 점수가 중립으로 고정됩니다.
 
 ## 사전 요구사항
 
-- Python 3.11+
+- Python 3.11+ (3.13 권장)
 - Node.js 18+
-
-Python 확인:
 
 ```powershell
 python --version
-```
-
-Node.js 확인:
-
-```powershell
 node --version
 ```
 
 ## 설치 방법
 
-프로젝트 폴더로 이동:
+프로젝트 폴더로 이동 (각 PC 경로에 맞게):
 
 ```powershell
-cd C:\Users\Bat\Desktop\stock\futures-options-analyzer
+cd <프로젝트 폴더 경로>
 ```
 
-가상환경 생성:
+가상환경 생성 및 활성화:
 
 ```powershell
 python -m venv .venv
-```
-
-PowerShell에서 가상환경 활성화:
-
-```powershell
 .\.venv\Scripts\Activate.ps1
 ```
 
@@ -71,71 +70,61 @@ npm install
 cd ..
 ```
 
-`.env` 파일 생성:
+`.env` 파일 생성 (텔레그램 미사용 시 비워도 됨):
 
 ```powershell
 Copy-Item .env.example .env
 ```
 
-텔레그램을 쓰지 않으면 `.env`는 비워둬도 됩니다.
-
 ## 백엔드 실행
 
 ```powershell
-cd C:\Users\Bat\Desktop\stock\futures-options-analyzer
-.\.venv\Scripts\Activate.ps1
 $env:PYTHONPATH="."
-uvicorn backend.main:app --reload
+.\.venv\Scripts\python.exe -m uvicorn backend.main:app --reload
 ```
 
-백엔드 주소:
-
-- http://127.0.0.1:8000
-- http://127.0.0.1:8000/docs
+- API: http://127.0.0.1:8000
+- Swagger: http://127.0.0.1:8000/docs
 
 ## 프론트엔드 실행
 
-다른 터미널을 열고 실행:
+다른 터미널에서:
 
 ```powershell
-cd C:\Users\Bat\Desktop\stock\futures-options-analyzer\frontend
-npm run dev
+cd frontend
+npm run dev -- --host 127.0.0.1 --port 5173
 ```
 
-프론트엔드 주소:
-
-- http://127.0.0.1:5173
+- 대시보드: http://127.0.0.1:5173
 
 ## 최초 실행 순서
 
-1. 백엔드를 실행한다.
-2. 프론트엔드를 실행한다.
-3. 브라우저에서 대시보드를 연다.
-4. 필요하면 대시보드에서 `수동 파이프라인 실행` 버튼을 눌러 데이터를 다시 생성한다.
+1. 백엔드 실행
+2. 프론트엔드 실행
+3. 브라우저에서 대시보드 열기
+4. `수동 파이프라인 실행` 버튼 클릭 (또는 아래 PowerShell 명령)
 
 ## 수동 파이프라인 실행
 
-PowerShell에서:
-
 ```powershell
-Invoke-RestMethod -Method POST http://127.0.0.1:8000/api/jobs/run-daily
+Invoke-RestMethod -Method POST "http://127.0.0.1:8000/api/jobs/run-daily"
+# 날짜 지정 시:
+Invoke-RestMethod -Method POST "http://127.0.0.1:8000/api/jobs/run-daily?trading_date=2026-04-03"
 ```
 
 ## 백필
-
-현재 MVP는 단일 날짜 실행 중심이며, 백필 API는 같은 파이프라인을 날짜 기반으로 다시 실행하는 단순 형태입니다.
 
 ```powershell
 Invoke-RestMethod -Method POST "http://127.0.0.1:8000/api/jobs/backfill?start_date=2026-04-02"
 ```
 
+> 현재 MVP는 단일 날짜 재실행 형태이며, 날짜 범위 루프는 미구현.
+
 ## 테스트 실행
 
 ```powershell
-cd C:\Users\Bat\Desktop\stock\futures-options-analyzer
-.\.venv\Scripts\Activate.ps1
 $env:PYTHONPATH="."
-pytest
+.\.venv\Scripts\python.exe -m pytest
 ```
 
 ## 주요 API
@@ -143,10 +132,12 @@ pytest
 - `GET /api/health`
 - `GET /api/market-signal`
 - `GET /api/market-signal/history`
-- `GET /api/recommendations`
+- `GET /api/recommendations` — 상위 N개 (상방 10개 / 중립 5개 / 하방 0개)
+- `GET /api/screener` — 전종목 점수 내림차순 (제한 없음)
 - `GET /api/recommendations/history`
 - `GET /api/stock/{code}/signals`
 - `GET /api/derivatives/overview`
+- `GET /api/data-sources` — 각 항목별 데이터 소스 상태 확인
 - `GET /api/backtest/results`
 - `PUT /api/settings/weights`
 - `POST /api/jobs/run-daily`
@@ -154,41 +145,39 @@ pytest
 
 ## 설정 우선순위
 
-1. DB `settings`
-2. `config.py`
+1. DB `settings` 테이블
+2. `backend/config.py`
 3. 코드 기본값
 
-## DB 초기화 방법
-
-스키마를 다시 만들고 싶으면 SQLite 파일을 삭제하면 됩니다.
+## DB 초기화
 
 ```powershell
 Remove-Item .\data\app.db
 ```
 
-그 다음 백엔드를 다시 실행하면 테이블이 재생성됩니다.
+이후 백엔드 재실행 시 테이블 자동 재생성.
 
 ## 트러블슈팅
 
-KRX 수집 실패 시:
+**KRX 수집 실패 (LOGOUT)**  
+사내망·VPN 환경에서 `data.krx.co.kr`가 LOGOUT을 반환하는 경우입니다.  
+시스템은 fallback(0)으로 계속 동작합니다. 개인 네트워크에서 실행하면 실데이터가 수집됩니다.
 
-- 현재 MVP는 데모 데이터 fallback으로 계속 동작합니다.
-- 실제 KRX 파라미터 매핑은 이후 보강해야 합니다.
+**pykrx 설치 오류**  
+`pip install "setuptools<81"` 후 재설치.
 
-텔레그램 알림이 안 올 때:
+**텔레그램 알림 미수신**  
+`.env`의 `TELEGRAM_BOT_TOKEN`, `TELEGRAM_CHAT_ID` 확인.  
+현재 MVP는 전송 로직 미구현 상태.
 
-- `.env`의 토큰과 채팅 ID를 확인합니다.
-- 현재 MVP는 메시지 생성 로직 중심이며 실제 전송은 환경 설정 기반으로 확장 예정입니다.
-
-포트 충돌 시:
-
+**포트 충돌**  
 ```powershell
-uvicorn backend.main:app --reload --port 8001
+.\.venv\Scripts\python.exe -m uvicorn backend.main:app --reload --port 8001
 ```
 
-## 시스템 한계
+## 시스템 한계 (MVP)
 
-- 현재는 외부 실데이터보다 로컬 실행성과 구조를 우선한 MVP입니다.
-- 일부 수집기는 실제 KRX 요청 파라미터 매핑이 필요합니다.
-- 차익잔고 압력과 종목별 프로그램 순매수는 fallback 처리됩니다.
-
+- KRX API 접근 불가 환경에서는 시장 점수가 0(중립)으로 고정됨
+- 차익잔고 압력 / 종목별 프로그램 순매수 미구현 (항상 0)
+- Backfill이 날짜 범위 루프 미지원 (단일 날짜만)
+- 공매도 비율 정규화 범위 불일치 (0~5 가정 vs 실제 0~100)

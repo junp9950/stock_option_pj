@@ -10,6 +10,7 @@ export const useAppStore = create((set, get) => ({
   universe: "KOSPI200",
   marketSignal: null,
   recommendations: [],
+  screenerItems: [],
   history: [],
   isLoading: false,
   error: null,
@@ -31,8 +32,11 @@ export const useAppStore = create((set, get) => ({
     set({ isLoading: true, error: null });
     try {
       const selectedDate = get().selectedDate;
-      const recommendationResponse = await api.getRecommendations(selectedDate);
-      set({ recommendations: recommendationResponse.items, isLoading: false });
+      const [recommendationResponse, screenerItems] = await Promise.all([
+        api.getRecommendations(selectedDate),
+        api.getScreener(selectedDate),
+      ]);
+      set({ recommendations: recommendationResponse.items, screenerItems, isLoading: false });
     } catch (error) {
       set({ error: error.message, isLoading: false });
     }
