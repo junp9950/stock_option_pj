@@ -168,6 +168,21 @@ def collect_spot_data(db: Session, trading_date: date) -> None:
             else:
                 foreign_net, institution_net, individual_net = 0.0, 0.0, 0.0
 
+            # 수급이 없으면 DB 최근 데이터 재사용
+            if foreign_net == 0.0 and institution_net == 0.0 and individual_net == 0.0:
+                from sqlalchemy import select as sa_select  # noqa: PLC0415
+                prev = db.execute(
+                    sa_select(SpotInvestorFlow)
+                    .where(SpotInvestorFlow.stock_code == stock.code)
+                    .where(SpotInvestorFlow.trading_date < trading_date)
+                    .order_by(SpotInvestorFlow.trading_date.desc())
+                    .limit(1)
+                ).scalar_one_or_none()
+                if prev:
+                    foreign_net = prev.foreign_net_buy
+                    institution_net = prev.institution_net_buy
+                    individual_net = prev.individual_net_buy
+
             db.add(
                 SpotInvestorFlow(
                     trading_date=trading_date,

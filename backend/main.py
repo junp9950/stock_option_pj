@@ -238,7 +238,7 @@ select{background:#21262d;border:1px solid #30363d;color:#c9d1d9;padding:6px 10p
 const API = window.location.origin + '/api';
 let scrData = [], scrSortKey = 'total_score', scrSortAsc = false;
 
-const fmt = n => n==null?'—':Math.abs(n)>=1e8?(n>=0?'+':'')+Math.abs(n/1e8).toFixed(0)+'억':(n>=0?'+':'-')+Math.abs(n/1e4).toFixed(0)+'만';
+const fmt = n => (n==null||n===0)?'—':Math.abs(n)>=1e8?(n>=0?'+':'')+Math.abs(n/1e8).toFixed(0)+'억':(n>=0?'+':'-')+Math.abs(n/1e4).toFixed(0)+'만';
 const fmtP = n => n==null?'—':(n>=0?'+':'')+n.toFixed(2)+'%';
 const fmtKrw = n => n==null?'—':Number(n).toLocaleString()+'원';
 const scoreBar = (s,max=3) => {const w=Math.min(Math.abs(s)/max*60,60);return `<span class="${s<0?'neg':''}" style="display:inline-flex;align-items:center"><b style="color:${s>0?'#58a6ff':s<0?'#f85149':'#8b949e'}">${s.toFixed(2)}</b><span class="score-bar" style="width:${w}px;background:${s>0?'#58a6ff':s<0?'#f85149':'#444'}"></span></span>`;};
