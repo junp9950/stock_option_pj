@@ -17,26 +17,27 @@ DEFAULT_STOCKS = [
     {"code": "105560", "name": "KB금융", "market": "KOSPI", "market_cap": 30_000_000_000_000},
 ]
 
-_TOP_N = 100  # FDR 시총 상위 N종목
+_TOP_N = 100  # FDR 시총 상위 N종목 (KOSPI + KOSDAQ 각각)
 
 
 def _fetch_top_stocks(n: int = _TOP_N) -> list[dict]:
-    """FinanceDataReader로 KOSPI 시총 상위 n종목 조회. 실패 시 빈 리스트."""
+    """FinanceDataReader로 KOSPI + KOSDAQ 시총 상위 n종목씩 조회. 실패 시 빈 리스트."""
     try:
         import FinanceDataReader as fdr  # noqa: PLC0415
-        listing = fdr.StockListing("KOSPI")
-        listing = listing[listing["Marcap"].notna() & (listing["Marcap"] > 0)]
-        listing = listing.sort_values("Marcap", ascending=False).head(n)
-        listing["Code"] = listing["Code"].astype(str).str.zfill(6)
         result = []
-        for _, row in listing.iterrows():
-            result.append({
-                "code": str(row["Code"]),
-                "name": str(row.get("Name", row.get("ISU_ABBRV", row["Code"]))),
-                "market": "KOSPI",
-                "market_cap": float(row["Marcap"]),
-            })
-        logger.info("FDR universe loaded: %d KOSPI stocks", len(result))
+        for market in ("KOSPI", "KOSDAQ"):
+            listing = fdr.StockListing(market)
+            listing = listing[listing["Marcap"].notna() & (listing["Marcap"] > 0)]
+            listing = listing.sort_values("Marcap", ascending=False).head(n)
+            listing["Code"] = listing["Code"].astype(str).str.zfill(6)
+            for _, row in listing.iterrows():
+                result.append({
+                    "code": str(row["Code"]),
+                    "name": str(row.get("Name", row.get("ISU_ABBRV", row["Code"]))),
+                    "market": market,
+                    "market_cap": float(row["Marcap"]),
+                })
+        logger.info("FDR universe loaded: %d stocks (KOSPI+KOSDAQ top %d each)", len(result), n)
         return result
     except Exception as exc:  # noqa: BLE001
         logger.warning("FDR universe fetch failed, using default 5 stocks: %s", exc)
