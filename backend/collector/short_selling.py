@@ -7,6 +7,7 @@ from sqlalchemy.orm import Session
 
 from backend.collector.universe import get_universe
 from backend.db.models import ShortSellingDaily
+from backend.utils.dates import latest_trading_day
 from backend.utils.logger import get_logger
 
 
@@ -105,7 +106,10 @@ def collect_short_selling_data(db: Session, trading_date: date) -> None:
       2. pykrx 단건 조회 (배치 실패 시)
       3. 합성 demo 값 (fallback)
     """
-    yyyymmdd = trading_date.strftime("%Y%m%d")
+    fetch_date = latest_trading_day(trading_date)
+    if fetch_date != trading_date:
+        logger.info("trading_date=%s is non-trading → fetching short data for %s", trading_date, fetch_date)
+    yyyymmdd = fetch_date.strftime("%Y%m%d")
     db.execute(delete(ShortSellingDaily).where(ShortSellingDaily.trading_date == trading_date))
 
     # 배치 조회 시도

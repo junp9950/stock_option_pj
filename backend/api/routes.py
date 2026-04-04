@@ -182,7 +182,7 @@ def get_screener(
             )
         )
     }
-    flows_map = {
+    flows_today = {
         f.stock_code: f
         for f in db.scalars(
             select(SpotInvestorFlow).where(
@@ -191,6 +191,33 @@ def get_screener(
             )
         )
     }
+    # 오늘 수급이 모두 0이면 가장 최근 유효 데이터로 fallback
+    all_zero = all(
+        f.foreign_net_buy == 0 and f.institution_net_buy == 0
+        for f in flows_today.values()
+    )
+    if all_zero and flows_today:
+        latest_flow_date = db.scalar(
+            select(func.max(SpotInvestorFlow.trading_date)).where(
+                SpotInvestorFlow.trading_date < target_date,
+                SpotInvestorFlow.stock_code.in_(codes),
+                (SpotInvestorFlow.foreign_net_buy != 0) | (SpotInvestorFlow.institution_net_buy != 0),
+            )
+        )
+        if latest_flow_date:
+            flows_map = {
+                f.stock_code: f
+                for f in db.scalars(
+                    select(SpotInvestorFlow).where(
+                        SpotInvestorFlow.trading_date == latest_flow_date,
+                        SpotInvestorFlow.stock_code.in_(codes),
+                    )
+                )
+            }
+        else:
+            flows_map = flows_today
+    else:
+        flows_map = flows_today
     shorts_map = {
         s.stock_code: s
         for s in db.scalars(

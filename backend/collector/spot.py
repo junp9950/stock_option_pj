@@ -9,6 +9,7 @@ from sqlalchemy.orm import Session
 
 from backend.collector.universe import get_universe
 from backend.db.models import SpotDailyPrice, SpotInvestorFlow, Stock
+from backend.utils.dates import latest_trading_day
 from backend.utils.logger import get_logger
 
 
@@ -119,12 +120,17 @@ def collect_spot_data(db: Session, trading_date: date) -> None:
     Fallback: demo data generation for local/offline runs.
     """
 
+    # pykrx/FDR 조회는 마지막 실제 거래일 기준으로 (주말·공휴일 진입 방지)
+    fetch_date = latest_trading_day(trading_date)
+    if fetch_date != trading_date:
+        logger.info("trading_date=%s is non-trading day → fetching data for %s", trading_date, fetch_date)
+
     db.execute(delete(SpotDailyPrice).where(SpotDailyPrice.trading_date == trading_date))
     db.execute(delete(SpotInvestorFlow).where(SpotInvestorFlow.trading_date == trading_date))
     try:
         listing = _load_listing_snapshot()
-        date_text = trading_date.isoformat()
-        yyyymmdd = trading_date.strftime("%Y%m%d")
+        date_text = fetch_date.isoformat()
+        yyyymmdd = fetch_date.strftime("%Y%m%d")
 
         # pykrx 전종목 수급 일괄 조회 (한 번만 호출)
         batch_flows = _pykrx_investor_flow_batch(yyyymmdd)
@@ -167,21 +173,6 @@ def collect_spot_data(db: Session, trading_date: date) -> None:
                 foreign_net, institution_net, individual_net = _pykrx_investor_flow_single(stock.code, yyyymmdd)
             else:
                 foreign_net, institution_net, individual_net = 0.0, 0.0, 0.0
-
-            # 수급이 없으면 DB 최근 데이터 재사용
-            if foreign_net == 0.0 and institution_net == 0.0 and individual_net == 0.0:
-                from sqlalchemy import select as sa_select  # noqa: PLC0415
-                prev = db.execute(
-                    sa_select(SpotInvestorFlow)
-                    .where(SpotInvestorFlow.stock_code == stock.code)
-                    .where(SpotInvestorFlow.trading_date < trading_date)
-                    .order_by(SpotInvestorFlow.trading_date.desc())
-                    .limit(1)
-                ).scalar_one_or_none()
-                if prev:
-                    foreign_net = prev.foreign_net_buy
-                    institution_net = prev.institution_net_buy
-                    individual_net = prev.individual_net_buy
 
             db.add(
                 SpotInvestorFlow(
