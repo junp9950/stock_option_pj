@@ -326,6 +326,7 @@ async function loadAll() {
         </div>`).join('');
     }
   } catch(e) {
+    console.error('loadAll error:', e);
     document.getElementById('err-bar').style.display='block';
   }
 }
@@ -440,7 +441,7 @@ function exportCsv(){
     (i.short_ratio||0).toFixed(1),i.rsi_14!=null?Math.round(i.rsi_14):'',
     (i.volume_surge||1).toFixed(2),i.ma_score||0,i.consecutive_days||0,
   ]);
-  const csv=[headers,...rows].map(r=>r.join(',')).join('\n');
+  const csv=[headers,...rows].map(r=>r.join(',')).join(String.fromCharCode(10));
   const blob=new Blob(['\uFEFF'+csv],{type:'text/csv;charset=utf-8'});
   const url=URL.createObjectURL(blob);
   const a=document.createElement('a');a.href=url;a.download='screener_'+new Date().toISOString().slice(0,10)+'.csv';
