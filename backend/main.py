@@ -156,9 +156,79 @@ select{background:#21262d;border:1px solid #30363d;color:#c9d1d9;padding:6px 10p
     <label style="display:flex;align-items:center;gap:4px;cursor:pointer;font-size:13px">
       <input type="checkbox" id="scr-showall" onchange="loadScreener()"> 필터 무시 (전종목)
     </label>
+    <button class="btn btn-gray btn-sm" onclick="toggleFilterPanel()">▼ 상세필터</button>
+    <button class="btn btn-gray btn-sm" onclick="resetFilters()">✕ 필터초기화</button>
     <button class="btn btn-gray btn-sm" onclick="loadScreener()">⟳ 새로고침</button>
     <button class="btn btn-gray btn-sm" onclick="exportCsv()">↓ CSV</button>
     <span class="ts" id="scr-info"></span>
+  </div>
+  <!-- 상세 필터 패널 -->
+  <div id="filter-panel" style="display:none;background:#161b22;border:1px solid #30363d;border-radius:8px;padding:14px 18px;margin:0 16px 12px;display:none">
+    <div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(200px,1fr));gap:12px 20px;font-size:13px">
+      <div>
+        <div style="color:#8b949e;margin-bottom:4px">RSI 범위</div>
+        <div style="display:flex;gap:6px;align-items:center">
+          <input type="number" id="f-rsi-min" placeholder="최소" min="0" max="100" style="width:70px;background:#0d1117;border:1px solid #30363d;color:#c9d1d9;padding:4px 6px;border-radius:4px" oninput="renderScreener()">
+          <span style="color:#8b949e">~</span>
+          <input type="number" id="f-rsi-max" placeholder="최대" min="0" max="100" style="width:70px;background:#0d1117;border:1px solid #30363d;color:#c9d1d9;padding:4px 6px;border-radius:4px" oninput="renderScreener()">
+        </div>
+      </div>
+      <div>
+        <div style="color:#8b949e;margin-bottom:4px">공매도% 범위</div>
+        <div style="display:flex;gap:6px;align-items:center">
+          <input type="number" id="f-short-min" placeholder="최소" min="0" step="0.1" style="width:70px;background:#0d1117;border:1px solid #30363d;color:#c9d1d9;padding:4px 6px;border-radius:4px" oninput="renderScreener()">
+          <span style="color:#8b949e">~</span>
+          <input type="number" id="f-short-max" placeholder="최대" min="0" step="0.1" style="width:70px;background:#0d1117;border:1px solid #30363d;color:#c9d1d9;padding:4px 6px;border-radius:4px" oninput="renderScreener()">
+        </div>
+      </div>
+      <div>
+        <div style="color:#8b949e;margin-bottom:4px">거래량배수 최소</div>
+        <input type="number" id="f-vol-min" placeholder="예: 1.5" min="0" step="0.1" style="width:100px;background:#0d1117;border:1px solid #30363d;color:#c9d1d9;padding:4px 6px;border-radius:4px" oninput="renderScreener()">
+      </div>
+      <div>
+        <div style="color:#8b949e;margin-bottom:4px">등락률 범위 (%)</div>
+        <div style="display:flex;gap:6px;align-items:center">
+          <input type="number" id="f-chg-min" placeholder="최소" step="0.1" style="width:70px;background:#0d1117;border:1px solid #30363d;color:#c9d1d9;padding:4px 6px;border-radius:4px" oninput="renderScreener()">
+          <span style="color:#8b949e">~</span>
+          <input type="number" id="f-chg-max" placeholder="최대" step="0.1" style="width:70px;background:#0d1117;border:1px solid #30363d;color:#c9d1d9;padding:4px 6px;border-radius:4px" oninput="renderScreener()">
+        </div>
+      </div>
+      <div>
+        <div style="color:#8b949e;margin-bottom:4px">기관 순매수 방향</div>
+        <select id="f-inst" style="background:#0d1117;border:1px solid #30363d;color:#c9d1d9;padding:4px 8px;border-radius:4px" onchange="renderScreener()">
+          <option value="">전체</option>
+          <option value="buy">매수(+)</option>
+          <option value="sell">매도(-)</option>
+        </select>
+      </div>
+      <div>
+        <div style="color:#8b949e;margin-bottom:4px">외국인 순매수 방향</div>
+        <select id="f-foreign" style="background:#0d1117;border:1px solid #30363d;color:#c9d1d9;padding:4px 8px;border-radius:4px" onchange="renderScreener()">
+          <option value="">전체</option>
+          <option value="buy">매수(+)</option>
+          <option value="sell">매도(-)</option>
+        </select>
+      </div>
+      <div>
+        <div style="color:#8b949e;margin-bottom:4px">신호 합류 수 최소</div>
+        <input type="number" id="f-conf-min" placeholder="예: 5" min="0" max="13" style="width:100px;background:#0d1117;border:1px solid #30363d;color:#c9d1d9;padding:4px 6px;border-radius:4px" oninput="renderScreener()">
+      </div>
+      <div>
+        <div style="color:#8b949e;margin-bottom:4px">연속매수일 최소</div>
+        <input type="number" id="f-consec-min" placeholder="예: 3" min="0" style="width:100px;background:#0d1117;border:1px solid #30363d;color:#c9d1d9;padding:4px 6px;border-radius:4px" oninput="renderScreener()">
+      </div>
+      <div>
+        <div style="color:#8b949e;margin-bottom:4px">총점 최소</div>
+        <input type="number" id="f-score-min" placeholder="예: 0.5" min="0" max="1" step="0.01" style="width:100px;background:#0d1117;border:1px solid #30363d;color:#c9d1d9;padding:4px 6px;border-radius:4px" oninput="renderScreener()">
+      </div>
+      <div>
+        <div style="color:#8b949e;margin-bottom:4px">기관+외국인 동시매수</div>
+        <label style="display:flex;align-items:center;gap:6px;cursor:pointer">
+          <input type="checkbox" id="f-cobuy" onchange="renderScreener()">
+          <span>동시매수만 보기</span>
+        </label>
+      </div>
+    </div>
   </div>
   <div class="content">
     <table>
@@ -345,12 +415,55 @@ function setScrSort(key){
   renderScreener();
 }
 
+function toggleFilterPanel(){
+  const p=document.getElementById('filter-panel');
+  p.style.display=p.style.display==='none'?'block':'none';
+}
+function resetFilters(){
+  ['f-rsi-min','f-rsi-max','f-short-min','f-short-max','f-vol-min',
+   'f-chg-min','f-chg-max','f-conf-min','f-consec-min','f-score-min'].forEach(id=>{
+    const el=document.getElementById(id); if(el) el.value='';
+  });
+  ['f-inst','f-foreign'].forEach(id=>{const el=document.getElementById(id);if(el)el.value='';});
+  const cb=document.getElementById('f-cobuy'); if(cb) cb.checked=false;
+  renderScreener();
+}
+function _fv(id){const v=document.getElementById(id)?.value;return v===''||v==null?null:parseFloat(v);}
+function _fs(id){return document.getElementById(id)?.value||'';}
+
 function renderScreener(){
   const q=document.getElementById('scr-search').value.toLowerCase();
   const mkt=document.getElementById('scr-market').value;
+  const rsiMin=_fv('f-rsi-min'), rsiMax=_fv('f-rsi-max');
+  const shortMin=_fv('f-short-min'), shortMax=_fv('f-short-max');
+  const volMin=_fv('f-vol-min');
+  const chgMin=_fv('f-chg-min'), chgMax=_fv('f-chg-max');
+  const confMin=_fv('f-conf-min');
+  const consecMin=_fv('f-consec-min');
+  const scoreMin=_fv('f-score-min');
+  const instDir=_fs('f-inst'), foreignDir=_fs('f-foreign');
+  const cobuy=document.getElementById('f-cobuy')?.checked;
   let data=[...scrData].filter(i=>{
     if(q&&!i.name.toLowerCase().includes(q)&&!i.code.includes(q))return false;
     if(mkt&&i.market!==mkt)return false;
+    const rsi=i.rsi_14;
+    if(rsiMin!=null&&(rsi==null||rsi<rsiMin))return false;
+    if(rsiMax!=null&&(rsi==null||rsi>rsiMax))return false;
+    const sr=i.short_ratio||0;
+    if(shortMin!=null&&sr<shortMin)return false;
+    if(shortMax!=null&&sr>shortMax)return false;
+    if(volMin!=null&&(i.volume_surge||1)<volMin)return false;
+    const chg=i.change_pct||0;
+    if(chgMin!=null&&chg<chgMin)return false;
+    if(chgMax!=null&&chg>chgMax)return false;
+    if(confMin!=null&&(i.signal_confluence||0)<confMin)return false;
+    if(consecMin!=null&&(i.consecutive_days||0)<consecMin)return false;
+    if(scoreMin!=null&&(i.total_score||0)<scoreMin)return false;
+    if(instDir==='buy'&&(i.institution_net_buy||0)<=0)return false;
+    if(instDir==='sell'&&(i.institution_net_buy||0)>=0)return false;
+    if(foreignDir==='buy'&&(i.foreign_net_buy||0)<=0)return false;
+    if(foreignDir==='sell'&&(i.foreign_net_buy||0)>=0)return false;
+    if(cobuy&&!((i.institution_net_buy||0)>0&&(i.foreign_net_buy||0)>0))return false;
     return true;
   });
   data.sort((a,b)=>{
