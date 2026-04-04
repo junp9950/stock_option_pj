@@ -16,6 +16,53 @@ from backend.utils.logger import get_logger
 logger = get_logger(__name__)
 
 
+def _naver_investor_flow_single(code: str, target_date_iso: str) -> tuple[float, float, float]:
+    """네이버 금융 main.naver에서 외국인/기관 순매수(주) 조회.
+    반환: (foreign_net_shares, institution_net_shares, 0.0)
+    실패 시 (0, 0, 0) 반환.
+    """
+    try:
+        import requests  # noqa: PLC0415
+        from bs4 import BeautifulSoup  # noqa: PLC0415
+        r = requests.get(
+            "https://finance.naver.com/item/main.naver",
+            params={"code": code},
+            headers={"User-Agent": "Mozilla/5.0", "Referer": "https://finance.naver.com"},
+            timeout=5,
+        )
+        if r.status_code != 200:
+            return 0.0, 0.0, 0.0
+        soup = BeautifulSoup(r.text, "html.parser")
+        tables = soup.select("table")
+        # Table 3: 날짜 | 종가 | 등락 | 외국인 | 기관
+        if len(tables) < 4:
+            return 0.0, 0.0, 0.0
+        t = tables[3]
+        # target_date_iso: "2026-04-03" → "04/03"
+        target_mmdd = target_date_iso[5:].replace("-", "/")
+
+        def _parse(s: str) -> float:
+            s = s.replace(",", "").replace("+", "").replace(" ", "")
+            try:
+                return float(s)
+            except ValueError:
+                return 0.0
+
+        for row in t.select("tr"):
+            # 날짜가 th에, 나머지가 td에 있는 구조
+            cells = [c.get_text(strip=True) for c in row.select("th,td")]
+            if not cells or cells[0] != target_mmdd:
+                continue
+            # cells: [mmdd, close, change, foreign_net, institution_net]
+            foreign_net = _parse(cells[3]) if len(cells) > 3 else 0.0
+            inst_net = _parse(cells[4]) if len(cells) > 4 else 0.0
+            return foreign_net, inst_net, 0.0
+        return 0.0, 0.0, 0.0
+    except Exception as exc:  # noqa: BLE001
+        logger.debug("naver investor flow failed for %s: %s", code, exc)
+        return 0.0, 0.0, 0.0
+
+
 def _pykrx_investor_flow_batch(yyyymmdd: str) -> dict[str, tuple[float, float, float]]:
     """pykrx로 당일 전종목 외국인/기관/개인 순매수(원) 일괄 조회.
     반환: {종목코드: (foreign_net, institution_net, individual_net)}
@@ -166,13 +213,17 @@ def collect_spot_data(db: Session, trading_date: date) -> None:
                 )
             )
 
-            # 수급 데이터: 배치 결과 우선, 없으면 단건 fallback
+            # 수급 데이터: pykrx 배치 → pykrx 단건 → 네이버 순서로 시도
             if batch_ok and stock.code in batch_flows:
                 foreign_net, institution_net, individual_net = batch_flows[stock.code]
             elif not batch_ok:
                 foreign_net, institution_net, individual_net = _pykrx_investor_flow_single(stock.code, yyyymmdd)
             else:
                 foreign_net, institution_net, individual_net = 0.0, 0.0, 0.0
+
+            # pykrx 실패 시 네이버 fallback
+            if foreign_net == 0.0 and institution_net == 0.0:
+                foreign_net, institution_net, individual_net = _naver_investor_flow_single(stock.code, fetch_date.isoformat())
 
             db.add(
                 SpotInvestorFlow(
