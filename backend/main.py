@@ -235,7 +235,7 @@ select{background:#21262d;border:1px solid #30363d;color:#c9d1d9;padding:6px 10p
 <div class="toast" id="toast"></div>
 
 <script>
-const API = 'http://127.0.0.1:8000/api';
+const API = window.location.origin + '/api';
 let scrData = [], scrSortKey = 'total_score', scrSortAsc = false;
 
 const fmt = n => n==null?'—':Math.abs(n)>=1e8?(n>=0?'+':'')+Math.abs(n/1e8).toFixed(0)+'억':(n>=0?'+':'-')+Math.abs(n/1e4).toFixed(0)+'만';
@@ -567,12 +567,19 @@ setInterval(loadAll,60000);
 
 @app.on_event("startup")
 def startup_event() -> None:
+    import threading
     Base.metadata.create_all(bind=engine)
     db = SessionLocal()
     try:
         seed_reference_data(db)
-        run_daily_pipeline(db)
     finally:
         db.close()
+    def _bg() -> None:
+        _db = SessionLocal()
+        try:
+            run_daily_pipeline(_db)
+        finally:
+            _db.close()
+    threading.Thread(target=_bg, daemon=True).start()
     start_scheduler()
 
