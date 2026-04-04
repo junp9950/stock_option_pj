@@ -1,37 +1,9 @@
-# Python
 .venv/
-.venv311/
 __pycache__/
-*.py[cod]
+*.pyc
 *.pyo
-*.pyd
-.Python
-*.egg-info/
-dist/
-build/
-
-# Pytest
-.pytest_cache/
-.coverage
-htmlcov/
-
-# Database
-*.db
-*.sqlite3
-
-# Env
+data/*.db
+data/*.sqlite
 .env
-.env.*
-
-# Node
-frontend/node_modules/
-frontend/dist/
-
-# IDE
-.vscode/
-.idea/
-
-# OS
-.DS_Store
-Thumbs.db
-.claude/
+*.log
+작업일지*.txt
