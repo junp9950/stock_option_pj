@@ -410,7 +410,7 @@ def calculate_stock_signals(db: Session, trading_date: date) -> list[StockSignal
         stock_signal = StockSignal(
             trading_date=trading_date,
             stock_code=stock.code,
-            score=round(max(0.0, weighted_score * 3.5), 2),
+            score=round(weighted_score * 3.5, 2),
         )
         db.add(stock_signal)
         results.append(stock_signal)

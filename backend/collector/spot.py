@@ -64,33 +64,63 @@ def _naver_investor_flow_single(code: str, target_date_iso: str) -> tuple[float,
 
 
 def _pykrx_investor_flow_batch(yyyymmdd: str) -> dict[str, tuple[float, float, float]]:
-    """pykrx로 당일 전종목 외국인/기관/개인 순매수(원) 일괄 조회.
-    반환: {종목코드: (foreign_net, institution_net, individual_net)}
+    """pykrx로 당일 전종목 외국인/기관 순매수(원) 일괄 조회.
+    반환: {종목코드: (foreign_net, institution_net, 0.0)}
     실패 시 빈 dict 반환.
     """
     try:
         from pykrx import stock as pykrx_stock  # noqa: PLC0415
-        df = pykrx_stock.get_market_net_purchases_of_equities_by_investor(
-            yyyymmdd, yyyymmdd
-        )
-        if df is None or df.empty:
+
+        def _fetch(market: str, investor: str) -> pd.DataFrame:
+            try:
+                df = pykrx_stock.get_market_net_purchases_of_equities_by_ticker(
+                    yyyymmdd, yyyymmdd, market, investor
+                )
+                return df if df is not None else pd.DataFrame()
+            except Exception:  # noqa: BLE001
+                return pd.DataFrame()
+
+        df_f_k = _fetch("KOSPI", "외국인")
+        df_f_q = _fetch("KOSDAQ", "외국인")
+        df_i_k = _fetch("KOSPI", "기관합계")
+        df_i_q = _fetch("KOSDAQ", "기관합계")
+
+        df_foreign = pd.concat([df_f_k, df_f_q]) if not df_f_k.empty or not df_f_q.empty else pd.DataFrame()
+        df_inst = pd.concat([df_i_k, df_i_q]) if not df_i_k.empty or not df_i_q.empty else pd.DataFrame()
+
+        if df_foreign.empty and df_inst.empty:
             return {}
 
         result: dict[str, tuple[float, float, float]] = {}
 
-        def _col(row: pd.Series, *keys: str) -> float:
-            for k in keys:
-                if k in row.index:
-                    return float(row[k])
+        def _net(df: pd.DataFrame, code: str) -> float:
+            if df is None or df.empty or code not in df.index:
+                return 0.0
+            row = df.loc[code]
+            for col in ["순매수", "매수", "순매수금액"]:
+                if col in row.index:
+                    return float(row[col])
+            # 첫 번째 숫자 컬럼 사용
+            for val in row:
+                try:
+                    return float(val)
+                except (TypeError, ValueError):
+                    continue
             return 0.0
 
-        for code, row in df.iterrows():
-            code_str = str(code).zfill(6)
-            result[code_str] = (
-                _col(row, "외국인합계", "외국인"),
-                _col(row, "기관합계", "기관"),
-                _col(row, "개인"),
+        all_codes = set()
+        if df_foreign is not None and not df_foreign.empty:
+            all_codes |= set(str(c).zfill(6) for c in df_foreign.index)
+        if df_inst is not None and not df_inst.empty:
+            all_codes |= set(str(c).zfill(6) for c in df_inst.index)
+
+        for code in all_codes:
+            result[code] = (
+                _net(df_foreign, code),
+                _net(df_inst, code),
+                0.0,
             )
+
         logger.info("pykrx batch investor flow: %d stocks fetched for %s", len(result), yyyymmdd)
         return result
     except Exception as exc:  # noqa: BLE001
@@ -99,27 +129,42 @@ def _pykrx_investor_flow_batch(yyyymmdd: str) -> dict[str, tuple[float, float, f
 
 
 def _pykrx_investor_flow_single(code: str, yyyymmdd: str) -> tuple[float, float, float]:
-    """pykrx로 단일 종목 외국인/기관/개인 순매수(원) 조회. 실패 시 (0, 0, 0) 반환."""
+    """pykrx로 단일 종목 외국인/기관 순매수(원) 조회. 실패 시 (0, 0, 0) 반환."""
     try:
         from pykrx import stock as pykrx_stock  # noqa: PLC0415
-        df = pykrx_stock.get_market_net_purchases_of_equities_by_investor(
-            yyyymmdd, yyyymmdd, code
-        )
-        if df is None or df.empty:
-            return 0.0, 0.0, 0.0
-        row = df.iloc[0]
 
-        def _col(r: pd.Series, *keys: str) -> float:
-            for k in keys:
-                if k in r.index:
-                    return float(r[k])
+        def _net_from_df(df: pd.DataFrame) -> float:
+            if df is None or df.empty:
+                return 0.0
+            row = df.iloc[0]
+            for col in ["순매수", "매수", "순매수금액"]:
+                if col in row.index:
+                    return float(row[col])
+            for val in row:
+                try:
+                    return float(val)
+                except (TypeError, ValueError):
+                    continue
             return 0.0
 
-        return (
-            _col(row, "외국인합계", "외국인"),
-            _col(row, "기관합계", "기관"),
-            _col(row, "개인"),
-        )
+        def _fetch_single(market: str, investor: str) -> pd.DataFrame:
+            try:
+                df = pykrx_stock.get_market_net_purchases_of_equities_by_ticker(
+                    yyyymmdd, yyyymmdd, market, investor
+                )
+                return df if df is not None else pd.DataFrame()
+            except Exception:  # noqa: BLE001
+                return pd.DataFrame()
+
+        df_f = pd.concat([_fetch_single("KOSPI", "외국인"), _fetch_single("KOSDAQ", "외국인")])
+        df_i = pd.concat([_fetch_single("KOSPI", "기관합계"), _fetch_single("KOSDAQ", "기관합계")])
+
+        def _get(df: pd.DataFrame) -> float:
+            if df is None or df.empty or code not in df.index:
+                return 0.0
+            return _net_from_df(df.loc[[code]])
+
+        return _get(df_f), _get(df_i), 0.0
     except Exception as exc:  # noqa: BLE001
         logger.debug("pykrx investor flow skipped for %s: %s", code, exc)
         return 0.0, 0.0, 0.0
@@ -132,6 +177,17 @@ def _load_listing_snapshot() -> pd.DataFrame:
 
 
 def _fallback_spot_row(db: Session, trading_date: date) -> None:
+    """FDR 수집 실패 시 폴백. 이미 실제 데이터가 있는 종목은 건드리지 않는다."""
+    from sqlalchemy import select  # noqa: PLC0415
+    existing_codes = {
+        row[0] for row in db.execute(
+            select(SpotDailyPrice.stock_code).where(SpotDailyPrice.trading_date == trading_date)
+        )
+    }
+    if existing_codes:
+        logger.info("폴백 스킵: %s에 이미 %d종목 실제 데이터 존재", trading_date, len(existing_codes))
+        return
+    logger.warning("폴백 데이터 생성: %s (실제 데이터 없음)", trading_date)
     for index, stock in enumerate(get_universe(db), start=1):
         base_price = 50_000 + index * 10_000
         change_pct = round(((index % 5) - 2) * 0.8, 2)
@@ -172,12 +228,20 @@ def collect_spot_data(db: Session, trading_date: date) -> None:
     if fetch_date != trading_date:
         logger.info("trading_date=%s is non-trading day → fetching data for %s", trading_date, fetch_date)
 
-    db.execute(delete(SpotDailyPrice).where(SpotDailyPrice.trading_date == trading_date))
-    db.execute(delete(SpotInvestorFlow).where(SpotInvestorFlow.trading_date == trading_date))
     try:
         listing = _load_listing_snapshot()
         date_text = fetch_date.isoformat()
         yyyymmdd = fetch_date.strftime("%Y%m%d")
+
+        # FDR 테스트 수집 — 실패하면 기존 데이터 보존 후 리턴
+        test_df = fdr.DataReader("005930", date_text, date_text)
+        if test_df.empty:
+            logger.warning("FDR 수집 실패 (%s) — 기존 DB 데이터 보존", date_text)
+            return
+
+        # FDR 정상 확인 후 기존 데이터 삭제
+        db.execute(delete(SpotDailyPrice).where(SpotDailyPrice.trading_date == trading_date))
+        db.execute(delete(SpotInvestorFlow).where(SpotInvestorFlow.trading_date == trading_date))
 
         # pykrx 전종목 수급 일괄 조회 (한 번만 호출)
         batch_flows = _pykrx_investor_flow_batch(yyyymmdd)
@@ -208,22 +272,16 @@ def collect_spot_data(db: Session, trading_date: date) -> None:
                     low_price=float(row["Low"]),
                     close_price=float(row["Close"]),
                     volume=float(row["Volume"]),
-                    trading_value=float(listing_row.get("Amount", 0.0)) if listing_row is not None else 0.0,
+                    trading_value=float(row["Volume"]) * float(row["Close"]),
                     change_pct=round(float(row["Change"]) * 100, 4),
                 )
             )
 
-            # 수급 데이터: pykrx 배치 → pykrx 단건 → 네이버 순서로 시도
+            # 수급 데이터: pykrx 배치 → 배치 내 해당 코드 없으면 0
             if batch_ok and stock.code in batch_flows:
                 foreign_net, institution_net, individual_net = batch_flows[stock.code]
-            elif not batch_ok:
-                foreign_net, institution_net, individual_net = _pykrx_investor_flow_single(stock.code, yyyymmdd)
             else:
                 foreign_net, institution_net, individual_net = 0.0, 0.0, 0.0
-
-            # pykrx 실패 시 네이버 fallback
-            if foreign_net == 0.0 and institution_net == 0.0:
-                foreign_net, institution_net, individual_net = _naver_investor_flow_single(stock.code, fetch_date.isoformat())
 
             db.add(
                 SpotInvestorFlow(

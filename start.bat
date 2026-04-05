@@ -1,11 +1,11 @@
 @echo off
-chcp 65001 >/dev/null
+chcp 65001 >nul
 title Stock System
 
 cd /d "%~dp0"
 echo Path: %CD%
 
-python --version >/dev/null 2>&1
+python --version >nul 2>&1
 if errorlevel 1 (
     echo Python not found. Install Python 3.10+ from python.org
     pause
@@ -22,11 +22,12 @@ call .venv\Scripts\activate.bat
 echo Installing packages...
 pip install -q -r requirements.txt --upgrade-strategy only-if-needed
 
-for /f "tokens=5" %%a in ('netstat -ano ^| findstr ":8000 "') do (
-    taskkill /F /PID %%a >/dev/null 2>&1
+echo Killing existing process on port 8000...
+for /f "tokens=5" %%a in ('netstat -ano 2^>nul ^| findstr ":8000 "') do (
+    taskkill /F /PID %%a >nul 2>&1
 )
 
-start "" cmd /c "timeout /t 5 >/dev/null && start http://127.0.0.1:8000"
+start "" cmd /c "timeout /t 5 >nul && start http://127.0.0.1:8000"
 
 echo.
 echo Dashboard: http://127.0.0.1:8000

@@ -70,14 +70,18 @@ select{background:#21262d;border:1px solid #30363d;color:#c9d1d9;padding:6px 10p
 .panel{display:none}.panel.active{display:block}
 .toast{position:fixed;bottom:20px;right:20px;background:#238636;color:#fff;padding:10px 18px;border-radius:8px;display:none;font-size:13px;z-index:999}
 .err-bar{background:#3d0b0b;color:#f85149;padding:8px 24px;font-size:12px;display:none}
-.modal-bg{position:fixed;inset:0;background:rgba(0,0,0,.7);display:none;z-index:100;align-items:center;justify-content:center}
+.modal-bg{position:fixed;inset:0;background:rgba(0,0,0,.75);display:none;z-index:100;align-items:center;justify-content:center;padding:16px}
 .modal-bg.show{display:flex}
-.modal{background:#161b22;border:1px solid #30363d;border-radius:10px;padding:24px;width:620px;max-height:80vh;overflow-y:auto}
+.modal{background:#161b22;border:1px solid #30363d;border-radius:10px;padding:24px;width:min(960px,100%);max-height:90vh;overflow-y:auto}
 .modal h2{font-size:16px;font-weight:700;margin-bottom:16px;color:#e6edf3}
 .close-btn{float:right;cursor:pointer;color:#8b949e;font-size:18px;line-height:1}.close-btn:hover{color:#e6edf3}
+.modal-tabs{display:flex;gap:4px;margin-bottom:16px;border-bottom:1px solid #30363d;padding-bottom:0}
+.modal-tab{padding:6px 14px;font-size:13px;color:#8b949e;cursor:pointer;border-bottom:2px solid transparent;margin-bottom:-1px}
+.modal-tab.active{color:#58a6ff;border-bottom-color:#58a6ff}
 .ts{color:#8b949e;font-size:11px}
 .log-ok{color:#3fb950}.log-err{color:#f85149}.log-run{color:#d29922}
 </style>
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4/dist/chart.umd.min.js"></script>
 </head>
 <body>
 <header>
@@ -257,8 +261,32 @@ select{background:#21262d;border:1px solid #30363d;color:#c9d1d9;padding:6px 10p
 
 <!-- 백테스트 탭 -->
 <div id="panel-backtest" class="panel content">
+
+  <!-- 히스토리컬 백테스트 -->
+  <div style="background:#161b22;border:1px solid #30363d;border-radius:8px;padding:16px;margin-bottom:20px">
+    <div style="font-weight:600;color:#c9d1d9;margin-bottom:12px;font-size:15px">히스토리컬 백테스트 (FDR 가격 기반)</div>
+    <div style="display:flex;align-items:center;gap:12px;flex-wrap:wrap;margin-bottom:12px">
+      <label style="color:#8b949e;font-size:13px">시작일</label>
+      <input type="text" id="hbt-start" placeholder="2026-01-01" maxlength="10" style="background:#0d1117;border:1px solid #30363d;color:#c9d1d9;padding:4px 8px;border-radius:4px;font-size:13px;width:100px;font-family:monospace">
+      <label style="color:#8b949e;font-size:13px">종료일</label>
+      <input type="text" id="hbt-end" placeholder="2026-04-05" maxlength="10" style="background:#0d1117;border:1px solid #30363d;color:#c9d1d9;padding:4px 8px;border-radius:4px;font-size:13px;width:100px;font-family:monospace">
+      <label style="color:#8b949e;font-size:13px">Top-N</label>
+      <input type="number" id="hbt-topn" value="5" min="1" max="20" style="background:#0d1117;border:1px solid #30363d;color:#c9d1d9;padding:4px 8px;border-radius:4px;font-size:13px;width:60px">
+      <button class="btn" onclick="runHistoricalBacktest(this)">▶ 실행</button>
+      <span class="ts" id="hbt-status"></span>
+    </div>
+    <div class="grid" id="hbt-cards" style="margin-bottom:12px"></div>
+    <canvas id="hbt-chart" style="display:none;max-height:180px;margin-bottom:12px"></canvas>
+    <table id="hbt-table" style="display:none">
+      <thead><tr><th>날짜</th><th>평균수익률</th><th>승률</th><th>종목수</th><th>추천종목</th></tr></thead>
+      <tbody id="hbt-body"></tbody>
+    </table>
+  </div>
+
+  <!-- 기존 DB 기반 백테스트 -->
+  <div style="font-weight:600;color:#8b949e;margin-bottom:8px;font-size:13px">DB 추천 기록 기반 백테스트</div>
   <div style="display:flex;align-items:center;gap:12px;margin-bottom:16px">
-    <button class="btn" onclick="runBacktest(this)">▶ 백테스트 실행 (T+1)</button>
+    <button class="btn" onclick="runBacktest(this)">▶ 실행 (최근 90일 추천)</button>
     <span class="ts" id="bt-status"></span>
   </div>
   <div class="grid" id="bt-cards" style="margin-bottom:16px"></div>
@@ -287,6 +315,22 @@ select{background:#21262d;border:1px solid #30363d;color:#c9d1d9;padding:6px 10p
 
 <!-- 실행 이력 탭 -->
 <div id="panel-logs" class="panel content">
+
+  <!-- 과거 데이터 백필 -->
+  <div style="background:#161b22;border:1px solid #30363d;border-radius:8px;padding:16px;margin-bottom:20px">
+    <div style="font-weight:600;color:#c9d1d9;margin-bottom:12px;font-size:15px">과거 데이터 백필 (수급·가격)</div>
+    <div style="color:#8b949e;font-size:12px;margin-bottom:12px">pykrx로 과거 기관/외국인 수급 + FDR 가격을 한번에 수집합니다. 이미 있는 날짜는 건너뜁니다.<br>수급 포함 백테스트를 하려면 먼저 이 기능으로 데이터를 채우세요.</div>
+    <div style="display:flex;align-items:center;gap:12px;flex-wrap:wrap;margin-bottom:12px">
+      <label style="color:#8b949e;font-size:13px">시작일</label>
+      <input type="text" id="bf-start" placeholder="2024-01-01" maxlength="10" style="background:#0d1117;border:1px solid #30363d;color:#c9d1d9;padding:4px 8px;border-radius:4px;font-size:13px;width:100px;font-family:monospace">
+      <label style="color:#8b949e;font-size:13px">종료일</label>
+      <input type="text" id="bf-end" placeholder="2025-12-31" maxlength="10" style="background:#0d1117;border:1px solid #30363d;color:#c9d1d9;padding:4px 8px;border-radius:4px;font-size:13px;width:100px;font-family:monospace">
+      <button class="btn" onclick="runBackfill(this)">▶ 백필 시작</button>
+      <span class="ts" id="bf-status"></span>
+    </div>
+    <div id="bf-result" style="font-size:13px;color:#8b949e"></div>
+  </div>
+
   <table>
     <thead><tr><th>시각</th><th>기준일</th><th>단계</th><th>상태</th><th>메시지</th></tr></thead>
     <tbody id="log-body"><tr><td colspan="5" style="color:#8b949e;text-align:center;padding:20px">로딩 중…</td></tr></tbody>
@@ -298,7 +342,24 @@ select{background:#21262d;border:1px solid #30363d;color:#c9d1d9;padding:6px 10p
   <div class="modal">
     <span class="close-btn" onclick="closeModal()">✕</span>
     <h2 id="modal-title">종목 시그널 상세</h2>
-    <div id="modal-body"></div>
+    <div class="modal-tabs">
+      <div class="modal-tab active" onclick="switchModalTab('chart',this)">차트</div>
+      <div class="modal-tab" onclick="switchModalTab('signal',this)">시그널 상세</div>
+    </div>
+    <!-- 차트 탭 -->
+    <div id="modal-chart-tab">
+      <div style="position:relative;margin-bottom:8px">
+        <canvas id="modal-price-chart" style="max-height:220px"></canvas>
+      </div>
+      <div style="position:relative">
+        <canvas id="modal-volume-chart" style="max-height:80px"></canvas>
+      </div>
+      <div id="modal-chart-info" style="display:flex;gap:16px;margin-top:12px;flex-wrap:wrap"></div>
+    </div>
+    <!-- 시그널 탭 -->
+    <div id="modal-signal-tab" style="display:none">
+      <div id="modal-body"></div>
+    </div>
   </div>
 </div>
 
@@ -329,8 +390,8 @@ function switchTab(id) {
   if(id==='screener')loadScreener();
   if(id==='signal')loadSignalDetail();
   if(id==='sources')loadSources();
-  if(id==='logs')loadLogs();
-  if(id==='backtest')loadBacktestSummary();
+  if(id==='logs'){loadLogs();_initBfDates();}
+  if(id==='backtest'){loadBacktestSummary();_initHbtDates();}
 }
 
 async function loadAll() {
@@ -434,6 +495,7 @@ function _fs(id){return document.getElementById(id)?.value||'';}
 function renderScreener(){
   const q=document.getElementById('scr-search').value.toLowerCase();
   const mkt=document.getElementById('scr-market').value;
+  const showAll=document.getElementById('scr-showall')?.checked;
   const rsiMin=_fv('f-rsi-min'), rsiMax=_fv('f-rsi-max');
   const shortMin=_fv('f-short-min'), shortMax=_fv('f-short-max');
   const volMin=_fv('f-vol-min');
@@ -446,6 +508,7 @@ function renderScreener(){
   let data=[...scrData].filter(i=>{
     if(q&&!i.name.toLowerCase().includes(q)&&!i.code.includes(q))return false;
     if(mkt&&i.market!==mkt)return false;
+    if(showAll)return true;
     const rsi=i.rsi_14;
     if(rsiMin!=null&&(rsi==null||rsi<rsiMin))return false;
     if(rsiMax!=null&&(rsi==null||rsi>rsiMax))return false;
@@ -537,6 +600,65 @@ async function loadLogs(){
   </tr>`).join('');
 }
 
+function _initBfDates(){
+  const fmt = d => d.toISOString().slice(0,10);
+  const es = document.getElementById('bf-start');
+  const ee = document.getElementById('bf-end');
+  if(!es.value) es.value = '2024-01-02';
+  if(!ee.value){const d=new Date();d.setDate(d.getDate()-1);ee.value=fmt(d);}
+}
+
+let _bfPollTimer = null;
+
+async function runBackfill(btn){
+  const start = document.getElementById('bf-start').value;
+  const end = document.getElementById('bf-end').value;
+  if(!start||!end){showToast('시작일·종료일을 입력하세요',true);return;}
+  if(!confirm(`${start} ~ ${end} 기간 데이터를 백필합니다.\n종목 수에 따라 수십 분 소요될 수 있습니다.\n계속하시겠습니까?`)){return;}
+  btn.disabled=true;btn.textContent='백필 중…';
+  document.getElementById('bf-result').textContent='';
+  try{
+    const r=await fetch(API+`/data/backfill?start_date=${start}&end_date=${end}`,{method:'POST'});
+    const d=await r.json();
+    if(!r.ok){
+      const msg=d.detail||d.error||JSON.stringify(d);
+      showToast('오류: '+msg,true);
+      document.getElementById('bf-result').innerHTML=`<span style="color:#f85149">오류: ${msg}</span>`;
+      document.getElementById('bf-status').textContent='';
+      btn.disabled=false;btn.textContent='▶ 백필 시작';return;
+    }
+    // 백그라운드 실행 시작됨 — 5초마다 상태 polling
+    document.getElementById('bf-status').textContent='백필 실행 중… (서버 로그에서 진행 확인 가능)';
+    if(_bfPollTimer) clearInterval(_bfPollTimer);
+    _bfPollTimer = setInterval(async()=>{
+      try{
+        const s=await fetch(API+'/data/backfill/status').then(r=>r.json());
+        if(s.error){
+          clearInterval(_bfPollTimer);
+          document.getElementById('bf-status').textContent='오류 발생';
+          document.getElementById('bf-result').innerHTML=`<span style="color:#f85149">오류: ${s.error}</span>`;
+          btn.disabled=false;btn.textContent='▶ 백필 시작';
+        } else if(!s.running && s.result){
+          clearInterval(_bfPollTimer);
+          const res=s.result;
+          document.getElementById('bf-status').textContent='완료';
+          document.getElementById('bf-result').innerHTML=`
+            <span style="color:#3fb950">✓ ${res.days_filled}일 채움</span> &nbsp;
+            <span style="color:#8b949e">/ 건너뜀 ${res.days_skipped}일 / 전체 ${res.days_total}일 / 종목 ${res.stocks}개</span>
+            ${res.errors&&res.errors.length?'<br><span style="color:#f85149">오류 '+res.errors.length+'건: '+res.errors[0]+'</span>':''}`;
+          showToast(`백필 완료: ${res.days_filled}일 채움`);
+          btn.disabled=false;btn.textContent='▶ 백필 시작';
+          loadLogs();
+        }
+      }catch(e){}
+    }, 5000);
+  }catch(e){
+    showToast('백필 요청 실패: '+e.message,true);
+    document.getElementById('bf-status').textContent='';
+    btn.disabled=false;btn.textContent='▶ 백필 시작';
+  }
+}
+
 function exportCsv(){
   if(!scrData.length){showToast('내보낼 데이터가 없습니다.',true);return;}
   const q=document.getElementById('scr-search').value.toLowerCase();
@@ -605,29 +727,233 @@ async function runBacktest(btn){
     document.getElementById('bt-status').textContent=' ('+d.period+')';
     showToast(`백테스트 완료: 평균수익 ${(m.avg_return_1d*100).toFixed(3)}%, 승률 ${(m.win_rate_1d*100).toFixed(1)}%`);
   }catch(e){showToast('백테스트 실패: '+e.message,true);}
-  finally{btn.disabled=false;btn.textContent='▶ 백테스트 실행 (T+1)';}
+  finally{btn.disabled=false;btn.textContent='▶ 실행 (최근 90일 추천)';}
+}
+
+// 히스토리컬 백테스트 차트 인스턴스
+let hbtChart = null;
+
+function _initHbtDates(){
+  const end = new Date();
+  const start = new Date();
+  start.setMonth(start.getMonth()-3);
+  const fmt = d => d.toISOString().slice(0,10);
+  const es = document.getElementById('hbt-start');
+  const ee = document.getElementById('hbt-end');
+  if(!es.value) es.value = fmt(start);
+  if(!ee.value) ee.value = fmt(end);
+}
+
+async function runHistoricalBacktest(btn){
+  const start = document.getElementById('hbt-start').value;
+  const end = document.getElementById('hbt-end').value;
+  const topn = document.getElementById('hbt-topn').value||5;
+  if(!start||!end){showToast('시작일·종료일을 입력하세요',true);return;}
+  btn.disabled=true;btn.textContent='실행 중…';
+  document.getElementById('hbt-status').textContent='FDR 가격 다운로드 중 (수십 초 소요)…';
+  try{
+    const r=await fetch(API+`/backtest/historical?start_date=${start}&end_date=${end}&top_n=${topn}`,{method:'POST'});
+    const d=await r.json();
+    if(d.error){showToast('오류: '+d.error,true);return;}
+    const m=d.metrics||{};
+    const pct=v=>v!=null?v.toFixed(3)+'%':'—';
+    const pctWr=v=>v!=null?v.toFixed(1)+'%':'—';
+    document.getElementById('hbt-cards').innerHTML=`
+      <div class="card"><h3>평균수익률</h3><div class="val" style="color:${(m.avg_return_pct||0)>=0?'#3fb950':'#f85149'};font-size:22px">${pct(m.avg_return_pct)}</div><div class="note">수수료·슬리피지 차감</div></div>
+      <div class="card"><h3>승률</h3><div class="val" style="font-size:22px">${pctWr(m.win_rate_pct)}</div></div>
+      <div class="card"><h3>샤프</h3><div class="val" style="font-size:22px">${m.sharpe!=null?m.sharpe.toFixed(3):'—'}</div><div class="note">연환산</div></div>
+      <div class="card"><h3>누적수익률</h3><div class="val" style="font-size:22px;color:${(m.cumulative_return_pct||0)>=0?'#3fb950':'#f85149'}">${pct(m.cumulative_return_pct)}</div></div>
+      <div class="card"><h3>최대낙폭</h3><div class="val" style="font-size:22px;color:#f85149">${pct(m.max_drawdown_pct)}</div></div>
+      <div class="card"><h3>총 거래수</h3><div class="val" style="font-size:22px">${d.total_trades||0}</div><div class="note">${d.simulated_days||0}일 진입 / 시장필터 ${d.skipped_market_filter||0}일 스킵 / 점수필터 ${d.skipped_score_filter||0}일 스킵</div></div>`;
+
+    // 누적수익 곡선 차트
+    const curve = d.cumulative_curve||[];
+    if(curve.length>1){
+      const canvas=document.getElementById('hbt-chart');
+      canvas.style.display='block';
+      if(hbtChart){hbtChart.destroy();hbtChart=null;}
+      if(typeof Chart!=='undefined'){
+        const ctx=canvas.getContext('2d');
+        const color=curve[curve.length-1]>=0?'#3fb950':'#f85149';
+        hbtChart=new Chart(ctx,{
+          type:'line',
+          data:{labels:Array.from({length:curve.length},(_,i)=>i+1),datasets:[{label:'누적수익률(%)',data:curve,borderColor:color,backgroundColor:color+'22',borderWidth:1.5,pointRadius:0,fill:true,tension:0.2}]},
+          options:{responsive:true,plugins:{legend:{display:false},tooltip:{callbacks:{label:c=>`${c.parsed.y.toFixed(3)}%`}}},scales:{x:{display:false},y:{ticks:{callback:v=>v+'%'},grid:{color:'#30363d'},border:{color:'#30363d'}}},animation:{duration:300}}
+        });
+      }
+    }
+
+    // 일별 결과 테이블
+    const daily=d.daily_results||[];
+    document.getElementById('hbt-table').style.display=daily.length?'':'none';
+    document.getElementById('hbt-body').innerHTML=daily.map(r=>`<tr>
+      <td>${r.date}</td>
+      <td style="color:${r.avg_return_pct>=0?'#3fb950':'#f85149'}">${r.avg_return_pct>=0?'+':''}${r.avg_return_pct}%</td>
+      <td>${r.win_rate_pct}%</td>
+      <td>${r.count}</td>
+      <td style="font-size:11px;color:#8b949e">${(r.top_stocks||[]).join(', ')}</td>
+    </tr>`).join('');
+    document.getElementById('hbt-status').textContent=` (${d.period})`;
+    showToast(`히스토리컬 백테스트 완료: 승률 ${m.win_rate_pct?.toFixed(1)}%, 샤프 ${m.sharpe?.toFixed(3)}`);
+  }catch(e){showToast('히스토리컬 백테스트 실패: '+e.message,true);document.getElementById('hbt-status').textContent='';}
+  finally{btn.disabled=false;btn.textContent='▶ 실행';}
+}
+
+// 모달 차트 인스턴스
+let _modalPriceChart = null, _modalVolumeChart = null;
+
+function switchModalTab(tab, el){
+  document.querySelectorAll('.modal-tab').forEach(t=>t.classList.remove('active'));
+  el.classList.add('active');
+  document.getElementById('modal-chart-tab').style.display = tab==='chart'?'':'none';
+  document.getElementById('modal-signal-tab').style.display = tab==='signal'?'':'none';
 }
 
 async function showStockDetail(code, name){
-  document.getElementById('modal-title').textContent=name+' ('+code+') 시그널 상세';
-  document.getElementById('modal-body').innerHTML='<div style="color:#8b949e;padding:20px;text-align:center">로딩 중…</div>';
+  document.getElementById('modal-title').textContent = name + ' (' + code + ')';
   document.getElementById('modal-bg').classList.add('show');
-  const [data, hist] = await Promise.all([
+  document.getElementById('modal-body').innerHTML = '<div style="color:#8b949e;padding:20px;text-align:center">로딩 중…</div>';
+  document.getElementById('modal-chart-info').innerHTML = '<div style="color:#8b949e;font-size:13px">차트 로딩 중…</div>';
+
+  // 차트 탭 기본 활성화
+  document.querySelectorAll('.modal-tab').forEach((t,i)=>t.classList.toggle('active',i===0));
+  document.getElementById('modal-chart-tab').style.display='';
+  document.getElementById('modal-signal-tab').style.display='none';
+
+  const [data, hist, priceHist] = await Promise.all([
     fetch(API+'/stock/'+code+'/signals').then(r=>r.ok?r.json():null).catch(()=>null),
-    fetch(API+'/stock/'+code+'/history?limit=10').then(r=>r.ok?r.json():null).catch(()=>null),
+    fetch(API+'/stock/'+code+'/history?limit=60').then(r=>r.ok?r.json():null).catch(()=>null),
+    fetch('https://query1.finance.yahoo.com/v8/finance/chart/'+code+'.KS?interval=1d&range=3mo')
+      .then(r=>r.ok?r.json():null).catch(()=>null),
   ]);
-  if(!data){document.getElementById('modal-body').innerHTML='<div style="color:#f85149">데이터 없음</div>';return;}
+
+  // ── 가격 차트 (Yahoo Finance)
+  let priceData = null;
+  if(priceHist && priceHist.chart && priceHist.chart.result && priceHist.chart.result[0]){
+    const res = priceHist.chart.result[0];
+    const ts = res.timestamp || [];
+    const q = res.indicators.quote[0] || {};
+    priceData = {
+      labels: ts.map(t=>new Date(t*1000).toLocaleDateString('ko-KR',{month:'2-digit',day:'2-digit'})),
+      closes: q.close || [],
+      volumes: q.volume || [],
+      opens: q.open || [],
+      highs: q.high || [],
+      lows: q.low || [],
+    };
+  }
+
+  if(priceData && priceData.closes.length > 0){
+    const closes = priceData.closes;
+    const lastClose = closes[closes.length-1];
+    const firstClose = closes[0];
+    const chg = ((lastClose-firstClose)/firstClose*100).toFixed(2);
+    const high3m = Math.max(...closes).toLocaleString();
+    const low3m = Math.min(...closes).toLocaleString();
+    const color = chg >= 0 ? '#3fb950' : '#f85149';
+
+    document.getElementById('modal-chart-info').innerHTML = `
+      <div style="background:#0d1117;border:1px solid #30363d;border-radius:6px;padding:8px 14px;font-size:13px">
+        <span style="color:#8b949e">현재가</span> <span style="font-weight:700;font-size:16px">${lastClose?.toLocaleString()}원</span>
+        <span style="color:${color};margin-left:8px">${chg>=0?'+':''}${chg}% (3개월)</span>
+      </div>
+      <div style="background:#0d1117;border:1px solid #30363d;border-radius:6px;padding:8px 14px;font-size:13px">
+        <span style="color:#8b949e">3개월 고가</span> <span style="color:#3fb950">${high3m}</span>
+      </div>
+      <div style="background:#0d1117;border:1px solid #30363d;border-radius:6px;padding:8px 14px;font-size:13px">
+        <span style="color:#8b949e">3개월 저가</span> <span style="color:#f85149">${low3m}</span>
+      </div>`;
+
+    if(typeof Chart !== 'undefined'){
+      // 가격 차트
+      if(_modalPriceChart){_modalPriceChart.destroy();_modalPriceChart=null;}
+      const ctx1 = document.getElementById('modal-price-chart').getContext('2d');
+      const grad = ctx1.createLinearGradient(0,0,0,200);
+      grad.addColorStop(0, chg>=0?'rgba(63,185,80,0.3)':'rgba(248,81,73,0.3)');
+      grad.addColorStop(1, 'rgba(0,0,0,0)');
+      _modalPriceChart = new Chart(ctx1,{
+        type:'line',
+        data:{
+          labels: priceData.labels,
+          datasets:[{
+            label:'종가',
+            data: closes,
+            borderColor: chg>=0?'#3fb950':'#f85149',
+            backgroundColor: grad,
+            borderWidth:2,
+            pointRadius:0,
+            fill:true,
+            tension:0.2,
+          }]
+        },
+        options:{
+          responsive:true,
+          interaction:{mode:'index',intersect:false},
+          plugins:{
+            legend:{display:false},
+            tooltip:{callbacks:{label:c=>c.parsed.y?.toLocaleString()+'원'}}
+          },
+          scales:{
+            x:{ticks:{maxTicksLimit:8,font:{size:10}},grid:{color:'#21262d'},border:{color:'#30363d'}},
+            y:{ticks:{callback:v=>v?.toLocaleString(),font:{size:10}},grid:{color:'#21262d'},border:{color:'#30363d'}}
+          },
+          animation:{duration:300}
+        }
+      });
+
+      // 거래량 차트
+      if(_modalVolumeChart){_modalVolumeChart.destroy();_modalVolumeChart=null;}
+      const ctx2 = document.getElementById('modal-volume-chart').getContext('2d');
+      const avgVol = priceData.volumes.reduce((a,b)=>a+(b||0),0)/priceData.volumes.length;
+      _modalVolumeChart = new Chart(ctx2,{
+        type:'bar',
+        data:{
+          labels: priceData.labels,
+          datasets:[{
+            label:'거래량',
+            data: priceData.volumes,
+            backgroundColor: priceData.volumes.map(v=>v>avgVol*1.5?'rgba(88,166,255,0.7)':'rgba(88,166,255,0.3)'),
+            borderWidth:0,
+          }]
+        },
+        options:{
+          responsive:true,
+          plugins:{legend:{display:false},tooltip:{callbacks:{label:c=>(c.parsed.y/10000).toFixed(0)+'만주'}}},
+          scales:{
+            x:{display:false},
+            y:{ticks:{callback:v=>(v/10000).toFixed(0)+'만',font:{size:9}},grid:{color:'#21262d'},border:{color:'#30363d'}}
+          },
+          animation:{duration:300}
+        }
+      });
+    }
+  } else {
+    // Yahoo 실패 시 DB 가격 데이터로 폴백
+    document.getElementById('modal-chart-info').innerHTML='<div style="color:#8b949e;font-size:12px">차트 데이터를 불러올 수 없습니다 (Yahoo Finance 접속 불가)</div>';
+    if(_modalPriceChart){_modalPriceChart.destroy();_modalPriceChart=null;}
+    if(_modalVolumeChart){_modalVolumeChart.destroy();_modalVolumeChart=null;}
+  }
+
+  // ── 시그널 탭
+  if(!data){document.getElementById('modal-body').innerHTML='<div style="color:#f85149">시그널 데이터 없음</div>';return;}
 
   let histHtml='';
   if(hist&&hist.history&&hist.history.length>1){
     const scores=hist.history.map(h=>h.score);
     const maxS=Math.max(...scores)||1;
-    const bars=hist.history.map(h=>{
-      const w=Math.max(2,(h.score/maxS)*80);
+    const bars=hist.history.slice(0,20).map(h=>{
+      const w=Math.max(2,(h.score/maxS)*120);
       const color=h.score>=5?'#3fb950':h.score>=2?'#58a6ff':'#8b949e';
-      return `<div style="display:flex;align-items:center;gap:6px;margin:2px 0"><span class="ts" style="width:85px">${h.date}</span><div style="height:10px;width:${w}px;background:${color};border-radius:2px"></div><span class="ts">${h.score.toFixed(2)}</span></div>`;
+      return `<div style="display:flex;align-items:center;gap:6px;margin:2px 0">
+        <span class="ts" style="width:85px">${h.date}</span>
+        <div style="height:10px;width:${w}px;background:${color};border-radius:2px"></div>
+        <span class="ts">${h.score.toFixed(2)}</span>
+      </div>`;
     }).join('');
-    histHtml=`<div style="margin-bottom:16px"><div style="font-size:11px;text-transform:uppercase;color:#8b949e;margin-bottom:6px">점수 이력</div>${bars}</div>`;
+    histHtml=`<div style="margin-bottom:16px">
+      <div style="font-size:11px;text-transform:uppercase;color:#8b949e;margin-bottom:6px">점수 이력 (최근 20일)</div>
+      ${bars}
+    </div>`;
   }
 
   document.getElementById('modal-body').innerHTML=histHtml+`<table>
@@ -641,7 +967,12 @@ async function showStockDetail(code, name){
     </tr>`).join('')}</tbody>
   </table>`;
 }
-function closeModal(){document.getElementById('modal-bg').classList.remove('show');}
+
+function closeModal(){
+  document.getElementById('modal-bg').classList.remove('show');
+  if(_modalPriceChart){_modalPriceChart.destroy();_modalPriceChart=null;}
+  if(_modalVolumeChart){_modalVolumeChart.destroy();_modalVolumeChart=null;}
+}
 
 async function runPipeline(btn){
   const today=new Date().toISOString().slice(0,10);
@@ -688,6 +1019,13 @@ def startup_event() -> None:
     finally:
         db.close()
     def _bg() -> None:
+        from backend.utils.dates import is_trading_day  # noqa: PLC0415
+        from datetime import date as _date  # noqa: PLC0415
+        today = _date.today()
+        if not is_trading_day(today):
+            import logging  # noqa: PLC0415
+            logging.getLogger(__name__).info("오늘(%s)은 거래일이 아니므로 startup 파이프라인 스킵", today)
+            return
         _db = SessionLocal()
         try:
             run_daily_pipeline(_db)

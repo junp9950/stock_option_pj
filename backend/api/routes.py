@@ -10,6 +10,8 @@ from sqlalchemy.orm import Session
 
 from backend.api.schemas import HealthResponse, JobResponse, MarketSignalResponse, RecommendationItem, RecommendationResponse
 from backend.backtest.backtester import run_backtest
+from backend.backtest.historical_backtester import run_historical_backtest
+from backend.collector.backfill import run_backfill as run_data_backfill
 from backend.db.database import get_db
 from backend.db.models import BacktestResult, BacktestRun, JobLog, MarketSignal, MarketSignalDetail, Recommendation, Setting, ShortSellingDaily, SpotDailyPrice, SpotInvestorFlow, Stock, StockSignal, StockSignalDetail
 from backend.db.seed import refresh_universe
@@ -475,6 +477,50 @@ def run_backfill(start_date: date | None = None, end_date: date | None = None, d
     return {"status": "ok", "days_processed": len(results), "results": results}
 
 
+_backfill_status: dict = {"running": False, "result": None, "error": None}
+
+@router.post("/data/backfill")
+def trigger_data_backfill(start_date: date, end_date: date):
+    """과거 가격·수급 데이터 일괄 백필. 백그라운드 실행 후 즉시 반환."""
+    import threading
+    from backend.db.database import SessionLocal
+
+    if end_date <= start_date:
+        raise HTTPException(status_code=400, detail="end_date must be after start_date")
+    if (end_date - start_date).days > 730:
+        raise HTTPException(status_code=400, detail="최대 2년 범위까지 지원합니다")
+    if _backfill_status["running"]:
+        raise HTTPException(status_code=409, detail="이미 백필이 실행 중입니다")
+
+    _backfill_status["running"] = True
+    _backfill_status["result"] = None
+    _backfill_status["error"] = None
+
+    def _run():
+        db = SessionLocal()
+        try:
+            result = run_data_backfill(db, start_date, end_date)
+            _backfill_status["result"] = result
+        except Exception as exc:  # noqa: BLE001
+            _backfill_status["error"] = str(exc)
+        finally:
+            db.close()
+            _backfill_status["running"] = False
+
+    threading.Thread(target=_run, daemon=True).start()
+    return {"status": "started", "message": f"{start_date} ~ {end_date} 백필 시작됨. /data/backfill/status 로 진행 확인"}
+
+
+@router.get("/data/backfill/status")
+def get_backfill_status():
+    """백필 진행 상태 조회."""
+    return {
+        "running": _backfill_status["running"],
+        "result": _backfill_status["result"],
+        "error": _backfill_status["error"],
+    }
+
+
 @router.post("/backtest/run")
 def trigger_backtest(lookback_days: int = 60, db: Session = Depends(get_db)):
     """T+1 백테스트 실행 (lookback_days: 최근 몇일치 추천 기록 사용, 기본 60일)."""
@@ -496,6 +542,21 @@ def get_backtest_summary(db: Session = Depends(get_db)):
         "note": latest_run.note,
         "metrics": metrics,
     }
+
+
+@router.post("/backtest/historical")
+def trigger_historical_backtest(
+    start_date: date,
+    end_date: date,
+    top_n: int = 5,
+    db: Session = Depends(get_db),
+):
+    """FDR 가격 데이터 기반 히스토리컬 백테스트. DB 추천 기록 불필요."""
+    if end_date <= start_date:
+        raise HTTPException(status_code=400, detail="end_date must be after start_date")
+    if (end_date - start_date).days > 365:
+        raise HTTPException(status_code=400, detail="최대 1년 범위까지 지원합니다")
+    return run_historical_backtest(db, start_date, end_date, top_n=top_n)
 
 
 @router.get("/jobs/logs")
