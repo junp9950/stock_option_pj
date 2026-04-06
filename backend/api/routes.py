@@ -20,9 +20,13 @@ from backend.utils.dates import latest_trading_day
 
 
 def _count_consecutive(flows: list, check) -> int:
-    """flows는 최신 순으로 정렬된 SpotInvestorFlow 리스트."""
+    """flows는 최신 순으로 정렬된 SpotInvestorFlow 리스트.
+    외국인/기관 수급이 둘 다 0인 날(주말·공휴일)은 건너뜀.
+    """
     count = 0
     for f in flows:
+        if f.foreign_net_buy == 0 and f.institution_net_buy == 0:
+            continue  # 주말/공휴일 스킵
         if check(f):
             count += 1
         else:

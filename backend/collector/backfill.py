@@ -45,9 +45,11 @@ def _trading_days_in_range(start: date, end: date) -> list[date]:
 
 
 def _already_collected_dates(db: Session) -> set[date]:
-    """SpotInvestorFlow에 이미 데이터가 있는 날짜 집합."""
+    """실제 수급 데이터(0이 아닌)가 하나라도 있는 날짜 집합."""
     rows = db.execute(
-        select(SpotInvestorFlow.trading_date).distinct()
+        select(SpotInvestorFlow.trading_date).distinct().where(
+            (SpotInvestorFlow.foreign_net_buy != 0) | (SpotInvestorFlow.institution_net_buy != 0)
+        )
     ).scalars().all()
     return set(rows)
 
@@ -105,6 +107,48 @@ def _pykrx_flow_batch(yyyymmdd: str) -> dict[str, tuple[float, float, float]]:
         return result
     except Exception as exc:  # noqa: BLE001
         logger.debug("pykrx batch failed for %s: %s", yyyymmdd, exc)
+        return {}
+
+
+# ── 네이버 금융 수급 히스토리 ────────────────────────────────────────────────────
+
+def _naver_flow_history(code: str, pages: int = 30) -> dict[str, tuple[float, float]]:
+    """네이버 금융 main.naver에서 종목 전체 기간 외국인/기관 순매수 수집.
+    반환: {"MM/DD" → (foreign_net, institution_net)} — 연도 없이 MM/DD 키.
+    """
+    try:
+        import requests  # noqa: PLC0415
+        from bs4 import BeautifulSoup  # noqa: PLC0415
+
+        result: dict[str, tuple[float, float]] = {}
+
+        def _parse(s: str) -> float:
+            s = s.replace(",", "").replace("+", "").replace(" ", "")
+            try:
+                return float(s)
+            except ValueError:
+                return 0.0
+
+        r = requests.get(
+            "https://finance.naver.com/item/main.naver",
+            params={"code": code},
+            headers={"User-Agent": "Mozilla/5.0", "Referer": "https://finance.naver.com"},
+            timeout=10,
+        )
+        if r.status_code != 200:
+            return {}
+        soup = BeautifulSoup(r.text, "html.parser")
+        tables = soup.select("table")
+        if len(tables) < 4:
+            return {}
+        t = tables[3]
+        for row in t.select("tr"):
+            cells = [c.get_text(strip=True) for c in row.select("th,td")]
+            if len(cells) >= 5 and cells[0] and "/" in cells[0]:
+                result[cells[0]] = (_parse(cells[3]), _parse(cells[4]))
+        return result
+    except Exception as exc:  # noqa: BLE001
+        logger.debug("naver flow history failed for %s: %s", code, exc)
         return {}
 
 
@@ -194,18 +238,37 @@ def run_backfill(
 
     logger.info("  가격 다운로드 완료: %d / %d 종목 성공", len(price_cache), len(stocks))
 
-    # ── Step 2: 날짜별 수급 + 가격 저장
-    logger.info("Step 2/2 — 날짜별 수급 저장 중 (%d일)...", len(target_days))
+    # ── Step 2: 종목별 네이버 수급 히스토리 캐싱 (병렬)
+    logger.info("Step 2/3 — 네이버 수급 히스토리 수집 중 (%d 종목)...", len(stocks))
+    # flow_cache[code] = {"MM/DD": (foreign, institution)}
+    flow_cache: dict[str, dict[str, tuple[float, float]]] = {}
+
+    def _load_flow(s: Stock) -> tuple[str, dict]:
+        hist = _naver_flow_history(s.code)
+        time.sleep(0.05)  # 네이버 과부하 방지
+        return s.code, hist
+
+    with ThreadPoolExecutor(max_workers=4) as pool:
+        futs2 = {pool.submit(_load_flow, s): s.code for s in stocks}
+        done2 = 0
+        for fut in as_completed(futs2):
+            code, hist = fut.result()
+            if hist:
+                flow_cache[code] = hist
+            done2 += 1
+            if done2 % 50 == 0:
+                logger.info("  수급 수집: %d / %d", done2, len(stocks))
+
+    logger.info("  수급 수집 완료: %d / %d 종목 성공", len(flow_cache), len(stocks))
+
+    # ── Step 3: 날짜별 가격 + 수급 저장
+    logger.info("Step 3/3 — 날짜별 저장 중 (%d일)...", len(target_days))
     errors: list[str] = []
     days_filled = 0
 
     for idx, trading_date in enumerate(target_days):
-        yyyymmdd = trading_date.strftime("%Y%m%d")
-
-        # pykrx 수급 조회 (실패하면 0으로 저장)
-        flows = _pykrx_flow_batch(yyyymmdd)
-        if not flows:
-            logger.debug("pykrx flow empty for %s — 수급 0으로 저장", yyyymmdd)
+        mmdd = trading_date.strftime("%m/%d").lstrip("0").replace("/0", "/")  # "04/06" → "4/06"
+        mmdd_padded = trading_date.strftime("%m/%d")  # "04/06"
 
         ts = pd.Timestamp(trading_date)
         inserted = 0
@@ -218,7 +281,6 @@ def run_backfill(
                 df = price_cache[code]
                 if ts in df.index:
                     row = df.loc[ts]
-                    # 중복 체크
                     exists = db.scalar(
                         select(SpotDailyPrice.id).where(
                             SpotDailyPrice.trading_date == trading_date,
@@ -226,34 +288,53 @@ def run_backfill(
                         )
                     )
                     if not exists:
+                        tv = _safe_float(row.get("Amount", row.get("Turnover", 0)))
+                        if tv == 0:
+                            tv = _safe_float(row.get("Volume", 0)) * _safe_float(row.get("Close", 0))
                         db.add(SpotDailyPrice(
                             trading_date=trading_date,
                             stock_code=code,
-                            open_price=float(row.get("Open", 0)),
-                            high_price=float(row.get("High", 0)),
-                            low_price=float(row.get("Low", 0)),
-                            close_price=float(row.get("Close", 0)),
-                            volume=float(row.get("Volume", 0)),
-                            trading_value=float(row.get("Amount", row.get("Turnover", 0))),
+                            open_price=_safe_float(row.get("Open", 0)),
+                            high_price=_safe_float(row.get("High", 0)),
+                            low_price=_safe_float(row.get("Low", 0)),
+                            close_price=_safe_float(row.get("Close", 0)),
+                            volume=_safe_float(row.get("Volume", 0)),
+                            trading_value=tv,
                             change_pct=round(_safe_float(row.get("Change", 0)) * 100, 4),
                         ))
 
-            # 수급 저장
+            # 수급 저장 — 네이버 히스토리에서 날짜 매핑
             exists_flow = db.scalar(
                 select(SpotInvestorFlow.id).where(
                     SpotInvestorFlow.trading_date == trading_date,
                     SpotInvestorFlow.stock_code == code,
+                    (SpotInvestorFlow.foreign_net_buy != 0) | (SpotInvestorFlow.institution_net_buy != 0),
                 )
             )
             if not exists_flow:
-                f, i, p = flows.get(code, (0.0, 0.0, 0.0))
-                db.add(SpotInvestorFlow(
-                    trading_date=trading_date,
-                    stock_code=code,
-                    foreign_net_buy=f,
-                    institution_net_buy=i,
-                    individual_net_buy=p,
-                ))
+                hist = flow_cache.get(code, {})
+                # 네이버는 앞 0 없이 저장하기도 함 ("4/06", "04/06" 둘 다 시도)
+                flow_entry = hist.get(mmdd_padded) or hist.get(mmdd)
+                f = flow_entry[0] if flow_entry else 0.0
+                i = flow_entry[1] if flow_entry else 0.0
+                # 기존 0짜리 행 업데이트 또는 신규 insert
+                existing_row = db.scalar(
+                    select(SpotInvestorFlow).where(
+                        SpotInvestorFlow.trading_date == trading_date,
+                        SpotInvestorFlow.stock_code == code,
+                    )
+                )
+                if existing_row:
+                    existing_row.foreign_net_buy = f
+                    existing_row.institution_net_buy = i
+                else:
+                    db.add(SpotInvestorFlow(
+                        trading_date=trading_date,
+                        stock_code=code,
+                        foreign_net_buy=f,
+                        institution_net_buy=i,
+                        individual_net_buy=0.0,
+                    ))
                 inserted += 1
 
         try:
@@ -267,9 +348,6 @@ def run_backfill(
 
         if (idx + 1) % 10 == 0 or (idx + 1) == len(target_days):
             logger.info("  저장 진행: %d / %d일 완료", idx + 1, len(target_days))
-
-        # pykrx 과부하 방지 (너무 빠르면 차단될 수 있음)
-        time.sleep(0.3)
 
     logger.info(
         "백필 완료: %d일 채움, %d일 건너뜀, 오류 %d건",
