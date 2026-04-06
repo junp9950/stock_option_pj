@@ -60,14 +60,20 @@ def run_daily_pipeline(db: Session, trading_date: date | None = None) -> dict[st
 
 
 def run_backfill_pipeline(db: Session, start_date: date, end_date: date) -> list[dict]:
-    """start_date ~ end_date 범위의 날짜를 순서대로 파이프라인 실행."""
+    """start_date ~ end_date 범위의 날짜를 순서대로 파이프라인 실행.
+    날짜마다 새 DB 세션을 사용해 lock 에러가 한 날짜에 생겨도 다음 날짜에 영향 없음.
+    """
+    from backend.db.database import SessionLocal  # noqa: PLC0415
     results = []
     current = start_date
     while current <= end_date:
+        fresh_db = SessionLocal()
         try:
-            result = run_daily_pipeline(db, current)
+            result = run_daily_pipeline(fresh_db, current)
             results.append(result)
         except Exception as exc:  # noqa: BLE001
             results.append({"trading_date": current.isoformat(), "error": str(exc)})
+        finally:
+            fresh_db.close()
         current += timedelta(days=1)
     return results

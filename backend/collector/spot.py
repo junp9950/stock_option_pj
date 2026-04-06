@@ -277,11 +277,13 @@ def collect_spot_data(db: Session, trading_date: date) -> None:
                 )
             )
 
-            # 수급 데이터: pykrx 배치 → 배치 내 해당 코드 없으면 0
+            # 수급 데이터: pykrx 배치 → 없으면 네이버 금융 단건 → 0
             if batch_ok and stock.code in batch_flows:
                 foreign_net, institution_net, individual_net = batch_flows[stock.code]
             else:
-                foreign_net, institution_net, individual_net = 0.0, 0.0, 0.0
+                foreign_net, institution_net, individual_net = _naver_investor_flow_single(
+                    stock.code, fetch_date.isoformat()
+                )
 
             db.add(
                 SpotInvestorFlow(
