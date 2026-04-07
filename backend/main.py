@@ -604,7 +604,7 @@ function _initBfDates(){
   const fmt = d => d.toISOString().slice(0,10);
   const es = document.getElementById('bf-start');
   const ee = document.getElementById('bf-end');
-  if(!es.value) es.value = '2024-01-02';
+  if(!es.value){const d=new Date();d.setFullYear(d.getFullYear()-2);es.value=fmt(d);}
   if(!ee.value){const d=new Date();d.setDate(d.getDate()-1);ee.value=fmt(d);}
 }
 
