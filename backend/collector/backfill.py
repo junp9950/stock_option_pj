@@ -112,43 +112,67 @@ def _pykrx_flow_batch(yyyymmdd: str) -> dict[str, tuple[float, float, float]]:
 
 # ── 네이버 금융 수급 히스토리 ────────────────────────────────────────────────────
 
-def _naver_flow_history(code: str, pages: int = 30) -> dict[str, tuple[float, float]]:
-    """네이버 금융 main.naver에서 종목 전체 기간 외국인/기관 순매수 수집.
-    반환: {"MM/DD" → (foreign_net, institution_net)} — 연도 없이 MM/DD 키.
+def _naver_flow_history(
+    code: str, start_date: date | None = None, end_date: date | None = None
+) -> dict[date, tuple[float, float]]:
+    """네이버 frgn.naver 페이지에서 종목의 외국인/기관 일별 순매수 수집.
+    컬럼 순서: 날짜, 종가, 등락, 등락률, 거래량, 기관, 외국인, ...
+    반환: {date → (foreign_net, institution_net)}
     """
     try:
         import requests  # noqa: PLC0415
         from bs4 import BeautifulSoup  # noqa: PLC0415
 
-        result: dict[str, tuple[float, float]] = {}
+        result: dict[date, tuple[float, float]] = {}
 
         def _parse(s: str) -> float:
-            s = s.replace(",", "").replace("+", "").replace(" ", "")
+            s = s.replace(",", "").replace("+", "").strip()
             try:
                 return float(s)
             except ValueError:
                 return 0.0
 
-        r = requests.get(
-            "https://finance.naver.com/item/main.naver",
-            params={"code": code},
-            headers={"User-Agent": "Mozilla/5.0", "Referer": "https://finance.naver.com"},
-            timeout=10,
-        )
-        if r.status_code != 200:
-            return {}
-        soup = BeautifulSoup(r.text, "html.parser")
-        tables = soup.select("table")
-        if len(tables) < 4:
-            return {}
-        t = tables[3]
-        for row in t.select("tr"):
-            cells = [c.get_text(strip=True) for c in row.select("th,td")]
-            if len(cells) >= 5 and cells[0] and "/" in cells[0]:
-                result[cells[0]] = (_parse(cells[3]), _parse(cells[4]))
+        headers = {"User-Agent": "Mozilla/5.0", "Referer": "https://finance.naver.com"}
+        page = 1
+        max_page = 30  # 2년치 = ~25페이지
+        while page <= max_page:
+            r = requests.get(
+                "https://finance.naver.com/item/frgn.naver",
+                params={"code": code, "page": str(page)},
+                headers=headers,
+                timeout=5,
+            )
+            if r.status_code != 200:
+                break
+            soup = BeautifulSoup(r.text, "html.parser")
+            tables = soup.select("table")
+            if len(tables) < 4:
+                break
+            rows = tables[3].select("tr")[1:]
+            found_any = False
+            for row in rows:
+                cells = [c.get_text(strip=True) for c in row.select("td")]
+                if not cells or not cells[0] or "." not in cells[0]:
+                    continue
+                try:
+                    d = date.fromisoformat(cells[0].replace(".", "-"))
+                except ValueError:
+                    continue
+                if end_date and d > end_date:
+                    continue
+                if start_date and d < start_date:
+                    return result  # 날짜 역순 정렬이므로 start_date 이전이면 종료
+                institution = _parse(cells[5]) if len(cells) > 5 else 0.0
+                foreign = _parse(cells[6]) if len(cells) > 6 else 0.0
+                result[d] = (foreign, institution)
+                found_any = True
+            if not found_any:
+                break
+            page += 1
+            time.sleep(0.05)
         return result
     except Exception as exc:  # noqa: BLE001
-        logger.debug("naver flow history failed for %s: %s", code, exc)
+        logger.debug("naver frgn history failed for %s: %s", code, exc)
         return {}
 
 
@@ -239,25 +263,35 @@ def run_backfill(
     logger.info("  가격 다운로드 완료: %d / %d 종목 성공", len(price_cache), len(stocks))
 
     # ── Step 2: 종목별 네이버 수급 히스토리 캐싱 (병렬)
-    logger.info("Step 2/3 — 네이버 수급 히스토리 수집 중 (%d 종목)...", len(stocks))
-    # flow_cache[code] = {"MM/DD": (foreign, institution)}
-    flow_cache: dict[str, dict[str, tuple[float, float]]] = {}
+    # 실제로 수급이 없는 날짜 범위만 수집 — 이미 다 채워졌으면 스킵
+    flow_target_days = [d for d in target_days if d not in already]
+    flow_start = min(flow_target_days) if flow_target_days else None
 
-    def _load_flow(s: Stock) -> tuple[str, dict]:
-        hist = _naver_flow_history(s.code)
-        time.sleep(0.05)  # 네이버 과부하 방지
-        return s.code, hist
+    flow_cache: dict[str, dict[date, tuple[float, float]]] = {}
+    if not flow_target_days:
+        logger.info("Step 2/3 — 수급 수집 스킵 (모든 날짜 이미 채워짐)")
+    else:
+        logger.info("Step 2/3 — 네이버 수급 히스토리 수집 중 (%d 종목, %s~%s)...",
+                    len(stocks), flow_start, end_date)
 
-    with ThreadPoolExecutor(max_workers=4) as pool:
-        futs2 = {pool.submit(_load_flow, s): s.code for s in stocks}
-        done2 = 0
-        for fut in as_completed(futs2):
-            code, hist = fut.result()
-            if hist:
-                flow_cache[code] = hist
-            done2 += 1
-            if done2 % 50 == 0:
-                logger.info("  수급 수집: %d / %d", done2, len(stocks))
+        def _load_flow(s: Stock) -> tuple[str, dict]:
+            hist = _naver_flow_history(s.code, start_date=flow_start, end_date=end_date)
+            time.sleep(0.05)
+            return s.code, hist
+
+        with ThreadPoolExecutor(max_workers=6) as pool:
+            futs2 = {pool.submit(_load_flow, s): s.code for s in stocks}
+            done2 = 0
+            for fut in as_completed(futs2, timeout=3600):  # 최대 1시간
+                try:
+                    code, hist = fut.result(timeout=60)
+                    if hist:
+                        flow_cache[code] = hist
+                except Exception:  # noqa: BLE001
+                    pass
+                done2 += 1
+                if done2 % 30 == 0:
+                    logger.info("  수급 수집: %d / %d", done2, len(stocks))
 
     logger.info("  수급 수집 완료: %d / %d 종목 성공", len(flow_cache), len(stocks))
 
@@ -267,9 +301,6 @@ def run_backfill(
     days_filled = 0
 
     for idx, trading_date in enumerate(target_days):
-        mmdd = trading_date.strftime("%m/%d").lstrip("0").replace("/0", "/")  # "04/06" → "4/06"
-        mmdd_padded = trading_date.strftime("%m/%d")  # "04/06"
-
         ts = pd.Timestamp(trading_date)
         inserted = 0
 
@@ -313,8 +344,7 @@ def run_backfill(
             )
             if not exists_flow:
                 hist = flow_cache.get(code, {})
-                # 네이버는 앞 0 없이 저장하기도 함 ("4/06", "04/06" 둘 다 시도)
-                flow_entry = hist.get(mmdd_padded) or hist.get(mmdd)
+                flow_entry = hist.get(trading_date)  # date 객체로 직접 매핑
                 f = flow_entry[0] if flow_entry else 0.0
                 i = flow_entry[1] if flow_entry else 0.0
                 # 기존 0짜리 행 업데이트 또는 신규 insert

@@ -277,10 +277,12 @@ select{background:#21262d;border:1px solid #30363d;color:#c9d1d9;padding:6px 10p
     </div>
     <div class="grid" id="hbt-cards" style="margin-bottom:12px"></div>
     <canvas id="hbt-chart" style="display:none;max-height:180px;margin-bottom:12px"></canvas>
-    <table id="hbt-table" style="display:none">
-      <thead><tr><th>날짜</th><th>평균수익률</th><th>승률</th><th>종목수</th><th>추천종목</th></tr></thead>
-      <tbody id="hbt-body"></tbody>
-    </table>
+    <div id="hbt-table-wrap" style="display:none;max-height:320px;overflow-y:auto;border:1px solid #30363d;border-radius:6px">
+      <table id="hbt-table" style="width:100%">
+        <thead style="position:sticky;top:0;background:#161b22;z-index:1"><tr><th>날짜</th><th>평균수익률</th><th>승률</th><th>종목수</th><th>추천종목</th></tr></thead>
+        <tbody id="hbt-body"></tbody>
+      </table>
+    </div>
   </div>
 
   <!-- 기존 DB 기반 백테스트 -->
@@ -785,7 +787,7 @@ async function runHistoricalBacktest(btn){
 
     // 일별 결과 테이블
     const daily=d.daily_results||[];
-    document.getElementById('hbt-table').style.display=daily.length?'':'none';
+    document.getElementById('hbt-table-wrap').style.display=daily.length?'':'none';
     document.getElementById('hbt-body').innerHTML=daily.map(r=>`<tr>
       <td>${r.date}</td>
       <td style="color:${r.avg_return_pct>=0?'#3fb950':'#f85149'}">${r.avg_return_pct>=0?'+':''}${r.avg_return_pct}%</td>
