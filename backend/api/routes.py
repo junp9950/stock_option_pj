@@ -607,8 +607,8 @@ def trigger_historical_backtest(
     """FDR 가격 데이터 기반 히스토리컬 백테스트. DB 추천 기록 불필요."""
     if end_date <= start_date:
         raise HTTPException(status_code=400, detail="end_date must be after start_date")
-    if (end_date - start_date).days > 365:
-        raise HTTPException(status_code=400, detail="최대 1년 범위까지 지원합니다")
+    if (end_date - start_date).days > 730:
+        raise HTTPException(status_code=400, detail="최대 2년 범위까지 지원합니다")
     return run_historical_backtest(db, start_date, end_date, top_n=top_n)
 
 
