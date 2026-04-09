@@ -574,6 +574,80 @@ def get_backfill_status():
     }
 
 
+_signal_backfill_status: dict = {"running": False, "result": None, "error": None, "progress": ""}
+
+@router.post("/data/signal-backfill")
+def trigger_signal_backfill(skip_existing: bool = True):
+    """DB 가격+수급 데이터로 과거 시그널 점수 일괄 재계산. 백그라운드 실행."""
+    import threading
+    from backend.db.database import SessionLocal
+    from backend.db.models import SpotDailyPrice, StockSignal
+    from backend.signal_engine.stock_signal import calculate_stock_signals
+    from backend.utils.dates import is_trading_day
+
+    if _signal_backfill_status["running"]:
+        raise HTTPException(status_code=409, detail="이미 시그널 재계산이 실행 중입니다")
+
+    _signal_backfill_status["running"] = True
+    _signal_backfill_status["result"] = None
+    _signal_backfill_status["error"] = None
+    _signal_backfill_status["progress"] = "시작 중..."
+
+    def _run():
+        db = SessionLocal()
+        try:
+            # 가격 데이터 있는 날짜 목록
+            price_dates = sorted(set(
+                row[0] for row in db.execute(select(SpotDailyPrice.trading_date).distinct())
+            ))
+            # 시그널 이미 있는 날짜
+            signal_dates = set(
+                row[0] for row in db.execute(select(StockSignal.trading_date).distinct())
+            )
+            target_dates = [d for d in price_dates if not skip_existing or d not in signal_dates]
+
+            total = len(target_dates)
+            done = 0
+            errors = []
+            _signal_backfill_status["progress"] = f"0 / {total} 일 완료"
+
+            for d in target_dates:
+                fresh_db = SessionLocal()
+                try:
+                    calculate_stock_signals(fresh_db, d)
+                    done += 1
+                    if done % 10 == 0 or done == total:
+                        _signal_backfill_status["progress"] = f"{done} / {total} 일 완료"
+                except Exception as exc:  # noqa: BLE001
+                    errors.append(f"{d}: {exc}")
+                finally:
+                    fresh_db.close()
+
+            _signal_backfill_status["result"] = {
+                "total": total,
+                "done": done,
+                "errors": errors[:10],
+            }
+        except Exception as exc:  # noqa: BLE001
+            _signal_backfill_status["error"] = str(exc)
+        finally:
+            db.close()
+            _signal_backfill_status["running"] = False
+
+    threading.Thread(target=_run, daemon=True).start()
+    return {"status": "started", "message": "시그널 재계산 시작. /data/signal-backfill/status 로 확인"}
+
+
+@router.get("/data/signal-backfill/status")
+def get_signal_backfill_status():
+    return {
+        "running": _signal_backfill_status["running"],
+        "progress": _signal_backfill_status["progress"],
+        "result": _signal_backfill_status["result"],
+        "error": _signal_backfill_status["error"],
+    }
+
+
 @router.post("/backtest/run")
 def trigger_backtest(lookback_days: int = 60, db: Session = Depends(get_db)):
     """T+1 백테스트 실행 (lookback_days: 최근 몇일치 추천 기록 사용, 기본 60일)."""
@@ -604,13 +678,31 @@ def trigger_historical_backtest(
     top_n: int = 5,
     stop_loss_pct: float = 0.0,
     take_profit_pct: float = 0.0,
+    mode: str = "db",   # "db" = DB 시그널 기반 (권장), "fdr" = FDR 기술지표 기반
+    min_score: float = 0.0,
+    use_market_filter: bool = True,
     db: Session = Depends(get_db),
 ):
-    """FDR 가격 데이터 기반 히스토리컬 백테스트. DB 추천 기록 불필요."""
+    """히스토리컬 백테스트.
+    mode=db (기본): DB StockSignal 기반 — 외인/기관 수급 포함, 빠름.
+    mode=fdr: FDR 가격 다운로드 기반 기술지표 — 수급 데이터 없음, 느림.
+    """
     if end_date <= start_date:
         raise HTTPException(status_code=400, detail="end_date must be after start_date")
     if (end_date - start_date).days > 730:
         raise HTTPException(status_code=400, detail="최대 2년 범위까지 지원합니다")
+
+    if mode == "db":
+        from backend.backtest.db_backtester import run_db_backtest  # noqa: PLC0415
+        return run_db_backtest(
+            db, start_date, end_date,
+            top_n=top_n,
+            min_score=min_score,
+            use_market_filter=use_market_filter,
+            stop_loss=stop_loss_pct / 100,
+            take_profit=take_profit_pct / 100,
+        )
+
     return run_historical_backtest(
         db, start_date, end_date, top_n=top_n,
         stop_loss=stop_loss_pct / 100,
