@@ -134,6 +134,17 @@ select{background:#21262d;border:1px solid #30363d;color:#c9d1d9;padding:6px 10p
     <div style="font-size:12px;text-transform:uppercase;color:#8b949e;margin-bottom:8px;letter-spacing:.06em">전일 대비 시그널 상승 TOP 5</div>
     <div id="trending-stocks" style="display:flex;gap:8px;flex-wrap:wrap"></div>
   </div>
+
+  <!-- 내일 매수 후보 -->
+  <div style="margin-top:20px;background:#161b22;border:1px solid #30363d;border-radius:8px;padding:16px">
+    <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:12px">
+      <div style="font-weight:700;color:#f0f6fc;font-size:15px">내일 매수 후보 <span style="font-size:11px;color:#8b949e;font-weight:400">(T+1 진입 적합도 기준)</span></div>
+      <div style="font-size:11px;color:#8b949e">수급 연속성 보너스 · 당일 급등 페널티 적용</div>
+    </div>
+    <div id="tomorrow-picks-body">
+      <div style="color:#8b949e;font-size:13px;text-align:center;padding:20px">로딩 중…</div>
+    </div>
+  </div>
 </div>
 
 <!-- 전종목 스크리너 탭 -->
@@ -429,13 +440,14 @@ function switchTab(id) {
 
 async function loadAll() {
   try {
-    const [sig, recs, scr, hist, dq, trending] = await Promise.all([
+    const [sig, recs, scr, hist, dq, trending, tomorrowPicks] = await Promise.all([
       fetch(API+'/market-signal').then(r=>r.ok?r.json():null).catch(()=>null),
       fetch(API+'/recommendations').then(r=>r.ok?r.json():null).catch(()=>null),
       fetch(API+'/screener').then(r=>r.ok?r.json():null).catch(()=>null),
       fetch(API+'/market-signal/history?limit=7').then(r=>r.ok?r.json():null).catch(()=>null),
       fetch(API+'/data-quality').then(r=>r.ok?r.json():null).catch(()=>null),
       fetch(API+'/screener/trending?top_n=5').then(r=>r.ok?r.json():null).catch(()=>null),
+      fetch(API+'/screener/tomorrow-picks?top_n=7').then(r=>r.ok?r.json():null).catch(()=>null),
     ]);
     document.getElementById('err-bar').style.display='none';
 
@@ -479,6 +491,48 @@ async function loadAll() {
         </div>`).join('');
     } else if(document.getElementById('trending-stocks')) {
       document.getElementById('trending-stocks').innerHTML='<span class="ts">이전 거래일 데이터 없음</span>';
+    }
+    // 내일 매수 후보 렌더링
+    const tpEl = document.getElementById('tomorrow-picks-body');
+    if(tpEl){
+      if(tomorrowPicks && tomorrowPicks.length){
+        const riskColor = r => r==='고'?'#f85149':r==='중'?'#d29922':'#3fb950';
+        const fmtNet = v => { const a=Math.abs(v); const s=v<0?'-':'+'; if(a>=1e12)return s+(a/1e12).toFixed(1)+'조'; if(a>=1e8)return s+(a/1e8).toFixed(1)+'억'; if(a>=1e4)return s+(a/1e4).toFixed(0)+'만'; return v===0?'—':s+a.toFixed(0); };
+        tpEl.innerHTML = `<div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(220px,1fr));gap:10px">` +
+          tomorrowPicks.map((p,i) => {
+            const chgColor = p.change_pct>=0?'#3fb950':'#f85149';
+            const bothBadge = p.both_buying ? '<span style="background:#1f6feb33;color:#58a6ff;border:1px solid #1f6feb;border-radius:4px;padding:1px 6px;font-size:10px;margin-left:4px">기관+외인</span>' : '';
+            const coLine = p.co_consecutive_days>=2 ? `<div style="color:#d29922;font-size:11px">동반매수 ${p.co_consecutive_days}일 연속</div>` : '';
+            return `<div style="background:#0d1117;border:1px solid ${i===0?'#388bfd':'#30363d'};border-radius:8px;padding:12px;cursor:pointer" onclick="showStockDetail('${p.code}','${p.name}')">
+              <div style="display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:6px">
+                <div>
+                  <span style="font-weight:700;font-size:14px">${i+1}. ${p.name}</span>${bothBadge}
+                  <div class="ts">${p.code} · ${p.market}</div>
+                </div>
+                <div style="text-align:right">
+                  <div style="font-size:13px;color:${riskColor(p.risk)};font-weight:600">리스크 ${p.risk}</div>
+                  <div class="ts" style="color:${chgColor}">${p.change_pct>=0?'+':''}${p.change_pct}%</div>
+                </div>
+              </div>
+              <div style="display:flex;justify-content:space-between;margin-bottom:6px">
+                <div style="font-size:18px;font-weight:700;color:#f0f6fc">${p.close_price.toLocaleString()}원</div>
+                <div style="text-align:right">
+                  <div style="font-size:11px;color:#8b949e">T+1 적합도</div>
+                  <div style="font-size:16px;font-weight:700;color:#58a6ff">${p.t1_score.toFixed(2)}</div>
+                </div>
+              </div>
+              <div style="display:grid;grid-template-columns:1fr 1fr;gap:4px;font-size:11px;color:#8b949e;margin-bottom:4px">
+                <div>외인 <b style="color:#c9d1d9">${p.foreign_consecutive_days}일 연속</b></div>
+                <div>기관 <b style="color:#c9d1d9">${p.institution_consecutive_days}일 연속</b></div>
+                <div>수급비율 <b style="color:#c9d1d9">${p.flow_ratio}</b></div>
+                <div>기관 <b style="color:${p.institution_net_buy>=0?'#3fb950':'#f85149'}">${fmtNet(p.institution_net_buy)}</b></div>
+              </div>
+              ${coLine}
+            </div>`;
+          }).join('') + `</div>`;
+      } else {
+        tpEl.innerHTML = '<div style="color:#8b949e;font-size:13px;text-align:center;padding:20px">데이터 없음 — 파이프라인을 실행하세요</div>';
+      }
     }
     if(hist && hist.length){
       const sorted=[...hist].sort((a,b)=>a.trading_date>b.trading_date?1:-1);
