@@ -538,8 +538,8 @@ def trigger_data_backfill(start_date: date, end_date: date):
     import threading
     from backend.db.database import SessionLocal
 
-    if end_date <= start_date:
-        raise HTTPException(status_code=400, detail="end_date must be after start_date")
+    if end_date < start_date:
+        raise HTTPException(status_code=400, detail="end_date must be >= start_date")
     if (end_date - start_date).days > 730:
         raise HTTPException(status_code=400, detail="최대 2년 범위까지 지원합니다")
     if _backfill_status["running"]:

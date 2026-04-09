@@ -1,10 +1,12 @@
 from __future__ import annotations
 
+from concurrent.futures import ThreadPoolExecutor, as_completed
 from datetime import date
+from typing import Optional
 
 import FinanceDataReader as fdr
 import pandas as pd
-from sqlalchemy import delete
+from sqlalchemy import delete, select
 from sqlalchemy.orm import Session
 
 from backend.collector.universe import get_universe
@@ -247,15 +249,49 @@ def collect_spot_data(db: Session, trading_date: date) -> None:
         batch_flows = _pykrx_investor_flow_batch(yyyymmdd)
         batch_ok = len(batch_flows) > 0
         if not batch_ok:
-            logger.warning("pykrx batch investor flow failed — will use single-stock fallback per stock")
+            logger.warning("pykrx batch investor flow failed — naver fallback 사용")
 
-        for stock in get_universe(db):
-            price_df = fdr.DataReader(stock.code, date_text, date_text)
-            if price_df.empty:
+        stocks = list(get_universe(db))
+
+        # FDR 가격 병렬 다운로드
+        def _fetch_price(code: str) -> tuple[str, Optional[pd.DataFrame]]:
+            try:
+                df = fdr.DataReader(code, date_text, date_text)
+                return code, df if not df.empty else None
+            except Exception:  # noqa: BLE001
+                return code, None
+
+        price_map: dict[str, pd.DataFrame] = {}
+        with ThreadPoolExecutor(max_workers=16) as pool:
+            futs = {pool.submit(_fetch_price, s.code): s.code for s in stocks}
+            done = 0
+            for fut in as_completed(futs):
+                code, df = fut.result()
+                if df is not None:
+                    price_map[code] = df
+                done += 1
+                if done % 50 == 0:
+                    logger.info("  FDR 가격 다운로드: %d / %d", done, len(stocks))
+        logger.info("FDR 가격 수집 완료: %d / %d 종목", len(price_map), len(stocks))
+
+        # naver 수급 fallback (pykrx 실패 시)
+        naver_flows: dict[str, tuple[float, float, float]] = {}
+        if not batch_ok:
+            logger.info("네이버 수급 단건 조회 중 (%d 종목)...", len(stocks))
+            def _fetch_naver(s: Stock) -> tuple[str, tuple]:
+                return s.code, _naver_investor_flow_single(s.code, fetch_date.isoformat())
+            with ThreadPoolExecutor(max_workers=8) as pool:
+                for fut in as_completed({pool.submit(_fetch_naver, s): s.code for s in stocks}):
+                    code, flow = fut.result()
+                    naver_flows[code] = flow
+
+        for stock in stocks:
+            df = price_map.get(stock.code)
+            if df is None:
                 logger.warning("No spot data from FDR for %s on %s", stock.code, date_text)
                 continue
 
-            row = price_df.iloc[-1]
+            row = df.iloc[-1]
             listing_row = listing.loc[stock.code] if stock.code in listing.index else None
             if listing_row is not None:
                 stock.name = str(listing_row.get("Name", stock.name))
@@ -277,13 +313,13 @@ def collect_spot_data(db: Session, trading_date: date) -> None:
                 )
             )
 
-            # 수급 데이터: pykrx 배치 → 없으면 네이버 금융 단건 → 0
+            # 수급: pykrx 배치 → naver fallback (병렬) → 0
             if batch_ok and stock.code in batch_flows:
                 foreign_net, institution_net, individual_net = batch_flows[stock.code]
+            elif stock.code in naver_flows:
+                foreign_net, institution_net, individual_net = naver_flows[stock.code]
             else:
-                foreign_net, institution_net, individual_net = _naver_investor_flow_single(
-                    stock.code, fetch_date.isoformat()
-                )
+                foreign_net, institution_net, individual_net = 0.0, 0.0, 0.0
 
             db.add(
                 SpotInvestorFlow(
