@@ -779,6 +779,132 @@ def get_trending_stocks(top_n: int = 10, db: Session = Depends(get_db)):
     return changes[:top_n]
 
 
+@router.get("/screener/tomorrow-picks")
+def get_tomorrow_picks(top_n: int = 7, db: Session = Depends(get_db)):
+    """내일 매수 후보 추천 (T+1 진입 적합도 점수 기준).
+
+    스크리너 점수 + 수급 연속성 보너스 - 당일 급등 페널티로 T+1 적합도를 계산.
+    """
+    target_date = latest_trading_day()
+
+    stock_signals = list(db.scalars(
+        select(StockSignal).where(StockSignal.trading_date == target_date)
+    ))
+    if not stock_signals:
+        return []
+
+    codes = [s.stock_code for s in stock_signals]
+    sig_map = {s.stock_code: s.score for s in stock_signals}
+
+    stocks_map = {s.code: s for s in db.scalars(select(Stock).where(Stock.code.in_(codes)))}
+    prices_map = {
+        p.stock_code: p for p in db.scalars(
+            select(SpotDailyPrice).where(
+                SpotDailyPrice.trading_date == target_date,
+                SpotDailyPrice.stock_code.in_(codes),
+            )
+        )
+    }
+
+    # 최근 14일 수급 일괄 조회
+    recent_raw = list(db.scalars(
+        select(SpotInvestorFlow)
+        .where(
+            SpotInvestorFlow.stock_code.in_(codes),
+            SpotInvestorFlow.trading_date <= target_date,
+            SpotInvestorFlow.trading_date >= target_date - timedelta(days=14),
+        )
+        .order_by(SpotInvestorFlow.stock_code, desc(SpotInvestorFlow.trading_date))
+    ))
+    recent_flows: dict[str, list] = defaultdict(list)
+    for f in recent_raw:
+        if len(recent_flows[f.stock_code]) < 10:
+            recent_flows[f.stock_code].append(f)
+
+    picks = []
+    for code, base_score in sig_map.items():
+        if base_score <= 0:
+            continue
+
+        price = prices_map.get(code)
+        stock = stocks_map.get(code)
+        hist = recent_flows.get(code, [])
+
+        change_pct = float(price.change_pct) if price and price.change_pct else 0.0
+        close_price = float(price.close_price) if price and price.close_price else 0
+        foreign_net = 0.0
+        institution_net = 0.0
+        if hist:
+            today_flow = hist[0] if hist[0].trading_date == target_date else None
+            if today_flow:
+                foreign_net = float(today_flow.foreign_net_buy or 0)
+                institution_net = float(today_flow.institution_net_buy or 0)
+
+        fc = _count_consecutive(hist, lambda f: f.foreign_net_buy > 0)
+        ic = _count_consecutive(hist, lambda f: f.institution_net_buy > 0)
+        co = _count_consecutive(hist, lambda f: f.foreign_net_buy > 0 and f.institution_net_buy > 0)
+        fr_str = _flow_ratio(hist, lambda f: f.foreign_net_buy > 0 or f.institution_net_buy > 0)
+
+        # T+1 적합도 점수 계산
+        t1_score = base_score
+
+        # 수급 연속성 보너스
+        t1_score += fc * 0.05   # 외인 연속일당 +0.05
+        t1_score += ic * 0.05   # 기관 연속일당 +0.05
+        t1_score += co * 0.10   # 동반매수 연속일당 +0.10 (가중치 높음)
+
+        # 수급비율 보너스 (10일 중 7일 이상 매수)
+        try:
+            hit, total = map(int, fr_str.split("/"))
+            if total > 0 and hit / total >= 0.7:
+                t1_score += 0.15
+        except Exception:
+            pass
+
+        # 당일 급등 페널티 (이미 많이 올랐으면 T+1 고점 리스크)
+        if change_pct >= 8:
+            t1_score -= 0.5
+            risk = "고"
+        elif change_pct >= 5:
+            t1_score -= 0.25
+            risk = "중"
+        elif change_pct >= 3:
+            t1_score -= 0.10
+            risk = "저"
+        elif change_pct <= -3:
+            t1_score += 0.05   # 수급은 좋은데 눌린 종목 — 미세 보너스
+            risk = "저"
+        else:
+            risk = "저"
+
+        # 기관+외인 동시 매수 여부
+        both_buying = foreign_net > 0 and institution_net > 0
+
+        # 수급비율 (flow_ratio 재활용)
+        fr_buy_str = _flow_ratio(hist, lambda f: f.foreign_net_buy > 0 or f.institution_net_buy > 0)
+
+        picks.append({
+            "code": code,
+            "name": stock.name if stock else code,
+            "market": stock.market if stock else "KOSPI",
+            "base_score": round(base_score, 3),
+            "t1_score": round(t1_score, 3),
+            "close_price": close_price,
+            "change_pct": round(change_pct, 2),
+            "foreign_consecutive_days": fc,
+            "institution_consecutive_days": ic,
+            "co_consecutive_days": co,
+            "flow_ratio": fr_buy_str,
+            "foreign_net_buy": foreign_net,
+            "institution_net_buy": institution_net,
+            "both_buying": both_buying,
+            "risk": risk,
+        })
+
+    picks.sort(key=lambda x: x["t1_score"], reverse=True)
+    return picks[:top_n]
+
+
 @router.get("/data-quality")
 def get_data_quality(db: Session = Depends(get_db)):
     """오늘 데이터 수집 품질 요약 (실데이터 비율)."""
