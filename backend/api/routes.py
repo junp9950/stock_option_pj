@@ -574,6 +574,62 @@ def get_backfill_status():
     }
 
 
+_market_backfill_status: dict = {"running": False, "result": None, "error": None, "progress": ""}
+
+@router.post("/data/market-signal-backfill")
+def trigger_market_signal_backfill(skip_existing: bool = True):
+    """DB 수급 데이터로 과거 시장 시그널 일괄 재계산."""
+    import threading
+    from backend.db.database import SessionLocal
+    from backend.db.models import SpotInvestorFlow, MarketSignal
+    from backend.signal_engine.market_signal import calculate_market_signal
+
+    if _market_backfill_status["running"]:
+        raise HTTPException(status_code=409, detail="이미 실행 중")
+
+    _market_backfill_status.update({"running": True, "result": None, "error": None, "progress": "시작 중..."})
+
+    def _run():
+        db = SessionLocal()
+        try:
+            flow_dates = sorted(set(
+                row[0] for row in db.execute(select(SpotInvestorFlow.trading_date).distinct())
+            ))
+            signal_dates = set(
+                row[0] for row in db.execute(select(MarketSignal.trading_date).distinct())
+            )
+            targets = [d for d in flow_dates if not skip_existing or d not in signal_dates]
+            total = len(targets)
+            done = 0
+            errors = []
+            _market_backfill_status["progress"] = f"0 / {total} 일 완료"
+            for d in targets:
+                fresh = SessionLocal()
+                try:
+                    calculate_market_signal(fresh, d)
+                    done += 1
+                    if done % 20 == 0 or done == total:
+                        _market_backfill_status["progress"] = f"{done} / {total} 일 완료"
+                except Exception as exc:
+                    errors.append(f"{d}: {exc}")
+                finally:
+                    fresh.close()
+            _market_backfill_status["result"] = {"total": total, "done": done, "errors": errors[:5]}
+        except Exception as exc:
+            _market_backfill_status["error"] = str(exc)
+        finally:
+            db.close()
+            _market_backfill_status["running"] = False
+
+    threading.Thread(target=_run, daemon=True).start()
+    return {"status": "started"}
+
+
+@router.get("/data/market-signal-backfill/status")
+def get_market_signal_backfill_status():
+    return _market_backfill_status
+
+
 _signal_backfill_status: dict = {"running": False, "result": None, "error": None, "progress": ""}
 
 @router.post("/data/signal-backfill")
