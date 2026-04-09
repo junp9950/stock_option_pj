@@ -771,7 +771,7 @@ async function runHistoricalBacktest(btn){
   try{
     const r=await fetch(API+`/backtest/historical?start_date=${start}&end_date=${end}&top_n=${topn}`,{method:'POST'});
     const d=await r.json();
-    if(d.error){showToast('오류: '+d.error,true);return;}
+    if(!r.ok||d.error||d.detail){showToast('오류: '+(d.error||d.detail||r.status),true);document.getElementById('hbt-status').textContent='';return;}
     const m=d.metrics||{};
     const pct=v=>v!=null?v.toFixed(3)+'%':'—';
     const pctWr=v=>v!=null?v.toFixed(1)+'%':'—';
