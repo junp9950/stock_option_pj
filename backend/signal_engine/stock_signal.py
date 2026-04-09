@@ -318,7 +318,7 @@ def calculate_stock_signals(db: Session, trading_date: date) -> list[StockSignal
         short_hist = short_history.get(stock.code, [])
         short = next((s for s in short_hist if s.trading_date == trading_date), None)
 
-        if not all([price, flow, short]):
+        if not all([price, flow]):
             continue
 
         # 20일 평균 거래량으로 거래량 급증 계산
@@ -334,15 +334,19 @@ def calculate_stock_signals(db: Session, trading_date: date) -> list[StockSignal
         institution_strength = flow.institution_net_buy / tv * 100  # 거래대금 대비 %  (기관)
         co_buy = 2.0 if flow.foreign_net_buy > 0 and flow.institution_net_buy > 0 else 0.0
 
-        # 공매도 비율 (pykrx: 0~100%)
-        short_ratio_pct = short.short_ratio
-        short_ratio_score = (
-            2.0 if short_ratio_pct <= 1.0
-            else 1.0 if short_ratio_pct <= 4.0
-            else 0.0 if short_ratio_pct <= 10.0
-            else -1.0 if short_ratio_pct <= 20.0
-            else -2.0
-        )
+        # 공매도 비율 (pykrx: 0~100%) — 데이터 없으면 중립(0)
+        if short is not None:
+            short_ratio_pct = short.short_ratio
+            short_ratio_score = (
+                2.0 if short_ratio_pct <= 1.0
+                else 1.0 if short_ratio_pct <= 4.0
+                else 0.0 if short_ratio_pct <= 10.0
+                else -1.0 if short_ratio_pct <= 20.0
+                else -2.0
+            )
+        else:
+            short_ratio_pct = None
+            short_ratio_score = 0.0
 
         # 공매도 추세: 최근 비율이 감소 중인지
         short_ratios = [s.short_ratio for s in short_hist]

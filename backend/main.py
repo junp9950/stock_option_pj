@@ -264,7 +264,17 @@ select{background:#21262d;border:1px solid #30363d;color:#c9d1d9;padding:6px 10p
 
   <!-- 히스토리컬 백테스트 -->
   <div style="background:#161b22;border:1px solid #30363d;border-radius:8px;padding:16px;margin-bottom:20px">
-    <div style="font-weight:600;color:#c9d1d9;margin-bottom:12px;font-size:15px">히스토리컬 백테스트 (FDR 가격 기반)</div>
+    <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:12px;flex-wrap:wrap;gap:8px">
+      <div style="font-weight:600;color:#c9d1d9;font-size:15px">히스토리컬 백테스트</div>
+      <div style="display:flex;align-items:center;gap:8px">
+        <select id="hbt-mode" style="background:#0d1117;border:1px solid #30363d;color:#c9d1d9;padding:4px 8px;border-radius:4px;font-size:12px">
+          <option value="db" selected>DB 시그널 (수급 포함 · 빠름)</option>
+          <option value="fdr">FDR 기술지표 (수급 없음 · 느림)</option>
+        </select>
+        <button class="btn" style="font-size:11px;padding:4px 10px;background:#21262d" onclick="runSignalBackfill(this)" id="sig-backfill-btn">↺ 시그널 재계산</button>
+        <span id="sig-backfill-status" style="font-size:11px;color:#8b949e"></span>
+      </div>
+    </div>
     <div style="display:flex;align-items:center;gap:12px;flex-wrap:wrap;margin-bottom:8px">
       <label style="color:#8b949e;font-size:13px">시작일</label>
       <input type="text" id="hbt-start" placeholder="2026-01-01" maxlength="10" style="background:#0d1117;border:1px solid #30363d;color:#c9d1d9;padding:4px 8px;border-radius:4px;font-size:13px;width:100px;font-family:monospace">
@@ -285,7 +295,7 @@ select{background:#21262d;border:1px solid #30363d;color:#c9d1d9;padding:6px 10p
         <span style="color:#8b949e;font-size:13px">%</span>
       </div>
       <label style="color:#8b949e;font-size:12px;display:flex;align-items:center;gap:4px">
-        <input type="checkbox" id="hbt-use-sltp" checked> 손절/익절 적용
+        <input type="checkbox" id="hbt-use-sltp"> 손절/익절 적용
       </label>
       <button class="btn" onclick="runHistoricalBacktest(this)">▶ 실행</button>
       <span class="ts" id="hbt-status"></span>
@@ -776,18 +786,44 @@ function _initHbtDates(){
   if(!ee.value) ee.value = fmt(end);
 }
 
+let _sigBackfillTimer = null;
+async function runSignalBackfill(btn){
+  btn.disabled=true;
+  const statusEl=document.getElementById('sig-backfill-status');
+  statusEl.textContent='시작 중…';
+  try{
+    await fetch(API+'/data/signal-backfill',{method:'POST'});
+    // 폴링
+    _sigBackfillTimer = setInterval(async()=>{
+      const r=await fetch(API+'/data/signal-backfill/status');
+      const d=await r.json();
+      statusEl.textContent=d.progress||'';
+      if(!d.running){
+        clearInterval(_sigBackfillTimer);
+        btn.disabled=false;
+        if(d.result){
+          const errs=d.result.errors?.length||0;
+          statusEl.textContent=`완료 ${d.result.done}/${d.result.total}일${errs?` (오류${errs})`:' ✓'}`;
+          showToast(`시그널 재계산 완료: ${d.result.done}/${d.result.total}일`);
+        }else if(d.error){statusEl.textContent='오류: '+d.error;showToast('시그널 재계산 오류',true);}
+      }
+    },5000);
+  }catch(e){btn.disabled=false;statusEl.textContent='실패';showToast('시그널 재계산 실패',true);}
+}
+
 async function runHistoricalBacktest(btn){
   const start = document.getElementById('hbt-start').value;
   const end = document.getElementById('hbt-end').value;
   const topn = document.getElementById('hbt-topn').value||5;
+  const mode = document.getElementById('hbt-mode')?.value||'db';
   const useSltp = document.getElementById('hbt-use-sltp')?.checked;
   const sl = useSltp ? (document.getElementById('hbt-stoploss').value||0) : 0;
   const tp = useSltp ? (document.getElementById('hbt-takeprofit').value||0) : 0;
   if(!start||!end){showToast('시작일·종료일을 입력하세요',true);return;}
   btn.disabled=true;btn.textContent='실행 중…';
-  document.getElementById('hbt-status').textContent='FDR 가격 다운로드 중 (수십 초 소요)…';
+  document.getElementById('hbt-status').textContent=mode==='db'?'DB 시그널 계산 중…':'FDR 가격 다운로드 중 (수십 초 소요)…';
   try{
-    const r=await fetch(API+`/backtest/historical?start_date=${start}&end_date=${end}&top_n=${topn}&stop_loss_pct=${sl}&take_profit_pct=${tp}`,{method:'POST'});
+    const r=await fetch(API+`/backtest/historical?start_date=${start}&end_date=${end}&top_n=${topn}&mode=${mode}&stop_loss_pct=${sl}&take_profit_pct=${tp}`,{method:'POST'});
     const d=await r.json();
     if(!r.ok||d.error||d.detail){showToast('오류: '+(d.error||d.detail||r.status),true);document.getElementById('hbt-status').textContent='';return;}
     const m=d.metrics||{};
@@ -800,7 +836,7 @@ async function runHistoricalBacktest(btn){
       <div class="card"><h3>누적수익률</h3><div class="val" style="font-size:22px;color:${(m.cumulative_return_pct||0)>=0?'#3fb950':'#f85149'}">${pct(m.cumulative_return_pct)}</div></div>
       <div class="card"><h3>최대낙폭</h3><div class="val" style="font-size:22px;color:#f85149">${pct(m.max_drawdown_pct)}</div></div>
       <div class="card"><h3>총 거래수</h3><div class="val" style="font-size:22px">${d.total_trades||0}</div><div class="note">${d.simulated_days||0}일 진입 / 시장필터 ${d.skipped_market_filter||0}일 스킵 / 점수필터 ${d.skipped_score_filter||0}일 스킵</div></div>
-      <div class="card"><h3>손절/익절</h3><div class="val" style="font-size:18px">${(d.filters?.stop_loss_pct!=null?'<span style="color:#f85149">-'+d.filters.stop_loss_pct+'%</span>':'<span style="color:#444">없음</span>')} / ${(d.filters?.take_profit_pct!=null?'<span style="color:#3fb950">+'+d.filters.take_profit_pct+'%</span>':'<span style="color:#444">없음</span>')}</div><div class="note">시장레짐필터 MA${d.filters?.market_filter_ma||20}</div></div>`;
+      <div class="card"><h3>손절/익절</h3><div class="val" style="font-size:18px">${(d.filters?.stop_loss_pct!=null?'<span style="color:#f85149">-'+d.filters.stop_loss_pct+'%</span>':'<span style="color:#444">없음</span>')} / ${(d.filters?.take_profit_pct!=null?'<span style="color:#3fb950">+'+d.filters.take_profit_pct+'%</span>':'<span style="color:#444">없음</span>')}</div><div class="note">${d.mode==='db'?'DB 수급 시그널':'FDR 기술지표'} | 시장필터 ${d.filters?.market_filter!==false?'ON':'OFF'}</div></div>`;
 
     // 누적수익 곡선 차트
     const curve = d.cumulative_curve||[];
