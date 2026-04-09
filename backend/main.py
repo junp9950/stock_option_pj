@@ -239,22 +239,22 @@ select{background:#21262d;border:1px solid #30363d;color:#c9d1d9;padding:6px 10p
       <thead><tr>
         <th onclick="setScrSort('rank')">#<span class="sort-icon">↕</span></th>
         <th onclick="setScrSort('name')">종목<span class="sort-icon">↕</span></th>
-        <th onclick="setScrSort('total_score')">총점<span class="sort-icon">↕</span></th>
-        <th onclick="setScrSort('stock_score')">종목점수<span class="sort-icon">↕</span></th>
+        <th onclick="setScrSort('total_score')">신뢰도<span class="sort-icon">↕</span></th>
         <th onclick="setScrSort('close_price')">종가<span class="sort-icon">↕</span></th>
         <th onclick="setScrSort('change_pct')">등락<span class="sort-icon">↕</span></th>
-        <th onclick="setScrSort('institution_net_buy')">기관<span class="sort-icon">↕</span></th>
-        <th onclick="setScrSort('foreign_net_buy')">외국인<span class="sort-icon">↕</span></th>
-        <th onclick="setScrSort('market_cap')">시총<span class="sort-icon">↕</span></th>
-        <th onclick="setScrSort('short_ratio')">공매도%<span class="sort-icon">↕</span></th>
+        <th onclick="setScrSort('institution_net_buy')">기관</th>
+        <th onclick="setScrSort('foreign_net_buy')">외인</th>
+        <th onclick="setScrSort('institution_consecutive_days')">기관연속<span class="sort-icon">↕</span></th>
+        <th onclick="setScrSort('foreign_consecutive_days')">외인연속<span class="sort-icon">↕</span></th>
+        <th>수급비율</th>
         <th onclick="setScrSort('rsi_14')">RSI<span class="sort-icon">↕</span></th>
-        <th onclick="setScrSort('volume_surge')">거래량배수<span class="sort-icon">↕</span></th>
-        <th onclick="setScrSort('ma_score')">MA<span class="sort-icon">↕</span></th>
-        <th onclick="setScrSort('signal_confluence')">합류<span class="sort-icon">↕</span></th>
+        <th onclick="setScrSort('volume_surge')">거래량<span class="sort-icon">↕</span></th>
+        <th onclick="setScrSort('short_ratio')">공매도<span class="sort-icon">↕</span></th>
+        <th onclick="setScrSort('market_cap')">시총<span class="sort-icon">↕</span></th>
         <th>태그</th>
         <th>상세</th>
       </tr></thead>
-      <tbody id="scr-body"><tr><td colspan="17" style="color:#8b949e;text-align:center;padding:20px">로딩 중…</td></tr></tbody>
+      <tbody id="scr-body"><tr><td colspan="16" style="color:#8b949e;text-align:center;padding:20px">로딩 중…</td></tr></tbody>
     </table>
   </div>
 </div>
@@ -346,6 +346,7 @@ select{background:#21262d;border:1px solid #30363d;color:#c9d1d9;padding:6px 10p
     <h2 id="modal-title">종목 시그널 상세</h2>
     <div class="modal-tabs">
       <div class="modal-tab active" onclick="switchModalTab('chart',this)">차트</div>
+      <div class="modal-tab" onclick="switchModalTab('flow',this)">수급 히스토리</div>
       <div class="modal-tab" onclick="switchModalTab('signal',this)">시그널 상세</div>
     </div>
     <!-- 차트 탭 -->
@@ -357,6 +358,10 @@ select{background:#21262d;border:1px solid #30363d;color:#c9d1d9;padding:6px 10p
         <canvas id="modal-volume-chart" style="max-height:80px"></canvas>
       </div>
       <div id="modal-chart-info" style="display:flex;gap:16px;margin-top:12px;flex-wrap:wrap"></div>
+    </div>
+    <!-- 수급 히스토리 탭 -->
+    <div id="modal-flow-tab" style="display:none">
+      <div id="modal-flow-body"></div>
     </div>
     <!-- 시그널 탭 -->
     <div id="modal-signal-tab" style="display:none">
@@ -371,10 +376,11 @@ select{background:#21262d;border:1px solid #30363d;color:#c9d1d9;padding:6px 10p
 const API = window.location.origin + '/api';
 let scrData = [], scrSortKey = 'total_score', scrSortAsc = false;
 
-const fmt = n => (n==null||n===0)?'—':Math.abs(n)>=1e8?(n>=0?'+':'')+Math.abs(n/1e8).toFixed(0)+'억':(n>=0?'+':'-')+Math.abs(n/1e4).toFixed(0)+'만';
+const fmt = n => { if(n==null)return '—'; const a=Math.abs(n); const s=n<0?'-':'+'; if(a>=1e12)return s+(a/1e12).toFixed(1)+'조'; if(a>=1e8)return s+(a/1e8).toFixed(0)+'억'; if(a>=1e4)return s+(a/1e4).toFixed(0)+'만'; return n===0?'—':s+a.toFixed(0); };
 const fmtP = n => n==null?'—':(n>=0?'+':'')+n.toFixed(2)+'%';
 const fmtKrw = n => n==null?'—':Number(n).toLocaleString()+'원';
 const scoreBar = (s,max=3) => {const w=Math.min(Math.abs(s)/max*60,60);return `<span class="${s<0?'neg':''}" style="display:inline-flex;align-items:center"><b style="color:${s>0?'#58a6ff':s<0?'#f85149':'#8b949e'}">${s.toFixed(2)}</b><span class="score-bar" style="width:${w}px;background:${s>0?'#58a6ff':s<0?'#f85149':'#444'}"></span></span>`;};
+const trustPct = score => { const pct = Math.min(100, Math.max(0, Math.round((score/3)*100))); const color = pct>=70?'#3fb950':pct>=40?'#58a6ff':'#d29922'; return `<span style="color:${color};font-weight:700">${pct}%</span>`; };
 const tagHtml = tags => (tags||[]).map(t=>{
   let cls='tag';
   if(t.includes('동시'))cls+=' co';
@@ -537,24 +543,33 @@ function renderScreener(){
   });
   document.getElementById('scr-info').textContent=`${data.length}/${scrData.length}종목`;
   if(!data.length){document.getElementById('scr-body').innerHTML='<tr><td colspan="17" style="color:#8b949e;text-align:center;padding:16px">검색 결과 없음</td></tr>';return;}
-  document.getElementById('scr-body').innerHTML=data.map((i,idx)=>`<tr>
+  document.getElementById('scr-body').innerHTML=data.map((i,idx)=>{
+    const instCol = i.institution_net_buy>0?'#3fb950':i.institution_net_buy<0?'#f85149':'#8b949e';
+    const fgnCol = i.foreign_net_buy>0?'#3fb950':i.foreign_net_buy<0?'#f85149':'#8b949e';
+    const instDays = i.institution_consecutive_days||0;
+    const fgnDays = i.foreign_consecutive_days||0;
+    const instDayHtml = instDays>0?`<b style="color:#58a6ff">${instDays}일</b>`:'<span style="color:#444">—</span>';
+    const fgnDayHtml = fgnDays>0?`<b style="color:#39d0d0">${fgnDays}일</b>`:'<span style="color:#444">—</span>';
+    const pct = Math.min(100, Math.round((i.total_score/3)*100));
+    const pctColor = pct>=70?'#3fb950':pct>=40?'#58a6ff':'#d29922';
+    return `<tr>
     <td style="color:#8b949e">${idx+1}</td>
-    <td><b>${i.name}</b><br><span class="ts">${i.code} · <span style="color:${i.market==='KOSPI'?'#58a6ff':'#39d0d0'}">${i.market||'KOSPI'}</span></span></td>
-    <td>${scoreBar(i.total_score)}</td>
-    <td>${scoreBar(i.stock_score)}</td>
+    <td><b style="cursor:pointer;color:#e6edf3" onclick="showStockDetail('${i.code}','${i.name}')">${i.name}</b><br><span class="ts">${i.code} · <span style="color:${i.market==='KOSPI'?'#58a6ff':'#39d0d0'}">${i.market||'KOSPI'}</span></span></td>
+    <td><span style="color:${pctColor};font-weight:700;font-size:15px">${pct}%</span><br><span class="ts" style="color:#444">${i.total_score.toFixed(2)}</span></td>
     <td style="font-weight:600">${fmtKrw(i.close_price)}</td>
     <td style="color:${i.change_pct>=0?'#3fb950':'#f85149'};font-weight:600">${fmtP(i.change_pct)}</td>
-    <td>${fmt(i.institution_net_buy)}</td>
-    <td>${fmt(i.foreign_net_buy)}</td>
-    <td class="ts">${i.market_cap>=1e12?((i.market_cap/1e12).toFixed(1)+'조'):i.market_cap>=1e8?((i.market_cap/1e8).toFixed(0)+'억'):'—'}</td>
-    <td style="color:${(i.short_ratio||0)<=4?'#3fb950':(i.short_ratio||0)<=10?'#d29922':'#f85149'}">${(i.short_ratio||0).toFixed(1)}%</td>
+    <td style="color:${instCol};font-weight:600">${fmt(i.institution_net_buy)}</td>
+    <td style="color:${fgnCol};font-weight:600">${fmt(i.foreign_net_buy)}</td>
+    <td style="text-align:center">${instDayHtml}</td>
+    <td style="text-align:center">${fgnDayHtml}</td>
+    <td style="color:#8b949e;font-size:12px">${i.flow_ratio||'—'}</td>
     <td style="color:${i.rsi_14!=null?(i.rsi_14<30?'#58a6ff':i.rsi_14>70?'#f85149':'#c9d1d9'):'#444'}">${i.rsi_14!=null?Math.round(i.rsi_14):'—'}</td>
     <td style="color:${(i.volume_surge||1)>=2?'#3fb950':(i.volume_surge||1)<0.8?'#f85149':'#c9d1d9'}">${(i.volume_surge||1).toFixed(1)}x</td>
-    <td>${scoreBar(i.ma_score||0,2)}</td>
-    <td style="color:${(i.signal_confluence||0)>=7?'#3fb950':(i.signal_confluence||0)>=5?'#58a6ff':'#8b949e'};font-weight:600">${i.signal_confluence||0}</td>
+    <td style="color:${(i.short_ratio||0)<=4?'#3fb950':(i.short_ratio||0)<=10?'#d29922':'#f85149'}">${(i.short_ratio||0).toFixed(1)}%</td>
+    <td class="ts">${i.market_cap>=1e12?((i.market_cap/1e12).toFixed(1)+'조'):i.market_cap>=1e8?((i.market_cap/1e8).toFixed(0)+'억'):'—'}</td>
     <td>${tagHtml(i.tags)}</td>
     <td><button class="btn btn-gray btn-sm" onclick="showStockDetail('${i.code}','${i.name}')">상세</button></td>
-  </tr>`).join('');
+  </tr>`;}).join('');
 }
 
 async function loadSignalDetail(){
@@ -808,6 +823,7 @@ function switchModalTab(tab, el){
   document.querySelectorAll('.modal-tab').forEach(t=>t.classList.remove('active'));
   el.classList.add('active');
   document.getElementById('modal-chart-tab').style.display = tab==='chart'?'':'none';
+  document.getElementById('modal-flow-tab').style.display = tab==='flow'?'':'none';
   document.getElementById('modal-signal-tab').style.display = tab==='signal'?'':'none';
 }
 
@@ -820,14 +836,41 @@ async function showStockDetail(code, name){
   // 차트 탭 기본 활성화
   document.querySelectorAll('.modal-tab').forEach((t,i)=>t.classList.toggle('active',i===0));
   document.getElementById('modal-chart-tab').style.display='';
+  document.getElementById('modal-flow-tab').style.display='none';
   document.getElementById('modal-signal-tab').style.display='none';
 
-  const [data, hist, priceHist] = await Promise.all([
+  const [data, hist, priceHist, flowHist] = await Promise.all([
     fetch(API+'/stock/'+code+'/signals').then(r=>r.ok?r.json():null).catch(()=>null),
     fetch(API+'/stock/'+code+'/history?limit=60').then(r=>r.ok?r.json():null).catch(()=>null),
     fetch('https://query1.finance.yahoo.com/v8/finance/chart/'+code+'.KS?interval=1d&range=3mo')
       .then(r=>r.ok?r.json():null).catch(()=>null),
+    fetch(API+'/stock/'+code+'/flow-history?days=30').then(r=>r.ok?r.json():null).catch(()=>null),
   ]);
+
+  // ── 수급 히스토리 탭
+  if(flowHist && flowHist.length){
+    const rows = [...flowHist].reverse().map(d=>{
+      const fCol = d.foreign_net>0?'#3fb950':d.foreign_net<0?'#f85149':'#8b949e';
+      const iCol = d.institution_net>0?'#3fb950':d.institution_net<0?'#f85149':'#8b949e';
+      const chgCol = d.change_pct>=0?'#3fb950':'#f85149';
+      return `<tr>
+        <td class="ts">${d.date}</td>
+        <td style="color:${fCol};font-weight:600">${fmt(d.foreign_net)}</td>
+        <td style="color:${iCol};font-weight:600">${fmt(d.institution_net)}</td>
+        <td style="font-weight:600">${d.close_price!=null?Number(d.close_price).toLocaleString()+'원':'—'}</td>
+        <td style="color:${chgCol}">${d.change_pct!=null?fmtP(d.change_pct):'—'}</td>
+      </tr>`;
+    }).join('');
+    document.getElementById('modal-flow-body').innerHTML=`
+      <table style="width:100%;margin-top:8px">
+        <thead><tr>
+          <th>날짜</th><th style="color:#39d0d0">외인순매수</th><th style="color:#58a6ff">기관순매수</th><th>종가</th><th>등락</th>
+        </tr></thead>
+        <tbody>${rows}</tbody>
+      </table>`;
+  } else {
+    document.getElementById('modal-flow-body').innerHTML='<div style="color:#8b949e;padding:20px;text-align:center">수급 데이터 없음</div>';
+  }
 
   // ── 가격 차트 (Yahoo Finance)
   let priceData = null;
