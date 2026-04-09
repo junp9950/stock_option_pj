@@ -27,6 +27,9 @@ class RecommendationItem(BaseModel):
     foreign_net_buy: float = 0.0
     individual_net_buy: float = 0.0
     consecutive_days: int = 0
+    foreign_consecutive_days: int = 0
+    institution_consecutive_days: int = 0
+    flow_ratio: str = "0/0"
     tags: list[str] = []
     short_ratio: float = 0.0
     ma_score: float = 0.0

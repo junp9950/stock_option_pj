@@ -34,6 +34,16 @@ def _count_consecutive(flows: list, check) -> int:
     return count
 
 
+def _flow_ratio(flows: list, check, window: int = 10) -> str:
+    """최근 window 영업일 중 check 조건 충족 일수 반환. 예: '7/10'"""
+    real = [f for f in flows if not (f.foreign_net_buy == 0 and f.institution_net_buy == 0)]
+    real = real[:window]
+    if not real:
+        return "0/0"
+    hit = sum(1 for f in real if check(f))
+    return f"{hit}/{len(real)}"
+
+
 def _build_tags(inst: float, foreign: float, indiv: float, co_days: int, inst_days: int, foreign_days: int) -> list[str]:
     tags: list[str] = []
     if inst > 0 and foreign > 0:
@@ -133,6 +143,7 @@ def get_recommendations(trading_date: date | None = None, db: Session = Depends(
         co_days = _count_consecutive(hist, lambda f: f.institution_net_buy > 0 and f.foreign_net_buy > 0)
         inst_days = _count_consecutive(hist, lambda f: f.institution_net_buy > 0)
         foreign_days = _count_consecutive(hist, lambda f: f.foreign_net_buy > 0)
+        fr = _flow_ratio(hist, lambda f: f.institution_net_buy > 0 or f.foreign_net_buy > 0)
 
         result_items.append(
             RecommendationItem(
@@ -149,6 +160,9 @@ def get_recommendations(trading_date: date | None = None, db: Session = Depends(
                 foreign_net_buy=foreign,
                 individual_net_buy=indiv,
                 consecutive_days=co_days,
+                foreign_consecutive_days=foreign_days,
+                institution_consecutive_days=inst_days,
+                flow_ratio=fr,
                 tags=_build_tags(inst, foreign, indiv, co_days, inst_days, foreign_days),
             )
         )
@@ -291,6 +305,7 @@ def get_screener(
         co_days = _count_consecutive(hist, lambda f: f.institution_net_buy > 0 and f.foreign_net_buy > 0)
         inst_days = _count_consecutive(hist, lambda f: f.institution_net_buy > 0)
         foreign_days = _count_consecutive(hist, lambda f: f.foreign_net_buy > 0)
+        fr = _flow_ratio(hist, lambda f: f.institution_net_buy > 0 or f.foreign_net_buy > 0)
 
         total_score = round(market_score * config.score_market_weight + ss.score * config.score_stock_weight, 2)
         ranked.append(
@@ -308,6 +323,9 @@ def get_screener(
                 foreign_net_buy=foreign,
                 individual_net_buy=indiv,
                 consecutive_days=co_days,
+                foreign_consecutive_days=foreign_days,
+                institution_consecutive_days=inst_days,
+                flow_ratio=fr,
                 tags=_build_tags(inst, foreign, indiv, co_days, inst_days, foreign_days),
                 short_ratio=short.short_ratio if short else 0.0,
                 ma_score=ma_scores.get(ss.stock_code, 0.0),
@@ -369,6 +387,37 @@ def get_stock_signal_history(code: str, limit: int = 10, db: Session = Depends(g
             for s in reversed(signals)
         ],
     }
+
+
+@router.get("/stock/{code}/flow-history")
+def get_stock_flow_history(code: str, days: int = 20, db: Session = Depends(get_db)):
+    """종목 일별 수급·가격 히스토리 (최근 N영업일)."""
+    flows = list(db.scalars(
+        select(SpotInvestorFlow)
+        .where(SpotInvestorFlow.stock_code == code)
+        .order_by(desc(SpotInvestorFlow.trading_date))
+        .limit(days)
+    ))
+    prices = {
+        p.trading_date: p for p in db.scalars(
+            select(SpotDailyPrice)
+            .where(SpotDailyPrice.stock_code == code)
+            .order_by(desc(SpotDailyPrice.trading_date))
+            .limit(days)
+        )
+    }
+    result = []
+    for f in reversed(flows):
+        p = prices.get(f.trading_date)
+        result.append({
+            "date": f.trading_date.isoformat(),
+            "foreign_net": f.foreign_net_buy,
+            "institution_net": f.institution_net_buy,
+            "close_price": p.close_price if p else None,
+            "change_pct": p.change_pct if p else None,
+            "volume": p.volume if p else None,
+        })
+    return result
 
 
 @router.get("/stock/{code}/signals")
