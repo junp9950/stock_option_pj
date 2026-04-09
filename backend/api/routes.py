@@ -602,6 +602,8 @@ def trigger_historical_backtest(
     start_date: date,
     end_date: date,
     top_n: int = 5,
+    stop_loss_pct: float = 0.0,
+    take_profit_pct: float = 0.0,
     db: Session = Depends(get_db),
 ):
     """FDR 가격 데이터 기반 히스토리컬 백테스트. DB 추천 기록 불필요."""
@@ -609,7 +611,11 @@ def trigger_historical_backtest(
         raise HTTPException(status_code=400, detail="end_date must be after start_date")
     if (end_date - start_date).days > 730:
         raise HTTPException(status_code=400, detail="최대 2년 범위까지 지원합니다")
-    return run_historical_backtest(db, start_date, end_date, top_n=top_n)
+    return run_historical_backtest(
+        db, start_date, end_date, top_n=top_n,
+        stop_loss=stop_loss_pct / 100,
+        take_profit=take_profit_pct / 100,
+    )
 
 
 @router.get("/jobs/logs")
