@@ -160,10 +160,51 @@ def _fetch_price(code: str, fetch_start: date, fetch_end: date) -> Optional[pd.D
         if df is None or df.empty:
             return None
         df.index = pd.to_datetime(df.index)
-        return df[["Close", "Volume"]].copy()
+        cols = [c for c in ["Open", "High", "Low", "Close", "Volume"] if c in df.columns]
+        return df[cols].copy()
     except Exception as exc:  # noqa: BLE001
         logger.debug("FDR failed for %s: %s", code, exc)
         return None
+
+
+def _simulate_exit(df: pd.DataFrame, entry_ts: pd.Timestamp, exit_ts: pd.Timestamp,
+                   entry_price: float, stop_loss: float, take_profit: float) -> float:
+    """손절/익절 포함 청산 가격 시뮬레이션.
+    entry_price 기준으로 T+1 OHLC를 보고:
+      - 갭 다운으로 손절 레벨 하회 → 오픈에 청산
+      - 갭 업으로 익절 레벨 상회 → 오픈에 청산
+      - 장중 저가가 손절 레벨 하회 → 손절가에 청산
+      - 장중 고가가 익절 레벨 상회 → 익절가에 청산
+      - 위 조건 없으면 종가에 청산
+    """
+    if exit_ts not in df.index:
+        return entry_price  # 데이터 없으면 손익 0
+    row = df.loc[exit_ts]
+    has_ohlc = all(c in df.columns for c in ["Open", "High", "Low"])
+
+    stop_price = entry_price * (1 - stop_loss)
+    tp_price = entry_price * (1 + take_profit)
+
+    if has_ohlc:
+        open_p = float(row["Open"])
+        high_p = float(row["High"])
+        low_p = float(row["Low"])
+        close_p = float(row["Close"])
+
+        # 갭 처리
+        if open_p <= stop_price:
+            return open_p  # 갭 다운, 오픈에 손절
+        if open_p >= tp_price:
+            return open_p  # 갭 업, 오픈에 익절
+
+        # 장중 손절 vs 익절 (저가가 먼저냐 고가가 먼저냐 알 수 없으므로 보수적으로 손절 우선)
+        if low_p <= stop_price:
+            return stop_price
+        if high_p >= tp_price:
+            return tp_price
+        return close_p
+    else:
+        return float(row["Close"])
 
 
 def _get_trading_days(start: date, end: date) -> list[date]:
@@ -186,6 +227,8 @@ def run_historical_backtest(
     fee_rate: float = 0.00015,
     slippage: float = 0.0005,
     max_workers: int = 8,
+    stop_loss: float = 0.0,    # 0.0 = 손절 없음, 0.03 = -3%
+    take_profit: float = 0.0,  # 0.0 = 익절 없음, 0.05 = +5%
 ) -> dict:
     """
     start_date ~ end_date 기간 동안 매일 top_n 종목 T+1 전략 백테스트.
@@ -194,6 +237,7 @@ def run_historical_backtest(
       A. 최소 점수 필터 (MIN_SCORE 이상인 날만 진입)
       B. 시장 필터 (KOSPI200 > 20일선인 날만 진입)
       C. RSI 추세추종 방식
+      D. 손절/익절 (stop_loss, take_profit)
 
     Returns:
         win_rate, avg_return, sharpe, cumulative_return, daily_results 등
@@ -285,18 +329,28 @@ def run_historical_backtest(
         # MIN_SCORE 이상인 종목만 선택 (최대 top_n)
         selected = [code for s, code in scored if s >= MIN_SCORE][:top_n]
 
-        # T+1 수익률 계산
+        # T+1 수익률 계산 (손절/익절 적용)
         returns = []
         for code in selected:
             df = price_data.get(code)
             if df is None:
                 continue
-            if sig_ts not in df.index or next_ts not in df.index:
+            if sig_ts not in df.index:
                 continue
             entry = float(df.loc[sig_ts, "Close"])
-            exit_p = float(df.loc[next_ts, "Close"])
             if entry <= 0:
                 continue
+
+            # 손절/익절 활성화 시 _simulate_exit, 아니면 단순 종가
+            if (stop_loss > 0 or take_profit > 0) and next_ts in df.index:
+                exit_p = _simulate_exit(df, sig_ts, next_ts, entry,
+                                        stop_loss if stop_loss > 0 else 1.0,
+                                        take_profit if take_profit > 0 else 1.0)
+            else:
+                if next_ts not in df.index:
+                    continue
+                exit_p = float(df.loc[next_ts, "Close"])
+
             net = (exit_p - entry) / entry - (fee_rate + slippage) * 2
             returns.append(net)
 
@@ -370,6 +424,8 @@ def run_historical_backtest(
             "min_score": MIN_SCORE,
             "market_filter_ma": MARKET_FILTER_MA,
             "rsi_mode": "추세추종",
+            "stop_loss_pct": round(stop_loss * 100, 1) if stop_loss > 0 else None,
+            "take_profit_pct": round(take_profit * 100, 1) if take_profit > 0 else None,
         },
         "metrics": {
             "win_rate_pct": round(win_rate * 100, 1),

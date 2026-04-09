@@ -265,13 +265,28 @@ select{background:#21262d;border:1px solid #30363d;color:#c9d1d9;padding:6px 10p
   <!-- 히스토리컬 백테스트 -->
   <div style="background:#161b22;border:1px solid #30363d;border-radius:8px;padding:16px;margin-bottom:20px">
     <div style="font-weight:600;color:#c9d1d9;margin-bottom:12px;font-size:15px">히스토리컬 백테스트 (FDR 가격 기반)</div>
-    <div style="display:flex;align-items:center;gap:12px;flex-wrap:wrap;margin-bottom:12px">
+    <div style="display:flex;align-items:center;gap:12px;flex-wrap:wrap;margin-bottom:8px">
       <label style="color:#8b949e;font-size:13px">시작일</label>
       <input type="text" id="hbt-start" placeholder="2026-01-01" maxlength="10" style="background:#0d1117;border:1px solid #30363d;color:#c9d1d9;padding:4px 8px;border-radius:4px;font-size:13px;width:100px;font-family:monospace">
       <label style="color:#8b949e;font-size:13px">종료일</label>
       <input type="text" id="hbt-end" placeholder="2026-04-05" maxlength="10" style="background:#0d1117;border:1px solid #30363d;color:#c9d1d9;padding:4px 8px;border-radius:4px;font-size:13px;width:100px;font-family:monospace">
       <label style="color:#8b949e;font-size:13px">Top-N</label>
       <input type="number" id="hbt-topn" value="5" min="1" max="20" style="background:#0d1117;border:1px solid #30363d;color:#c9d1d9;padding:4px 8px;border-radius:4px;font-size:13px;width:60px">
+    </div>
+    <div style="display:flex;align-items:center;gap:12px;flex-wrap:wrap;margin-bottom:12px">
+      <label style="color:#8b949e;font-size:13px">손절</label>
+      <div style="display:flex;align-items:center;gap:4px">
+        <input type="number" id="hbt-stoploss" value="3" min="0" max="20" step="0.5" style="background:#0d1117;border:1px solid #30363d;color:#f85149;padding:4px 8px;border-radius:4px;font-size:13px;width:60px">
+        <span style="color:#8b949e;font-size:13px">%</span>
+      </div>
+      <label style="color:#8b949e;font-size:13px">익절</label>
+      <div style="display:flex;align-items:center;gap:4px">
+        <input type="number" id="hbt-takeprofit" value="5" min="0" max="50" step="0.5" style="background:#0d1117;border:1px solid #30363d;color:#3fb950;padding:4px 8px;border-radius:4px;font-size:13px;width:60px">
+        <span style="color:#8b949e;font-size:13px">%</span>
+      </div>
+      <label style="color:#8b949e;font-size:12px;display:flex;align-items:center;gap:4px">
+        <input type="checkbox" id="hbt-use-sltp" checked> 손절/익절 적용
+      </label>
       <button class="btn" onclick="runHistoricalBacktest(this)">▶ 실행</button>
       <span class="ts" id="hbt-status"></span>
     </div>
@@ -767,11 +782,14 @@ async function runHistoricalBacktest(btn){
   const start = document.getElementById('hbt-start').value;
   const end = document.getElementById('hbt-end').value;
   const topn = document.getElementById('hbt-topn').value||5;
+  const useSltp = document.getElementById('hbt-use-sltp')?.checked;
+  const sl = useSltp ? (document.getElementById('hbt-stoploss').value||0) : 0;
+  const tp = useSltp ? (document.getElementById('hbt-takeprofit').value||0) : 0;
   if(!start||!end){showToast('시작일·종료일을 입력하세요',true);return;}
   btn.disabled=true;btn.textContent='실행 중…';
   document.getElementById('hbt-status').textContent='FDR 가격 다운로드 중 (수십 초 소요)…';
   try{
-    const r=await fetch(API+`/backtest/historical?start_date=${start}&end_date=${end}&top_n=${topn}`,{method:'POST'});
+    const r=await fetch(API+`/backtest/historical?start_date=${start}&end_date=${end}&top_n=${topn}&stop_loss_pct=${sl}&take_profit_pct=${tp}`,{method:'POST'});
     const d=await r.json();
     if(!r.ok||d.error||d.detail){showToast('오류: '+(d.error||d.detail||r.status),true);document.getElementById('hbt-status').textContent='';return;}
     const m=d.metrics||{};
@@ -783,7 +801,8 @@ async function runHistoricalBacktest(btn){
       <div class="card"><h3>샤프</h3><div class="val" style="font-size:22px">${m.sharpe!=null?m.sharpe.toFixed(3):'—'}</div><div class="note">연환산</div></div>
       <div class="card"><h3>누적수익률</h3><div class="val" style="font-size:22px;color:${(m.cumulative_return_pct||0)>=0?'#3fb950':'#f85149'}">${pct(m.cumulative_return_pct)}</div></div>
       <div class="card"><h3>최대낙폭</h3><div class="val" style="font-size:22px;color:#f85149">${pct(m.max_drawdown_pct)}</div></div>
-      <div class="card"><h3>총 거래수</h3><div class="val" style="font-size:22px">${d.total_trades||0}</div><div class="note">${d.simulated_days||0}일 진입 / 시장필터 ${d.skipped_market_filter||0}일 스킵 / 점수필터 ${d.skipped_score_filter||0}일 스킵</div></div>`;
+      <div class="card"><h3>총 거래수</h3><div class="val" style="font-size:22px">${d.total_trades||0}</div><div class="note">${d.simulated_days||0}일 진입 / 시장필터 ${d.skipped_market_filter||0}일 스킵 / 점수필터 ${d.skipped_score_filter||0}일 스킵</div></div>
+      <div class="card"><h3>손절/익절</h3><div class="val" style="font-size:18px">${(d.filters?.stop_loss_pct!=null?'<span style="color:#f85149">-'+d.filters.stop_loss_pct+'%</span>':'<span style="color:#444">없음</span>')} / ${(d.filters?.take_profit_pct!=null?'<span style="color:#3fb950">+'+d.filters.take_profit_pct+'%</span>':'<span style="color:#444">없음</span>')}</div><div class="note">시장레짐필터 MA${d.filters?.market_filter_ma||20}</div></div>`;
 
     // 누적수익 곡선 차트
     const curve = d.cumulative_curve||[];
