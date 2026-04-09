@@ -109,42 +109,56 @@ select{background:#21262d;border:1px solid #30363d;color:#c9d1d9;padding:6px 10p
 
 <!-- 대시보드 탭 -->
 <div id="panel-dash" class="panel active content">
-  <div class="grid">
+
+  <!-- 내일 매수 후보 (최상단) -->
+  <div style="background:#0d1117;border:2px solid #388bfd;border-radius:10px;padding:18px;margin-bottom:20px">
+    <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:14px;flex-wrap:wrap;gap:8px">
+      <div>
+        <span style="font-weight:800;color:#58a6ff;font-size:17px">내일 매수 후보</span>
+        <span style="font-size:12px;color:#8b949e;margin-left:8px">T+1 진입 적합도 · 수급 연속성 보너스 · 급등 페널티 적용</span>
+      </div>
+      <div style="font-size:11px;color:#8b949e" id="picks-date-label"></div>
+    </div>
+    <div id="tomorrow-picks-body">
+      <div style="color:#8b949e;font-size:13px;text-align:center;padding:20px">로딩 중…</div>
+    </div>
+  </div>
+
+  <!-- 요약 카드 -->
+  <div class="grid" style="margin-bottom:16px">
     <div class="card"><h3>시장 시그널</h3><div class="val" id="sig">—</div><div class="note" id="sig-score"></div></div>
     <div class="card"><h3>기준일</h3><div class="val" id="date" style="font-size:20px">—</div></div>
-    <div class="card"><h3>추천 종목</h3><div class="val" id="rec-cnt">—</div><div class="note">상위 점수 기준</div></div>
     <div class="card"><h3>전종목 스크리닝</h3><div class="val" id="scr-cnt">—</div><div class="note">시총·거래대금 필터 후</div></div>
     <div class="card"><h3>데이터 품질</h3><div class="val" id="dq-score" style="font-size:24px">—</div><div class="note" id="dq-note">데이터 수집 현황</div></div>
   </div>
+
   <!-- 시장 시그널 히스토리 -->
-  <div style="margin-bottom:20px">
-    <div style="font-size:12px;text-transform:uppercase;color:#8b949e;margin-bottom:8px;letter-spacing:.06em">시장 시그널 히스토리</div>
+  <div style="margin-bottom:16px">
+    <div style="font-size:12px;text-transform:uppercase;color:#8b949e;margin-bottom:8px;letter-spacing:.06em">시장 시그널 히스토리 (외인+기관 수급 기반)</div>
     <div id="sig-history" style="display:flex;gap:8px;flex-wrap:wrap"></div>
   </div>
-  <table>
+
+  <!-- 전일 대비 상승 종목 -->
+  <div style="margin-bottom:16px">
+    <div style="font-size:12px;text-transform:uppercase;color:#8b949e;margin-bottom:8px;letter-spacing:.06em">전일 대비 시그널 상승 TOP 5</div>
+    <div id="trending-stocks" style="display:flex;gap:8px;flex-wrap:wrap"></div>
+  </div>
+
+  <!-- 추천 종목 테이블 (접을 수 있음) -->
+  <details style="margin-bottom:8px">
+    <summary style="cursor:pointer;font-size:12px;text-transform:uppercase;color:#8b949e;letter-spacing:.06em;list-style:none;display:flex;align-items:center;gap:6px">
+      <span id="rec-cnt-label">추천 종목</span> <span id="rec-cnt" style="color:#58a6ff"></span> <span style="color:#444;font-size:10px">▼ 펼치기</span>
+    </summary>
+  <table style="margin-top:8px">
     <thead><tr>
       <th>#</th><th>종목</th><th>총점</th><th>종가</th><th>등락</th>
       <th>기관 순매수</th><th>외국인 순매수</th><th>연속일</th><th>태그</th>
     </tr></thead>
     <tbody id="rec-body"><tr><td colspan="9" style="color:#8b949e;text-align:center;padding:20px">로딩 중…</td></tr></tbody>
   </table>
+  </details>
 
-  <!-- 전일 대비 상승 종목 -->
-  <div style="margin-top:16px">
-    <div style="font-size:12px;text-transform:uppercase;color:#8b949e;margin-bottom:8px;letter-spacing:.06em">전일 대비 시그널 상승 TOP 5</div>
-    <div id="trending-stocks" style="display:flex;gap:8px;flex-wrap:wrap"></div>
-  </div>
-
-  <!-- 내일 매수 후보 -->
-  <div style="margin-top:20px;background:#161b22;border:1px solid #30363d;border-radius:8px;padding:16px">
-    <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:12px">
-      <div style="font-weight:700;color:#f0f6fc;font-size:15px">내일 매수 후보 <span style="font-size:11px;color:#8b949e;font-weight:400">(T+1 진입 적합도 기준)</span></div>
-      <div style="font-size:11px;color:#8b949e">수급 연속성 보너스 · 당일 급등 페널티 적용</div>
-    </div>
-    <div id="tomorrow-picks-body">
-      <div style="color:#8b949e;font-size:13px;text-align:center;padding:20px">로딩 중…</div>
-    </div>
-  </div>
+  <!-- (hidden placeholder for tomorrow-picks end tag compatibility) -->
 </div>
 
 <!-- 전종목 스크리너 탭 -->
@@ -530,17 +544,21 @@ async function loadAll() {
               ${coLine}
             </div>`;
           }).join('') + `</div>`;
+      // picks-date-label 업데이트
+      const pdl = document.getElementById('picks-date-label');
+      if(pdl && sig) pdl.textContent = sig.trading_date + ' 기준';
       } else {
         tpEl.innerHTML = '<div style="color:#8b949e;font-size:13px;text-align:center;padding:20px">데이터 없음 — 파이프라인을 실행하세요</div>';
       }
     }
     if(hist && hist.length){
       const sorted=[...hist].sort((a,b)=>a.trading_date>b.trading_date?1:-1);
+      const sigColor = s => s==='강세매수'?'#3fb950':s==='상방'?'#58a6ff':s==='하방'?'#f85149':s==='강세매도'?'#f85149':'#d29922';
       document.getElementById('sig-history').innerHTML=sorted.map(h=>`
-        <div style="background:#161b22;border:1px solid #30363d;border-radius:6px;padding:8px 14px;text-align:center;min-width:100px">
+        <div style="background:#161b22;border:1px solid #30363d;border-radius:6px;padding:8px 14px;text-align:center;min-width:110px">
           <div class="ts">${h.trading_date}</div>
-          <div class="signal-${h.signal}" style="font-weight:700;font-size:15px">${h.signal}</div>
-          <div class="ts" style="color:${h.score>0?'#3fb950':h.score<0?'#f85149':'#d29922'}">${h.score.toFixed(1)}</div>
+          <div style="font-weight:700;font-size:14px;color:${sigColor(h.signal)}">${h.signal}</div>
+          <div class="ts" style="color:${h.score>0?'#3fb950':h.score<0?'#f85149':'#8b949e'}">${h.score>0?'+':''}${h.score.toFixed(1)}</div>
         </div>`).join('');
     }
   } catch(e) {
