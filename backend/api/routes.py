@@ -19,6 +19,22 @@ from backend.services.daily_pipeline import run_backfill_pipeline, run_daily_pip
 from backend.utils.dates import latest_trading_day
 
 
+def _latest_data_date(db: Session, requested: date | None = None) -> date:
+    """실제 수급 데이터가 있는 가장 최근 거래일.
+    오늘 수급이 아직 없거나 전부 0이면 이전 유효일을 반환.
+    requested가 명시되면 그대로 반환.
+    """
+    if requested is not None:
+        return requested
+    # 실수급이 있는 가장 최근 날짜를 DB에서 직접 조회 (calendar 불필요)
+    last = db.scalar(
+        select(func.max(SpotInvestorFlow.trading_date)).where(
+            (SpotInvestorFlow.foreign_net_buy != 0) | (SpotInvestorFlow.institution_net_buy != 0)
+        )
+    )
+    return last if last else latest_trading_day()
+
+
 def _count_consecutive(flows: list, check) -> int:
     """flows는 최신 순으로 정렬된 SpotInvestorFlow 리스트.
     외국인/기관 수급이 둘 다 0인 날(주말·공휴일)은 건너뜀.
@@ -71,7 +87,7 @@ def health_check() -> HealthResponse:
 
 @router.get("/market-signal", response_model=MarketSignalResponse)
 def get_market_signal(trading_date: date | None = None, db: Session = Depends(get_db)) -> MarketSignalResponse:
-    target_date = trading_date or latest_trading_day()
+    target_date = trading_date or _latest_data_date(db)
     signal = db.scalar(select(MarketSignal).where(MarketSignal.trading_date == target_date))
     if signal is None:
         raise HTTPException(status_code=404, detail="시장 시그널 데이터가 없습니다.")
@@ -89,7 +105,7 @@ def get_market_signal_history(limit: int = 10, db: Session = Depends(get_db)) ->
 
 @router.get("/recommendations", response_model=RecommendationResponse)
 def get_recommendations(trading_date: date | None = None, db: Session = Depends(get_db)) -> RecommendationResponse:
-    target_date = trading_date or latest_trading_day()
+    target_date = trading_date or _latest_data_date(db)
     items = list(
         db.scalars(
             select(Recommendation).where(Recommendation.trading_date == target_date).order_by(Recommendation.rank)
@@ -180,7 +196,7 @@ def get_screener(
     show_all=true이면 시총/거래대금 필터 무시하고 전종목 반환.
     """
     from backend.config import get_config
-    target_date = trading_date or latest_trading_day()
+    target_date = trading_date or _latest_data_date(db)
     config = get_config()
 
     market_signal = db.scalar(select(MarketSignal).where(MarketSignal.trading_date == target_date))
@@ -422,7 +438,7 @@ def get_stock_flow_history(code: str, days: int = 20, db: Session = Depends(get_
 
 @router.get("/stock/{code}/signals")
 def get_stock_signal_details(code: str, trading_date: date | None = None, db: Session = Depends(get_db)):
-    target_date = trading_date or latest_trading_day()
+    target_date = trading_date or _latest_data_date(db)
     details = list(
         db.scalars(
             select(StockSignalDetail).where(
@@ -453,7 +469,7 @@ def get_data_sources(db: Session = Depends(get_db)):
         DerivativesFuturesDaily, FuturesDailyPrice, IndexDaily,
         OpenInterestDaily, ProgramTradingDaily, ShortSellingDaily, SpotDailyPrice, SpotInvestorFlow
     )
-    target_date = latest_trading_day()
+    target_date = _latest_data_date(db)
 
     # 최근 수집 결과를 DB에서 실제로 확인
     spot_count = db.scalar(select(func.count()).select_from(SpotDailyPrice).where(SpotDailyPrice.trading_date == target_date)) or 0
@@ -484,7 +500,7 @@ def get_data_sources(db: Session = Depends(get_db)):
 
 @router.get("/derivatives/overview")
 def get_derivatives_overview(trading_date: date | None = None, db: Session = Depends(get_db)):
-    target_date = trading_date or latest_trading_day()
+    target_date = trading_date or _latest_data_date(db)
     signal = db.scalar(select(MarketSignal).where(MarketSignal.trading_date == target_date))
     return {"trading_date": target_date.isoformat(), "market_signal": signal.signal if signal else "중립", "score": signal.score if signal else 0.0}
 
@@ -786,7 +802,7 @@ def get_job_logs(limit: int = 50, db: Session = Depends(get_db)):
 @router.get("/market-signal/details")
 def get_market_signal_details(trading_date: date | None = None, db: Session = Depends(get_db)):
     """시장 시그널 지표별 상세 점수."""
-    target_date = trading_date or latest_trading_day()
+    target_date = trading_date or _latest_data_date(db)
     details = list(db.scalars(
         select(MarketSignalDetail).where(MarketSignalDetail.trading_date == target_date)
     ))
@@ -807,7 +823,7 @@ def get_market_signal_details(trading_date: date | None = None, db: Session = De
 @router.get("/screener/trending")
 def get_trending_stocks(top_n: int = 10, db: Session = Depends(get_db)):
     """전일 대비 종목 점수가 가장 많이 상승한 종목 (최근 2 거래일 비교)."""
-    target_date = latest_trading_day()
+    target_date = _latest_data_date(db)
     prev_date = latest_trading_day(target_date - timedelta(days=1))
 
     today_signals = {s.stock_code: s.score for s in db.scalars(
@@ -841,7 +857,7 @@ def get_tomorrow_picks(top_n: int = 7, db: Session = Depends(get_db)):
 
     스크리너 점수 + 수급 연속성 보너스 - 당일 급등 페널티로 T+1 적합도를 계산.
     """
-    target_date = latest_trading_day()
+    target_date = _latest_data_date(db)
 
     stock_signals = list(db.scalars(
         select(StockSignal).where(StockSignal.trading_date == target_date)
@@ -968,7 +984,7 @@ def get_data_quality(db: Session = Depends(get_db)):
         DerivativesFuturesDaily, IndexDaily, OpenInterestDaily,
         ProgramTradingDaily, ShortSellingDaily, SpotDailyPrice, SpotInvestorFlow, Stock
     )
-    target_date = latest_trading_day()
+    target_date = _latest_data_date(db)
     total_stocks = db.scalar(select(func.count()).select_from(Stock).where(Stock.is_active.is_(True))) or 1
 
     spot_count = db.scalar(select(func.count()).select_from(SpotDailyPrice).where(SpotDailyPrice.trading_date == target_date)) or 0
