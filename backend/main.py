@@ -495,6 +495,8 @@ function _fv(id){const v=document.getElementById(id)?.value;return v===''||v==nu
 function _fs(id){return document.getElementById(id)?.value||'';}
 
 function renderScreener(){
+  const sortSel=document.getElementById('scr-sort');
+  if(sortSel&&sortSel.value)scrSortKey=sortSel.value;
   const q=document.getElementById('scr-search').value.toLowerCase();
   const mkt=document.getElementById('scr-market').value;
   const showAll=document.getElementById('scr-showall')?.checked;
