@@ -9,7 +9,12 @@ except Exception:  # noqa: BLE001
 
 
 def get_calendar():
-    return xcals.get_calendar("XKRX") if xcals else None
+    if not xcals:
+        return None
+    try:
+        return xcals.get_calendar("XKRX")
+    except Exception:  # noqa: BLE001
+        return None
 
 
 def is_trading_day(target_date: date) -> bool:

@@ -296,7 +296,12 @@ def collect_spot_data(db: Session, trading_date: date) -> None:
             if listing_row is not None:
                 stock.name = str(listing_row.get("Name", stock.name))
                 stock.market = str(listing_row.get("Market", stock.market))
-                stock.market_cap = float(listing_row.get("Marcap", stock.market_cap or 0.0))
+                _marcap = listing_row.get("Marcap")
+                import math as _math
+                if _marcap is not None and not (isinstance(_marcap, float) and _math.isnan(_marcap)):
+                    stock.market_cap = float(_marcap)
+                elif stock.market_cap is None:
+                    stock.market_cap = 0.0
                 db.add(stock)
 
             db.add(
