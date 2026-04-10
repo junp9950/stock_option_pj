@@ -126,9 +126,10 @@ def collect_short_selling_data(db: Session, trading_date: date) -> None:
             if result is not None:
                 short_volume, short_ratio, short_balance = result
             else:
-                short_volume = _FALLBACK_VOL_BASE + index * 1_500
-                short_ratio = _FALLBACK_RATIO_BASE + index * 0.2
-                short_balance = _FALLBACK_BAL_BASE + index * 10_000_000
+                # 데이터 없으면 0 저장 (가짜 fallback값 사용 안 함)
+                short_volume = 0.0
+                short_ratio = 0.0
+                short_balance = 0.0
         else:
             # batch ok but this code not in batch (likely not traded)
             short_volume = 0.0
