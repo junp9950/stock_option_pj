@@ -21,7 +21,7 @@ class AppConfig:
     api_prefix: str = "/api"
     backend_host: str = "127.0.0.1"
     backend_port: int = 8000
-    database_url: str = f"sqlite:///{DB_PATH.as_posix()}"
+    database_url: str = field(default_factory=lambda: os.getenv("DATABASE_URL", f"sqlite:///{DB_PATH.as_posix()}"))
     default_universe: str = "KOSPI200"
     max_retry_count: int = 3
     request_interval_seconds: float = 1.5
