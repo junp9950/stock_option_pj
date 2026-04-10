@@ -389,7 +389,13 @@ def calculate_stock_signals(db: Session, trading_date: date) -> list[StockSignal
             ("program_buy", None, 0.0, "종목별 프로그램 순매수 TODO"),
         ]
 
-        enabled = {key: key != "program_buy" for key, *_ in details}
+        # 공매도 데이터 없으면 해당 지표 비활성화 → 가중치 자동 재배분
+        no_short = short is None
+        enabled = {
+            key: key not in ("program_buy",)
+            and not (key in ("short_ratio_change", "short_trend") and no_short)
+            for key, *_ in details
+        }
         normalized_weights = _normalize_weights(config.stock_signal_weights, enabled)
         weighted_score = 0.0
 
