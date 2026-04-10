@@ -170,7 +170,7 @@ select{background:#21262d;border:1px solid #30363d;color:#c9d1d9;padding:6px 10p
       <option value="KOSPI">KOSPI</option>
       <option value="KOSDAQ">KOSDAQ</option>
     </select>
-    <select id="scr-sort" onchange="renderScreener()">
+    <select id="scr-sort" onchange="setScrSort(this.value)">
       <option value="total_score">총점 순</option>
       <option value="stock_score">종목점수 순</option>
       <option value="change_pct">등락률 순</option>
@@ -578,6 +578,11 @@ async function loadScreener() {
 function setScrSort(key){
   if(scrSortKey===key)scrSortAsc=!scrSortAsc;
   else{scrSortKey=key;scrSortAsc=false;}
+  const sel=document.getElementById('scr-sort');
+  if(sel&&sel.value!==key){
+    const opt=[...sel.options].find(o=>o.value===key);
+    if(opt) sel.value=key;
+  }
   renderScreener();
 }
 
