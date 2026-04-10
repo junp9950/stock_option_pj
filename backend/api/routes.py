@@ -949,6 +949,15 @@ def get_tomorrow_picks(top_n: int = 7, db: Session = Depends(get_db)):
         else:
             risk = "저"
 
+        # 수급 강도로 리스크 완화
+        # 외인 5일+ 연속이면 한 단계 낮춤 (고→중, 중→저)
+        # 외인+기관 동반 3일+ 이면 추가 완화
+        if fc >= 5 or co >= 3:
+            if risk == "고":
+                risk = "중"
+            elif risk == "중":
+                risk = "저"
+
         # 기관+외인 동시 매수 여부
         both_buying = foreign_net > 0 and institution_net > 0
 
