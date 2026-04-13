@@ -8,15 +8,25 @@
 
 ## 구성
 
-- **백엔드** — FastAPI + APScheduler (매일 16:30 KST 자동 실행)
+- **백엔드** — FastAPI + APScheduler
 - **DB** — Supabase PostgreSQL (클라우드, 집·회사 어디서든 같은 데이터)
-- **데이터** — FinanceDataReader(주가) + KIS Open API(수급) + pykrx fallback
+- **데이터** — FinanceDataReader(주가) + KIS Open API(수급·공매도) + pykrx fallback
+
+---
+
+## 스케줄
+
+| 시각 (KST) | 작업 |
+|-----------|------|
+| 매일 03:00 | 최근 30일 데이터 갭 채우기 + 시그널·추천 재계산 |
+| 매일 16:30 | 오늘 데이터 수집 + 시그널 + 추천 생성 (실패 시 5분마다 재시도) |
+| 매주 월 08:00 | 유니버스 갱신 (KOSPI+KOSDAQ 시총 상위 200종목) |
 
 ---
 
 ## 설치 방법
 
-### Windows (로컬)
+### Windows (로컬 개발)
 
 ```powershell
 git clone https://github.com/junp9950/stock_option_pj.git
@@ -48,12 +58,10 @@ chmod +x setup.sh
 
 스크립트가 Python 3.11 설치 → 레포 클론 → 패키지 설치 → .env 생성 → systemd 서비스 등록까지 자동으로 처리합니다. VM 재시작 시 서버 자동 실행됩니다.
 
----
-
-## 매일 사용법
-
-- **자동** — 매일 16:30 KST 파이프라인 실행. 데이터가 아직 없으면 5분마다 재시도
-- **수동** — 대시보드 우상단 **▶ 파이프라인 실행** 버튼
+코드 업데이트 시:
+```bash
+cd stock_option_pj && git pull && sudo systemctl restart stock-analyzer
+```
 
 ---
 
@@ -63,9 +71,7 @@ chmod +x setup.sh
 |----|------|
 | 대시보드 | 내일 매수 후보 TOP 7, 시장 시그널, 추천 성과, 시그널 히스토리 |
 | 전종목 스크리너 | KOSPI+KOSDAQ 200종목, 필터·정렬, 종목별 30일 수급 차트 |
-| 시장 시그널 | 외인·기관 수급 기반 5단계 시그널 |
-| 데이터 소스 | 수집 현황 및 데이터 품질 |
-| 작업 로그 | 파이프라인 실행 이력 |
+| 시장 시그널 상세 | 외인·기관 수급 기반 5단계 시그널 |
 
 ---
 
@@ -90,9 +96,22 @@ chmod +x setup.sh
 
 ---
 
+## 데이터 수집 우선순위
+
+| 항목 | 1순위 | 2순위 | 실패 시 |
+|------|-------|-------|---------|
+| 주가 OHLCV | FinanceDataReader | — | 건너뜀 |
+| 외국인·기관 수급 | pykrx | KIS Open API | 0 (중립) |
+| 공매도 | pykrx | KRX 직접 API → KIS Open API | 0 (중립) |
+| 선물·파생 | pykrx | fallback | 0 (중립) |
+
+> KRX 차단 환경(회사망, 클라우드 VM)에서는 KIS Open API로 자동 전환됩니다.
+
+---
+
 ## 초기 데이터 세팅 (최초 설치 시)
 
-DB가 비어있으면 아래 순서로 데이터를 채웁니다. **Supabase DB를 공유 중이면 생략해도 됩니다.**
+**Supabase DB를 공유 중이면 생략해도 됩니다.**
 
 ```powershell
 # 1. 가격·수급 백필
@@ -115,15 +134,15 @@ Invoke-RestMethod -Method POST "http://127.0.0.1:8000/api/jobs/backfill?start_da
 | `GET /api/market-signal` | 시장 시그널 |
 | `GET /api/screener/tomorrow-picks` | 내일 매수 후보 TOP 7 |
 | `GET /api/screener` | 전종목 스크리너 |
-| `GET /api/recommendations/performance` | 추천 성과 |
-| `POST /api/jobs/run-daily` | 파이프라인 수동 실행 |
+| `GET /api/recommendations/performance` | 추천 성과 (T+1 수익률) |
+| `POST /api/jobs/run-daily` | 파이프라인 수동 실행 (API 직접 호출용) |
 
 ---
 
 ## 트러블슈팅
 
 **KRX 수집 실패**
-회사망·주말에 자주 발생. KIS API로 자동 전환되므로 무시해도 됩니다.
+회사망·클라우드 VM에서 자주 발생. KIS API로 자동 전환되므로 무시해도 됩니다.
 
 **포트 충돌 (Windows)**
 ```powershell
