@@ -8,3 +8,5 @@ data/*.db
 data/*.sqlite
 *.log
 작업일지*.txt
+.env
+.claude/

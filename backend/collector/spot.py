@@ -65,6 +65,63 @@ def _naver_investor_flow_single(code: str, target_date_iso: str) -> tuple[float,
         return 0.0, 0.0, 0.0
 
 
+def _kis_investor_flow_batch(yyyymmdd: str, codes: list[str]) -> dict[str, tuple[float, float, float]]:
+    """한국투자증권 Open API로 종목별 외국인/기관 순매수 수량 조회.
+    반환: {종목코드: (foreign_net, institution_net, individual_net)}
+    실패 시 빈 dict 반환.
+    """
+    import os, requests as _req, time as _time  # noqa: PLC0415
+    app_key = os.getenv("KIS_APP_KEY", "")
+    app_secret = os.getenv("KIS_APP_SECRET", "")
+    if not app_key or not app_secret:
+        return {}
+    try:
+        token_r = _req.post(
+            "https://openapi.koreainvestment.com:9443/oauth2/tokenP",
+            json={"grant_type": "client_credentials", "appkey": app_key, "appsecret": app_secret},
+            timeout=10,
+        ).json()
+        token = token_r.get("access_token")
+        if not token:
+            logger.warning("KIS 토큰 발급 실패: %s", token_r.get("error_description", ""))
+            return {}
+    except Exception as exc:  # noqa: BLE001
+        logger.warning("KIS 토큰 발급 오류: %s", exc)
+        return {}
+
+    result: dict[str, tuple[float, float, float]] = {}
+    headers = {
+        "authorization": f"Bearer {token}",
+        "appkey": app_key,
+        "appsecret": app_secret,
+        "tr_id": "FHKST01010900",
+        "content-type": "application/json",
+    }
+
+    for code in codes:
+        try:
+            r = _req.get(
+                "https://openapi.koreainvestment.com:9443/uapi/domestic-stock/v1/quotations/inquire-investor",
+                headers=headers,
+                params={"fid_cond_mrkt_div_code": "J", "fid_input_iscd": code},
+                timeout=5,
+            )
+            rows = r.json().get("output", [])
+            for row in rows:
+                if row.get("stck_bsop_date") == yyyymmdd:
+                    f = float(row.get("frgn_ntby_qty") or 0)
+                    i = float(row.get("orgn_ntby_qty") or 0)
+                    p = float(row.get("prsn_ntby_qty") or 0)
+                    result[code] = (f, i, p)
+                    break
+            _time.sleep(0.05)
+        except Exception as exc:  # noqa: BLE001
+            logger.debug("KIS flow failed for %s: %s", code, exc)
+
+    logger.info("KIS 수급 수집 완료: %d/%d 종목", len(result), len(codes))
+    return result
+
+
 def _pykrx_investor_flow_batch(yyyymmdd: str) -> dict[str, tuple[float, float, float]]:
     """pykrx로 당일 전종목 외국인/기관 순매수(원) 일괄 조회.
     반환: {종목코드: (foreign_net, institution_net, 0.0)}
@@ -249,7 +306,7 @@ def collect_spot_data(db: Session, trading_date: date) -> None:
         batch_flows = _pykrx_investor_flow_batch(yyyymmdd)
         batch_ok = len(batch_flows) > 0
         if not batch_ok:
-            logger.warning("pykrx batch investor flow failed — naver fallback 사용")
+            logger.warning("pykrx batch investor flow failed — KIS API 시도")
 
         stocks = list(get_universe(db))
 
@@ -274,16 +331,23 @@ def collect_spot_data(db: Session, trading_date: date) -> None:
                     logger.info("  FDR 가격 다운로드: %d / %d", done, len(stocks))
         logger.info("FDR 가격 수집 완료: %d / %d 종목", len(price_map), len(stocks))
 
-        # naver 수급 fallback (pykrx 실패 시)
+        # KIS API fallback (pykrx 실패 시) → 네이버 fallback
         naver_flows: dict[str, tuple[float, float, float]] = {}
         if not batch_ok:
-            logger.info("네이버 수급 단건 조회 중 (%d 종목)...", len(stocks))
-            def _fetch_naver(s: Stock) -> tuple[str, tuple]:
-                return s.code, _naver_investor_flow_single(s.code, fetch_date.isoformat())
-            with ThreadPoolExecutor(max_workers=8) as pool:
-                for fut in as_completed({pool.submit(_fetch_naver, s): s.code for s in stocks}):
-                    code, flow = fut.result()
-                    naver_flows[code] = flow
+            codes = [s.code for s in stocks]
+            kis_flows = _kis_investor_flow_batch(yyyymmdd, codes)
+            if kis_flows:
+                batch_flows = kis_flows
+                batch_ok = True
+                logger.info("KIS API 수급 수집 완료: %d 종목", len(kis_flows))
+            else:
+                logger.info("KIS API 실패 — 네이버 수급 단건 조회 중 (%d 종목)...", len(stocks))
+                def _fetch_naver(s: Stock) -> tuple[str, tuple]:
+                    return s.code, _naver_investor_flow_single(s.code, fetch_date.isoformat())
+                with ThreadPoolExecutor(max_workers=8) as pool:
+                    for fut in as_completed({pool.submit(_fetch_naver, s): s.code for s in stocks}):
+                        code, flow = fut.result()
+                        naver_flows[code] = flow
 
         for stock in stocks:
             df = price_map.get(stock.code)
