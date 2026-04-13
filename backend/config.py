@@ -4,10 +4,10 @@ from dataclasses import dataclass, field
 from pathlib import Path
 import os
 
+from dotenv import load_dotenv
 
 BASE_DIR = Path(__file__).resolve().parent.parent
-DATA_DIR = BASE_DIR / "data"
-DB_PATH = DATA_DIR / "app.db"
+load_dotenv(BASE_DIR / ".env")
 
 
 def _float_env(name: str, default: float) -> float:
@@ -21,7 +21,7 @@ class AppConfig:
     api_prefix: str = "/api"
     backend_host: str = "127.0.0.1"
     backend_port: int = 8000
-    database_url: str = field(default_factory=lambda: os.getenv("DATABASE_URL", f"sqlite:///{DB_PATH.as_posix()}"))
+    database_url: str = field(default_factory=lambda: os.getenv("DATABASE_URL", ""))
     default_universe: str = "KOSPI200"
     max_retry_count: int = 3
     request_interval_seconds: float = 1.5
@@ -76,6 +76,4 @@ class AppConfig:
 
 
 def get_config() -> AppConfig:
-    DATA_DIR.mkdir(parents=True, exist_ok=True)
     return AppConfig()
-
