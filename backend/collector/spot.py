@@ -17,6 +17,39 @@ from backend.utils.logger import get_logger
 
 logger = get_logger(__name__)
 
+# KIS 토큰 캐시 (24시간 유효, 만료 10분 전 자동 재발급)
+_kis_token: str = ""
+_kis_token_expires_at: float = 0.0
+
+
+def _get_kis_token() -> str:
+    """KIS Access Token 반환. 만료 10분 전이면 자동 재발급."""
+    import os, time, requests as _req  # noqa: PLC0415
+    global _kis_token, _kis_token_expires_at
+
+    if _kis_token and time.time() < _kis_token_expires_at - 600:
+        return _kis_token
+
+    app_key = os.getenv("KIS_APP_KEY", "")
+    app_secret = os.getenv("KIS_APP_SECRET", "")
+    if not app_key or not app_secret:
+        return ""
+    try:
+        r = _req.post(
+            "https://openapi.koreainvestment.com:9443/oauth2/tokenP",
+            json={"grant_type": "client_credentials", "appkey": app_key, "appsecret": app_secret},
+            timeout=10,
+        ).json()
+        token = r.get("access_token", "")
+        if token:
+            _kis_token = token
+            _kis_token_expires_at = time.time() + 86400  # 24시간
+            logger.info("KIS 토큰 발급 완료 (24시간 유효)")
+        else:
+            logger.warning("KIS 토큰 발급 실패: %s", r.get("error_description", ""))
+    except Exception as exc:  # noqa: BLE001
+        logger.warning("KIS 토큰 발급 오류: %s", exc)
+    return _kis_token
 
 
 def _kis_investor_flow_batch(yyyymmdd: str, codes: list[str]) -> dict[str, tuple[float, float, float]]:
@@ -24,23 +57,15 @@ def _kis_investor_flow_batch(yyyymmdd: str, codes: list[str]) -> dict[str, tuple
     반환: {종목코드: (foreign_net, institution_net, individual_net)}
     실패 시 빈 dict 반환.
     """
-    import os, requests as _req, time as _time  # noqa: PLC0415
+    import os, time as _time  # noqa: PLC0415
+    import requests as _req
     app_key = os.getenv("KIS_APP_KEY", "")
     app_secret = os.getenv("KIS_APP_SECRET", "")
     if not app_key or not app_secret:
         return {}
-    try:
-        token_r = _req.post(
-            "https://openapi.koreainvestment.com:9443/oauth2/tokenP",
-            json={"grant_type": "client_credentials", "appkey": app_key, "appsecret": app_secret},
-            timeout=10,
-        ).json()
-        token = token_r.get("access_token")
-        if not token:
-            logger.warning("KIS 토큰 발급 실패: %s", token_r.get("error_description", ""))
-            return {}
-    except Exception as exc:  # noqa: BLE001
-        logger.warning("KIS 토큰 발급 오류: %s", exc)
+
+    token = _get_kis_token()
+    if not token:
         return {}
 
     result: dict[str, tuple[float, float, float]] = {}
