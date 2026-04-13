@@ -288,7 +288,11 @@ def collect_spot_data(db: Session, trading_date: date) -> None:
 
         stocks = list(get_universe(db))
 
-        # FDR 가격 병렬 다운로드
+        # FDR 가격 병렬 다운로드 (소켓 타임아웃 10초)
+        import socket as _socket  # noqa: PLC0415
+        _prev_timeout = _socket.getdefaulttimeout()
+        _socket.setdefaulttimeout(10)
+
         def _fetch_price(code: str) -> tuple[str, Optional[pd.DataFrame]]:
             try:
                 df = fdr.DataReader(code, date_text, date_text)
@@ -297,26 +301,21 @@ def collect_spot_data(db: Session, trading_date: date) -> None:
                 return code, None
 
         price_map: dict[str, pd.DataFrame] = {}
-        from concurrent.futures import wait, FIRST_COMPLETED  # noqa: PLC0415
-        with ThreadPoolExecutor(max_workers=16) as pool:
-            futs = {pool.submit(_fetch_price, s.code): s.code for s in stocks}
-            done = 0
-            pending = set(futs.keys())
-            while pending:
-                finished, pending = wait(pending, timeout=15, return_when=FIRST_COMPLETED)
-                for fut in finished:
+        try:
+            with ThreadPoolExecutor(max_workers=16) as pool:
+                futs = {pool.submit(_fetch_price, s.code): s.code for s in stocks}
+                done = 0
+                for fut in as_completed(futs, timeout=120):
                     code, df = fut.result()
                     if df is not None:
                         price_map[code] = df
                     done += 1
                     if done % 50 == 0:
                         logger.info("  FDR 가격 다운로드: %d / %d", done, len(stocks))
-                # 15초 안에 아무것도 안 끝났으면 남은 것들 타임아웃 처리
-                if not finished and pending:
-                    logger.warning("FDR 응답 없는 종목 %d개 타임아웃 처리", len(pending))
-                    for fut in pending:
-                        fut.cancel()
-                    break
+        except Exception:  # noqa: BLE001
+            logger.warning("FDR 가격 다운로드 타임아웃 — %d / %d 종목만 수집됨", len(price_map), len(stocks))
+        finally:
+            _socket.setdefaulttimeout(_prev_timeout)
         logger.info("FDR 가격 수집 완료: %d / %d 종목", len(price_map), len(stocks))
 
         # KIS API fallback (pykrx 실패 시)
