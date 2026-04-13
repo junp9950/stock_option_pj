@@ -6,7 +6,7 @@ from typing import Optional
 
 import FinanceDataReader as fdr
 import pandas as pd
-from sqlalchemy import delete, select
+from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from backend.collector.universe import get_universe
@@ -253,9 +253,7 @@ def collect_spot_data(db: Session, trading_date: date) -> None:
             logger.warning("FDR 수집 실패 (%s) — 기존 DB 데이터 보존", date_text)
             return
 
-        # FDR 정상 확인 후 기존 데이터 삭제
-        db.execute(delete(SpotDailyPrice).where(SpotDailyPrice.trading_date == trading_date))
-        db.execute(delete(SpotInvestorFlow).where(SpotInvestorFlow.trading_date == trading_date))
+        # FDR 정상 확인 (기존 데이터는 upsert로 덮어씀, DELETE 불필요)
 
         # pykrx 전종목 수급 일괄 조회 (한 번만 호출)
         batch_flows = _pykrx_investor_flow_batch(yyyymmdd)
@@ -316,17 +314,23 @@ def collect_spot_data(db: Session, trading_date: date) -> None:
                     stock.market_cap = 0.0
                 db.add(stock)
 
-            db.add(
-                SpotDailyPrice(
-                    trading_date=trading_date,
-                    stock_code=stock.code,
-                    open_price=float(row["Open"]),
-                    high_price=float(row["High"]),
-                    low_price=float(row["Low"]),
-                    close_price=float(row["Close"]),
-                    volume=float(row["Volume"]),
-                    trading_value=float(row["Volume"]) * float(row["Close"]),
-                    change_pct=round(float(row["Change"]) * 100, 4),
+            from sqlalchemy.dialects.postgresql import insert as pg_insert  # noqa: PLC0415
+            price_vals = dict(
+                trading_date=trading_date,
+                stock_code=stock.code,
+                open_price=float(row["Open"]),
+                high_price=float(row["High"]),
+                low_price=float(row["Low"]),
+                close_price=float(row["Close"]),
+                volume=float(row["Volume"]),
+                trading_value=float(row["Volume"]) * float(row["Close"]),
+                change_pct=round(float(row["Change"]) * 100, 4),
+            )
+            db.execute(
+                pg_insert(SpotDailyPrice).values(**price_vals)
+                .on_conflict_do_update(
+                    constraint="uq_spot_daily_prices",
+                    set_={k: v for k, v in price_vals.items() if k not in ("trading_date", "stock_code")},
                 )
             )
 
@@ -336,13 +340,18 @@ def collect_spot_data(db: Session, trading_date: date) -> None:
             else:
                 foreign_net, institution_net, individual_net = 0.0, 0.0, 0.0
 
-            db.add(
-                SpotInvestorFlow(
-                    trading_date=trading_date,
-                    stock_code=stock.code,
-                    foreign_net_buy=foreign_net,
-                    institution_net_buy=institution_net,
-                    individual_net_buy=individual_net,
+            flow_vals = dict(
+                trading_date=trading_date,
+                stock_code=stock.code,
+                foreign_net_buy=foreign_net,
+                institution_net_buy=institution_net,
+                individual_net_buy=individual_net,
+            )
+            db.execute(
+                pg_insert(SpotInvestorFlow).values(**flow_vals)
+                .on_conflict_do_update(
+                    constraint="uq_spot_investor_flows",
+                    set_={k: v for k, v in flow_vals.items() if k not in ("trading_date", "stock_code")},
                 )
             )
     except Exception as exc:  # noqa: BLE001
