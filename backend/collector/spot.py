@@ -288,10 +288,13 @@ def collect_spot_data(db: Session, trading_date: date) -> None:
 
         stocks = list(get_universe(db))
 
-        # FDR 가격 병렬 다운로드 (소켓 타임아웃 10초)
-        import socket as _socket  # noqa: PLC0415
-        _prev_timeout = _socket.getdefaulttimeout()
-        _socket.setdefaulttimeout(10)
+        # FDR 가격 병렬 다운로드 (requests read timeout 10초 강제 적용)
+        import requests as _requests  # noqa: PLC0415
+        _orig_request = _requests.Session.request
+        def _patched_request(self, method, url, **kwargs):  # noqa: ANN001
+            kwargs.setdefault("timeout", 10)
+            return _orig_request(self, method, url, **kwargs)
+        _requests.Session.request = _patched_request  # type: ignore[method-assign]
 
         def _fetch_price(code: str) -> tuple[str, Optional[pd.DataFrame]]:
             try:
@@ -315,7 +318,7 @@ def collect_spot_data(db: Session, trading_date: date) -> None:
         except Exception:  # noqa: BLE001
             logger.warning("FDR 가격 다운로드 타임아웃 — %d / %d 종목만 수집됨", len(price_map), len(stocks))
         finally:
-            _socket.setdefaulttimeout(_prev_timeout)
+            _requests.Session.request = _orig_request  # type: ignore[method-assign]
         logger.info("FDR 가격 수집 완료: %d / %d 종목", len(price_map), len(stocks))
 
         # KIS API fallback (pykrx 실패 시)
