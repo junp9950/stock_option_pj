@@ -18,52 +18,6 @@ from backend.utils.logger import get_logger
 logger = get_logger(__name__)
 
 
-def _naver_investor_flow_single(code: str, target_date_iso: str) -> tuple[float, float, float]:
-    """네이버 금융 main.naver에서 외국인/기관 순매수(주) 조회.
-    반환: (foreign_net_shares, institution_net_shares, 0.0)
-    실패 시 (0, 0, 0) 반환.
-    """
-    try:
-        import requests  # noqa: PLC0415
-        from bs4 import BeautifulSoup  # noqa: PLC0415
-        r = requests.get(
-            "https://finance.naver.com/item/main.naver",
-            params={"code": code},
-            headers={"User-Agent": "Mozilla/5.0", "Referer": "https://finance.naver.com"},
-            timeout=5,
-        )
-        if r.status_code != 200:
-            return 0.0, 0.0, 0.0
-        soup = BeautifulSoup(r.text, "html.parser")
-        tables = soup.select("table")
-        # Table 3: 날짜 | 종가 | 등락 | 외국인 | 기관
-        if len(tables) < 4:
-            return 0.0, 0.0, 0.0
-        t = tables[3]
-        # target_date_iso: "2026-04-03" → "04/03"
-        target_mmdd = target_date_iso[5:].replace("-", "/")
-
-        def _parse(s: str) -> float:
-            s = s.replace(",", "").replace("+", "").replace(" ", "")
-            try:
-                return float(s)
-            except ValueError:
-                return 0.0
-
-        for row in t.select("tr"):
-            # 날짜가 th에, 나머지가 td에 있는 구조
-            cells = [c.get_text(strip=True) for c in row.select("th,td")]
-            if not cells or cells[0] != target_mmdd:
-                continue
-            # cells: [mmdd, close, change, foreign_net, institution_net]
-            foreign_net = _parse(cells[3]) if len(cells) > 3 else 0.0
-            inst_net = _parse(cells[4]) if len(cells) > 4 else 0.0
-            return foreign_net, inst_net, 0.0
-        return 0.0, 0.0, 0.0
-    except Exception as exc:  # noqa: BLE001
-        logger.debug("naver investor flow failed for %s: %s", code, exc)
-        return 0.0, 0.0, 0.0
-
 
 def _kis_investor_flow_batch(yyyymmdd: str, codes: list[str]) -> dict[str, tuple[float, float, float]]:
     """한국투자증권 Open API로 종목별 외국인/기관 순매수 수량 조회.
@@ -286,6 +240,7 @@ def collect_spot_data(db: Session, trading_date: date) -> None:
     fetch_date = latest_trading_day(trading_date)
     if fetch_date != trading_date:
         logger.info("trading_date=%s is non-trading day → fetching data for %s", trading_date, fetch_date)
+        trading_date = fetch_date  # 비거래일이면 실제 거래일로 redirect
 
     try:
         listing = _load_listing_snapshot()
@@ -331,8 +286,7 @@ def collect_spot_data(db: Session, trading_date: date) -> None:
                     logger.info("  FDR 가격 다운로드: %d / %d", done, len(stocks))
         logger.info("FDR 가격 수집 완료: %d / %d 종목", len(price_map), len(stocks))
 
-        # KIS API fallback (pykrx 실패 시) → 네이버 fallback
-        naver_flows: dict[str, tuple[float, float, float]] = {}
+        # KIS API fallback (pykrx 실패 시)
         if not batch_ok:
             codes = [s.code for s in stocks]
             kis_flows = _kis_investor_flow_batch(yyyymmdd, codes)
@@ -341,13 +295,7 @@ def collect_spot_data(db: Session, trading_date: date) -> None:
                 batch_ok = True
                 logger.info("KIS API 수급 수집 완료: %d 종목", len(kis_flows))
             else:
-                logger.info("KIS API 실패 — 네이버 수급 단건 조회 중 (%d 종목)...", len(stocks))
-                def _fetch_naver(s: Stock) -> tuple[str, tuple]:
-                    return s.code, _naver_investor_flow_single(s.code, fetch_date.isoformat())
-                with ThreadPoolExecutor(max_workers=8) as pool:
-                    for fut in as_completed({pool.submit(_fetch_naver, s): s.code for s in stocks}):
-                        code, flow = fut.result()
-                        naver_flows[code] = flow
+                logger.warning("KIS API 실패 — 수급 데이터 없음")
 
         for stock in stocks:
             df = price_map.get(stock.code)
@@ -382,11 +330,9 @@ def collect_spot_data(db: Session, trading_date: date) -> None:
                 )
             )
 
-            # 수급: pykrx 배치 → naver fallback (병렬) → 0
+            # 수급: pykrx 배치 → KIS API fallback → 0
             if batch_ok and stock.code in batch_flows:
                 foreign_net, institution_net, individual_net = batch_flows[stock.code]
-            elif stock.code in naver_flows:
-                foreign_net, institution_net, individual_net = naver_flows[stock.code]
             else:
                 foreign_net, institution_net, individual_net = 0.0, 0.0, 0.0
 
