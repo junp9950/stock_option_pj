@@ -31,7 +31,7 @@ def _flow_ratio(flows: list, check, window: int = 10) -> float:
     return sum(1 for f in real if check(f)) / len(real)
 
 
-def _t1_score(base_score: float, price: SpotDailyPrice, flows: list) -> float:
+def _t1_score(base_score: float, price: SpotDailyPrice, flows: list, prev_change_pct: float = 0.0) -> float:
     """T+1 매수 적합도 점수: 기본 점수 + 수급 연속성 보너스 - 급등 페널티."""
     score = base_score
 
@@ -46,6 +46,7 @@ def _t1_score(base_score: float, price: SpotDailyPrice, flows: list) -> float:
     if fr >= 0.7:
         score += 0.15
 
+    # 당일 급등 페널티
     change_pct = float(price.change_pct) if price.change_pct else 0.0
     if change_pct >= 8:
         score -= 0.5
@@ -55,6 +56,14 @@ def _t1_score(base_score: float, price: SpotDailyPrice, flows: list) -> float:
         score -= 0.10
     elif change_pct <= -3:
         score += 0.05
+
+    # 전일 급등 페널티 (당일보다 완화)
+    if prev_change_pct >= 8:
+        score -= 0.30
+    elif prev_change_pct >= 5:
+        score -= 0.15
+    elif prev_change_pct >= 3:
+        score -= 0.05
 
     return score
 
@@ -74,8 +83,25 @@ def build_recommendations(db: Session, trading_date: date) -> list[Recommendatio
 
     stock_signals = list(db.scalars(select(StockSignal).where(StockSignal.trading_date == trading_date)))
 
-    # 최근 14일 수급 일괄 조회
     codes = [s.stock_code for s in stock_signals]
+
+    # 전일 가격 일괄 조회 (전일 급등 페널티용)
+    from sqlalchemy import func  # noqa: PLC0415
+    prev_date = db.scalar(
+        select(func.max(SpotDailyPrice.trading_date)).where(SpotDailyPrice.trading_date < trading_date)
+    )
+    prev_prices_map: dict[str, float] = {}
+    if prev_date:
+        prev_prices = db.scalars(
+            select(SpotDailyPrice).where(
+                SpotDailyPrice.trading_date == prev_date,
+                SpotDailyPrice.stock_code.in_(codes),
+            )
+        )
+        prev_prices_map = {p.stock_code: float(p.change_pct or 0) for p in prev_prices}
+
+    # 최근 14일 수급 일괄 조회
+
     recent_raw = list(db.scalars(
         select(SpotInvestorFlow)
         .where(
@@ -109,7 +135,8 @@ def build_recommendations(db: Session, trading_date: date) -> list[Recommendatio
             2,
         )
         flows = recent_flows.get(stock_signal.stock_code, [])
-        total_score = round(_t1_score(base_score, price, flows), 4)
+        prev_change = prev_prices_map.get(stock_signal.stock_code, 0.0)
+        total_score = round(_t1_score(base_score, price, flows, prev_change), 4)
         ranked.append((total_score, base_score, stock, price, stock_signal))
 
     ranked.sort(key=lambda item: item[0], reverse=True)
