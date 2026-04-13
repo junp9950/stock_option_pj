@@ -6,6 +6,5 @@ __pycache__/
 *.pyo
 data/*.db
 data/*.sqlite
-.env
 *.log
 작업일지*.txt

@@ -9,11 +9,9 @@ from sqlalchemy import desc, func, select
 from sqlalchemy.orm import Session
 
 from backend.api.schemas import HealthResponse, JobResponse, MarketSignalResponse, RecommendationItem, RecommendationResponse
-from backend.backtest.backtester import run_backtest
-from backend.backtest.historical_backtester import run_historical_backtest
 from backend.collector.backfill import run_backfill as run_data_backfill
 from backend.db.database import get_db
-from backend.db.models import BacktestResult, BacktestRun, JobLog, MarketSignal, MarketSignalDetail, Recommendation, Setting, ShortSellingDaily, SpotDailyPrice, SpotInvestorFlow, Stock, StockSignal, StockSignalDetail
+from backend.db.models import JobLog, MarketSignal, MarketSignalDetail, Recommendation, Setting, ShortSellingDaily, SpotDailyPrice, SpotInvestorFlow, Stock, StockSignal, StockSignalDetail
 from backend.db.seed import refresh_universe
 from backend.services.daily_pipeline import run_backfill_pipeline, run_daily_pipeline
 from backend.utils.dates import latest_trading_day
@@ -505,10 +503,61 @@ def get_derivatives_overview(trading_date: date | None = None, db: Session = Dep
     return {"trading_date": target_date.isoformat(), "market_signal": signal.signal if signal else "중립", "score": signal.score if signal else 0.0}
 
 
-@router.get("/backtest/results")
-def get_backtest_results(db: Session = Depends(get_db)):
-    results = list(db.scalars(select(BacktestResult).order_by(desc(BacktestResult.created_at)).limit(10)))
-    return [{"metric": item.metric, "value": item.value, "note": item.note} for item in results]
+@router.get("/recommendations/performance")
+def get_recommendation_performance(days: int = 30, db: Session = Depends(get_db)):
+    """과거 T+1 추천 종목의 실제 성과.
+    추천일 종가 → 다음 거래일 종가 수익률 계산.
+    """
+    from_date = date.today() - timedelta(days=days)
+    recs = list(db.scalars(
+        select(Recommendation)
+        .where(Recommendation.trading_date >= from_date)
+        .order_by(desc(Recommendation.trading_date), Recommendation.rank)
+    ))
+
+    results = []
+    for rec in recs:
+        # 다음 거래일 가격 조회
+        next_price = db.scalar(
+            select(SpotDailyPrice.close_price)
+            .where(
+                SpotDailyPrice.stock_code == rec.stock_code,
+                SpotDailyPrice.trading_date > rec.trading_date,
+            )
+            .order_by(SpotDailyPrice.trading_date)
+            .limit(1)
+        )
+        if next_price and rec.close_price and rec.close_price > 0:
+            ret_pct = round((next_price - rec.close_price) / rec.close_price * 100, 2)
+        else:
+            ret_pct = None
+
+        results.append({
+            "trading_date": rec.trading_date.isoformat(),
+            "stock_code": rec.stock_code,
+            "stock_name": rec.stock_name,
+            "rank": rec.rank,
+            "entry_price": rec.close_price,
+            "next_price": next_price,
+            "return_pct": ret_pct,
+            "score": rec.total_score,
+        })
+
+    # 요약 통계
+    valid = [r for r in results if r["return_pct"] is not None]
+    summary = {}
+    if valid:
+        rets = [r["return_pct"] for r in valid]
+        summary = {
+            "total": len(valid),
+            "win_count": sum(1 for r in rets if r > 0),
+            "win_rate": round(sum(1 for r in rets if r > 0) / len(rets) * 100, 1),
+            "avg_return": round(sum(rets) / len(rets), 2),
+            "best": round(max(rets), 2),
+            "worst": round(min(rets), 2),
+        }
+
+    return {"summary": summary, "records": results}
 
 
 @router.put("/settings/weights")
@@ -666,18 +715,20 @@ def trigger_signal_backfill(skip_existing: bool = True):
     _signal_backfill_status["progress"] = "시작 중..."
 
     def _run():
-        db = SessionLocal()
+        # 대상 날짜만 빠르게 조회 후 즉시 연결 닫기 (Supabase 장기 연결 방지)
         try:
-            # 가격 데이터 있는 날짜 목록
-            price_dates = sorted(set(
-                row[0] for row in db.execute(select(SpotDailyPrice.trading_date).distinct())
-            ))
-            # 시그널 이미 있는 날짜
-            signal_dates = set(
-                row[0] for row in db.execute(select(StockSignal.trading_date).distinct())
-            )
-            target_dates = [d for d in price_dates if not skip_existing or d not in signal_dates]
+            db = SessionLocal()
+            try:
+                price_dates = sorted(set(
+                    row[0] for row in db.execute(select(SpotDailyPrice.trading_date).distinct())
+                ))
+                signal_dates = set(
+                    row[0] for row in db.execute(select(StockSignal.trading_date).distinct())
+                )
+            finally:
+                db.close()
 
+            target_dates = [d for d in price_dates if not skip_existing or d not in signal_dates]
             total = len(target_dates)
             done = 0
             errors = []
@@ -688,8 +739,7 @@ def trigger_signal_backfill(skip_existing: bool = True):
                 try:
                     calculate_stock_signals(fresh_db, d)
                     done += 1
-                    if done % 10 == 0 or done == total:
-                        _signal_backfill_status["progress"] = f"{done} / {total} 일 완료"
+                    _signal_backfill_status["progress"] = f"{done} / {total} 일 완료"
                 except Exception as exc:  # noqa: BLE001
                     errors.append(f"{d}: {exc}")
                 finally:
@@ -703,7 +753,6 @@ def trigger_signal_backfill(skip_existing: bool = True):
         except Exception as exc:  # noqa: BLE001
             _signal_backfill_status["error"] = str(exc)
         finally:
-            db.close()
             _signal_backfill_status["running"] = False
 
     threading.Thread(target=_run, daemon=True).start()
@@ -720,66 +769,6 @@ def get_signal_backfill_status():
     }
 
 
-@router.post("/backtest/run")
-def trigger_backtest(lookback_days: int = 60, db: Session = Depends(get_db)):
-    """T+1 백테스트 실행 (lookback_days: 최근 몇일치 추천 기록 사용, 기본 60일)."""
-    return run_backtest(db, lookback_days=lookback_days)
-
-
-@router.get("/backtest/summary")
-def get_backtest_summary(db: Session = Depends(get_db)):
-    """가장 최근 백테스트 실행 결과 요약."""
-    from backend.db.models import BacktestRun
-    latest_run = db.scalar(select(BacktestRun).order_by(desc(BacktestRun.created_at)))
-    if latest_run is None:
-        return {"run_id": None, "period": None, "metrics": {}}
-    results = list(db.scalars(select(BacktestResult).where(BacktestResult.run_id == latest_run.id)))
-    metrics = {r.metric: r.value for r in results}
-    return {
-        "run_id": latest_run.id,
-        "period": latest_run.period_label,
-        "note": latest_run.note,
-        "metrics": metrics,
-    }
-
-
-@router.post("/backtest/historical")
-def trigger_historical_backtest(
-    start_date: date,
-    end_date: date,
-    top_n: int = 5,
-    stop_loss_pct: float = 0.0,
-    take_profit_pct: float = 0.0,
-    mode: str = "db",   # "db" = DB 시그널 기반 (권장), "fdr" = FDR 기술지표 기반
-    min_score: float = 0.0,
-    use_market_filter: bool = True,
-    db: Session = Depends(get_db),
-):
-    """히스토리컬 백테스트.
-    mode=db (기본): DB StockSignal 기반 — 외인/기관 수급 포함, 빠름.
-    mode=fdr: FDR 가격 다운로드 기반 기술지표 — 수급 데이터 없음, 느림.
-    """
-    if end_date <= start_date:
-        raise HTTPException(status_code=400, detail="end_date must be after start_date")
-    if (end_date - start_date).days > 730:
-        raise HTTPException(status_code=400, detail="최대 2년 범위까지 지원합니다")
-
-    if mode == "db":
-        from backend.backtest.db_backtester import run_db_backtest  # noqa: PLC0415
-        return run_db_backtest(
-            db, start_date, end_date,
-            top_n=top_n,
-            min_score=min_score,
-            use_market_filter=use_market_filter,
-            stop_loss=stop_loss_pct / 100,
-            take_profit=take_profit_pct / 100,
-        )
-
-    return run_historical_backtest(
-        db, start_date, end_date, top_n=top_n,
-        stop_loss=stop_loss_pct / 100,
-        take_profit=take_profit_pct / 100,
-    )
 
 
 @router.get("/jobs/logs")
@@ -1032,4 +1021,57 @@ def get_universe(db: Session = Depends(get_db)):
         {"code": s.code, "name": s.name, "market": s.market, "market_cap": s.market_cap}
         for s in stocks
     ]
+
+
+@router.get("/recommendations/performance")
+def get_recommendation_performance(days: int = 30, db: Session = Depends(get_db)):
+    """과거 추천 종목의 T+1 실제 수익률."""
+    from_date = date.today() - timedelta(days=days)
+    recs = list(db.scalars(
+        select(Recommendation)
+        .where(Recommendation.trading_date >= from_date)
+        .order_by(desc(Recommendation.trading_date), Recommendation.rank)
+    ))
+
+    results = []
+    for rec in recs:
+        # 추천일 다음 실거래일 종가
+        next_price = db.scalar(
+            select(SpotDailyPrice.close_price)
+            .where(
+                SpotDailyPrice.stock_code == rec.stock_code,
+                SpotDailyPrice.trading_date > rec.trading_date,
+            )
+            .order_by(SpotDailyPrice.trading_date)
+            .limit(1)
+        )
+        if next_price and rec.close_price and rec.close_price > 0:
+            ret_pct = round((next_price - rec.close_price) / rec.close_price * 100, 2)
+        else:
+            ret_pct = None
+        results.append({
+            "trading_date": rec.trading_date.isoformat(),
+            "stock_code": rec.stock_code,
+            "stock_name": rec.stock_name,
+            "rank": rec.rank,
+            "entry_price": rec.close_price,
+            "next_price": next_price,
+            "return_pct": ret_pct,
+        })
+
+    valid = [r for r in results if r["return_pct"] is not None]
+    if valid:
+        win_count = sum(1 for r in valid if r["return_pct"] > 0)
+        summary = {
+            "total": len(valid),
+            "win_count": win_count,
+            "win_rate": round(win_count / len(valid) * 100, 1),
+            "avg_return": round(sum(r["return_pct"] for r in valid) / len(valid), 2),
+            "best": max(r["return_pct"] for r in valid),
+            "worst": min(r["return_pct"] for r in valid),
+        }
+    else:
+        summary = {"total": 0, "win_count": 0, "win_rate": 0, "avg_return": 0, "best": None, "worst": None}
+
+    return {"summary": summary, "records": results}
 

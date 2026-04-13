@@ -105,7 +105,6 @@ select{background:#21262d;border:1px solid #30363d;color:#c9d1d9;padding:6px 10p
   <div class="tab active" onclick="switchTab('dash')">대시보드</div>
   <div class="tab" onclick="switchTab('screener')">전종목 스크리너</div>
   <div class="tab" onclick="switchTab('signal')">시장 시그널 상세</div>
-  <div class="tab" onclick="switchTab('backtest')">백테스트</div>
   <div class="tab" onclick="switchTab('sources')">데이터 소스</div>
   <div class="tab" onclick="switchTab('logs')">실행 이력</div>
 </div>
@@ -147,21 +146,33 @@ select{background:#21262d;border:1px solid #30363d;color:#c9d1d9;padding:6px 10p
     <div id="trending-stocks" style="display:flex;gap:8px;flex-wrap:wrap"></div>
   </div>
 
-  <!-- 추천 종목 테이블 (접을 수 있음) -->
-  <details style="margin-bottom:8px">
-    <summary style="cursor:pointer;font-size:12px;text-transform:uppercase;color:#8b949e;letter-spacing:.06em;list-style:none;display:flex;align-items:center;gap:6px">
-      <span id="rec-cnt-label">추천 종목</span> <span id="rec-cnt" style="color:#58a6ff"></span> <span style="color:#444;font-size:10px">▼ 펼치기</span>
-    </summary>
-  <table style="margin-top:8px">
-    <thead><tr>
-      <th>#</th><th>종목</th><th>총점</th><th>종가</th><th>등락</th>
-      <th>기관 순매수</th><th>외국인 순매수</th><th>연속일</th><th>태그</th>
-    </tr></thead>
-    <tbody id="rec-body"><tr><td colspan="9" style="color:#8b949e;text-align:center;padding:20px">로딩 중…</td></tr></tbody>
-  </table>
-  </details>
+  <span id="rec-cnt" style="display:none"></span>
 
-  <!-- (hidden placeholder for tomorrow-picks end tag compatibility) -->
+  <!-- 추천 성과 섹션 -->
+  <div style="background:#161b22;border:1px solid #30363d;border-radius:10px;padding:18px;margin-top:20px">
+    <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:14px;flex-wrap:wrap;gap:8px">
+      <div style="font-weight:600;color:#c9d1d9;font-size:15px">추천 성과 <span style="font-size:12px;color:#8b949e;font-weight:400">(T+1 실제 수익률)</span></div>
+      <div style="display:flex;align-items:center;gap:8px">
+        <select id="perf-days" onchange="loadPerformance()" style="background:#0d1117;border:1px solid #30363d;color:#c9d1d9;padding:4px 8px;border-radius:4px;font-size:12px">
+          <option value="14">최근 2주</option>
+          <option value="30" selected>최근 1개월</option>
+          <option value="60">최근 2개월</option>
+        </select>
+      </div>
+    </div>
+    <!-- 요약 카드 -->
+    <div id="perf-summary" style="display:flex;gap:12px;flex-wrap:wrap;margin-bottom:16px"></div>
+    <!-- 상세 테이블 -->
+    <div style="max-height:300px;overflow-y:auto;border:1px solid #21262d;border-radius:6px">
+      <table style="font-size:12px">
+        <thead style="position:sticky;top:0;background:#161b22;z-index:1">
+          <tr><th>추천일</th><th>종목</th><th>순위</th><th>매수가</th><th>익일가</th><th>수익률</th></tr>
+        </thead>
+        <tbody id="perf-body"><tr><td colspan="6" style="color:#8b949e;text-align:center;padding:20px">로딩 중…</td></tr></tbody>
+      </table>
+    </div>
+  </div>
+
 </div>
 
 <!-- 전종목 스크리너 탭 -->
@@ -287,69 +298,6 @@ select{background:#21262d;border:1px solid #30363d;color:#c9d1d9;padding:6px 10p
   </div>
 </div>
 
-<!-- 백테스트 탭 -->
-<div id="panel-backtest" class="panel content">
-
-  <!-- 히스토리컬 백테스트 -->
-  <div style="background:#161b22;border:1px solid #30363d;border-radius:8px;padding:16px;margin-bottom:20px">
-    <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:12px;flex-wrap:wrap;gap:8px">
-      <div style="font-weight:600;color:#c9d1d9;font-size:15px">히스토리컬 백테스트</div>
-      <div style="display:flex;align-items:center;gap:8px">
-        <select id="hbt-mode" style="background:#0d1117;border:1px solid #30363d;color:#c9d1d9;padding:4px 8px;border-radius:4px;font-size:12px">
-          <option value="db" selected>DB 시그널 (수급 포함 · 빠름)</option>
-          <option value="fdr">FDR 기술지표 (수급 없음 · 느림)</option>
-        </select>
-        <button class="btn" style="font-size:11px;padding:4px 10px;background:#21262d" onclick="runSignalBackfill(this)" id="sig-backfill-btn">↺ 시그널 재계산</button>
-        <span id="sig-backfill-status" style="font-size:11px;color:#8b949e"></span>
-      </div>
-    </div>
-    <div style="display:flex;align-items:center;gap:12px;flex-wrap:wrap;margin-bottom:8px">
-      <label style="color:#8b949e;font-size:13px">시작일</label>
-      <input type="text" id="hbt-start" placeholder="2026-01-01" maxlength="10" style="background:#0d1117;border:1px solid #30363d;color:#c9d1d9;padding:4px 8px;border-radius:4px;font-size:13px;width:100px;font-family:monospace">
-      <label style="color:#8b949e;font-size:13px">종료일</label>
-      <input type="text" id="hbt-end" placeholder="2026-04-05" maxlength="10" style="background:#0d1117;border:1px solid #30363d;color:#c9d1d9;padding:4px 8px;border-radius:4px;font-size:13px;width:100px;font-family:monospace">
-      <label style="color:#8b949e;font-size:13px">Top-N</label>
-      <input type="number" id="hbt-topn" value="5" min="1" max="20" style="background:#0d1117;border:1px solid #30363d;color:#c9d1d9;padding:4px 8px;border-radius:4px;font-size:13px;width:60px">
-    </div>
-    <div style="display:flex;align-items:center;gap:12px;flex-wrap:wrap;margin-bottom:12px">
-      <label style="color:#8b949e;font-size:13px">손절</label>
-      <div style="display:flex;align-items:center;gap:4px">
-        <input type="number" id="hbt-stoploss" value="3" min="0" max="20" step="0.5" style="background:#0d1117;border:1px solid #30363d;color:#f85149;padding:4px 8px;border-radius:4px;font-size:13px;width:60px">
-        <span style="color:#8b949e;font-size:13px">%</span>
-      </div>
-      <label style="color:#8b949e;font-size:13px">익절</label>
-      <div style="display:flex;align-items:center;gap:4px">
-        <input type="number" id="hbt-takeprofit" value="5" min="0" max="50" step="0.5" style="background:#0d1117;border:1px solid #30363d;color:#3fb950;padding:4px 8px;border-radius:4px;font-size:13px;width:60px">
-        <span style="color:#8b949e;font-size:13px">%</span>
-      </div>
-      <label style="color:#8b949e;font-size:12px;display:flex;align-items:center;gap:4px">
-        <input type="checkbox" id="hbt-use-sltp"> 손절/익절 적용
-      </label>
-      <button class="btn" onclick="runHistoricalBacktest(this)">▶ 실행</button>
-      <span class="ts" id="hbt-status"></span>
-    </div>
-    <div class="grid" id="hbt-cards" style="margin-bottom:12px"></div>
-    <canvas id="hbt-chart" style="display:none;max-height:180px;margin-bottom:12px"></canvas>
-    <div id="hbt-table-wrap" style="display:none;max-height:320px;overflow-y:auto;border:1px solid #30363d;border-radius:6px">
-      <table id="hbt-table" style="width:100%">
-        <thead style="position:sticky;top:0;background:#161b22;z-index:1"><tr><th>날짜</th><th>평균수익률</th><th>승률</th><th>종목수</th><th>추천종목</th></tr></thead>
-        <tbody id="hbt-body"></tbody>
-      </table>
-    </div>
-  </div>
-
-  <!-- 기존 DB 기반 백테스트 -->
-  <div style="font-weight:600;color:#8b949e;margin-bottom:8px;font-size:13px">DB 추천 기록 기반 백테스트</div>
-  <div style="display:flex;align-items:center;gap:12px;margin-bottom:16px">
-    <button class="btn" onclick="runBacktest(this)">▶ 실행 (최근 90일 추천)</button>
-    <span class="ts" id="bt-status"></span>
-  </div>
-  <div class="grid" id="bt-cards" style="margin-bottom:16px"></div>
-  <table>
-    <thead><tr><th>날짜</th><th>평균수익률(T+1)</th><th>승률</th><th>종목수</th></tr></thead>
-    <tbody id="bt-body"><tr><td colspan="4" style="color:#8b949e;text-align:center;padding:20px">백테스트 실행 버튼을 눌러 결과를 확인하세요</td></tr></tbody>
-  </table>
-</div>
 
 <!-- 시장 시그널 상세 탭 -->
 <div id="panel-signal" class="panel content">
@@ -445,14 +393,13 @@ const tagHtml = tags => (tags||[]).map(t=>{
 }).join('');
 
 function switchTab(id) {
-  document.querySelectorAll('.tab').forEach((t,i)=>t.classList.toggle('active',['dash','screener','signal','backtest','sources','logs'][i]===id));
+  document.querySelectorAll('.tab').forEach((t,i)=>t.classList.toggle('active',['dash','screener','signal','sources','logs'][i]===id));
   document.querySelectorAll('.panel').forEach(p=>p.classList.remove('active'));
   document.getElementById('panel-'+id).classList.add('active');
   if(id==='screener')loadScreener();
   if(id==='signal')loadSignalDetail();
   if(id==='sources')loadSources();
   if(id==='logs'){loadLogs();_initBfDates();}
-  if(id==='backtest'){loadBacktestSummary();_initHbtDates();}
 }
 
 async function loadAll() {
@@ -477,18 +424,6 @@ async function loadAll() {
     }
     if(recs){
       document.getElementById('rec-cnt').textContent=recs.items.length;
-      const empty='<tr><td colspan="9" style="color:#8b949e;text-align:center;padding:20px">데이터 없음 — 파이프라인을 실행하세요</td></tr>';
-      document.getElementById('rec-body').innerHTML=recs.items.length?recs.items.map(i=>`<tr>
-        <td>${i.rank}</td>
-        <td><b>${i.name}</b><br><span class="ts">${i.code} · ${i.market||'KOSPI'}</span></td>
-        <td>${scoreBar(i.total_score)}</td>
-        <td>${fmtKrw(i.close_price)}</td>
-        <td style="color:${i.change_pct>=0?'#3fb950':'#f85149'}">${fmtP(i.change_pct)}</td>
-        <td>${fmt(i.institution_net_buy)}</td>
-        <td>${fmt(i.foreign_net_buy)}</td>
-        <td>${i.consecutive_days>0?'<b style="color:#58a6ff">'+i.consecutive_days+'일</b>':'—'}</td>
-        <td>${tagHtml(i.tags)}</td>
-      </tr>`).join(''):empty;
     }
     if(scr) document.getElementById('scr-cnt').textContent=scr.length;
     if(dq){
@@ -503,8 +438,8 @@ async function loadAll() {
         <div style="background:#161b22;border:1px solid #30363d;border-radius:6px;padding:8px 14px;min-width:140px;cursor:pointer" onclick="showStockDetail('${t.code}','${t.name}')">
           <div style="font-size:13px;font-weight:700">${t.name}</div>
           <div class="ts">${t.code}</div>
-          <div style="color:#3fb950;font-weight:600;margin-top:4px">+${t.delta.toFixed(2)} ↑</div>
-          <div class="ts">${t.today_score.toFixed(2)} (전: ${t.prev_score.toFixed(2)})</div>
+          <div style="color:#3fb950;font-weight:600;margin-top:4px">+${(t.delta||0).toFixed(2)} ↑</div>
+          <div class="ts">${(t.today_score||0).toFixed(2)} (전: ${(t.prev_score||0).toFixed(2)})</div>
         </div>`).join('');
     } else if(document.getElementById('trending-stocks')) {
       document.getElementById('trending-stocks').innerHTML='<span class="ts">이전 거래일 데이터 없음</span>';
@@ -532,10 +467,10 @@ async function loadAll() {
                 </div>
               </div>
               <div style="display:flex;justify-content:space-between;margin-bottom:6px">
-                <div style="font-size:18px;font-weight:700;color:#f0f6fc">${p.close_price.toLocaleString()}원</div>
+                <div style="font-size:18px;font-weight:700;color:#f0f6fc">${p.close_price!=null?p.close_price.toLocaleString():'—'}원</div>
                 <div style="text-align:right">
                   <div style="font-size:11px;color:#8b949e">T+1 적합도</div>
-                  <div style="font-size:16px;font-weight:700;color:#58a6ff">${p.t1_score.toFixed(2)}</div>
+                  <div style="font-size:16px;font-weight:700;color:#58a6ff">${(p.t1_score||0).toFixed(2)}</div>
                 </div>
               </div>
               <div style="display:grid;grid-template-columns:1fr 1fr;gap:4px;font-size:11px;color:#8b949e;margin-bottom:4px">
@@ -808,64 +743,46 @@ function exportCsv(){
   showToast(`CSV 내보내기 완료 (${data.length}종목)`);
 }
 
-async function loadBacktestSummary(){
-  const d=await fetch(API+'/backtest/summary').then(r=>r.ok?r.json():null).catch(()=>null);
-  if(!d||d.run_id==null){
-    document.getElementById('bt-cards').innerHTML='<div class="card"><h3>백테스트 결과</h3><div class="val" style="font-size:16px;color:#8b949e">실행 기록 없음</div><div class="note">버튼을 눌러 백테스트를 실행하세요</div></div>';
-    document.getElementById('bt-status').textContent='';
+async function loadPerformance(){
+  const days = document.getElementById('perf-days')?.value || 30;
+  const d = await fetch(API+'/recommendations/performance?days='+days).then(r=>r.ok?r.json():null).catch(()=>null);
+  if(!d){
+    document.getElementById('perf-summary').innerHTML='<div style="color:#f85149;font-size:12px;margin:8px 0">데이터를 불러오지 못했습니다</div>';
+    document.getElementById('perf-body').innerHTML='<tr><td colspan="6" style="color:#8b949e;text-align:center;padding:20px">데이터 없음</td></tr>';
     return;
   }
-  const m=d.metrics||{};
-  const pct=v=>v!=null?(v*100).toFixed(3)+'%':'—';
-  document.getElementById('bt-cards').innerHTML=`
-    <div class="card"><h3>T+1 평균수익률</h3><div class="val" style="color:${(m.avg_return_1d||0)>=0?'#3fb950':'#f85149'};font-size:22px">${pct(m.avg_return_1d)}</div><div class="note">수수료·슬리피지 차감</div></div>
-    <div class="card"><h3>승률</h3><div class="val" style="font-size:22px">${m.win_rate_1d!=null?(m.win_rate_1d*100).toFixed(1)+'%':'—'}</div></div>
-    <div class="card"><h3>샤프 추정</h3><div class="val" style="font-size:22px">${m.sharpe_approx!=null?m.sharpe_approx.toFixed(2):'—'}</div><div class="note">연환산 근사</div></div>
-    <div class="card"><h3>누적수익률</h3><div class="val" style="font-size:22px;color:${(m.cumulative_return||0)>=0?'#3fb950':'#f85149'}">${m.cumulative_return!=null?(m.cumulative_return*100).toFixed(2)+'%':'—'}</div></div>
-    <div class="card"><h3>총 거래수</h3><div class="val" style="font-size:22px">${m.total_trades!=null?Math.round(m.total_trades):'—'}</div></div>
-    <div class="card"><h3>분석 기간</h3><div class="val" style="font-size:14px;color:#c9d1d9">${d.period||'—'}</div></div>`;
-  document.getElementById('bt-status').textContent=d.period?' ('+d.period+')':'';
-}
-
-async function runBacktest(btn){
-  btn.disabled=true;btn.textContent='실행 중…';
-  try{
-    const r=await fetch(API+'/backtest/run?lookback_days=90',{method:'POST'});
-    const d=await r.json();
-    const m=d.metrics||{};
-    const pct=v=>v!=null?(v*100).toFixed(3)+'%':'—';
-    document.getElementById('bt-cards').innerHTML=`
-      <div class="card"><h3>T+1 평균수익률</h3><div class="val" style="color:${(m.avg_return_1d||0)>=0?'#3fb950':'#f85149'};font-size:22px">${pct(m.avg_return_1d)}</div><div class="note">수수료·슬리피지 차감</div></div>
-      <div class="card"><h3>승률</h3><div class="val" style="font-size:22px">${m.win_rate_1d!=null?(m.win_rate_1d*100).toFixed(1)+'%':'—'}</div></div>
-      <div class="card"><h3>샤프 추정</h3><div class="val" style="font-size:22px">${m.sharpe_approx!=null?m.sharpe_approx.toFixed(2):'—'}</div><div class="note">연환산 근사</div></div>
-      <div class="card"><h3>누적수익률</h3><div class="val" style="font-size:22px;color:${(m.cumulative_return||0)>=0?'#3fb950':'#f85149'}">${m.cumulative_return!=null?(m.cumulative_return*100).toFixed(2)+'%':'—'}</div></div>
-      <div class="card"><h3>총 거래수</h3><div class="val" style="font-size:22px">${m.total_trades!=null?Math.round(m.total_trades):'—'}</div></div>
-      <div class="card"><h3>기간</h3><div class="val" style="font-size:14px;color:#c9d1d9">${d.period||'—'}</div></div>`;
-    const daily=d.daily_results||[];
-    document.getElementById('bt-body').innerHTML=daily.length?daily.map(r=>`<tr>
-      <td>${r.date}</td>
-      <td style="color:${r.avg_return_pct>=0?'#3fb950':'#f85149'}">${r.avg_return_pct>=0?'+':''}${r.avg_return_pct}%</td>
-      <td>${r.win_rate_pct}%</td>
-      <td>${r.count}</td>
-    </tr>`).join(''):'<tr><td colspan="4" style="color:#8b949e;text-align:center;padding:20px">추천 기록 없음 (파이프라인을 먼저 실행하세요)</td></tr>';
-    document.getElementById('bt-status').textContent=' ('+d.period+')';
-    showToast(`백테스트 완료: 평균수익 ${(m.avg_return_1d*100).toFixed(3)}%, 승률 ${(m.win_rate_1d*100).toFixed(1)}%`);
-  }catch(e){showToast('백테스트 실패: '+e.message,true);}
-  finally{btn.disabled=false;btn.textContent='▶ 실행 (최근 90일 추천)';}
-}
-
-// 히스토리컬 백테스트 차트 인스턴스
-let hbtChart = null;
-
-function _initHbtDates(){
-  const end = new Date();
-  const start = new Date();
-  start.setMonth(start.getMonth()-3);
-  const fmt = d => d.toISOString().slice(0,10);
-  const es = document.getElementById('hbt-start');
-  const ee = document.getElementById('hbt-end');
-  if(!es.value) es.value = fmt(start);
-  if(!ee.value) ee.value = fmt(end);
+  const s = d.summary;
+  const retColor = v => v==null?'#8b949e':v>=0?'#3fb950':'#f85149';
+  document.getElementById('perf-summary').innerHTML = s.total===0
+    ? '<div style="color:#8b949e;font-size:12px;margin:8px 0">추천 이력이 없습니다 — 파이프라인을 실행하세요</div>'
+    : `<div style="display:flex;gap:10px;flex-wrap:wrap;margin:10px 0">
+        <div class="card" style="min-width:110px;padding:12px 16px">
+          <h3>분석 종목수</h3><div class="val" style="font-size:22px">${s.total}</div>
+        </div>
+        <div class="card" style="min-width:110px;padding:12px 16px">
+          <h3>승률</h3><div class="val" style="font-size:22px;color:${retColor(s.win_rate-50)}">${s.win_rate}%</div>
+          <div class="note">${s.win_count}승 / ${s.total-s.win_count}패</div>
+        </div>
+        <div class="card" style="min-width:110px;padding:12px 16px">
+          <h3>평균 수익률</h3><div class="val" style="font-size:22px;color:${retColor(s.avg_return)}">${s.avg_return>=0?'+':''}${s.avg_return}%</div>
+        </div>
+        <div class="card" style="min-width:110px;padding:12px 16px">
+          <h3>최고</h3><div class="val" style="font-size:22px;color:#3fb950">+${s.best}%</div>
+        </div>
+        <div class="card" style="min-width:110px;padding:12px 16px">
+          <h3>최저</h3><div class="val" style="font-size:22px;color:#f85149">${s.worst}%</div>
+        </div>
+      </div>`;
+  document.getElementById('perf-body').innerHTML = d.records.length
+    ? d.records.map(r=>`<tr>
+        <td class="ts">${r.trading_date}</td>
+        <td><b>${r.stock_name}</b><br><span class="ts">${r.stock_code}</span></td>
+        <td>${r.rank}</td>
+        <td>${r.entry_price!=null?r.entry_price.toLocaleString()+'원':'—'}</td>
+        <td>${r.next_price!=null?r.next_price.toLocaleString()+'원':'<span style="color:#8b949e">미확인</span>'}</td>
+        <td style="font-weight:600;color:${retColor(r.return_pct)}">${r.return_pct!=null?(r.return_pct>=0?'+':'')+r.return_pct+'%':'<span style="color:#8b949e">—</span>'}</td>
+      </tr>`).join('')
+    : '<tr><td colspan="6" style="color:#8b949e;text-align:center;padding:20px">추천 이력 없음</td></tr>';
 }
 
 let _sigBackfillTimer = null;
@@ -891,66 +808,6 @@ async function runSignalBackfill(btn){
       }
     },5000);
   }catch(e){btn.disabled=false;statusEl.textContent='실패';showToast('시그널 재계산 실패',true);}
-}
-
-async function runHistoricalBacktest(btn){
-  const start = document.getElementById('hbt-start').value;
-  const end = document.getElementById('hbt-end').value;
-  const topn = document.getElementById('hbt-topn').value||5;
-  const mode = document.getElementById('hbt-mode')?.value||'db';
-  const useSltp = document.getElementById('hbt-use-sltp')?.checked;
-  const sl = useSltp ? (document.getElementById('hbt-stoploss').value||0) : 0;
-  const tp = useSltp ? (document.getElementById('hbt-takeprofit').value||0) : 0;
-  if(!start||!end){showToast('시작일·종료일을 입력하세요',true);return;}
-  btn.disabled=true;btn.textContent='실행 중…';
-  document.getElementById('hbt-status').textContent=mode==='db'?'DB 시그널 계산 중…':'FDR 가격 다운로드 중 (수십 초 소요)…';
-  try{
-    const r=await fetch(API+`/backtest/historical?start_date=${start}&end_date=${end}&top_n=${topn}&mode=${mode}&stop_loss_pct=${sl}&take_profit_pct=${tp}`,{method:'POST'});
-    const d=await r.json();
-    if(!r.ok||d.error||d.detail){showToast('오류: '+(d.error||d.detail||r.status),true);document.getElementById('hbt-status').textContent='';return;}
-    const m=d.metrics||{};
-    const pct=v=>v!=null?v.toFixed(3)+'%':'—';
-    const pctWr=v=>v!=null?v.toFixed(1)+'%':'—';
-    document.getElementById('hbt-cards').innerHTML=`
-      <div class="card"><h3>평균수익률</h3><div class="val" style="color:${(m.avg_return_pct||0)>=0?'#3fb950':'#f85149'};font-size:22px">${pct(m.avg_return_pct)}</div><div class="note">수수료·슬리피지 차감</div></div>
-      <div class="card"><h3>승률</h3><div class="val" style="font-size:22px">${pctWr(m.win_rate_pct)}</div></div>
-      <div class="card"><h3>샤프</h3><div class="val" style="font-size:22px">${m.sharpe!=null?m.sharpe.toFixed(3):'—'}</div><div class="note">연환산</div></div>
-      <div class="card"><h3>누적수익률</h3><div class="val" style="font-size:22px;color:${(m.cumulative_return_pct||0)>=0?'#3fb950':'#f85149'}">${pct(m.cumulative_return_pct)}</div></div>
-      <div class="card"><h3>최대낙폭</h3><div class="val" style="font-size:22px;color:#f85149">${pct(m.max_drawdown_pct)}</div></div>
-      <div class="card"><h3>총 거래수</h3><div class="val" style="font-size:22px">${d.total_trades||0}</div><div class="note">${d.simulated_days||0}일 진입 / 시장필터 ${d.skipped_market_filter||0}일 스킵 / 점수필터 ${d.skipped_score_filter||0}일 스킵</div></div>
-      <div class="card"><h3>손절/익절</h3><div class="val" style="font-size:18px">${(d.filters?.stop_loss_pct!=null?'<span style="color:#f85149">-'+d.filters.stop_loss_pct+'%</span>':'<span style="color:#444">없음</span>')} / ${(d.filters?.take_profit_pct!=null?'<span style="color:#3fb950">+'+d.filters.take_profit_pct+'%</span>':'<span style="color:#444">없음</span>')}</div><div class="note">${d.mode==='db'?'DB 수급 시그널':'FDR 기술지표'} | 시장필터 ${d.filters?.market_filter!==false?'ON':'OFF'}</div></div>`;
-
-    // 누적수익 곡선 차트
-    const curve = d.cumulative_curve||[];
-    if(curve.length>1){
-      const canvas=document.getElementById('hbt-chart');
-      canvas.style.display='block';
-      if(hbtChart){hbtChart.destroy();hbtChart=null;}
-      if(typeof Chart!=='undefined'){
-        const ctx=canvas.getContext('2d');
-        const color=curve[curve.length-1]>=0?'#3fb950':'#f85149';
-        hbtChart=new Chart(ctx,{
-          type:'line',
-          data:{labels:Array.from({length:curve.length},(_,i)=>i+1),datasets:[{label:'누적수익률(%)',data:curve,borderColor:color,backgroundColor:color+'22',borderWidth:1.5,pointRadius:0,fill:true,tension:0.2}]},
-          options:{responsive:true,plugins:{legend:{display:false},tooltip:{callbacks:{label:c=>`${c.parsed.y.toFixed(3)}%`}}},scales:{x:{display:false},y:{ticks:{callback:v=>v+'%'},grid:{color:'#30363d'},border:{color:'#30363d'}}},animation:{duration:300}}
-        });
-      }
-    }
-
-    // 일별 결과 테이블
-    const daily=d.daily_results||[];
-    document.getElementById('hbt-table-wrap').style.display=daily.length?'':'none';
-    document.getElementById('hbt-body').innerHTML=daily.map(r=>`<tr>
-      <td>${r.date}</td>
-      <td style="color:${r.avg_return_pct>=0?'#3fb950':'#f85149'}">${r.avg_return_pct>=0?'+':''}${r.avg_return_pct}%</td>
-      <td>${r.win_rate_pct}%</td>
-      <td>${r.count}</td>
-      <td style="font-size:11px;color:#8b949e">${(r.top_stocks||[]).join(', ')}</td>
-    </tr>`).join('');
-    document.getElementById('hbt-status').textContent=` (${d.period})`;
-    showToast(`히스토리컬 백테스트 완료: 승률 ${m.win_rate_pct?.toFixed(1)}%, 샤프 ${m.sharpe?.toFixed(3)}`);
-  }catch(e){showToast('히스토리컬 백테스트 실패: '+e.message,true);document.getElementById('hbt-status').textContent='';}
-  finally{btn.disabled=false;btn.textContent='▶ 실행';}
 }
 
 // 모달 차트 인스턴스
@@ -1185,6 +1042,7 @@ function showToast(msg,err=false){
 }
 
 loadAll();
+loadPerformance();
 setInterval(loadAll,60000);
 </script>
 </body>

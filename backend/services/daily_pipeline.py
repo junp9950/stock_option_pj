@@ -20,16 +20,17 @@ from backend.services.validation import validate_daily_data
 from backend.utils.dates import latest_trading_day
 
 
-def run_daily_pipeline(db: Session, trading_date: date | None = None) -> dict[str, object]:
+def run_daily_pipeline(db: Session, trading_date: date | None = None, skip_collection: bool = False) -> dict[str, object]:
     target_date = trading_date or latest_trading_day()
     db.add(JobLog(trading_date=target_date, stage="pipeline", status="started", message="daily pipeline started"))
     db.commit()
 
-    collect_spot_data(db, target_date)
-    collect_short_selling_data(db, target_date)
-    collect_borrow_data(db, target_date)
-    collect_derivatives_data(db, target_date)
-    collect_program_trading_data(db, target_date)
+    if not skip_collection:
+        collect_spot_data(db, target_date)
+        collect_short_selling_data(db, target_date)
+        collect_borrow_data(db, target_date)
+        collect_derivatives_data(db, target_date)
+        collect_program_trading_data(db, target_date)
     warnings = validate_daily_data(db, target_date)
     market_signal = calculate_market_signal(db, target_date)
     stock_signals = calculate_stock_signals(db, target_date)
@@ -69,7 +70,7 @@ def run_backfill_pipeline(db: Session, start_date: date, end_date: date) -> list
     while current <= end_date:
         fresh_db = SessionLocal()
         try:
-            result = run_daily_pipeline(fresh_db, current)
+            result = run_daily_pipeline(fresh_db, current, skip_collection=True)
             results.append(result)
         except Exception as exc:  # noqa: BLE001
             results.append({"trading_date": current.isoformat(), "error": str(exc)})
