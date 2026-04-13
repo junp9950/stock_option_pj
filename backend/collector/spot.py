@@ -297,16 +297,26 @@ def collect_spot_data(db: Session, trading_date: date) -> None:
                 return code, None
 
         price_map: dict[str, pd.DataFrame] = {}
+        from concurrent.futures import wait, FIRST_COMPLETED  # noqa: PLC0415
         with ThreadPoolExecutor(max_workers=16) as pool:
             futs = {pool.submit(_fetch_price, s.code): s.code for s in stocks}
             done = 0
-            for fut in as_completed(futs):
-                code, df = fut.result()
-                if df is not None:
-                    price_map[code] = df
-                done += 1
-                if done % 50 == 0:
-                    logger.info("  FDR 가격 다운로드: %d / %d", done, len(stocks))
+            pending = set(futs.keys())
+            while pending:
+                finished, pending = wait(pending, timeout=15, return_when=FIRST_COMPLETED)
+                for fut in finished:
+                    code, df = fut.result()
+                    if df is not None:
+                        price_map[code] = df
+                    done += 1
+                    if done % 50 == 0:
+                        logger.info("  FDR 가격 다운로드: %d / %d", done, len(stocks))
+                # 15초 안에 아무것도 안 끝났으면 남은 것들 타임아웃 처리
+                if not finished and pending:
+                    logger.warning("FDR 응답 없는 종목 %d개 타임아웃 처리", len(pending))
+                    for fut in pending:
+                        fut.cancel()
+                    break
         logger.info("FDR 가격 수집 완료: %d / %d 종목", len(price_map), len(stocks))
 
         # KIS API fallback (pykrx 실패 시)
