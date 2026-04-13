@@ -134,6 +134,72 @@ def _krx_direct_short_batch(yyyymmdd: str) -> dict[str, tuple[float, float, floa
         return {}
 
 
+def _kis_short_batch(yyyymmdd: str) -> dict[str, tuple[float, float, float]]:
+    """KIS Open API로 종목별 공매도 데이터 조회.
+    반환: {종목코드: (short_volume, short_ratio, short_balance)}
+    실패 시 빈 dict 반환.
+    """
+    import os, time as _time, requests as _req  # noqa: PLC0415
+    from backend.collector.spot import _get_kis_token  # noqa: PLC0415
+
+    app_key = os.getenv("KIS_APP_KEY", "")
+    app_secret = os.getenv("KIS_APP_SECRET", "")
+    if not app_key or not app_secret:
+        return {}
+
+    token = _get_kis_token()
+    if not token:
+        return {}
+
+    from backend.db.database import SessionLocal  # noqa: PLC0415
+    from backend.collector.universe import get_universe  # noqa: PLC0415
+    _db = SessionLocal()
+    try:
+        codes = [s.code for s in get_universe(_db)]
+    finally:
+        _db.close()
+
+    result: dict[str, tuple[float, float, float]] = {}
+    headers = {
+        "authorization": f"Bearer {token}",
+        "appkey": app_key,
+        "appsecret": app_secret,
+        "tr_id": "FHKST130000C0",
+        "content-type": "application/json",
+    }
+
+    for code in codes:
+        try:
+            r = _req.get(
+                "https://openapi.koreainvestment.com:9443/uapi/domestic-stock/v1/quotations/inquire-daily-itemchartprice",
+                headers={**headers, "tr_id": "FHKST130000C0"},
+                params={
+                    "fid_cond_mrkt_div_code": "J",
+                    "fid_input_iscd": code,
+                    "fid_input_date_1": yyyymmdd,
+                    "fid_input_date_2": yyyymmdd,
+                    "fid_period_div_code": "D",
+                    "fid_org_adj_prc": "0",
+                },
+                timeout=5,
+            )
+            rows = r.json().get("output2", [])
+            for row in rows:
+                if row.get("stck_bsop_date") == yyyymmdd:
+                    vol = float(row.get("stck_shrts_vol") or 0)
+                    ratio = float(row.get("stck_shrts_vol_rlim") or 0)
+                    bal = float(row.get("stck_shrts_rmnd_amt") or 0)
+                    if vol > 0 or ratio > 0:
+                        result[code] = (vol, ratio, bal)
+                    break
+            _time.sleep(0.05)
+        except Exception as exc:  # noqa: BLE001
+            logger.debug("KIS short failed for %s: %s", code, exc)
+
+    logger.info("KIS 공매도 수집 완료: %d/%d 종목", len(result), len(codes))
+    return result
+
+
 def _pykrx_short_batch(yyyymmdd: str) -> dict[str, tuple[float, float, float]]:
     """pykrx로 KOSPI+KOSDAQ 전종목 공매도 데이터 일괄 조회.
     반환: {종목코드: (short_volume, short_ratio, short_balance)}
@@ -246,6 +312,12 @@ def collect_short_selling_data(db: Session, trading_date: date) -> None:
         logger.info("pykrx 실패 → KRX 직접 API 시도")
         batch_data = _krx_direct_short_batch(yyyymmdd)
         source = "krx_direct"
+
+    # 3차: KIS API (KRX 완전 차단 시)
+    if not batch_data:
+        logger.info("KRX 직접 API 실패 → KIS API 공매도 시도")
+        batch_data = _kis_short_batch(yyyymmdd)
+        source = "kis"
 
     batch_ok = len(batch_data) > 0
 

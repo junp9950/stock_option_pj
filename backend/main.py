@@ -93,8 +93,6 @@ select{background:#21262d;border:1px solid #30363d;color:#c9d1d9;padding:6px 10p
     <div class="sub">로컬 대시보드 · <span id="hdr-date">—</span> · <span id="hdr-sig">—</span> · 1분 자동 갱신</div>
   </div>
   <div style="display:flex;gap:8px">
-    <button class="btn" onclick="runPipeline(this)">▶ 파이프라인 실행</button>
-    <button class="btn btn-gray" onclick="refreshUniverse(this)">↺ 유니버스 갱신</button>
     <button class="btn btn-gray" onclick="loadAll()">⟳ 새로고침</button>
   </div>
 </header>
