@@ -69,12 +69,12 @@ def start_scheduler() -> BackgroundScheduler:
         finally:
             db.close()
 
-    # 매일 19:00에 파이프라인 실행, 데이터 없으면 5분마다 재시도
-    scheduler.add_job(_daily_pipeline_job, "cron", hour=19, minute=0, id="daily_pipeline", replace_existing=True)
+    # 매일 16:30에 파이프라인 실행, 데이터 없으면 5분마다 재시도
+    scheduler.add_job(_daily_pipeline_job, "cron", hour=16, minute=30, id="daily_pipeline", replace_existing=True)
     # 매주 월요일 오전 8시에 유니버스 갱신
     scheduler.add_job(_universe_refresh_job, "cron", day_of_week="mon", hour=8, minute=0, id="universe_refresh", replace_existing=True)
 
     scheduler.start()
-    logger.info("Scheduler started: daily_pipeline=19:00 KST (retry every 5min if no data), universe_refresh=Mon 08:00 KST")
+    logger.info("Scheduler started: daily_pipeline=16:30 KST (retry every 5min if no data), universe_refresh=Mon 08:00 KST")
     return scheduler
 
