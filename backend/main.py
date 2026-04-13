@@ -103,8 +103,6 @@ select{background:#21262d;border:1px solid #30363d;color:#c9d1d9;padding:6px 10p
   <div class="tab active" onclick="switchTab('dash')">대시보드</div>
   <div class="tab" onclick="switchTab('screener')">전종목 스크리너</div>
   <div class="tab" onclick="switchTab('signal')">시장 시그널 상세</div>
-  <div class="tab" onclick="switchTab('sources')">데이터 소스</div>
-  <div class="tab" onclick="switchTab('logs')">실행 이력</div>
 </div>
 
 <!-- 대시보드 탭 -->
@@ -306,37 +304,6 @@ select{background:#21262d;border:1px solid #30363d;color:#c9d1d9;padding:6px 10p
   </table>
 </div>
 
-<!-- 데이터 소스 탭 -->
-<div id="panel-sources" class="panel content">
-  <table>
-    <thead><tr><th>항목</th><th>소스</th><th>상태</th><th>비고</th></tr></thead>
-    <tbody id="src-body"><tr><td colspan="4" style="color:#8b949e;text-align:center;padding:20px">로딩 중…</td></tr></tbody>
-  </table>
-</div>
-
-<!-- 실행 이력 탭 -->
-<div id="panel-logs" class="panel content">
-
-  <!-- 과거 데이터 백필 -->
-  <div style="background:#161b22;border:1px solid #30363d;border-radius:8px;padding:16px;margin-bottom:20px">
-    <div style="font-weight:600;color:#c9d1d9;margin-bottom:12px;font-size:15px">과거 데이터 백필 (수급·가격)</div>
-    <div style="color:#8b949e;font-size:12px;margin-bottom:12px">pykrx로 과거 기관/외국인 수급 + FDR 가격을 한번에 수집합니다. 이미 있는 날짜는 건너뜁니다.<br>수급 포함 백테스트를 하려면 먼저 이 기능으로 데이터를 채우세요.</div>
-    <div style="display:flex;align-items:center;gap:12px;flex-wrap:wrap;margin-bottom:12px">
-      <label style="color:#8b949e;font-size:13px">시작일</label>
-      <input type="text" id="bf-start" placeholder="2024-01-01" maxlength="10" style="background:#0d1117;border:1px solid #30363d;color:#c9d1d9;padding:4px 8px;border-radius:4px;font-size:13px;width:100px;font-family:monospace">
-      <label style="color:#8b949e;font-size:13px">종료일</label>
-      <input type="text" id="bf-end" placeholder="2025-12-31" maxlength="10" style="background:#0d1117;border:1px solid #30363d;color:#c9d1d9;padding:4px 8px;border-radius:4px;font-size:13px;width:100px;font-family:monospace">
-      <button class="btn" onclick="runBackfill(this)">▶ 백필 시작</button>
-      <span class="ts" id="bf-status"></span>
-    </div>
-    <div id="bf-result" style="font-size:13px;color:#8b949e"></div>
-  </div>
-
-  <table>
-    <thead><tr><th>시각</th><th>기준일</th><th>단계</th><th>상태</th><th>메시지</th></tr></thead>
-    <tbody id="log-body"><tr><td colspan="5" style="color:#8b949e;text-align:center;padding:20px">로딩 중…</td></tr></tbody>
-  </table>
-</div>
 
 <!-- 종목 상세 모달 -->
 <div class="modal-bg" id="modal-bg" onclick="if(event.target===this)closeModal()">
@@ -391,13 +358,11 @@ const tagHtml = tags => (tags||[]).map(t=>{
 }).join('');
 
 function switchTab(id) {
-  document.querySelectorAll('.tab').forEach((t,i)=>t.classList.toggle('active',['dash','screener','signal','sources','logs'][i]===id));
+  document.querySelectorAll('.tab').forEach((t,i)=>t.classList.toggle('active',['dash','screener','signal'][i]===id));
   document.querySelectorAll('.panel').forEach(p=>p.classList.remove('active'));
   document.getElementById('panel-'+id).classList.add('active');
   if(id==='screener')loadScreener();
   if(id==='signal')loadSignalDetail();
-  if(id==='sources')loadSources();
-  if(id==='logs'){loadLogs();_initBfDates();}
 }
 
 async function loadAll() {
@@ -633,88 +598,6 @@ async function loadSignalDetail(){
   </tr>`).join('');
 }
 
-async function loadSources(){
-  const srcs=await fetch(API+'/data-sources').then(r=>r.ok?r.json():null).catch(()=>null);
-  if(!srcs){document.getElementById('src-body').innerHTML='<tr><td colspan="4" style="color:#f85149;text-align:center">로드 실패</td></tr>';return;}
-  const sm={real:'real',real_with_fallback:'rfb',fallback:'fallback'};
-  const lm={real:'실제',real_with_fallback:'실제(fallback가능)',fallback:'fallback'};
-  document.getElementById('src-body').innerHTML=Object.entries(srcs).map(([k,v])=>`<tr>
-    <td>${k}</td><td>${v.source}</td>
-    <td><span class="badge ${sm[v.status]||''}">${lm[v.status]||v.status}</span></td>
-    <td class="ts">${v.note||''}</td>
-  </tr>`).join('');
-}
-
-async function loadLogs(){
-  const logs=await fetch(API+'/jobs/logs?limit=100').then(r=>r.ok?r.json():null).catch(()=>null);
-  if(!logs){document.getElementById('log-body').innerHTML='<tr><td colspan="5" style="color:#f85149;text-align:center">로드 실패</td></tr>';return;}
-  document.getElementById('log-body').innerHTML=logs.map(l=>`<tr>
-    <td class="ts">${l.created_at.replace('T',' ').slice(0,19)}</td>
-    <td>${l.trading_date||'—'}</td>
-    <td>${l.stage}</td>
-    <td><span class="log-${l.status==='completed'?'ok':l.status==='started'?'run':'err'}">${l.status}</span></td>
-    <td class="ts">${l.message}</td>
-  </tr>`).join('');
-}
-
-function _initBfDates(){
-  const fmt = d => d.toISOString().slice(0,10);
-  const es = document.getElementById('bf-start');
-  const ee = document.getElementById('bf-end');
-  if(!es.value){const d=new Date();d.setFullYear(d.getFullYear()-2);es.value=fmt(d);}
-  if(!ee.value){const d=new Date();d.setDate(d.getDate()-1);ee.value=fmt(d);}
-}
-
-let _bfPollTimer = null;
-
-async function runBackfill(btn){
-  const start = document.getElementById('bf-start').value;
-  const end = document.getElementById('bf-end').value;
-  if(!start||!end){showToast('시작일·종료일을 입력하세요',true);return;}
-  if(!confirm(`${start} ~ ${end} 기간 데이터를 백필합니다.\n종목 수에 따라 수십 분 소요될 수 있습니다.\n계속하시겠습니까?`)){return;}
-  btn.disabled=true;btn.textContent='백필 중…';
-  document.getElementById('bf-result').textContent='';
-  try{
-    const r=await fetch(API+`/data/backfill?start_date=${start}&end_date=${end}`,{method:'POST'});
-    const d=await r.json();
-    if(!r.ok){
-      const msg=d.detail||d.error||JSON.stringify(d);
-      showToast('오류: '+msg,true);
-      document.getElementById('bf-result').innerHTML=`<span style="color:#f85149">오류: ${msg}</span>`;
-      document.getElementById('bf-status').textContent='';
-      btn.disabled=false;btn.textContent='▶ 백필 시작';return;
-    }
-    // 백그라운드 실행 시작됨 — 5초마다 상태 polling
-    document.getElementById('bf-status').textContent='백필 실행 중… (서버 로그에서 진행 확인 가능)';
-    if(_bfPollTimer) clearInterval(_bfPollTimer);
-    _bfPollTimer = setInterval(async()=>{
-      try{
-        const s=await fetch(API+'/data/backfill/status').then(r=>r.json());
-        if(s.error){
-          clearInterval(_bfPollTimer);
-          document.getElementById('bf-status').textContent='오류 발생';
-          document.getElementById('bf-result').innerHTML=`<span style="color:#f85149">오류: ${s.error}</span>`;
-          btn.disabled=false;btn.textContent='▶ 백필 시작';
-        } else if(!s.running && s.result){
-          clearInterval(_bfPollTimer);
-          const res=s.result;
-          document.getElementById('bf-status').textContent='완료';
-          document.getElementById('bf-result').innerHTML=`
-            <span style="color:#3fb950">✓ ${res.days_filled}일 채움</span> &nbsp;
-            <span style="color:#8b949e">/ 건너뜀 ${res.days_skipped}일 / 전체 ${res.days_total}일 / 종목 ${res.stocks}개</span>
-            ${res.errors&&res.errors.length?'<br><span style="color:#f85149">오류 '+res.errors.length+'건: '+res.errors[0]+'</span>':''}`;
-          showToast(`백필 완료: ${res.days_filled}일 채움`);
-          btn.disabled=false;btn.textContent='▶ 백필 시작';
-          loadLogs();
-        }
-      }catch(e){}
-    }, 5000);
-  }catch(e){
-    showToast('백필 요청 실패: '+e.message,true);
-    document.getElementById('bf-status').textContent='';
-    btn.disabled=false;btn.textContent='▶ 백필 시작';
-  }
-}
 
 function exportCsv(){
   if(!scrData.length){showToast('내보낼 데이터가 없습니다.',true);return;}
@@ -1011,27 +894,7 @@ function closeModal(){
   if(_modalVolumeChart){_modalVolumeChart.destroy();_modalVolumeChart=null;}
 }
 
-async function runPipeline(btn){
-  const today=new Date().toISOString().slice(0,10);
-  btn.disabled=true;btn.textContent='실행 중…';
-  try{
-    const r=await fetch(`${API}/jobs/run-daily?trading_date=${today}`,{method:'POST'});
-    const d=await r.json();
-    showToast(`완료: ${d.market_signal} (${d.market_score}) / 추천 ${d.recommendation_count}종목`);
-    await loadAll();
-  }catch(e){showToast('실행 실패: '+e.message,true);}
-  finally{btn.disabled=false;btn.textContent='▶ 파이프라인 실행';}
-}
 
-async function refreshUniverse(btn){
-  btn.disabled=true;btn.textContent='갱신 중…';
-  try{
-    const r=await fetch(`${API}/universe/refresh`,{method:'POST'});
-    const d=await r.json();
-    showToast(`유니버스 갱신 완료: +${d.added}종목 추가 (총 ${d.total}종목)`);
-  }catch(e){showToast('갱신 실패',true);}
-  finally{btn.disabled=false;btn.textContent='↺ 유니버스 갱신';}
-}
 
 function showToast(msg,err=false){
   const t=document.getElementById('toast');
