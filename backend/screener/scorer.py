@@ -65,6 +65,10 @@ def build_recommendations(db: Session, trading_date: date) -> list[Recommendatio
     if market_signal is None:
         return []
 
+    # 기존 추천 삭제 (소량이라 빠름)
+    db.query(Recommendation).filter(Recommendation.trading_date == trading_date).delete()
+    db.commit()
+
     if market_signal.signal == "하방":
         return []
 

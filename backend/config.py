@@ -33,8 +33,8 @@ class AppConfig:
     bullish_threshold: float = 3.0
     score_market_weight: float = 0.3
     score_stock_weight: float = 0.7
-    recommendation_count_bullish: int = 10
-    recommendation_count_neutral: int = 5
+    recommendation_count_bullish: int = 5
+    recommendation_count_neutral: int = 3
     min_market_cap: float = 100_000_000_000
     min_trading_value: float = 5_000_000_000
     fee_rate: float = 0.00015
