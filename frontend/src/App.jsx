@@ -20,7 +20,6 @@ export default function App() {
     setDate,
     fetchMarketSignal,
     fetchRecommendations,
-    runDaily,
   } = useAppStore();
 
   useEffect(() => {
@@ -37,7 +36,6 @@ export default function App() {
 
       <div className="toolbar">
         <DatePicker value={selectedDate} onChange={setDate} />
-        <button onClick={runDaily}>수동 파이프라인 실행</button>
       </div>
 
       <LoadingState loading={isLoading} error={error} />
