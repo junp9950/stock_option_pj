@@ -8,3 +8,5 @@ __pycache__/
 작업일지*.txt
 .env
 .claude/
+deploy_key
+deploy_key.pub
