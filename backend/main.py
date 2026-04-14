@@ -174,6 +174,7 @@ select{background:#21262d;border:1px solid #30363d;color:#c9d1d9;padding:6px 10p
 <!-- 전종목 스크리너 탭 -->
 <div id="panel-screener" class="panel">
   <div class="toolbar">
+    <input type="date" id="scr-date" onchange="loadScreener()" style="background:#161b22;border:1px solid #30363d;color:#c9d1d9;padding:4px 8px;border-radius:4px;font-size:13px">
     <input type="text" id="scr-search" placeholder="종목명 또는 코드 검색…" oninput="renderScreener()">
     <select id="scr-market" onchange="renderScreener()">
       <option value="">전체 시장</option>
@@ -474,7 +475,9 @@ async function loadAll() {
 
 async function loadScreener() {
   const showAll = document.getElementById('scr-showall')?.checked ? '&show_all=true' : '';
-  const r = await fetch(API+'/screener?'+showAll).catch(()=>null);
+  const dateVal = document.getElementById('scr-date')?.value;
+  const dateParam = dateVal ? '&trading_date='+dateVal : '';
+  const r = await fetch(API+'/screener?'+showAll+dateParam).catch(()=>null);
   if(!r||!r.ok){document.getElementById('scr-body').innerHTML='<tr><td colspan="12" style="color:#f85149;text-align:center;padding:20px">로드 실패</td></tr>';return;}
   scrData = await r.json();
   renderScreener();
