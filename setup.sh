@@ -1,5 +1,5 @@
 #!/bin/bash
-# Rocky Linux / RHEL 계열 자동 설치 스크립트
+# Rocky Linux / RHEL / Ubuntu / Debian 자동 설치 스크립트
 
 set -e
 
@@ -11,10 +11,44 @@ echo "=============================="
 echo "  주식 분석 서버 자동 설치"
 echo "=============================="
 
+# OS 판별
+if [ -f /etc/os-release ]; then
+    . /etc/os-release
+    OS_ID="${ID,,}"  # lowercase
+else
+    OS_ID="unknown"
+fi
+
+case "$OS_ID" in
+    ubuntu|debian)
+        PKG_INSTALL="sudo apt-get install -y"
+        PKG_UPDATE="sudo apt-get update -y"
+        PYTHON_PKG="python3.11 python3.11-venv"
+        ;;
+    rocky|rhel|centos|fedora|almalinux)
+        PKG_INSTALL="sudo dnf install -y"
+        PKG_UPDATE=""
+        PYTHON_PKG="python3.11"
+        ;;
+    *)
+        echo "⚠ 지원하지 않는 OS ($OS_ID). Rocky/RHEL/Ubuntu/Debian 권장."
+        PKG_INSTALL="sudo dnf install -y"
+        PKG_UPDATE=""
+        PYTHON_PKG="python3.11"
+        ;;
+esac
+
+echo "  감지된 OS: $PRETTY_NAME"
+
+# 패키지 매니저 업데이트 (apt 계열만)
+if [ -n "$PKG_UPDATE" ]; then
+    $PKG_UPDATE -q
+fi
+
 # 1. Python 3.11 설치
 echo "[1/6] Python 3.11 설치 중..."
 if ! command -v python3.11 &>/dev/null; then
-    sudo dnf install python3.11 -y
+    $PKG_INSTALL $PYTHON_PKG
 else
     echo "  Python 3.11 이미 설치됨"
 fi
@@ -22,7 +56,7 @@ fi
 # 2. git 설치
 echo "[2/6] git 설치 확인..."
 if ! command -v git &>/dev/null; then
-    sudo dnf install git -y
+    $PKG_INSTALL git
 else
     echo "  git 이미 설치됨"
 fi
@@ -103,7 +137,10 @@ echo ""
 
 # 방화벽 포트 오픈 안내
 if command -v firewall-cmd &>/dev/null; then
-    echo "방화벽 포트 오픈 필요 시:"
+    echo "방화벽 포트 오픈 필요 시 (Rocky/RHEL):"
     echo "  sudo firewall-cmd --permanent --add-port=8000/tcp"
     echo "  sudo firewall-cmd --reload"
+elif command -v ufw &>/dev/null; then
+    echo "방화벽 포트 오픈 필요 시 (Ubuntu):"
+    echo "  sudo ufw allow 8000/tcp"
 fi
