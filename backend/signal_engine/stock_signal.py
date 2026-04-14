@@ -244,6 +244,57 @@ def _calc_consecutive_buy(flows: list) -> float:
     return 0.0
 
 
+def _calc_short_squeeze_score(
+    short_ratio_pct: float | None,
+    change_pct: float,
+    volume_surge: float,
+    short_ratios: list[float],
+) -> float:
+    """숏스퀴즈 탐지 점수 (최신 순 short_ratio 리스트).
+
+    조건: 공매도 비중 높음 + 당일 주가 상승 + 거래량 급증
+    → 공매도 세력 손절 매수(숏커버링) 진행 중 → 추가 상승 압력
+
+    공매도 비중 < 5%이거나 주가 하락이면 0 반환.
+    점수 범위: 0.0 ~ 2.0
+    """
+    if short_ratio_pct is None or short_ratio_pct < 5.0:
+        return 0.0
+    if change_pct < 1.5:
+        return 0.0  # 주가 상승 없으면 숏스퀴즈 아님
+
+    score = 0.0
+
+    # 1. 주가 상승 강도 (숏커버링 트리거)
+    if change_pct >= 5.0:
+        score += 1.5
+    elif change_pct >= 3.0:
+        score += 1.0
+    else:
+        score += 0.5
+
+    # 2. 거래량 급증 (숏커버링 매수량 확인)
+    if volume_surge >= 3.0:
+        score += 1.5
+    elif volume_surge >= 2.0:
+        score += 1.0
+    elif volume_surge >= 1.5:
+        score += 0.5
+
+    # 3. 공매도 잔고 많을수록 폭발력 큼
+    if short_ratio_pct >= 20.0:
+        score += 1.0
+    elif short_ratio_pct >= 10.0:
+        score += 0.5
+
+    # 4. 공매도 비율 감소 추세 = 숏커버링 진행 중
+    if len(short_ratios) >= 2 and short_ratios[0] < short_ratios[1]:
+        score += 0.5
+
+    # 정규화: 만점 4.5 → 2.0
+    return round(min(score / 2.25, 2.0), 4)
+
+
 def _calc_short_trend_score(short_ratios: list[float]) -> float:
     """공매도 비율 추세 점수 계산 (최신 순, 최소 3개 필요).
     최근 1일과 5일 전 비율을 비교해 개선/악화 판단.
@@ -352,6 +403,14 @@ def calculate_stock_signals(db: Session, trading_date: date) -> list[StockSignal
         short_ratios = [s.short_ratio for s in short_hist]
         short_trend_score = _calc_short_trend_score(short_ratios)
 
+        # 숏스퀴즈 탐지: 공매도 잔고 높음 + 주가 상승 + 거래량 급증
+        short_squeeze_score = _calc_short_squeeze_score(
+            short_ratio_pct,
+            price.change_pct,
+            volume_surge,
+            short_ratios,
+        )
+
         # 이동평균 위치 (20일/60일)
         close_prices = [p.close_price for p in price_hist]
         ma_score = _calc_ma_score(close_prices)
@@ -380,6 +439,7 @@ def calculate_stock_signals(db: Session, trading_date: date) -> list[StockSignal
             ("volume_surge", volume_surge, 2.0 if volume_surge >= 3.0 else 1.0 if volume_surge >= 1.8 else 0.0 if volume_surge >= 0.8 else -1.0, "거래량 급증 (20일 평균 대비)"),
             ("short_ratio_change", short_ratio_pct, short_ratio_score, "공매도 비율 수준"),
             ("short_trend", None, short_trend_score, "공매도 비율 감소 추세"),
+            ("short_squeeze", short_ratio_pct, short_squeeze_score, "숏스퀴즈 탐지 (공매도↑ + 주가상승 + 거래량급증)"),
             ("ma_position", close_prices[0] if close_prices else None, ma_score, "20일/60일 이동평균 위치"),
             ("momentum_5d", close_prices[0] if close_prices else None, momentum_score, "5일 가격 모멘텀"),
             ("rsi_14", rsi_val, rsi_score, "RSI(14) — 과매도/과매수"),
@@ -393,7 +453,7 @@ def calculate_stock_signals(db: Session, trading_date: date) -> list[StockSignal
         no_short = short is None
         enabled = {
             key: key not in ("program_buy",)
-            and not (key in ("short_ratio_change", "short_trend") and no_short)
+            and not (key in ("short_ratio_change", "short_trend", "short_squeeze") and no_short)
             for key, *_ in details
         }
         normalized_weights = _normalize_weights(config.stock_signal_weights, enabled)
