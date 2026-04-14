@@ -136,6 +136,7 @@ def _krx_direct_short_batch(yyyymmdd: str) -> dict[str, tuple[float, float, floa
 
 def _kis_short_batch(yyyymmdd: str) -> dict[str, tuple[float, float, float]]:
     """KIS Open API로 종목별 공매도 데이터 조회.
+    TR_ID: FHPST04830000, endpoint: /uapi/domestic-stock/v1/quotations/daily-short-sale
     반환: {종목코드: (short_volume, short_ratio, short_balance)}
     실패 시 빈 dict 반환.
     """
@@ -164,35 +165,35 @@ def _kis_short_batch(yyyymmdd: str) -> dict[str, tuple[float, float, float]]:
         "authorization": f"Bearer {token}",
         "appkey": app_key,
         "appsecret": app_secret,
-        "tr_id": "FHKST130000C0",
+        "tr_id": "FHPST04830000",
         "content-type": "application/json",
     }
 
     for code in codes:
         try:
             r = _req.get(
-                "https://openapi.koreainvestment.com:9443/uapi/domestic-stock/v1/quotations/inquire-daily-itemchartprice",
-                headers={**headers, "tr_id": "FHKST130000C0"},
+                "https://openapi.koreainvestment.com:9443/uapi/domestic-stock/v1/quotations/daily-short-sale",
+                headers=headers,
                 params={
-                    "fid_cond_mrkt_div_code": "J",
-                    "fid_input_iscd": code,
-                    "fid_input_date_1": yyyymmdd,
-                    "fid_input_date_2": yyyymmdd,
-                    "fid_period_div_code": "D",
-                    "fid_org_adj_prc": "0",
+                    "FID_COND_MRKT_DIV_CODE": "J",
+                    "FID_INPUT_ISCD": code,
+                    "FID_INPUT_DATE_1": yyyymmdd,
+                    "FID_INPUT_DATE_2": yyyymmdd,
                 },
                 timeout=5,
             )
             rows = r.json().get("output2", [])
             for row in rows:
                 if row.get("stck_bsop_date") == yyyymmdd:
-                    vol = float(row.get("stck_shrts_vol") or 0)
-                    ratio = float(row.get("stck_shrts_vol_rlim") or 0)
-                    bal = float(row.get("stck_shrts_rmnd_amt") or 0)
+                    # ssts_cntg_qty: 공매도 체결량, ssts_vol_rlim: 공매도 비중(%)
+                    # ssts_tr_pbmn: 공매도 거래대금 (잔고 대체)
+                    vol = float(row.get("ssts_cntg_qty") or 0)
+                    ratio = float(row.get("ssts_vol_rlim") or 0)
+                    bal = float(row.get("ssts_tr_pbmn") or 0)
                     if vol > 0 or ratio > 0:
                         result[code] = (vol, ratio, bal)
                     break
-            _time.sleep(0.05)
+            _time.sleep(0.15)
         except Exception as exc:  # noqa: BLE001
             logger.debug("KIS short failed for %s: %s", code, exc)
 
