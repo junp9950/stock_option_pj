@@ -129,7 +129,7 @@ def _kis_investor_flow_batch(yyyymmdd: str, codes: list[str]) -> dict[str, tuple
                     p = float(row.get("prsn_ntby_qty") or 0)
                     result[code] = (f, i, p)
                     break
-            _time.sleep(0.05)
+            _time.sleep(0.12)
         except Exception as exc:  # noqa: BLE001
             logger.debug("KIS flow failed for %s: %s", code, exc)
 

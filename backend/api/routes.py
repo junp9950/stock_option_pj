@@ -943,7 +943,8 @@ def get_data_quality(db: Session = Depends(get_db)):
 
     spot_count = db.scalar(select(func.count()).select_from(SpotDailyPrice).where(SpotDailyPrice.trading_date == target_date)) or 0
     flow_nonzero = db.scalar(select(func.count()).select_from(SpotInvestorFlow).where(
-        SpotInvestorFlow.trading_date == target_date, SpotInvestorFlow.foreign_net_buy != 0
+        SpotInvestorFlow.trading_date == target_date,
+        (SpotInvestorFlow.foreign_net_buy != 0) | (SpotInvestorFlow.institution_net_buy != 0) | (SpotInvestorFlow.individual_net_buy != 0)
     )) or 0
     short_count = db.scalar(select(func.count()).select_from(ShortSellingDaily).where(ShortSellingDaily.trading_date == target_date)) or 0
 
@@ -952,16 +953,24 @@ def get_data_quality(db: Session = Depends(get_db)):
     oi_row = db.scalar(select(OpenInterestDaily).where(OpenInterestDaily.trading_date == target_date))
     idx_row = db.scalar(select(IndexDaily).where(IndexDaily.trading_date == target_date))
 
+    futures_real = 1.0 if futures_row and futures_row.foreign_net_contracts != 0 else 0.0
+    program_real = 1.0 if program_row and (program_row.non_arbitrage_net_buy != 0 or program_row.arbitrage_net_buy != 0) else 0.0
+    oi_real = 1.0 if oi_row and (oi_row.call_oi > 0 or oi_row.put_oi > 0) else 0.0
+    index_real = 1.0 if idx_row else 0.0
+
     checks = {
         "spot_coverage": spot_count / total_stocks,
         "flow_coverage": flow_nonzero / total_stocks,
         "short_coverage": short_count / total_stocks,
-        "futures_real": 1.0 if futures_row and futures_row.foreign_net_contracts != 0 else 0.0,
-        "program_real": 1.0 if program_row and (program_row.non_arbitrage_net_buy != 0 or program_row.arbitrage_net_buy != 0) else 0.0,
-        "oi_real": 1.0 if oi_row and (oi_row.call_oi > 0 or oi_row.put_oi > 0) else 0.0,
-        "index_real": 1.0 if idx_row else 0.0,
+        "futures_real": futures_real,
+        "program_real": program_real,
+        "oi_real": oi_real,
+        "index_real": index_real,
     }
-    overall = sum(checks.values()) / len(checks)
+    # 핵심 데이터(주가·수급·공매도) 가중 60%, 파생 보조 데이터 40%
+    core_score = (checks["spot_coverage"] + checks["flow_coverage"] + checks["short_coverage"]) / 3
+    deriv_score = (futures_real + program_real + oi_real + index_real) / 4
+    overall = core_score * 0.6 + deriv_score * 0.4
     return {
         "trading_date": target_date.isoformat(),
         "overall_score": round(overall * 100, 1),
