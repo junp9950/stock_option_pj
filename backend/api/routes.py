@@ -74,12 +74,6 @@ def _build_tags(
         tags.append("숏스퀴즈")
     if inst > 0 and foreign > 0:
         tags.append("기관+외국인 동시매수")
-    if co_days >= 2:
-        tags.append(f"동시매수 {co_days}일 연속")
-    if inst_days >= 3:
-        tags.append(f"기관 {inst_days}일 연속")
-    if foreign_days >= 3:
-        tags.append(f"외국인 {foreign_days}일 연속")
     if abs(inst) >= 5_000_000_000 or abs(foreign) >= 10_000_000_000:
         tags.append("대규모 매집")
     if indiv < 0:
