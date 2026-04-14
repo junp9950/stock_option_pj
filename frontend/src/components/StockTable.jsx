@@ -1,6 +1,8 @@
 import { formatOk } from "../utils/format";
 
 const TAG_STYLES = {
+  "숏스퀴즈 강": { bg: "#4a0080", color: "#e879f9" },
+  숏스퀴즈: { bg: "#3b0764", color: "#d8b4fe" },
   "기관+외국인 동시매수": { bg: "#1e3a5f", color: "#93c5fd" },
   동시매수: { bg: "#14532d", color: "#86efac" },
   기관: { bg: "#1e3a8a", color: "#bfdbfe" },

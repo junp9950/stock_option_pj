@@ -58,8 +58,20 @@ def _flow_ratio(flows: list, check, window: int = 10) -> str:
     return f"{hit}/{len(real)}"
 
 
-def _build_tags(inst: float, foreign: float, indiv: float, co_days: int, inst_days: int, foreign_days: int) -> list[str]:
+def _build_tags(
+    inst: float,
+    foreign: float,
+    indiv: float,
+    co_days: int,
+    inst_days: int,
+    foreign_days: int,
+    short_squeeze_score: float = 0.0,
+) -> list[str]:
     tags: list[str] = []
+    if short_squeeze_score >= 1.5:
+        tags.append("숏스퀴즈 강")
+    elif short_squeeze_score >= 0.8:
+        tags.append("숏스퀴즈")
     if inst > 0 and foreign > 0:
         tags.append("기관+외국인 동시매수")
     if co_days >= 2:
@@ -273,6 +285,7 @@ def get_screener(
     rsi_values: dict[str, float | None] = {}
     volume_surges: dict[str, float] = {}
     confluence_counts: dict[str, int] = {}
+    short_squeeze_scores: dict[str, float] = {}
     for d in signal_details_raw:
         if d.key == "ma_position":
             ma_scores[d.stock_code] = d.normalized_score
@@ -280,6 +293,8 @@ def get_screener(
             rsi_values[d.stock_code] = d.raw_value
         elif d.key == "volume_surge":
             volume_surges[d.stock_code] = d.raw_value if d.raw_value is not None else 1.0
+        elif d.key == "short_squeeze":
+            short_squeeze_scores[d.stock_code] = d.normalized_score
         # Count positive signals for confluence
         if d.normalized_score > 0:
             confluence_counts[d.stock_code] = confluence_counts.get(d.stock_code, 0) + 1
@@ -340,7 +355,8 @@ def get_screener(
                 foreign_consecutive_days=foreign_days,
                 institution_consecutive_days=inst_days,
                 flow_ratio=fr,
-                tags=_build_tags(inst, foreign, indiv, co_days, inst_days, foreign_days),
+                tags=_build_tags(inst, foreign, indiv, co_days, inst_days, foreign_days,
+                                 short_squeeze_score=short_squeeze_scores.get(ss.stock_code, 0.0)),
                 short_ratio=short.short_ratio if short else 0.0,
                 ma_score=ma_scores.get(ss.stock_code, 0.0),
                 rsi_14=rsi_values.get(ss.stock_code),
