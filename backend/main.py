@@ -268,6 +268,10 @@ select{background:#21262d;border:1px solid #30363d;color:#c9d1d9;padding:6px 10p
         </label>
       </div>
     </div>
+    <div style="margin-top:12px;padding-top:12px;border-top:1px solid #30363d">
+      <div style="color:#8b949e;margin-bottom:6px;font-size:12px">태그 필터 (AND 조건, 복수 선택 가능)</div>
+      <div id="tag-filter-area" style="display:flex;flex-wrap:wrap;gap:6px"></div>
+    </div>
   </div>
   <div class="content">
     <table>
@@ -340,7 +344,7 @@ select{background:#21262d;border:1px solid #30363d;color:#c9d1d9;padding:6px 10p
 
 <script>
 const API = window.location.origin + '/api';
-let scrData = [], scrSortKey = 'total_score', scrSortAsc = false;
+let scrData = [], scrSortKey = 'total_score', scrSortAsc = false, scrTagFilter = [];
 
 const fmt = n => { if(n==null)return '—'; const a=Math.abs(n); const s=n<0?'-':'+'; if(a>=1e12)return s+(a/1e12).toFixed(1)+'조'; if(a>=1e8)return s+(a/1e8).toFixed(0)+'억'; if(a>=1e4)return s+(a/1e4).toFixed(0)+'만'; return n===0?'—':s+a.toFixed(0); };
 const fmtP = n => n==null?'—':(n>=0?'+':'')+n.toFixed(2)+'%';
@@ -498,12 +502,32 @@ function resetFilters(){
   });
   ['f-inst','f-foreign'].forEach(id=>{const el=document.getElementById(id);if(el)el.value='';});
   const cb=document.getElementById('f-cobuy'); if(cb) cb.checked=false;
+  scrTagFilter=[];
+  renderScreener();
+}
+function renderTagFilter(){
+  const area=document.getElementById('tag-filter-area');
+  if(!area)return;
+  const allTags=[...new Set(scrData.flatMap(i=>i.tags||[]))].sort();
+  if(!allTags.length){area.innerHTML='<span style="color:#484f58;font-size:12px">태그 없음</span>';return;}
+  area.innerHTML=allTags.map(t=>{
+    const active=scrTagFilter.includes(t);
+    const bg=active?'#4a0080':'transparent';
+    const color=active?'#e879f9':'#6b7280';
+    const border=active?'#7c3aed':'#30363d';
+    return `<button onclick="toggleTagFilter('${t.replace(/'/g,"\\'")}')" style="background:${bg};color:${color};border:1px solid ${border};border-radius:4px;padding:2px 10px;font-size:11px;font-weight:600;cursor:pointer">${t}</button>`;
+  }).join('');
+}
+function toggleTagFilter(tag){
+  scrTagFilter=scrTagFilter.includes(tag)?scrTagFilter.filter(t=>t!==tag):[...scrTagFilter,tag];
+  renderTagFilter();
   renderScreener();
 }
 function _fv(id){const v=document.getElementById(id)?.value;return v===''||v==null?null:parseFloat(v);}
 function _fs(id){return document.getElementById(id)?.value||'';}
 
 function renderScreener(){
+  renderTagFilter();
   const sortSel=document.getElementById('scr-sort');
   if(sortSel&&sortSel.value)scrSortKey=sortSel.value;
   const q=document.getElementById('scr-search').value.toLowerCase();
@@ -540,6 +564,7 @@ function renderScreener(){
     if(foreignDir==='buy'&&(i.foreign_net_buy||0)<=0)return false;
     if(foreignDir==='sell'&&(i.foreign_net_buy||0)>=0)return false;
     if(cobuy&&!((i.institution_net_buy||0)>0&&(i.foreign_net_buy||0)>0))return false;
+    if(scrTagFilter.length>0&&!scrTagFilter.every(t=>(i.tags||[]).includes(t)))return false;
     return true;
   });
   data.sort((a,b)=>{
