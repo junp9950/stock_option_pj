@@ -17,13 +17,47 @@ from backend.utils.logger import get_logger
 
 logger = get_logger(__name__)
 
-# KIS 토큰 캐시 (24시간 유효, 만료 10분 전 자동 재발급)
+# KIS 토큰 메모리 캐시
 _kis_token: str = ""
 _kis_token_expires_at: float = 0.0
 
+# 토큰 파일 경로 (.env 옆에 저장)
+import os as _os
+from pathlib import Path as _Path
+_TOKEN_FILE = _Path(__file__).resolve().parent.parent.parent / ".kis_token"
+
+
+def _load_token_from_file() -> None:
+    """서버 시작 시 파일에서 토큰 복원."""
+    global _kis_token, _kis_token_expires_at
+    import time
+    try:
+        if _TOKEN_FILE.exists():
+            parts = _TOKEN_FILE.read_text().strip().split("\n")
+            if len(parts) == 2:
+                token, expires = parts[0], float(parts[1])
+                if time.time() < expires - 600:  # 아직 유효하면 복원
+                    _kis_token = token
+                    _kis_token_expires_at = expires
+                    logger.info("KIS 토큰 파일에서 복원 (잔여 %.0f초)", expires - time.time())
+    except Exception:  # noqa: BLE001
+        pass
+
+
+def _save_token_to_file(token: str, expires_at: float) -> None:
+    """토큰을 파일에 저장."""
+    try:
+        _TOKEN_FILE.write_text(f"{token}\n{expires_at}")
+    except Exception:  # noqa: BLE001
+        pass
+
+
+# 모듈 로드 시 파일에서 토큰 복원 시도
+_load_token_from_file()
+
 
 def _get_kis_token() -> str:
-    """KIS Access Token 반환. 만료 10분 전이면 자동 재발급."""
+    """KIS Access Token 반환. 만료 10분 전이면 자동 재발급. 파일 캐시 사용."""
     import os, time, requests as _req  # noqa: PLC0415
     global _kis_token, _kis_token_expires_at
 
@@ -42,8 +76,10 @@ def _get_kis_token() -> str:
         ).json()
         token = r.get("access_token", "")
         if token:
+            expires_at = time.time() + 86400  # 24시간
             _kis_token = token
-            _kis_token_expires_at = time.time() + 86400  # 24시간
+            _kis_token_expires_at = expires_at
+            _save_token_to_file(token, expires_at)
             logger.info("KIS 토큰 발급 완료 (24시간 유효)")
         else:
             logger.warning("KIS 토큰 발급 실패: %s", r.get("error_description", ""))
