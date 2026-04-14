@@ -5,7 +5,6 @@ from datetime import date
 
 import FinanceDataReader as fdr
 import requests
-from sqlalchemy import delete
 from sqlalchemy.orm import Session
 
 from backend.db.models import (
@@ -181,17 +180,14 @@ def collect_derivatives_data(db: Session, trading_date: date) -> None:
       4. Demo fallback values when all sources unavailable
     """
     date_str = trading_date.strftime("%Y%m%d")
+    date_iso = trading_date.isoformat()  # FDR은 ISO 형식(YYYY-MM-DD) 필요
 
-    db.execute(delete(IndexDaily).where(IndexDaily.trading_date == trading_date))
-    db.execute(delete(FuturesDailyPrice).where(FuturesDailyPrice.trading_date == trading_date))
-    db.execute(delete(DerivativesFuturesDaily).where(DerivativesFuturesDaily.trading_date == trading_date))
-    db.execute(delete(DerivativesOptionsDaily).where(DerivativesOptionsDaily.trading_date == trading_date))
-    db.execute(delete(OpenInterestDaily).where(OpenInterestDaily.trading_date == trading_date))
+    from sqlalchemy.dialects.postgresql import insert as pg_insert  # noqa: PLC0415
 
-    # ── 1. KOSPI200 index close (FDR Yahoo Finance) ─────────────────────────
+    # ── 1. KOSPI200 index close (FDR) ────────────────────────────────────────
     index_close = 350.5
     try:
-        index_df = fdr.DataReader("KS200", date_str, date_str)
+        index_df = fdr.DataReader("KS200", date_iso, date_iso)
         if not index_df.empty:
             index_close = float(index_df.iloc[-1]["Close"])
             logger.info("FDR KS200 index close: %.2f", index_close)
@@ -231,32 +227,43 @@ def collect_derivatives_data(db: Session, trading_date: date) -> None:
         investor_source, foreign_net, institution_net, individual_net,
     )
 
-    db.add(IndexDaily(trading_date=trading_date, index_code="1028", close_price=index_close))
-    db.add(FuturesDailyPrice(trading_date=trading_date, symbol="KOSPI200", close_price=futures_close))
-    db.add(
-        DerivativesFuturesDaily(
+    # upsert (DELETE 대신 — Supabase timeout 방지)
+    db.execute(
+        pg_insert(IndexDaily).values(trading_date=trading_date, index_code="1028", close_price=index_close)
+        .on_conflict_do_update(constraint="uq_index_daily", set_={"close_price": index_close})
+    )
+    db.execute(
+        pg_insert(FuturesDailyPrice).values(trading_date=trading_date, symbol="KOSPI200", close_price=futures_close)
+        .on_conflict_do_update(constraint="uq_futures_daily_price", set_={"close_price": futures_close})
+    )
+    db.execute(
+        pg_insert(DerivativesFuturesDaily).values(
             trading_date=trading_date,
             foreign_net_contracts=foreign_net,
             institution_net_contracts=institution_net,
             individual_net_contracts=individual_net,
             foreign_net_amount=0.0,
+        ).on_conflict_do_update(
+            constraint="uq_derivatives_futures_daily",
+            set_={"foreign_net_contracts": foreign_net, "institution_net_contracts": institution_net, "individual_net_contracts": individual_net},
         )
     )
-    db.add(
-        DerivativesOptionsDaily(
+    db.execute(
+        pg_insert(DerivativesOptionsDaily).values(
             trading_date=trading_date,
-            call_foreign_net=0.0,
-            put_foreign_net=0.0,
-            call_institution_net=0.0,
-            put_institution_net=0.0,
+            call_foreign_net=0.0, put_foreign_net=0.0,
+            call_institution_net=0.0, put_institution_net=0.0,
+        ).on_conflict_do_update(
+            constraint="uq_derivatives_options_daily",
+            set_={"call_foreign_net": 0.0},
         )
     )
-    db.add(
-        OpenInterestDaily(
-            trading_date=trading_date,
-            futures_oi=futures_oi,
-            call_oi=call_oi,
-            put_oi=put_oi,
+    db.execute(
+        pg_insert(OpenInterestDaily).values(
+            trading_date=trading_date, futures_oi=futures_oi, call_oi=call_oi, put_oi=put_oi,
+        ).on_conflict_do_update(
+            constraint="uq_open_interest_daily",
+            set_={"futures_oi": futures_oi, "call_oi": call_oi, "put_oi": put_oi},
         )
     )
     db.commit()
