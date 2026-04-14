@@ -13,7 +13,7 @@ jobs:
         with:
           host: ${{ secrets.VM_HOST }}
           username: ${{ secrets.VM_USER }}
-          key: ${{ secrets.VM_SSH_KEY }}
+          password: ${{ secrets.VM_PASSWORD }}
           script: |
             cd ~/stock_option_pj
             git pull origin main
