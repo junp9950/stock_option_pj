@@ -1,3 +1,4 @@
+import { useState, useMemo } from "react";
 import { formatOk } from "../utils/format";
 
 const TAG_STYLES = {
@@ -44,6 +45,27 @@ function NetBuyCell({ value }) {
 }
 
 export default function StockTable({ items }) {
+  const [selectedTags, setSelectedTags] = useState([]);
+
+  const allTags = useMemo(() => {
+    if (!items) return [];
+    const tagSet = new Set();
+    items.forEach((item) => (item.tags ?? []).forEach((t) => tagSet.add(t)));
+    return Array.from(tagSet).sort();
+  }, [items]);
+
+  const filtered = useMemo(() => {
+    if (!items) return [];
+    if (selectedTags.length === 0) return items;
+    return items.filter((item) => selectedTags.every((t) => (item.tags ?? []).includes(t)));
+  }, [items, selectedTags]);
+
+  const toggleTag = (tag) => {
+    setSelectedTags((prev) =>
+      prev.includes(tag) ? prev.filter((t) => t !== tag) : [...prev, tag]
+    );
+  };
+
   if (!items || items.length === 0) {
     return (
       <div style={{ background: "#0d1117", borderRadius: 12, padding: "32px 24px", textAlign: "center", color: "#6b7280" }}>
@@ -55,8 +77,55 @@ export default function StockTable({ items }) {
   return (
     <div style={{ background: "#0d1117", borderRadius: 12, overflow: "hidden" }}>
       <div style={{ padding: "16px 20px 12px", borderBottom: "1px solid #21262d" }}>
-        <span style={{ color: "#e6edf3", fontWeight: 700, fontSize: 15 }}>추천 종목</span>
-        <span style={{ color: "#6b7280", fontSize: 13, marginLeft: 10 }}>{items.length}개</span>
+        <div style={{ display: "flex", alignItems: "center", gap: 12, flexWrap: "wrap" }}>
+          <span style={{ color: "#e6edf3", fontWeight: 700, fontSize: 15 }}>추천 종목</span>
+          <span style={{ color: "#6b7280", fontSize: 13 }}>
+            {filtered.length}{selectedTags.length > 0 ? `/${items.length}` : ""}개
+          </span>
+          {allTags.length > 0 && (
+            <div style={{ display: "flex", flexWrap: "wrap", gap: 6, marginLeft: 8 }}>
+              {allTags.map((tag) => {
+                const { bg, color } = tagStyle(tag);
+                const active = selectedTags.includes(tag);
+                return (
+                  <button
+                    key={tag}
+                    onClick={() => toggleTag(tag)}
+                    style={{
+                      background: active ? bg : "transparent",
+                      color: active ? color : "#6b7280",
+                      border: `1px solid ${active ? bg : "#30363d"}`,
+                      borderRadius: 4,
+                      padding: "2px 8px",
+                      fontSize: 11,
+                      fontWeight: 600,
+                      cursor: "pointer",
+                      whiteSpace: "nowrap",
+                    }}
+                  >
+                    {tag}
+                  </button>
+                );
+              })}
+              {selectedTags.length > 0 && (
+                <button
+                  onClick={() => setSelectedTags([])}
+                  style={{
+                    background: "transparent",
+                    color: "#6b7280",
+                    border: "1px solid #30363d",
+                    borderRadius: 4,
+                    padding: "2px 8px",
+                    fontSize: 11,
+                    cursor: "pointer",
+                  }}
+                >
+                  초기화
+                </button>
+              )}
+            </div>
+          )}
+        </div>
       </div>
       <div style={{ overflowX: "auto" }}>
         <table style={{ width: "100%", borderCollapse: "collapse", color: "#c9d1d9", fontSize: 13 }}>
@@ -81,7 +150,7 @@ export default function StockTable({ items }) {
             </tr>
           </thead>
           <tbody>
-            {items.map((item, idx) => (
+            {filtered.map((item, idx) => (
               <tr
                 key={item.code}
                 style={{
