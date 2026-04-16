@@ -244,6 +244,56 @@ def _calc_consecutive_buy(flows: list) -> float:
     return 0.0
 
 
+def _calc_stealth_accumulation_score(flows: list, prices: list) -> float:
+    """연속 외인/기관 매집 + 주가 횡보 = 스텔스 축적 점수.
+
+    flows: 최신 순 SpotInvestorFlow (주말/공휴일 제외)
+    prices: 최신 순 SpotDailyPrice
+
+    조건:
+      - 외인 OR 기관이 연속 N일(≥3) 순매수
+      - 해당 기간 누적 주가변동 < 5% (매도물량 흡수 중 판단)
+    점수 범위: 0.0 ~ 2.0
+    """
+    # 주말/공휴일(둘 다 0) 제외하고 연속 순매수일 카운트
+    count = 0
+    for f in flows:
+        if f.foreign_net_buy == 0 and f.institution_net_buy == 0:
+            continue  # 비거래일 스킵
+        if f.foreign_net_buy > 0 or f.institution_net_buy > 0:
+            count += 1
+        else:
+            break
+    if count < 3:
+        return 0.0
+
+    if len(prices) < count:
+        return 0.0
+    price_now = prices[0].close_price
+    price_start = prices[count - 1].close_price
+    if price_start <= 0:
+        return 0.0
+    price_chg_pct = abs(price_now - price_start) / price_start * 100
+
+    # 주가 변동 5% 미만이어야 스텔스로 인정
+    if price_chg_pct >= 5.0:
+        return 0.0
+
+    score = 0.0
+    if count >= 5:
+        score += 2.0
+    elif count >= 4:
+        score += 1.5
+    else:
+        score += 1.0
+
+    # 주가 하락 중에도 매집하면 더 강한 신호
+    if price_now < price_start:
+        score += 0.5
+
+    return min(score, 2.0)
+
+
 def _calc_short_squeeze_score(
     short_ratio_pct: float | None,
     change_pct: float,
@@ -432,6 +482,9 @@ def calculate_stock_signals(db: Session, trading_date: date) -> list[StockSignal
         flow_hist = flow_history.get(stock.code, [])
         consecutive_buy_score = _calc_consecutive_buy(flow_hist)
 
+        # 스텔스 축적: 외인/기관 연속 매수 + 주가 횡보
+        stealth_score = _calc_stealth_accumulation_score(flow_hist, price_hist)
+
         details = [
             ("foreign_strength", foreign_strength, _threshold_score(foreign_strength, 10.0, 3.0), "외국인 순매수 강도 (거래대금 대비%)"),
             ("institution_strength", institution_strength, _threshold_score(institution_strength, 8.0, 2.5), "기관 순매수 강도 (거래대금 대비%)"),
@@ -446,6 +499,7 @@ def calculate_stock_signals(db: Session, trading_date: date) -> list[StockSignal
             ("bollinger", close_prices[0] if close_prices else None, bb_score, "볼린저 밴드 위치 (20일)"),
             ("macd", macd_val, macd_score, "MACD(12,26) — 상승추세"),
             ("consecutive_buy", None, consecutive_buy_score, "기관+외국인 연속 동반매수"),
+            ("stealth_accumulation", None, stealth_score, "스텔스 축적 (연속매집 + 주가횡보)"),
             ("program_buy", None, 0.0, "종목별 프로그램 순매수 TODO"),
         ]
 

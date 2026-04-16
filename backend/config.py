@@ -60,7 +60,7 @@ class AppConfig:
         default_factory=lambda: {
             "foreign_strength": 0.12,
             "institution_strength": 0.12,
-            "co_buy": 0.09,
+            "co_buy": 0.07,
             "volume_surge": 0.07,
             "short_ratio_change": 0.04,
             "short_trend": 0.03,
@@ -70,8 +70,9 @@ class AppConfig:
             "rsi_14": 0.08,
             "bollinger": 0.06,
             "macd": 0.09,
-            "consecutive_buy": 0.07,
-            "program_buy": 0.02,
+            "consecutive_buy": 0.05,
+            "stealth_accumulation": 0.05,
+            "program_buy": 0.01,
         }
     )
 

@@ -66,12 +66,17 @@ def _build_tags(
     inst_days: int,
     foreign_days: int,
     short_squeeze_score: float = 0.0,
+    stealth_score: float = 0.0,
 ) -> list[str]:
     tags: list[str] = []
     if short_squeeze_score >= 1.5:
         tags.append("숏스퀴즈 강")
     elif short_squeeze_score >= 0.8:
         tags.append("숏스퀴즈")
+    if stealth_score >= 1.5:
+        tags.append("스텔스축적 강")
+    elif stealth_score >= 1.0:
+        tags.append("스텔스축적")
     if inst > 0 and foreign > 0:
         tags.append("기관+외국인 동시매수")
     if abs(inst) >= 5_000_000_000 or abs(foreign) >= 10_000_000_000:
@@ -280,6 +285,7 @@ def get_screener(
     volume_surges: dict[str, float] = {}
     confluence_counts: dict[str, int] = {}
     short_squeeze_scores: dict[str, float] = {}
+    stealth_scores: dict[str, float] = {}
     for d in signal_details_raw:
         if d.key == "ma_position":
             ma_scores[d.stock_code] = d.normalized_score
@@ -289,6 +295,8 @@ def get_screener(
             volume_surges[d.stock_code] = d.raw_value if d.raw_value is not None else 1.0
         elif d.key == "short_squeeze":
             short_squeeze_scores[d.stock_code] = d.normalized_score
+        elif d.key == "stealth_accumulation":
+            stealth_scores[d.stock_code] = d.normalized_score
         # Count positive signals for confluence
         if d.normalized_score > 0:
             confluence_counts[d.stock_code] = confluence_counts.get(d.stock_code, 0) + 1
@@ -350,7 +358,8 @@ def get_screener(
                 institution_consecutive_days=inst_days,
                 flow_ratio=fr,
                 tags=_build_tags(inst, foreign, indiv, co_days, inst_days, foreign_days,
-                                 short_squeeze_score=short_squeeze_scores.get(ss.stock_code, 0.0)),
+                                 short_squeeze_score=short_squeeze_scores.get(ss.stock_code, 0.0),
+                                 stealth_score=stealth_scores.get(ss.stock_code, 0.0)),
                 short_ratio=short.short_ratio if short else 0.0,
                 ma_score=ma_scores.get(ss.stock_code, 0.0),
                 rsi_14=rsi_values.get(ss.stock_code),
