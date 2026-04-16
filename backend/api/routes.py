@@ -120,6 +120,14 @@ def get_recommendations(trading_date: date | None = None, db: Session = Depends(
             select(Recommendation).where(Recommendation.trading_date == target_date).order_by(Recommendation.rank)
         )
     )
+    # 요청 날짜 데이터 없으면 최신 날짜로 폴백
+    if not items and trading_date is not None:
+        target_date = _latest_data_date(db)
+        items = list(
+            db.scalars(
+                select(Recommendation).where(Recommendation.trading_date == target_date).order_by(Recommendation.rank)
+            )
+        )
     if not items:
         return RecommendationResponse(trading_date=target_date.isoformat(), items=[])
 
@@ -212,6 +220,12 @@ def get_screener(
     market_score = market_signal.score if market_signal else 0.0
 
     stock_signals = list(db.scalars(select(StockSignal).where(StockSignal.trading_date == target_date)))
+    # 요청 날짜에 데이터가 없으면 (파이프라인 미실행 등) 최신 날짜로 폴백
+    if not stock_signals and trading_date is not None:
+        target_date = _latest_data_date(db)
+        market_signal = db.scalar(select(MarketSignal).where(MarketSignal.trading_date == target_date))
+        market_score = market_signal.score if market_signal else 0.0
+        stock_signals = list(db.scalars(select(StockSignal).where(StockSignal.trading_date == target_date)))
     if not stock_signals:
         return []
 
