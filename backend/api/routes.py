@@ -884,6 +884,17 @@ def get_tomorrow_picks(top_n: int = 7, db: Session = Depends(get_db)):
         .order_by(Recommendation.rank)
         .limit(top_n)
     ))
+    # 오늘 추천 없으면 가장 최근 추천 날짜로 폴백
+    if not recs:
+        from sqlalchemy import func  # noqa: PLC0415
+        latest_rec_date = db.scalar(select(func.max(Recommendation.trading_date)))
+        if latest_rec_date:
+            recs = list(db.scalars(
+                select(Recommendation)
+                .where(Recommendation.trading_date == latest_rec_date)
+                .order_by(Recommendation.rank)
+                .limit(top_n)
+            ))
     if not recs:
         return []
 
