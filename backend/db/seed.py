@@ -19,6 +19,11 @@ DEFAULT_STOCKS = [
 
 _TOP_N = 100  # FDR 시총 상위 N종목 (KOSPI + KOSDAQ 각각)
 
+# 시총 기준 자동선별에서 빠지는 종목을 수동으로 고정 포함
+MANUAL_STOCKS: list[dict] = [
+    {"code": "353200", "name": "대덕전자", "market": "KOSPI", "market_cap": 0},
+]
+
 
 def _fetch_top_stocks(n: int = _TOP_N) -> list[dict]:
     """FinanceDataReader로 KOSPI + KOSDAQ 시총 상위 n종목씩 조회. 실패 시 빈 리스트."""
@@ -66,6 +71,10 @@ def refresh_universe(db: Session) -> int:
     stocks = _fetch_top_stocks()
     if not stocks:
         return 0
+
+    # 수동 고정 종목은 항상 포함
+    manual_codes = {s["code"] for s in MANUAL_STOCKS}
+    stocks = [s for s in stocks if s["code"] not in manual_codes] + MANUAL_STOCKS
 
     existing_codes = {s.code for s in db.scalars(select(Stock))}
     added = 0
