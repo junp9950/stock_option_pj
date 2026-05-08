@@ -1213,6 +1213,19 @@ def get_sector_stocks(sector_id: int, db: Session = Depends(get_db)):
         )
     }
 
+    # pykrx fallback for names not in Stock table
+    name_fallback: dict[str, str] = {}
+    missing_name_codes = [c for c in codes if c not in stocks_map]
+    if missing_name_codes:
+        try:
+            from pykrx import stock as pk  # noqa: PLC0415
+            for c in missing_name_codes:
+                n = pk.get_market_ticker_name(c)
+                if n:
+                    name_fallback[c] = n
+        except Exception:  # noqa: BLE001
+            pass
+
     result = []
     for code in codes:
         stock = stocks_map.get(code)
@@ -1222,9 +1235,10 @@ def get_sector_stocks(sector_id: int, db: Session = Depends(get_db)):
             continue
         f_net = float(flow.foreign_net_buy or 0) if flow else 0.0
         i_net = float(flow.institution_net_buy or 0) if flow else 0.0
+        display_name = stock.name if stock else name_fallback.get(code, code)
         result.append(SectorStockItem(
             stock_code=code,
-            stock_name=stock.name if stock else code,
+            stock_name=display_name,
             market=stock.market if stock else "",
             foreign_net_buy=f_net,
             inst_net_buy=i_net,

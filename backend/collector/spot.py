@@ -450,7 +450,7 @@ def collect_sector_supplement(db: Session, trading_date: date) -> int:
     """
     import time as _time  # noqa: PLC0415
     from sqlalchemy.dialects.postgresql import insert as pg_insert  # noqa: PLC0415
-    from backend.db.models import SectorStock  # noqa: PLC0415
+    from backend.db.models import SectorStock, Stock  # noqa: PLC0415
 
     yyyymmdd = trading_date.strftime("%Y%m%d")
 
@@ -470,6 +470,36 @@ def collect_sector_supplement(db: Session, trading_date: date) -> int:
         )
     }
     missing = sorted(sector_codes - existing_flow)
+
+    # Stock 테이블에 없는 섹터 종목 이름을 FDR에서 가져와 upsert (is_active=False로 유니버스 제외)
+    existing_stock_codes = {
+        r.code for r in db.scalars(select(Stock).where(Stock.code.in_(sector_codes)))
+    }
+    name_missing = sorted(sector_codes - existing_stock_codes)
+    if name_missing:
+        try:
+            name_map: dict[str, tuple[str, str]] = {}  # code -> (name, market)
+            for market in ("KOSPI", "KOSDAQ"):
+                lst = fdr.StockListing(market)
+                lst["Code"] = lst["Code"].astype(str).str.zfill(6)
+                for _, row in lst.iterrows():
+                    name_map[row["Code"]] = (str(row.get("Name", row.get("종목명", ""))), market)
+            for code in name_missing:
+                if code in name_map:
+                    n, mkt = name_map[code]
+                    db.execute(
+                        pg_insert(Stock)
+                        .values(code=code, name=n, market=mkt, market_cap=0.0, is_active=False)
+                        .on_conflict_do_update(
+                            index_elements=["code"],
+                            set_={"name": n, "market": mkt},
+                        )
+                    )
+            db.commit()
+            logger.info("Sector supplement: upserted %d stock names into Stock table", len(name_missing))
+        except Exception as exc:  # noqa: BLE001
+            logger.warning("Sector supplement: stock name upsert failed: %s", exc)
+
     if not missing:
         logger.info("Sector supplement: all %d sector stocks already collected", len(sector_codes))
         return 0
