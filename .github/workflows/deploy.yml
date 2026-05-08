@@ -14,8 +14,10 @@ jobs:
           host: ${{ secrets.VM_HOST }}
           username: ${{ secrets.VM_USER }}
           password: ${{ secrets.VM_PASSWORD }}
+          port: 2222
           script: |
             cd ~/stock_option_pj
             git pull origin main
+            .venv/bin/pip install -r requirements.txt -q
             sudo systemctl restart stock-analyzer
             echo "Deploy complete"
