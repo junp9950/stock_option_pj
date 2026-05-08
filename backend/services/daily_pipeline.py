@@ -44,6 +44,12 @@ def run_daily_pipeline(db: Session, trading_date: date | None = None, skip_colle
         collect_borrow_data(db, target_date)
         collect_derivatives_data(db, target_date)
         collect_program_trading_data(db, target_date)
+        # 유니버스 밖 섹터 종목 보완 수집
+        try:
+            from backend.collector.spot import collect_sector_supplement  # noqa: PLC0415
+            collect_sector_supplement(db, target_date)
+        except Exception as exc:  # noqa: BLE001
+            logger.error("Pipeline: sector supplement collection failed (continuing): %s", exc)
     warnings = validate_daily_data(db, target_date)
     market_signal = calculate_market_signal(db, target_date)
     stock_signals = calculate_stock_signals(db, target_date)

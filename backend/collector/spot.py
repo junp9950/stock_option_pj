@@ -439,3 +439,134 @@ def collect_spot_data(db: Session, trading_date: date) -> None:
         logger.warning("FDR spot collection failed, falling back to demo data: %s", exc)
         _fallback_spot_row(db, trading_date)
     db.commit()
+
+
+def collect_sector_supplement(db: Session, trading_date: date) -> int:
+    """유니버스 밖 섹터 종목의 수급·가격 데이터를 KIS + FDR로 보완 수집.
+
+    섹터 분석에 필요하지만 시총 상위 유니버스에 없는 종목을 추가 수집한다.
+    이미 수집된 종목은 건너뛴다.
+    Returns: 새로 수집한 종목 수
+    """
+    import time as _time  # noqa: PLC0415
+    from sqlalchemy.dialects.postgresql import insert as pg_insert  # noqa: PLC0415
+    from backend.db.models import SectorStock  # noqa: PLC0415
+
+    yyyymmdd = trading_date.strftime("%Y%m%d")
+
+    # 섹터에 속한 전체 종목 코드
+    sector_codes = {
+        r.stock_code
+        for r in db.scalars(select(SectorStock))
+    }
+    if not sector_codes:
+        return 0
+
+    # 이미 수집된 종목 코드
+    existing_flow = {
+        r.stock_code
+        for r in db.scalars(
+            select(SpotInvestorFlow).where(SpotInvestorFlow.trading_date == trading_date)
+        )
+    }
+    missing = sorted(sector_codes - existing_flow)
+    if not missing:
+        logger.info("Sector supplement: all %d sector stocks already collected", len(sector_codes))
+        return 0
+
+    logger.info("Sector supplement: collecting %d stocks not in universe", len(missing))
+
+    token = _get_kis_token()
+    if not token:
+        logger.warning("Sector supplement: KIS token unavailable, skipping")
+        return 0
+
+    import os as _os, requests as _req  # noqa: PLC0415
+    app_key = _os.getenv("KIS_APP_KEY", "")
+    app_secret = _os.getenv("KIS_APP_SECRET", "")
+    headers = {
+        "authorization": f"Bearer {token}",
+        "appkey": app_key,
+        "appsecret": app_secret,
+        "tr_id": "FHKST01010900",
+        "content-type": "application/json",
+    }
+
+    # FDR로 가격 일괄 조회
+    try:
+        prices_df = fdr.DataReader(",".join(missing), trading_date, trading_date)
+    except Exception:  # noqa: BLE001
+        prices_df = None
+
+    collected = 0
+    for code in missing:
+        try:
+            # KIS 수급 조회
+            r = _req.get(
+                "https://openapi.koreainvestment.com:9443/uapi/domestic-stock/v1/quotations/inquire-investor",
+                headers=headers,
+                params={"fid_cond_mrkt_div_code": "J", "fid_input_iscd": code},
+                timeout=5,
+            )
+            rows = r.json().get("output", [])
+            foreign_net = inst_net = 0.0
+            for row in rows:
+                if row.get("stck_bsop_date") == yyyymmdd:
+                    def _won(pbmn_key: str, qty_key: str) -> float:
+                        v = row.get(pbmn_key)
+                        if v not in (None, "", "0"):
+                            return float(v) * 1_000_000
+                        return float(row.get(qty_key) or 0)
+                    foreign_net = _won("frgn_ntby_tr_pbmn", "frgn_ntby_qty")
+                    inst_net = _won("orgn_ntby_tr_pbmn", "orgn_ntby_qty")
+                    break
+
+            flow_vals = dict(
+                trading_date=trading_date,
+                stock_code=code,
+                foreign_net_buy=foreign_net,
+                institution_net_buy=inst_net,
+                individual_net_buy=0.0,
+            )
+            db.execute(
+                pg_insert(SpotInvestorFlow).values(**flow_vals)
+                .on_conflict_do_update(
+                    constraint="uq_spot_investor_flows",
+                    set_={k: v for k, v in flow_vals.items() if k not in ("trading_date", "stock_code")},
+                )
+            )
+
+            # FDR 가격 (있으면)
+            try:
+                price_row = fdr.DataReader(code, trading_date, trading_date)
+                if not price_row.empty:
+                    pr = price_row.iloc[-1]
+                    price_vals = dict(
+                        trading_date=trading_date,
+                        stock_code=code,
+                        open_price=float(pr.get("Open", 0)),
+                        high_price=float(pr.get("High", 0)),
+                        low_price=float(pr.get("Low", 0)),
+                        close_price=float(pr.get("Close", 0)),
+                        volume=float(pr.get("Volume", 0)),
+                        trading_value=float(pr.get("Volume", 0)) * float(pr.get("Close", 0)),
+                        change_pct=round(float(pr.get("Change", 0)) * 100, 4),
+                    )
+                    db.execute(
+                        pg_insert(SpotDailyPrice).values(**price_vals)
+                        .on_conflict_do_update(
+                            constraint="uq_spot_daily_prices",
+                            set_={k: v for k, v in price_vals.items() if k not in ("trading_date", "stock_code")},
+                        )
+                    )
+            except Exception:  # noqa: BLE001
+                pass
+
+            collected += 1
+            _time.sleep(0.12)
+        except Exception as exc:  # noqa: BLE001
+            logger.debug("Sector supplement failed for %s: %s", code, exc)
+
+    db.commit()
+    logger.info("Sector supplement done: %d/%d stocks collected", collected, len(missing))
+    return collected
