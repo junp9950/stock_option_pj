@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from datetime import date, datetime
 
-from sqlalchemy import Boolean, Date, DateTime, Float, Integer, String, Text, UniqueConstraint
+from sqlalchemy import BigInteger, Boolean, Date, DateTime, Float, ForeignKey, Integer, String, Text, UniqueConstraint
 from sqlalchemy.orm import Mapped, mapped_column
 
 from backend.db.database import Base
@@ -212,6 +212,49 @@ class Recommendation(Base, TimestampMixin):
     close_price: Mapped[float] = mapped_column(Float)
     change_pct: Mapped[float] = mapped_column(Float)
     market_signal: Mapped[str] = mapped_column(String(20))
+
+
+class Sector(Base, TimestampMixin):
+    __tablename__ = "sectors"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    sector_code: Mapped[str] = mapped_column(String(50), unique=True, index=True)
+    sector_name: Mapped[str] = mapped_column(String(100))
+    source: Mapped[str] = mapped_column(String(30))  # 'naver_theme' / 'krx_industry' / 'custom'
+    is_active: Mapped[bool] = mapped_column(Boolean, default=True)
+
+
+class SectorStock(Base):
+    __tablename__ = "sector_stocks"
+    __table_args__ = (UniqueConstraint("sector_id", "stock_code", name="uq_sector_stocks"),)
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    sector_id: Mapped[int] = mapped_column(Integer, ForeignKey("sectors.id"), index=True)
+    stock_code: Mapped[str] = mapped_column(String(20), index=True)
+
+
+class SectorFlowDaily(Base, TimestampMixin):
+    __tablename__ = "sector_flow_daily"
+    __table_args__ = (UniqueConstraint("date", "sector_id", name="uq_sector_flow_daily"),)
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    date: Mapped[date] = mapped_column(Date, index=True)
+    sector_id: Mapped[int] = mapped_column(Integer, ForeignKey("sectors.id"), index=True)
+    foreign_net_buy: Mapped[int] = mapped_column(BigInteger, default=0)
+    inst_net_buy: Mapped[int] = mapped_column(BigInteger, default=0)
+    combined_net_buy: Mapped[int] = mapped_column(BigInteger, default=0)
+    stock_count: Mapped[int] = mapped_column(Integer, default=0)
+    up_count: Mapped[int] = mapped_column(Integer, default=0)
+    down_count: Mapped[int] = mapped_column(Integer, default=0)
+    avg_change_pct: Mapped[float] = mapped_column(Float, default=0.0)
+    max_change_pct: Mapped[float] = mapped_column(Float, default=0.0)
+    total_volume: Mapped[int] = mapped_column(BigInteger, default=0)
+    flow_score: Mapped[float] = mapped_column(Float, default=0.0)
+    stealth_score: Mapped[float] = mapped_column(Float, default=0.0)
+    buy_streak: Mapped[int] = mapped_column(Integer, default=0)
+    top_contributor_code: Mapped[str | None] = mapped_column(String(20), nullable=True)
+    top_contributor_name: Mapped[str | None] = mapped_column(String(100), nullable=True)
+    top_contributor_amount: Mapped[int] = mapped_column(BigInteger, default=0)
 
 
 class BacktestRun(Base, TimestampMixin):

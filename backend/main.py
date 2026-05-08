@@ -103,6 +103,7 @@ select{background:#21262d;border:1px solid #30363d;color:#c9d1d9;padding:6px 10p
   <div class="tab active" onclick="switchTab('dash')">대시보드</div>
   <div class="tab" onclick="switchTab('screener')">전종목 스크리너</div>
   <div class="tab" onclick="switchTab('signal')">시장 시그널 상세</div>
+  <div class="tab" onclick="switchTab('sector')">섹터 수급</div>
 </div>
 
 <!-- 대시보드 탭 -->
@@ -310,6 +311,64 @@ select{background:#21262d;border:1px solid #30363d;color:#c9d1d9;padding:6px 10p
 </div>
 
 
+<!-- 섹터 수급 탭 -->
+<div id="panel-sector" class="panel content">
+  <div class="toolbar" style="margin-bottom:12px">
+    <select id="sec-sort" onchange="loadSector()">
+      <option value="stealth">스텔스 매집순</option>
+      <option value="flow">수급 점수순</option>
+      <option value="foreign">외국인 순매수순</option>
+      <option value="inst">기관 순매수순</option>
+    </select>
+    <select id="sec-source" onchange="loadSector()">
+      <option value="">전체 분류</option>
+      <option value="custom">커스텀</option>
+      <option value="naver_theme">네이버 테마</option>
+      <option value="krx_industry">KRX 업종</option>
+    </select>
+    <button class="btn btn-gray btn-sm" onclick="loadSector()">⟳ 새로고침</button>
+    <button class="btn btn-gray btn-sm" onclick="refreshSectorMapping()">↺ 매핑 갱신</button>
+    <span class="ts" id="sec-info"></span>
+  </div>
+
+  <!-- 매집 감지 섹터 -->
+  <div style="margin-bottom:20px">
+    <div style="font-size:12px;text-transform:uppercase;color:#8b949e;margin-bottom:8px;letter-spacing:.06em">🕵️ 매집 감지 섹터 (수급↑ 주가↔)</div>
+    <table id="sec-stealth-table">
+      <thead><tr>
+        <th>섹터</th><th>분류</th>
+        <th onclick="setSectorSort('foreign')" style="cursor:pointer">외국인</th>
+        <th onclick="setSectorSort('inst')" style="cursor:pointer">기관</th>
+        <th>합산</th>
+        <th>평균등락</th>
+        <th>연속일</th>
+        <th onclick="setSectorSort('stealth')" style="cursor:pointer">스텔스점수 ↕</th>
+      </tr></thead>
+      <tbody id="sec-stealth-body"><tr><td colspan="8" style="color:#8b949e;text-align:center;padding:20px">로딩 중…</td></tr></tbody>
+    </table>
+  </div>
+
+  <!-- 급등 섹터 -->
+  <div>
+    <div style="font-size:12px;text-transform:uppercase;color:#8b949e;margin-bottom:8px;letter-spacing:.06em">🚀 급등 섹터 (이미 반영됨)</div>
+    <table id="sec-surged-table">
+      <thead><tr>
+        <th>섹터</th><th>분류</th><th>외국인</th><th>기관</th><th>합산</th><th>평균등락</th><th>수급점수</th><th>상태</th>
+      </tr></thead>
+      <tbody id="sec-surged-body"><tr><td colspan="8" style="color:#8b949e;text-align:center;padding:20px">로딩 중…</td></tr></tbody>
+    </table>
+  </div>
+
+  <!-- 섹터 종목 모달 -->
+  <div class="modal-bg" id="sector-modal-bg" onclick="if(event.target===this)closeSectorModal()">
+    <div class="modal">
+      <span class="close-btn" onclick="closeSectorModal()">✕</span>
+      <h2 id="sector-modal-title">섹터 소속 종목</h2>
+      <div id="sector-modal-body"></div>
+    </div>
+  </div>
+</div>
+
 <!-- 종목 상세 모달 -->
 <div class="modal-bg" id="modal-bg" onclick="if(event.target===this)closeModal()">
   <div class="modal">
@@ -363,11 +422,90 @@ const tagHtml = tags => (tags||[]).map(t=>{
 }).join('');
 
 function switchTab(id) {
-  document.querySelectorAll('.tab').forEach((t,i)=>t.classList.toggle('active',['dash','screener','signal'][i]===id));
+  document.querySelectorAll('.tab').forEach((t,i)=>t.classList.toggle('active',['dash','screener','signal','sector'][i]===id));
   document.querySelectorAll('.panel').forEach(p=>p.classList.remove('active'));
   document.getElementById('panel-'+id).classList.add('active');
   if(id==='screener')loadScreener();
   if(id==='signal')loadSignalDetail();
+  if(id==='sector')loadSector();
+}
+
+// ── 섹터 수급 ──────────────────────────────────────────────────
+let _sectorData = [];
+function setSectorSort(s){document.getElementById('sec-sort').value=s;loadSector();}
+
+async function loadSector(){
+  const sort=document.getElementById('sec-sort').value;
+  const source=document.getElementById('sec-source').value;
+  const q=source?`sort=${sort}&source=${source}`:`sort=${sort}`;
+  try{
+    const data=await fetch(`${API}/sectors/flow?${q}&limit=50`).then(r=>r.ok?r.json():[]);
+    _sectorData=data;
+    renderSector(data);
+    document.getElementById('sec-info').textContent=data.length?`기준일: ${data[0].date}`:'';
+  }catch(e){console.error(e);}
+}
+
+function renderSector(data){
+  const stealth=data.filter(d=>!d.is_surged&&d.combined_net_buy>0).sort((a,b)=>b.stealth_score-a.stealth_score);
+  const surged=data.filter(d=>d.is_surged&&d.combined_net_buy>0).sort((a,b)=>b.flow_score-a.flow_score);
+
+  const srcBadge=s=>({custom:'<span class="badge real">커스텀</span>',naver_theme:'<span class="badge rfb">네이버</span>',krx_industry:'<span class="badge fallback">KRX</span>'}[s]||s);
+  const fmtBil=n=>n==null?'—':(n>=0?'<span style="color:#3fb950">':' <span style="color:#58a6ff">')+((n>=0?'+':'')+Math.round(n/1e8))+'억</span>';
+  const chgColor=n=>n>0?'#3fb950':n<0?'#f85149':'#8b949e';
+  const scoreBar10=s=>{const w=Math.min(s/10*80,80);const c=s>=7?'#3fb950':s>=4?'#58a6ff':'#d29922';return `<span style="display:inline-flex;align-items:center;gap:4px"><b style="color:${c}">${s.toFixed(1)}</b><span style="display:inline-block;width:${w}px;height:5px;border-radius:3px;background:${c}"></span></span>`;};
+
+  const sRow=(d,showStealth)=>`<tr style="cursor:pointer" onclick="openSectorModal(${d.sector_id},'${d.sector_name}')">
+    <td><b>${d.sector_name}</b>${d.buy_streak>1?` <span style="color:#d29922;font-size:11px">${d.buy_streak}일연속</span>`:''}</td>
+    <td>${srcBadge(d.source)}</td>
+    <td>${fmtBil(d.foreign_net_buy)}</td>
+    <td>${fmtBil(d.inst_net_buy)}</td>
+    <td>${fmtBil(d.combined_net_buy)}</td>
+    <td style="color:${chgColor(d.avg_change_pct)}">${d.avg_change_pct>=0?'+':''}${d.avg_change_pct.toFixed(2)}%</td>
+    ${showStealth
+      ?`<td>${d.buy_streak}</td><td>${scoreBar10(d.stealth_score)}</td>`
+      :`<td>${scoreBar10(d.flow_score)}</td><td><span style="color:#d29922;font-size:11px">⚠️ 추격주의</span></td>`
+    }
+  </tr>`;
+
+  document.getElementById('sec-stealth-body').innerHTML=stealth.length
+    ?stealth.slice(0,10).map(d=>sRow(d,true)).join('')
+    :'<tr><td colspan="8" style="color:#8b949e;text-align:center;padding:16px">매집 감지 섹터 없음</td></tr>';
+
+  document.getElementById('sec-surged-body').innerHTML=surged.length
+    ?surged.slice(0,5).map(d=>sRow(d,false)).join('')
+    :'<tr><td colspan="8" style="color:#8b949e;text-align:center;padding:16px">급등 섹터 없음</td></tr>';
+}
+
+async function openSectorModal(sectorId, name){
+  document.getElementById('sector-modal-title').textContent=name+' 소속 종목';
+  document.getElementById('sector-modal-body').innerHTML='<div style="color:#8b949e;text-align:center;padding:20px">로딩 중…</div>';
+  document.getElementById('sector-modal-bg').classList.add('show');
+  try{
+    const stocks=await fetch(`${API}/sectors/${sectorId}/stocks`).then(r=>r.ok?r.json():[]);
+    const fmtBil=n=>(n>=0?'<span style="color:#3fb950">+':' <span style="color:#58a6ff">')+Math.round(n/1e8)+'억</span>';
+    const rows=stocks.map(s=>`<tr>
+      <td>${s.stock_code}</td><td>${s.stock_name}</td><td style="color:#8b949e">${s.market}</td>
+      <td>${fmtBil(s.foreign_net_buy)}</td><td>${fmtBil(s.inst_net_buy)}</td>
+      <td style="color:${s.change_pct>0?'#3fb950':s.change_pct<0?'#f85149':'#8b949e'}">${s.change_pct>=0?'+':''}${s.change_pct.toFixed(2)}%</td>
+      <td>${Number(s.close_price).toLocaleString()}원</td>
+    </tr>`).join('');
+    document.getElementById('sector-modal-body').innerHTML=`<table>
+      <thead><tr><th>코드</th><th>종목명</th><th>시장</th><th>외국인</th><th>기관</th><th>등락</th><th>종가</th></tr></thead>
+      <tbody>${rows||'<tr><td colspan="7" style="color:#8b949e;text-align:center">데이터 없음</td></tr>'}</tbody>
+    </table>`;
+  }catch(e){document.getElementById('sector-modal-body').innerHTML='<div style="color:#f85149;padding:16px">오류 발생</div>';}
+}
+function closeSectorModal(){document.getElementById('sector-modal-bg').classList.remove('show');}
+
+async function refreshSectorMapping(){
+  if(!confirm('섹터 매핑을 갱신합니다. 네이버 크롤링이 포함되어 수분 소요될 수 있습니다. 계속할까요?'))return;
+  document.getElementById('sec-info').textContent='갱신 중…';
+  try{
+    const r=await fetch(`${API}/sectors/refresh`,{method:'POST'}).then(res=>res.json());
+    document.getElementById('sec-info').textContent=`갱신 완료: 추가 ${r.added} 업데이트 ${r.updated}`;
+    loadSector();
+  }catch(e){document.getElementById('sec-info').textContent='갱신 실패';}
 }
 
 async function loadAll() {

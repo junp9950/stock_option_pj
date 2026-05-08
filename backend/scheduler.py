@@ -69,6 +69,19 @@ def start_scheduler() -> BackgroundScheduler:
         finally:
             db.close()
 
+    def _sector_mapping_refresh_job() -> None:
+        """매주 일요일 새벽 2시: 네이버 테마 + KRX 업종 매핑 갱신."""
+        from backend.collector.sector import refresh_sector_mapping  # noqa: PLC0415
+        db = SessionLocal()
+        try:
+            logger.info("Scheduler: sector mapping weekly refresh")
+            result = refresh_sector_mapping(db, include_naver=True, include_krx=True)
+            logger.info("Scheduler: sector mapping done — %s", result)
+        except Exception as exc:  # noqa: BLE001
+            logger.error("Scheduler sector mapping refresh error: %s", exc)
+        finally:
+            db.close()
+
     def _nightly_backfill_job() -> None:
         """매일 새벽 3시: 최근 30일 데이터 갭 채우기 + 시그널·추천 재계산."""
         from datetime import timedelta  # noqa: PLC0415
@@ -119,6 +132,8 @@ def start_scheduler() -> BackgroundScheduler:
     scheduler.add_job(_nightly_backfill_job, "cron", hour=3, minute=0, id="nightly_backfill", replace_existing=True)
     # 매주 월요일 오전 8시에 유니버스 갱신
     scheduler.add_job(_universe_refresh_job, "cron", day_of_week="mon", hour=8, minute=0, id="universe_refresh", replace_existing=True)
+    # 매주 일요일 새벽 2시에 섹터 매핑 갱신
+    scheduler.add_job(_sector_mapping_refresh_job, "cron", day_of_week="sun", hour=2, minute=0, id="sector_mapping_refresh", replace_existing=True)
 
     scheduler.start()
     logger.info("Scheduler started: daily_pipeline=16:30 KST, nightly_backfill=03:00 KST, universe_refresh=Mon 08:00 KST")

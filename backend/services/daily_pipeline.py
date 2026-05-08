@@ -18,12 +18,25 @@ from backend.notification.telegram_bot import build_daily_message, send_message_
 from backend.screener.scorer import build_recommendations
 from backend.services.validation import validate_daily_data
 from backend.utils.dates import latest_trading_day
+from backend.utils.logger import get_logger
+
+
+logger = get_logger(__name__)
 
 
 def run_daily_pipeline(db: Session, trading_date: date | None = None, skip_collection: bool = False) -> dict[str, object]:
     target_date = trading_date or latest_trading_day()
     db.add(JobLog(trading_date=target_date, stage="pipeline", status="started", message="daily pipeline started"))
     db.commit()
+
+    # 1.5. 섹터 매핑 갱신 체크 (비어있거나 7일 이상 지난 경우)
+    try:
+        from backend.collector.sector import needs_refresh, refresh_sector_mapping  # noqa: PLC0415
+        if needs_refresh(db):
+            logger.info("Pipeline: sector mapping refresh triggered")
+            refresh_sector_mapping(db, include_naver=True, include_krx=True)
+    except Exception as exc:  # noqa: BLE001
+        logger.error("Pipeline: sector mapping refresh failed (continuing): %s", exc)
 
     if not skip_collection:
         collect_spot_data(db, target_date)
@@ -35,6 +48,15 @@ def run_daily_pipeline(db: Session, trading_date: date | None = None, skip_colle
     market_signal = calculate_market_signal(db, target_date)
     stock_signals = calculate_stock_signals(db, target_date)
     recommendations = build_recommendations(db, target_date)
+
+    # 4.5. 섹터 수급 집계
+    sector_count = 0
+    try:
+        from backend.signal_engine.sector_signal import calculate_sector_signals  # noqa: PLC0415
+        sector_rows = calculate_sector_signals(db, target_date)
+        sector_count = len(sector_rows)
+    except Exception as exc:  # noqa: BLE001
+        logger.error("Pipeline: sector signal calculation failed (continuing): %s", exc)
 
     db.add(JobLog(trading_date=target_date, stage="pipeline", status="completed", message="daily pipeline completed"))
     db.commit()
@@ -57,6 +79,7 @@ def run_daily_pipeline(db: Session, trading_date: date | None = None, skip_colle
         "market_score": market_signal.score,
         "stock_signal_count": len(stock_signals),
         "recommendation_count": len(recommendations),
+        "sector_count": sector_count,
     }
 
 

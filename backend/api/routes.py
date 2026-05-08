@@ -8,10 +8,10 @@ from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy import desc, func, select
 from sqlalchemy.orm import Session
 
-from backend.api.schemas import HealthResponse, JobResponse, MarketSignalResponse, RecommendationItem, RecommendationResponse
+from backend.api.schemas import HealthResponse, JobResponse, MarketSignalResponse, RecommendationItem, RecommendationResponse, SectorFlowItem, SectorItem, SectorStockItem
 from backend.collector.backfill import run_backfill as run_data_backfill
 from backend.db.database import get_db
-from backend.db.models import JobLog, MarketSignal, MarketSignalDetail, Recommendation, Setting, ShortSellingDaily, SpotDailyPrice, SpotInvestorFlow, Stock, StockSignal, StockSignalDetail
+from backend.db.models import JobLog, MarketSignal, MarketSignalDetail, Recommendation, Sector, SectorFlowDaily, SectorStock, Setting, ShortSellingDaily, SpotDailyPrice, SpotInvestorFlow, Stock, StockSignal, StockSignalDetail
 from backend.db.seed import refresh_universe
 from backend.services.daily_pipeline import run_backfill_pipeline, run_daily_pipeline
 from backend.utils.dates import latest_trading_day
@@ -1073,4 +1073,176 @@ def get_recommendation_performance(days: int = 30, db: Session = Depends(get_db)
         summary = {"total": 0, "win_count": 0, "win_rate": 0, "avg_return": 0, "best": None, "worst": None}
 
     return {"summary": summary, "records": results}
+
+
+# ─────────────────────────── 섹터 수급 ───────────────────────────
+
+@router.get("/sectors", response_model=list[SectorItem])
+def get_sectors(source: str | None = None, db: Session = Depends(get_db)):
+    """전체 섹터 목록. source 파라미터로 필터 (naver_theme / krx_industry / custom)."""
+    q = select(Sector).where(Sector.is_active == True)  # noqa: E712
+    if source:
+        q = q.where(Sector.source == source)
+    rows = list(db.scalars(q.order_by(Sector.sector_name)))
+    return [
+        SectorItem(
+            id=r.id,
+            sector_code=r.sector_code,
+            sector_name=r.sector_name,
+            source=r.source,
+            is_active=r.is_active,
+        )
+        for r in rows
+    ]
+
+
+@router.get("/sectors/flow", response_model=list[SectorFlowItem])
+def get_sector_flow(
+    sort: str = "stealth",
+    source: str | None = None,
+    limit: int = 30,
+    db: Session = Depends(get_db),
+):
+    """당일 섹터 수급 랭킹. sort: stealth(기본) / flow / foreign / inst."""
+    latest_date = db.scalar(select(func.max(SectorFlowDaily.date)))
+    if not latest_date:
+        return []
+
+    q = (
+        select(SectorFlowDaily, Sector)
+        .join(Sector, SectorFlowDaily.sector_id == Sector.id)
+        .where(SectorFlowDaily.date == latest_date, Sector.is_active == True)  # noqa: E712
+    )
+    if source:
+        q = q.where(Sector.source == source)
+
+    sort_col = {
+        "stealth": desc(SectorFlowDaily.stealth_score),
+        "flow": desc(SectorFlowDaily.flow_score),
+        "foreign": desc(SectorFlowDaily.foreign_net_buy),
+        "inst": desc(SectorFlowDaily.inst_net_buy),
+    }.get(sort, desc(SectorFlowDaily.stealth_score))
+
+    rows = list(db.execute(q.order_by(sort_col).limit(limit)))
+
+    result = []
+    for flow, sector in rows:
+        result.append(SectorFlowItem(
+            sector_id=sector.id,
+            sector_code=sector.sector_code,
+            sector_name=sector.sector_name,
+            source=sector.source,
+            date=flow.date.isoformat(),
+            foreign_net_buy=flow.foreign_net_buy,
+            inst_net_buy=flow.inst_net_buy,
+            combined_net_buy=flow.combined_net_buy,
+            stock_count=flow.stock_count,
+            up_count=flow.up_count,
+            down_count=flow.down_count,
+            avg_change_pct=flow.avg_change_pct,
+            max_change_pct=flow.max_change_pct,
+            flow_score=flow.flow_score,
+            stealth_score=flow.stealth_score,
+            buy_streak=flow.buy_streak,
+            top_contributor_code=flow.top_contributor_code,
+            top_contributor_name=flow.top_contributor_name,
+            top_contributor_amount=flow.top_contributor_amount,
+            is_surged=flow.avg_change_pct >= 3.0,
+        ))
+    return result
+
+
+@router.get("/sectors/{sector_id}/history")
+def get_sector_history(sector_id: int, days: int = 20, db: Session = Depends(get_db)):
+    """특정 섹터 일별 수급 추이."""
+    sector = db.scalar(select(Sector).where(Sector.id == sector_id))
+    if not sector:
+        raise HTTPException(status_code=404, detail="섹터를 찾을 수 없습니다")
+
+    rows = list(db.scalars(
+        select(SectorFlowDaily)
+        .where(SectorFlowDaily.sector_id == sector_id)
+        .order_by(desc(SectorFlowDaily.date))
+        .limit(days)
+    ))
+    return {
+        "sector_id": sector_id,
+        "sector_name": sector.sector_name,
+        "history": [
+            {
+                "date": r.date.isoformat(),
+                "foreign_net_buy": r.foreign_net_buy,
+                "inst_net_buy": r.inst_net_buy,
+                "combined_net_buy": r.combined_net_buy,
+                "avg_change_pct": r.avg_change_pct,
+                "flow_score": r.flow_score,
+                "stealth_score": r.stealth_score,
+                "buy_streak": r.buy_streak,
+            }
+            for r in reversed(rows)
+        ],
+    }
+
+
+@router.get("/sectors/{sector_id}/stocks", response_model=list[SectorStockItem])
+def get_sector_stocks(sector_id: int, db: Session = Depends(get_db)):
+    """특정 섹터 소속 종목 + 당일 수급."""
+    sector = db.scalar(select(Sector).where(Sector.id == sector_id))
+    if not sector:
+        raise HTTPException(status_code=404, detail="섹터를 찾을 수 없습니다")
+
+    mappings = list(db.scalars(select(SectorStock).where(SectorStock.sector_id == sector_id)))
+    codes = [m.stock_code for m in mappings]
+    if not codes:
+        return []
+
+    target_date = _latest_data_date(db)
+    stocks_map = {s.code: s for s in db.scalars(select(Stock).where(Stock.code.in_(codes)))}
+    flows_map = {
+        f.stock_code: f
+        for f in db.scalars(
+            select(SpotInvestorFlow)
+            .where(SpotInvestorFlow.stock_code.in_(codes), SpotInvestorFlow.trading_date == target_date)
+        )
+    }
+    prices_map = {
+        p.stock_code: p
+        for p in db.scalars(
+            select(SpotDailyPrice)
+            .where(SpotDailyPrice.stock_code.in_(codes), SpotDailyPrice.trading_date == target_date)
+        )
+    }
+
+    result = []
+    for code in codes:
+        stock = stocks_map.get(code)
+        flow = flows_map.get(code)
+        price = prices_map.get(code)
+        if stock is None and flow is None:
+            continue
+        f_net = float(flow.foreign_net_buy or 0) if flow else 0.0
+        i_net = float(flow.institution_net_buy or 0) if flow else 0.0
+        result.append(SectorStockItem(
+            stock_code=code,
+            stock_name=stock.name if stock else code,
+            market=stock.market if stock else "",
+            foreign_net_buy=f_net,
+            inst_net_buy=i_net,
+            combined_net_buy=f_net + i_net,
+            change_pct=float(price.change_pct or 0) if price else 0.0,
+            close_price=float(price.close_price or 0) if price else 0.0,
+        ))
+    result.sort(key=lambda x: x.combined_net_buy, reverse=True)
+    return result
+
+
+@router.post("/sectors/refresh")
+def refresh_sectors(db: Session = Depends(get_db)):
+    """섹터 매핑 수동 갱신 (네이버 테마 + KRX 업종 + 커스텀)."""
+    from backend.collector.sector import refresh_sector_mapping  # noqa: PLC0415
+    try:
+        result = refresh_sector_mapping(db, include_naver=True, include_krx=True)
+        return {"status": "ok", **result}
+    except Exception as exc:  # noqa: BLE001
+        raise HTTPException(status_code=500, detail=str(exc)) from exc
 
