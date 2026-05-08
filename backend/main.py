@@ -447,7 +447,7 @@ async function loadSector(){
 }
 
 function renderSector(data){
-  const stealth=data.filter(d=>d.combined_net_buy>0).sort((a,b)=>b.stealth_score-a.stealth_score);
+  const stealth=data.filter(d=>d.combined_net_buy>0&&!d.is_surged).sort((a,b)=>b.stealth_score-a.stealth_score);
   const surged=[...data].sort((a,b)=>b.flow_score-a.flow_score);
 
   const srcBadge=s=>({custom:'<span class="badge real">커스텀</span>',naver_theme:'<span class="badge rfb">네이버</span>',krx_industry:'<span class="badge fallback">KRX</span>'}[s]||s);

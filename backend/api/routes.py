@@ -1147,7 +1147,7 @@ def get_sector_flow(
             top_contributor_code=flow.top_contributor_code,
             top_contributor_name=flow.top_contributor_name,
             top_contributor_amount=flow.top_contributor_amount,
-            is_surged=flow.avg_change_pct >= 3.0,
+            is_surged=flow.avg_change_pct >= 5.0,
         ))
     return result
 

@@ -82,7 +82,7 @@ class SectorFlowItem(BaseModel):
     top_contributor_code: str | None
     top_contributor_name: str | None
     top_contributor_amount: int
-    is_surged: bool  # 당일 급등 여부 (avg_change_pct >= 3%)
+    is_surged: bool  # 당일 급등 여부 (avg_change_pct >= 5%)
 
 
 class SectorStockItem(BaseModel):
