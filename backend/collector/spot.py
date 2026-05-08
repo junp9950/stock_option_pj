@@ -124,9 +124,10 @@ def _kis_investor_flow_batch(yyyymmdd: str, codes: list[str]) -> dict[str, tuple
             rows = r.json().get("output", [])
             for row in rows:
                 if row.get("stck_bsop_date") == yyyymmdd:
-                    f = float(row.get("frgn_ntby_qty") or 0)
-                    i = float(row.get("orgn_ntby_qty") or 0)
-                    p = float(row.get("prsn_ntby_qty") or 0)
+                    # _amt = 순매수 금액(원), _qty = 순매수 수량(주) — 금액 우선
+                    f = float(row.get("frgn_ntby_amt") or row.get("frgn_ntby_qty") or 0)
+                    i = float(row.get("orgn_ntby_amt") or row.get("orgn_ntby_qty") or 0)
+                    p = float(row.get("prsn_ntby_amt") or row.get("prsn_ntby_qty") or 0)
                     result[code] = (f, i, p)
                     break
             _time.sleep(0.12)
@@ -171,10 +172,12 @@ def _pykrx_investor_flow_batch(yyyymmdd: str) -> dict[str, tuple[float, float, f
             if df is None or df.empty or code not in df.index:
                 return 0.0
             row = df.loc[code]
-            for col in ["순매수", "매수", "순매수금액"]:
+            # 순매수금액(천원) 우선 → 원 단위로 변환, 없으면 순매수(주) 사용
+            if "순매수금액" in row.index:
+                return float(row["순매수금액"]) * 1000.0
+            for col in ["순매수", "매수"]:
                 if col in row.index:
                     return float(row[col])
-            # 첫 번째 숫자 컬럼 사용
             for val in row:
                 try:
                     return float(val)
