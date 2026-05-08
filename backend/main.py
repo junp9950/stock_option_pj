@@ -348,9 +348,9 @@ select{background:#21262d;border:1px solid #30363d;color:#c9d1d9;padding:6px 10p
     </table>
   </div>
 
-  <!-- 급등 섹터 -->
+  <!-- 전체 섹터 수급 랭킹 -->
   <div>
-    <div style="font-size:12px;text-transform:uppercase;color:#8b949e;margin-bottom:8px;letter-spacing:.06em">🚀 급등 섹터 (이미 반영됨)</div>
+    <div style="font-size:12px;text-transform:uppercase;color:#8b949e;margin-bottom:8px;letter-spacing:.06em">📊 전체 섹터 수급 랭킹 (flow_score 순)</div>
     <table id="sec-surged-table">
       <thead><tr>
         <th>섹터</th><th>분류</th><th>외국인</th><th>기관</th><th>합산</th><th>평균등락</th><th>수급점수</th><th>상태</th>
@@ -447,8 +447,8 @@ async function loadSector(){
 }
 
 function renderSector(data){
-  const stealth=data.filter(d=>!d.is_surged&&d.combined_net_buy>0).sort((a,b)=>b.stealth_score-a.stealth_score);
-  const surged=data.filter(d=>d.is_surged&&d.combined_net_buy>0).sort((a,b)=>b.flow_score-a.flow_score);
+  const stealth=data.filter(d=>d.combined_net_buy>0).sort((a,b)=>b.stealth_score-a.stealth_score);
+  const surged=[...data].sort((a,b)=>b.flow_score-a.flow_score);
 
   const srcBadge=s=>({custom:'<span class="badge real">커스텀</span>',naver_theme:'<span class="badge rfb">네이버</span>',krx_industry:'<span class="badge fallback">KRX</span>'}[s]||s);
   const fmtBil=n=>n==null?'—':(n>=0?'<span style="color:#3fb950">':' <span style="color:#58a6ff">')+((n>=0?'+':'')+Math.round(n/1e8))+'억</span>';
@@ -464,7 +464,7 @@ function renderSector(data){
     <td style="color:${chgColor(d.avg_change_pct)}">${d.avg_change_pct>=0?'+':''}${d.avg_change_pct.toFixed(2)}%</td>
     ${showStealth
       ?`<td>${d.buy_streak}</td><td>${scoreBar10(d.stealth_score)}</td>`
-      :`<td>${scoreBar10(d.flow_score)}</td><td><span style="color:#d29922;font-size:11px">⚠️ 추격주의</span></td>`
+      :`<td>${scoreBar10(d.flow_score)}</td><td>${d.is_surged?'<span style="color:#d29922;font-size:11px">⚠️ 추격주의</span>':d.combined_net_buy>0?'<span style="color:#3fb950;font-size:11px">✅ 순매수</span>':'<span style="color:#f85149;font-size:11px">📉 순매도</span>'}</td>`
     }
   </tr>`;
 
@@ -473,8 +473,8 @@ function renderSector(data){
     :'<tr><td colspan="8" style="color:#8b949e;text-align:center;padding:16px">매집 감지 섹터 없음</td></tr>';
 
   document.getElementById('sec-surged-body').innerHTML=surged.length
-    ?surged.slice(0,5).map(d=>sRow(d,false)).join('')
-    :'<tr><td colspan="8" style="color:#8b949e;text-align:center;padding:16px">급등 섹터 없음</td></tr>';
+    ?surged.map(d=>sRow(d,false)).join('')
+    :'<tr><td colspan="8" style="color:#8b949e;text-align:center;padding:16px">섹터 데이터 없음</td></tr>';
 }
 
 async function openSectorModal(sectorId, name){
