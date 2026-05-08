@@ -61,22 +61,12 @@ def _parse_naver_theme_list() -> list[dict]:
 
 def _parse_naver_theme_stocks(no: str) -> list[str]:
     """특정 테마 소속 종목코드 리스트 반환"""
-    try:
-        from bs4 import BeautifulSoup  # noqa: PLC0415
-    except ImportError:
-        return []
-
+    import re  # noqa: PLC0415
     try:
         url = _NAVER_THEME_DETAIL_URL.format(no=no)
         resp = _get(url)
-        soup = BeautifulSoup(resp.text, "html.parser")
-        codes = []
-        for a in soup.select("td.left a"):
-            href = a.get("href", "")
-            if "code=" in href:
-                code = href.split("code=")[-1].split("&")[0].zfill(6)
-                if code:
-                    codes.append(code)
+        # /item/main.naver?code=XXXXXX 패턴으로 6자리 코드 추출
+        codes = list(dict.fromkeys(re.findall(r"/item/main\.naver\?code=([0-9]{6})", resp.text)))
         return codes
     except Exception as exc:  # noqa: BLE001
         logger.warning("네이버 테마 %s 종목 수집 실패: %s", no, exc)
