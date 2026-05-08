@@ -124,10 +124,15 @@ def _kis_investor_flow_batch(yyyymmdd: str, codes: list[str]) -> dict[str, tuple
             rows = r.json().get("output", [])
             for row in rows:
                 if row.get("stck_bsop_date") == yyyymmdd:
-                    # _amt = 순매수 금액(원), _qty = 순매수 수량(주) — 금액 우선
-                    f = float(row.get("frgn_ntby_amt") or row.get("frgn_ntby_qty") or 0)
-                    i = float(row.get("orgn_ntby_amt") or row.get("orgn_ntby_qty") or 0)
-                    p = float(row.get("prsn_ntby_amt") or row.get("prsn_ntby_qty") or 0)
+                    # _tr_pbmn = 순매수 거래대금(백만원) → 원 변환, 없으면 qty(주) 사용
+                    def _won(pbmn_key: str, qty_key: str) -> float:
+                        pbmn = row.get(pbmn_key)
+                        if pbmn not in (None, "", "0"):
+                            return float(pbmn) * 1_000_000
+                        return float(row.get(qty_key) or 0)
+                    f = _won("frgn_ntby_tr_pbmn", "frgn_ntby_qty")
+                    i = _won("orgn_ntby_tr_pbmn", "orgn_ntby_qty")
+                    p = _won("prsn_ntby_tr_pbmn", "prsn_ntby_qty")
                     result[code] = (f, i, p)
                     break
             _time.sleep(0.12)
