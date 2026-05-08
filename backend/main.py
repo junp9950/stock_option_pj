@@ -439,7 +439,7 @@ async function loadSector(){
   const source=document.getElementById('sec-source').value;
   const q=source?`sort=${sort}&source=${source}`:`sort=${sort}`;
   try{
-    const data=await fetch(`${API}/sectors/flow?${q}&limit=50`).then(r=>r.ok?r.json():[]);
+    const data=await fetch(`${API}/sectors/flow?${q}&limit=200`).then(r=>r.ok?r.json():[]);
     _sectorData=data;
     renderSector(data);
     document.getElementById('sec-info').textContent=data.length?`기준일: ${data[0].date}`:'';
