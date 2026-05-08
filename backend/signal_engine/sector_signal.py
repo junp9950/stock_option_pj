@@ -69,10 +69,7 @@ def _calc_volume_ratio(db: Session, codes: list[str], target_date: date, today_v
 
 def calculate_sector_signals(db: Session, target_date: date) -> list[SectorFlowDaily]:
     """target_date 기준 전체 섹터 수급 집계 + flow_score + stealth_score 계산 후 DB 저장."""
-    # 유니버스에 있는 종목 집합
-    universe_codes = {s.code for s in db.scalars(select(Stock).where(Stock.is_active == True))}  # noqa: E712
-
-    # target_date 수급 데이터 로드
+    # target_date 수급 데이터 로드 (universe 제한 없이 전체)
     flows_raw = list(db.scalars(
         select(SpotInvestorFlow).where(SpotInvestorFlow.trading_date == target_date)
     ))
@@ -81,6 +78,8 @@ def calculate_sector_signals(db: Session, target_date: date) -> list[SectorFlowD
     ))
     flow_map: dict[str, SpotInvestorFlow] = {f.stock_code: f for f in flows_raw}
     price_map: dict[str, SpotDailyPrice] = {p.stock_code: p for p in prices_raw}
+    # 오늘 데이터가 있는 종목 집합 (flow 또는 price 둘 중 하나라도)
+    available_codes = set(flow_map) | set(price_map)
 
     # 활성 섹터 목록
     sectors = list(db.scalars(select(Sector).where(Sector.is_active == True)))  # noqa: E712
@@ -98,8 +97,8 @@ def calculate_sector_signals(db: Session, target_date: date) -> list[SectorFlowD
     raw_results: list[dict] = []
     for sector in sectors:
         codes = sector_codes_map.get(sector.id, [])
-        # 유니버스 내 종목만 사용
-        valid_codes = [c for c in codes if c in universe_codes]
+        # 오늘 데이터가 있는 종목만 사용 (universe 제한 없음)
+        valid_codes = [c for c in codes if c in available_codes]
         if len(valid_codes) < 2:
             # 데이터 부족 섹터 제외
             continue
