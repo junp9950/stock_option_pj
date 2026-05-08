@@ -94,6 +94,7 @@ select{background:#21262d;border:1px solid #30363d;color:#c9d1d9;padding:6px 10p
   </div>
   <div style="display:flex;gap:8px">
     <button class="btn btn-gray" onclick="loadAll()">⟳ 새로고침</button>
+    <button class="btn" id="btn-run-pipeline" onclick="runPipeline()">▶ 파이프라인 실행</button>
   </div>
 </header>
 
@@ -506,6 +507,20 @@ async function refreshSectorMapping(){
     document.getElementById('sec-info').textContent=`갱신 완료: 추가 ${r.added} 업데이트 ${r.updated}`;
     loadSector();
   }catch(e){document.getElementById('sec-info').textContent='갱신 실패';}
+}
+
+async function runPipeline(){
+  const btn=document.getElementById('btn-run-pipeline');
+  btn.disabled=true;btn.textContent='실행 중…';
+  try{
+    const r=await fetch(`${API}/jobs/run-daily`,{method:'POST'}).then(res=>res.json());
+    btn.textContent='▶ 파이프라인 실행';btn.disabled=false;
+    showToast(`완료: ${r.trading_date} 시그널=${r.market_signal} 종목=${r.stock_signal_count}`);
+    loadAll();
+  }catch(e){
+    btn.textContent='▶ 파이프라인 실행';btn.disabled=false;
+    showToast('파이프라인 실행 실패');
+  }
 }
 
 async function loadAll() {
