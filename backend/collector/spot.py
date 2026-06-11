@@ -571,16 +571,22 @@ def collect_sector_supplement(db: Session, trading_date: date) -> int:
                 price_row = fdr.DataReader(code, trading_date, trading_date)
                 if not price_row.empty:
                     pr = price_row.iloc[-1]
+                    close_val = float(pr.get("Close", 0))
+                    change_val = round(float(pr.get("Change", 0)) * 100, 4)
+                    # sanity check: change_pct 이 ±50% 초과하면 FDR 오류로 간주하고 skip
+                    if abs(change_val) > 50:
+                        logger.warning("Sector supplement: %s close_price sanity fail (change=%.1f%%), skip", code, change_val)
+                        raise ValueError("sanity fail")
                     price_vals = dict(
                         trading_date=trading_date,
                         stock_code=code,
                         open_price=float(pr.get("Open", 0)),
                         high_price=float(pr.get("High", 0)),
                         low_price=float(pr.get("Low", 0)),
-                        close_price=float(pr.get("Close", 0)),
+                        close_price=close_val,
                         volume=float(pr.get("Volume", 0)),
-                        trading_value=float(pr.get("Volume", 0)) * float(pr.get("Close", 0)),
-                        change_pct=round(float(pr.get("Change", 0)) * 100, 4),
+                        trading_value=float(pr.get("Volume", 0)) * close_val,
+                        change_pct=change_val,
                     )
                     db.execute(
                         pg_insert(SpotDailyPrice).values(**price_vals)
