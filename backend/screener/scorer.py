@@ -1,50 +1,25 @@
 from __future__ import annotations
 
-from collections import defaultdict
-from datetime import date, timedelta
+from datetime import date
 
 from sqlalchemy import select
 from sqlalchemy.dialects.postgresql import insert as pg_insert
 from sqlalchemy.orm import Session
 
 from backend.config import get_config
-from backend.db.models import MarketSignal, Recommendation, SpotDailyPrice, SpotInvestorFlow, Stock, StockSignal
+from backend.db.models import MarketSignal, Recommendation, SpotDailyPrice, Stock, StockSignal
 
 
-def _count_consecutive(flows: list, check) -> int:
-    count = 0
-    for f in flows:
-        if f.foreign_net_buy == 0 and f.institution_net_buy == 0:
-            continue
-        if check(f):
-            count += 1
-        else:
-            break
-    return count
+def _t1_score(base_score: float, price: SpotDailyPrice, prev_change_pct: float = 0.0) -> float:
+    """T+1 매수 적합도 점수: 기본 점수 - 급등 페널티.
 
-
-def _flow_ratio(flows: list, check, window: int = 10) -> float:
-    real = [f for f in flows if not (f.foreign_net_buy == 0 and f.institution_net_buy == 0)]
-    real = real[:window]
-    if not real:
-        return 0.0
-    return sum(1 for f in real if check(f)) / len(real)
-
-
-def _t1_score(base_score: float, price: SpotDailyPrice, flows: list, prev_change_pct: float = 0.0) -> float:
-    """T+1 매수 적합도 점수: 기본 점수 + 수급 연속성 보너스 - 급등 페널티."""
+    2026-09-09: 연속 수급 보너스(연속매수일수·동반매수비율 가산점)를 제거함 —
+    8월 실데이터로 검증한 결과 보너스 있는 쪽이 오히려 더 나빴음
+    (승률 54.8%->53.2%, 평균수익률 +1.023%->+1.002%). stock_signal.py의
+    co_buy/consecutive_buy 지표 자체도 IC가 거의 0이거나 음수로 나와서
+    같은 결론이었음 — 검증 안 된 가산점을 추가로 얹을 이유가 없음.
+    """
     score = base_score
-
-    fc = _count_consecutive(flows, lambda f: f.foreign_net_buy > 0)
-    ic = _count_consecutive(flows, lambda f: f.institution_net_buy > 0)
-    co = _count_consecutive(flows, lambda f: f.foreign_net_buy > 0 and f.institution_net_buy > 0)
-    fr = _flow_ratio(flows, lambda f: f.foreign_net_buy > 0 or f.institution_net_buy > 0)
-
-    score += fc * 0.05
-    score += ic * 0.05
-    score += co * 0.10
-    if fr >= 0.7:
-        score += 0.15
 
     # 당일 급등 페널티
     change_pct = float(price.change_pct) if price.change_pct else 0.0
@@ -100,22 +75,6 @@ def build_recommendations(db: Session, trading_date: date) -> list[Recommendatio
         )
         prev_prices_map = {p.stock_code: float(p.change_pct or 0) for p in prev_prices}
 
-    # 최근 14일 수급 일괄 조회
-
-    recent_raw = list(db.scalars(
-        select(SpotInvestorFlow)
-        .where(
-            SpotInvestorFlow.stock_code.in_(codes),
-            SpotInvestorFlow.trading_date <= trading_date,
-            SpotInvestorFlow.trading_date >= trading_date - timedelta(days=14),
-        )
-        .order_by(SpotInvestorFlow.stock_code, SpotInvestorFlow.trading_date.desc())
-    ))
-    recent_flows: dict[str, list] = defaultdict(list)
-    for f in recent_raw:
-        if len(recent_flows[f.stock_code]) < 10:
-            recent_flows[f.stock_code].append(f)
-
     ranked = []
     for stock_signal in stock_signals:
         stock = db.scalar(select(Stock).where(Stock.code == stock_signal.stock_code))
@@ -134,9 +93,8 @@ def build_recommendations(db: Session, trading_date: date) -> list[Recommendatio
             market_signal.score * config.score_market_weight + stock_signal.score * config.score_stock_weight,
             2,
         )
-        flows = recent_flows.get(stock_signal.stock_code, [])
         prev_change = prev_prices_map.get(stock_signal.stock_code, 0.0)
-        total_score = round(_t1_score(base_score, price, flows, prev_change), 4)
+        total_score = round(_t1_score(base_score, price, prev_change), 4)
         ranked.append((total_score, base_score, stock, price, stock_signal))
 
     ranked.sort(key=lambda item: item[0], reverse=True)
