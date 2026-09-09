@@ -758,6 +758,16 @@ function renderScreener(){
   </tr>`;}).join('');
 }
 
+const SIGNAL_DETAIL_LABELS={
+  foreign_net_total:'외국인 순매수',
+  institution_net_total:'기관 순매수',
+  both_buy_ratio:'외인+기관 동시매수',
+  foreign_5d_trend:'외인 5일 추세',
+  avg_stock_score:'전종목 평균 점수',
+  score_up_ratio:'점수 상승 종목 비율',
+  program_trading_net:'프로그램매매 순매수',
+};
+
 async function loadSignalDetail(){
   const [sig, details] = await Promise.all([
     fetch(API+'/market-signal').then(r=>r.ok?r.json():null).catch(()=>null),
@@ -770,7 +780,7 @@ async function loadSignalDetail(){
   }
   if(!details){document.getElementById('sig-detail-body').innerHTML='<tr><td colspan="6" style="color:#f85149;text-align:center">로드 실패</td></tr>';return;}
   document.getElementById('sig-detail-body').innerHTML=details.map(d=>`<tr style="opacity:${d.is_enabled?1:.5}">
-    <td><b>${d.key}</b></td>
+    <td><b>${SIGNAL_DETAIL_LABELS[d.key]||d.key}</b></td>
     <td>${d.raw_value!=null?Number(d.raw_value).toLocaleString():'—'}</td>
     <td>${scoreBar(d.normalized_score,2)}</td>
     <td>${d.interpretation}</td>
