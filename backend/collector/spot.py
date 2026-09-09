@@ -312,7 +312,15 @@ def collect_spot_data(db: Session, trading_date: date) -> None:
         trading_date = fetch_date  # 비거래일이면 실제 거래일로 redirect
 
     try:
-        listing = _load_listing_snapshot()
+        # 종목명/시장/시총 갱신용 부가 정보 — 실패해도 가격·수급 수집 본 기능은 계속 진행.
+        # (2026-09-09: fdr.StockListing 원격 CSV가 간헐적으로 404를 반환해 전체 수집이
+        # 통째로 멈추는 문제가 있었음 — 이 호출만 실패를 흡수하도록 분리.)
+        try:
+            listing = _load_listing_snapshot()
+        except Exception as exc:  # noqa: BLE001
+            logger.warning("종목 리스팅 스냅샷 수집 실패, 이름/시총 갱신 건너뜀: %s", exc)
+            listing = None
+
         date_text = fetch_date.isoformat()
         yyyymmdd = fetch_date.strftime("%Y%m%d")
 
@@ -393,7 +401,7 @@ def collect_spot_data(db: Session, trading_date: date) -> None:
                     stock.code, change_check, date_text,
                 )
                 continue
-            listing_row = listing.loc[stock.code] if stock.code in listing.index else None
+            listing_row = listing.loc[stock.code] if listing is not None and stock.code in listing.index else None
             if listing_row is not None:
                 stock.name = str(listing_row.get("Name", stock.name))
                 stock.market = str(listing_row.get("Market", stock.market))
