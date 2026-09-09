@@ -383,6 +383,16 @@ def collect_spot_data(db: Session, trading_date: date) -> None:
                 continue
 
             row = df.iloc[-1]
+            # sanity check: FDR 병렬 수집 중 간헐적으로 완전히 다른 종목의 OHLCV가 섞여 반환되는
+            # 사례가 있었음 (2026-09-08, 003490/028050/036930에서 확인) — 하루 등락률이
+            # KRX 상한(±30%)을 크게 벗어나면 오염된 데이터로 간주하고 skip.
+            change_check = round(float(row["Change"]) * 100, 4)
+            if abs(change_check) > 50:
+                logger.warning(
+                    "FDR %s close_price sanity fail (change=%.1f%%), skip: %s",
+                    stock.code, change_check, date_text,
+                )
+                continue
             listing_row = listing.loc[stock.code] if stock.code in listing.index else None
             if listing_row is not None:
                 stock.name = str(listing_row.get("Name", stock.name))

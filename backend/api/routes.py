@@ -1022,59 +1022,6 @@ def get_universe(db: Session = Depends(get_db)):
     ]
 
 
-@router.get("/recommendations/performance")
-def get_recommendation_performance(days: int = 30, db: Session = Depends(get_db)):
-    """과거 추천 종목의 T+1 실제 수익률."""
-    from_date = date.today() - timedelta(days=days)
-    recs = list(db.scalars(
-        select(Recommendation)
-        .where(Recommendation.trading_date >= from_date)
-        .order_by(desc(Recommendation.trading_date), Recommendation.rank)
-    ))
-
-    results = []
-    for rec in recs:
-        # 추천일 다음 실거래일 종가
-        next_price = db.scalar(
-            select(SpotDailyPrice.close_price)
-            .where(
-                SpotDailyPrice.stock_code == rec.stock_code,
-                SpotDailyPrice.trading_date > rec.trading_date,
-            )
-            .order_by(SpotDailyPrice.trading_date)
-            .limit(1)
-        )
-        if next_price and rec.close_price and rec.close_price > 0:
-            ret_pct = round((next_price - rec.close_price) / rec.close_price * 100, 2)
-        else:
-            ret_pct = None
-        results.append({
-            "trading_date": rec.trading_date.isoformat(),
-            "stock_code": rec.stock_code,
-            "stock_name": rec.stock_name,
-            "rank": rec.rank,
-            "entry_price": rec.close_price,
-            "next_price": next_price,
-            "return_pct": ret_pct,
-        })
-
-    valid = [r for r in results if r["return_pct"] is not None]
-    if valid:
-        win_count = sum(1 for r in valid if r["return_pct"] > 0)
-        summary = {
-            "total": len(valid),
-            "win_count": win_count,
-            "win_rate": round(win_count / len(valid) * 100, 1),
-            "avg_return": round(sum(r["return_pct"] for r in valid) / len(valid), 2),
-            "best": max(r["return_pct"] for r in valid),
-            "worst": min(r["return_pct"] for r in valid),
-        }
-    else:
-        summary = {"total": 0, "win_count": 0, "win_rate": 0, "avg_return": 0, "best": None, "worst": None}
-
-    return {"summary": summary, "records": results}
-
-
 # ─────────────────────────── 섹터 수급 ───────────────────────────
 
 @router.get("/sectors", response_model=list[SectorItem])
