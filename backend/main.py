@@ -305,9 +305,17 @@ select{background:#21262d;border:1px solid #30363d;color:#c9d1d9;padding:6px 10p
 <!-- 시장 시그널 상세 탭 -->
 <div id="panel-signal" class="panel content">
   <div class="grid" id="sig-cards"></div>
+
+  <div style="font-size:12px;text-transform:uppercase;color:#8b949e;margin:16px 0 8px;letter-spacing:.06em">현물 수급</div>
   <table>
     <thead><tr><th>지표</th><th>실측값</th><th>정규화 점수</th><th>설명</th><th>소스</th><th>비고</th></tr></thead>
-    <tbody id="sig-detail-body"><tr><td colspan="6" style="color:#8b949e;text-align:center;padding:20px">로딩 중…</td></tr></tbody>
+    <tbody id="sig-detail-body-spot"><tr><td colspan="6" style="color:#8b949e;text-align:center;padding:20px">로딩 중…</td></tr></tbody>
+  </table>
+
+  <div style="font-size:12px;text-transform:uppercase;color:#8b949e;margin:16px 0 8px;letter-spacing:.06em">선물·파생 수급</div>
+  <table>
+    <thead><tr><th>지표</th><th>실측값</th><th>정규화 점수</th><th>설명</th><th>소스</th><th>비고</th></tr></thead>
+    <tbody id="sig-detail-body-futures"><tr><td colspan="6" style="color:#8b949e;text-align:center;padding:20px">로딩 중…</td></tr></tbody>
   </table>
 </div>
 
@@ -767,6 +775,21 @@ const SIGNAL_DETAIL_LABELS={
   score_up_ratio:'점수 상승 종목 비율',
   program_trading_net:'프로그램매매 순매수',
 };
+const SIGNAL_DETAIL_GROUP={
+  program_trading_net:'futures',
+};
+
+function renderSignalDetailRows(rows){
+  if(!rows.length)return '<tr><td colspan="6" style="color:#8b949e;text-align:center;padding:20px">데이터 없음</td></tr>';
+  return rows.map(d=>`<tr style="opacity:${d.is_enabled?1:.5}">
+    <td><b>${SIGNAL_DETAIL_LABELS[d.key]||d.key}</b></td>
+    <td>${d.raw_value!=null?Number(d.raw_value).toLocaleString():'—'}</td>
+    <td>${scoreBar(d.normalized_score,2)}</td>
+    <td>${d.interpretation}</td>
+    <td><span class="badge ${d.source==='computed'?'real':'fallback'}">${d.source}</span></td>
+    <td class="ts">${d.note||''}</td>
+  </tr>`).join('');
+}
 
 async function loadSignalDetail(){
   const [sig, details] = await Promise.all([
@@ -778,15 +801,15 @@ async function loadSignalDetail(){
       <div class="card"><h3>시장 시그널</h3><div class="val signal-${sig.signal}">${sig.signal}</div></div>
       <div class="card"><h3>종합 점수</h3><div class="val" style="color:${sig.score>0?'#3fb950':sig.score<0?'#f85149':'#d29922'}">${sig.score}</div></div>`;
   }
-  if(!details){document.getElementById('sig-detail-body').innerHTML='<tr><td colspan="6" style="color:#f85149;text-align:center">로드 실패</td></tr>';return;}
-  document.getElementById('sig-detail-body').innerHTML=details.map(d=>`<tr style="opacity:${d.is_enabled?1:.5}">
-    <td><b>${SIGNAL_DETAIL_LABELS[d.key]||d.key}</b></td>
-    <td>${d.raw_value!=null?Number(d.raw_value).toLocaleString():'—'}</td>
-    <td>${scoreBar(d.normalized_score,2)}</td>
-    <td>${d.interpretation}</td>
-    <td><span class="badge ${d.source==='computed'?'real':'fallback'}">${d.source}</span></td>
-    <td class="ts">${d.note||''}</td>
-  </tr>`).join('');
+  if(!details){
+    document.getElementById('sig-detail-body-spot').innerHTML='<tr><td colspan="6" style="color:#f85149;text-align:center">로드 실패</td></tr>';
+    document.getElementById('sig-detail-body-futures').innerHTML='<tr><td colspan="6" style="color:#f85149;text-align:center">로드 실패</td></tr>';
+    return;
+  }
+  const spotRows=details.filter(d=>SIGNAL_DETAIL_GROUP[d.key]!=='futures');
+  const futuresRows=details.filter(d=>SIGNAL_DETAIL_GROUP[d.key]==='futures');
+  document.getElementById('sig-detail-body-spot').innerHTML=renderSignalDetailRows(spotRows);
+  document.getElementById('sig-detail-body-futures').innerHTML=renderSignalDetailRows(futuresRows);
 }
 
 
