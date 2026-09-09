@@ -8,6 +8,7 @@ from sqlalchemy.orm import Session
 from backend.db.models import (
     MarketSignal,
     MarketSignalDetail,
+    ProgramTradingDaily,
     SpotDailyPrice,
     SpotInvestorFlow,
     StockSignal,
@@ -94,6 +95,14 @@ def calculate_market_signal(db: Session, trading_date: date) -> MarketSignal:
         if common:
             score_up_ratio = sum(1 for c in common if today_scores[c] > prev_scores[c]) / len(common) * 100
 
+    # ── 프로그램매매 순매수 (차익+비차익 합산)
+    program_row = db.scalar(
+        select(ProgramTradingDaily).where(ProgramTradingDaily.trading_date == trading_date)
+    )
+    program_net = 0.0
+    if program_row is not None:
+        program_net = (program_row.arbitrage_net_buy + program_row.non_arbitrage_net_buy) / 1e8  # 억원
+
     # ── 지표별 점수화
     details = [
         ("foreign_net_total",
@@ -125,15 +134,21 @@ def calculate_market_signal(db: Session, trading_date: date) -> MarketSignal:
          round(score_up_ratio, 1),
          _bucket(score_up_ratio, [(35, -1), (45, 0), (55, 1), (float("inf"), 2)]),
          f"전일 대비 점수 상승 종목 비율 ({score_up_ratio:.1f}%)"),
+
+        ("program_trading_net",
+         round(program_net, 1),
+         _bucket(program_net, [(-3000, -2), (-500, -1), (500, 0), (3000, 1), (float("inf"), 2)]),
+         f"프로그램매매 순매수 (차익+비차익, {program_net:+.0f}억)"),
     ]
 
     weights = {
-        "foreign_net_total": 0.25,
-        "institution_net_total": 0.20,
-        "both_buy_ratio": 0.15,
-        "foreign_5d_trend": 0.20,
+        "foreign_net_total": 0.22,
+        "institution_net_total": 0.18,
+        "both_buy_ratio": 0.13,
+        "foreign_5d_trend": 0.17,
         "avg_stock_score": 0.10,
         "score_up_ratio": 0.10,
+        "program_trading_net": 0.10,
     }
     total_w = sum(weights.values())
     weighted_score = sum(score * weights[key] / total_w for key, _, score, _ in details)
