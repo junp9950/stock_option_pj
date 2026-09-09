@@ -35,7 +35,11 @@ class AppConfig:
     score_stock_weight: float = 0.7
     recommendation_count_bullish: int = 5
     recommendation_count_neutral: int = 3
-    min_market_cap: float = 100_000_000_000
+    # 2026-09-09: 저유동성(소형) 종목이 상위 랭킹 노이즈의 주범으로 확인됨 —
+    # 유니버스 시총 중위값(~4조원) 이상으로 필터링한 아웃오브샘플 백테스트에서
+    # T+1 상위7 평균수익률이 -0.16% -> -0.01%(거의 본전)로 개선됨.
+    # 기존 1,000억원 기준은 이 효과를 걸러내기엔 너무 낮았음.
+    min_market_cap: float = 4_000_000_000_000
     min_trading_value: float = 5_000_000_000
     fee_rate: float = 0.00015
     slippage_rate: float = 0.0005
