@@ -427,12 +427,17 @@ def calculate_stock_signals(db: Session, trading_date: date) -> list[StockSignal
         avg_vol_20d = sum(vols_20d) / len(vols_20d) if vols_20d else price.volume or 1.0
         volume_surge = price.volume / max(avg_vol_20d, 1)
 
-        # 거래대금 대비 수급 강도 (won 단위)
-        # trading_value가 0이면 volume*price 추정치 사용
-        tv = price.trading_value if price.trading_value > 0 else (price.volume * price.close_price)
-        tv = max(tv, 1)
-        foreign_strength = flow.foreign_net_buy / tv * 100  # 거래대금 대비 % (외국인)
-        institution_strength = flow.institution_net_buy / tv * 100  # 거래대금 대비 %  (기관)
+        # 거래대금 대비 수급 강도 — 당일 거래대금이 아니라 직전 20일 평균 거래대금 기준.
+        # 당일 거래대금으로 나누면 거래가 뜸한 종목이 조금만 사도 %가 과장되어 상위
+        # 랭킹을 왜곡함 (2026-09-09 IC 검증: 당일 기준 T+1 IC +0.032 -> 20일 평균 기준 +0.036).
+        tvs_20d = [p.trading_value for p in price_hist[1:21] if p.trading_value and p.trading_value > 0]
+        if tvs_20d:
+            avg_tv_20d = sum(tvs_20d) / len(tvs_20d)
+        else:
+            avg_tv_20d = price.trading_value if price.trading_value > 0 else (price.volume * price.close_price)
+        avg_tv_20d = max(avg_tv_20d, 1)
+        foreign_strength = flow.foreign_net_buy / avg_tv_20d * 100  # 20일 평균 거래대금 대비 % (외국인)
+        institution_strength = flow.institution_net_buy / avg_tv_20d * 100  # 20일 평균 거래대금 대비 % (기관)
         co_buy = 2.0 if flow.foreign_net_buy > 0 and flow.institution_net_buy > 0 else 0.0
 
         # 공매도 비율 (pykrx: 0~100%) — 데이터 없으면 중립(0)
