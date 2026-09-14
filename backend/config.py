@@ -45,6 +45,8 @@ class AppConfig:
     slippage_rate: float = 0.0005
     telegram_bot_token: str = field(default_factory=lambda: os.getenv("TELEGRAM_BOT_TOKEN", ""))
     telegram_chat_id: str = field(default_factory=lambda: os.getenv("TELEGRAM_CHAT_ID", ""))
+    dart_api_key: str = field(default_factory=lambda: os.getenv("DART_API_KEY", ""))
+    dart_earnings_pool: int = 20
     frontend_origin: str = "http://localhost:5173"
     market_signal_weights: dict[str, float] = field(
         default_factory=lambda: {

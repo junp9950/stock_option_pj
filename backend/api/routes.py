@@ -197,6 +197,8 @@ def get_recommendations(trading_date: date | None = None, db: Session = Depends(
                 institution_consecutive_days=inst_days,
                 flow_ratio=fr,
                 tags=_build_tags(inst, foreign, indiv, co_days, inst_days, foreign_days),
+                earnings_score=item.earnings_score,
+                earnings_max=item.earnings_max,
             )
         )
 
@@ -960,6 +962,8 @@ def get_tomorrow_picks(top_n: int = 7, db: Session = Depends(get_db)):
             "institution_net_buy": institution_net,
             "both_buying": foreign_net > 0 and institution_net > 0,
             "risk": risk,
+            "earnings_score": rec.earnings_score,
+            "earnings_max": rec.earnings_max,
         })
 
     return picks
@@ -1097,6 +1101,54 @@ def get_sector_flow(
             is_surged=flow.avg_change_pct >= 5.0,
         ))
     return result
+
+
+@router.get("/sectors/for-stock/{code}")
+def get_sector_for_stock(code: str, db: Session = Depends(get_db)):
+    """종목 코드 -> 소속 업종의 당일 수급 상태 (외부 서비스의 업종 체크리스트 자동 채움용)."""
+    mapping = db.scalar(select(SectorStock).where(SectorStock.stock_code == code))
+    if not mapping:
+        return None
+    sector = db.scalar(select(Sector).where(Sector.id == mapping.sector_id))
+    if not sector:
+        return None
+
+    latest_date = db.scalar(select(func.max(SectorFlowDaily.date)))
+    if not latest_date:
+        return None
+
+    flow = db.scalar(
+        select(SectorFlowDaily).where(
+            SectorFlowDaily.sector_id == sector.id, SectorFlowDaily.date == latest_date
+        )
+    )
+    if not flow:
+        return None
+
+    all_scores = list(
+        db.scalars(
+            select(SectorFlowDaily.flow_score).where(SectorFlowDaily.date == latest_date)
+        )
+    )
+    rank_pct = 0.0
+    if all_scores:
+        below = sum(1 for s in all_scores if s <= flow.flow_score)
+        rank_pct = round(below / len(all_scores) * 100, 1)
+
+    return {
+        "sector_id": sector.id,
+        "sector_name": sector.sector_name,
+        "date": flow.date.isoformat(),
+        "flow_score": flow.flow_score,
+        "stealth_score": flow.stealth_score,
+        "foreign_net_buy": flow.foreign_net_buy,
+        "inst_net_buy": flow.inst_net_buy,
+        "combined_net_buy": flow.combined_net_buy,
+        "up_count": flow.up_count,
+        "down_count": flow.down_count,
+        "buy_streak": flow.buy_streak,
+        "flow_score_rank_pct": rank_pct,
+    }
 
 
 @router.get("/sectors/{sector_id}/history")

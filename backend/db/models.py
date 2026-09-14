@@ -212,6 +212,9 @@ class Recommendation(Base, TimestampMixin):
     close_price: Mapped[float] = mapped_column(Float)
     change_pct: Mapped[float] = mapped_column(Float)
     market_signal: Mapped[str] = mapped_column(String(20))
+    earnings_score: Mapped[float | None] = mapped_column(Float, nullable=True)
+    earnings_max: Mapped[float | None] = mapped_column(Float, nullable=True)
+    earnings_note: Mapped[str | None] = mapped_column(Text, nullable=True)
 
 
 class Sector(Base, TimestampMixin):

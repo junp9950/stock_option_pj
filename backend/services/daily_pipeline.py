@@ -55,6 +55,13 @@ def run_daily_pipeline(db: Session, trading_date: date | None = None, skip_colle
     stock_signals = calculate_stock_signals(db, target_date)
     recommendations = build_recommendations(db, target_date)
 
+    # 4.2. 추천 종목 DART 실적 점수 부착 (재무 건전성 보완, 실패해도 파이프라인은 계속)
+    try:
+        from backend.services.dart_score import attach_dart_earnings  # noqa: PLC0415
+        attach_dart_earnings(db, target_date, recommendations)
+    except Exception as exc:  # noqa: BLE001
+        logger.error("Pipeline: DART 실적 점수 부착 실패 (continuing): %s", exc)
+
     # 4.5. 섹터 수급 집계
     sector_count = 0
     try:
