@@ -585,7 +585,7 @@ async function loadAll() {
             const chgColor = p.change_pct>=0?'#3fb950':'#f85149';
             const bothBadge = p.both_buying ? '<span style="background:#1f6feb33;color:#58a6ff;border:1px solid #1f6feb;border-radius:4px;padding:1px 6px;font-size:10px;margin-left:4px">기관+외인</span>' : '';
             const coLine = p.co_consecutive_days>=2 ? `<div style="color:#d29922;font-size:11px">동반매수 ${p.co_consecutive_days}일 연속</div>` : '';
-            const earnLine = (p.earnings_score!=null && p.earnings_max) ? `<div style="color:#8b949e;font-size:11px;margin-top:4px">실적(DART) <b style="color:#c9d1d9">${p.earnings_score.toFixed(1)} / ${p.earnings_max.toFixed(0)}</b></div>` : '';
+            const earnLine = (p.earnings_score!=null && p.earnings_max) ? `<div style="color:#8b949e;font-size:11px;margin-top:4px">실적(DART, 참고용·순위 미반영) <b style="color:#c9d1d9">${p.earnings_score.toFixed(1)} / ${p.earnings_max.toFixed(0)}</b></div>` : '';
             return `<div style="background:#0d1117;border:1px solid ${i===0?'#388bfd':'#30363d'};border-radius:8px;padding:12px;cursor:pointer" onclick="showStockDetail('${p.code}','${p.name}')">
               <div style="display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:6px">
                 <div>
