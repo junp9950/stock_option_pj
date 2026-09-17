@@ -106,6 +106,7 @@ select{background:#21262d;border:1px solid #30363d;color:#c9d1d9;padding:6px 10p
   <div class="tab" onclick="switchTab('screener')">전종목 스크리너</div>
   <div class="tab" onclick="switchTab('signal')">시장 시그널 상세</div>
   <div class="tab" onclick="switchTab('sector')">섹터 수급</div>
+  <div class="tab" onclick="switchTab('heatmap')">시장 히트맵</div>
 </div>
 
 <!-- 대시보드 탭 -->
@@ -379,6 +380,26 @@ select{background:#21262d;border:1px solid #30363d;color:#c9d1d9;padding:6px 10p
   </div>
 </div>
 
+<!-- 시장 히트맵 탭 -->
+<div id="panel-heatmap" class="panel content">
+  <div class="toolbar" style="margin-bottom:12px">
+    <select id="hm-market" onchange="loadHeatmap()">
+      <option value="">전체 시장</option>
+      <option value="KOSPI">KOSPI</option>
+      <option value="KOSDAQ">KOSDAQ</option>
+    </select>
+    <select id="hm-limit" onchange="loadHeatmap()">
+      <option value="150">시총 상위 150</option>
+      <option value="250" selected>시총 상위 250</option>
+      <option value="500">시총 상위 500</option>
+    </select>
+    <button class="btn btn-gray btn-sm" onclick="loadHeatmap()">⟳ 새로고침</button>
+    <span class="ts" id="hm-info"></span>
+  </div>
+  <div id="heatmap-container" style="position:relative;width:100%;height:640px;background:#000;border-radius:8px;overflow:hidden"></div>
+  <div id="heatmap-legend" style="display:flex;margin-top:10px;border-radius:6px;overflow:hidden;font-size:12px"></div>
+</div>
+
 <!-- 종목 상세 모달 -->
 <div class="modal-bg" id="modal-bg" onclick="if(event.target===this)closeModal()">
   <div class="modal">
@@ -432,12 +453,13 @@ const tagHtml = tags => (tags||[]).map(t=>{
 }).join('');
 
 function switchTab(id) {
-  document.querySelectorAll('.tab').forEach((t,i)=>t.classList.toggle('active',['dash','screener','signal','sector'][i]===id));
+  document.querySelectorAll('.tab').forEach((t,i)=>t.classList.toggle('active',['dash','screener','signal','sector','heatmap'][i]===id));
   document.querySelectorAll('.panel').forEach(p=>p.classList.remove('active'));
   document.getElementById('panel-'+id).classList.add('active');
   if(id==='screener')loadScreener();
   if(id==='signal')loadSignalDetail();
   if(id==='sector')loadSector();
+  if(id==='heatmap')loadHeatmap();
 }
 
 // ── 섹터 수급 ──────────────────────────────────────────────────
@@ -516,6 +538,142 @@ async function refreshSectorMapping(){
     document.getElementById('sec-info').textContent=`갱신 완료: 추가 ${r.added} 업데이트 ${r.updated}`;
     loadSector();
   }catch(e){document.getElementById('sec-info').textContent='갱신 실패';}
+}
+
+// ── 시장 히트맵(트리맵) ────────────────────────────────────────
+function hmColor(pct){
+  const stops = [
+    [-3, [30,58,95]], [-1, [45,60,90]], [0, [50,55,65]],
+    [1, [90,45,45]], [2, [140,35,35]], [3.5, [200,30,30]],
+  ];
+  const p = Math.max(-3.5, Math.min(3.5, pct));
+  let lo = stops[0], hi = stops[stops.length-1];
+  for(let i=0;i<stops.length-1;i++){
+    if(p>=stops[i][0] && p<=stops[i+1][0]){ lo=stops[i]; hi=stops[i+1]; break; }
+  }
+  const range = hi[0]-lo[0] || 1;
+  const t = (p-lo[0])/range;
+  const c = lo[1].map((v,i)=>Math.round(v+(hi[1][i]-v)*t));
+  return `rgb(${c[0]},${c[1]},${c[2]})`;
+}
+
+// 표준 squarified treemap 알고리즘 (Bruls et al.) — 종횡비가 고른 사각형을 만들어줌
+function squarify(items, x, y, w, h){
+  const result = [];
+  const total = items.reduce((s,i)=>s+i.value, 0);
+  if (!total || !items.length) return result;
+  const scale = (w*h)/total;
+  const sorted = [...items].sort((a,b)=>b.value-a.value).map(i=>({...i, area: i.value*scale}));
+
+  function layoutRow(row, x, y, w, h, vertical){
+    const rowTotal = row.reduce((s,i)=>s+i.area, 0);
+    let offset = vertical ? x : y;
+    row.forEach(item=>{
+      const size = rowTotal>0 ? item.area/rowTotal : 0;
+      if (vertical){
+        const rw = (h>0)? item.area/h : 0;
+        result.push({...item, x: offset, y, w: rw, h});
+        offset += rw;
+      } else {
+        const rh = (w>0)? item.area/w : 0;
+        result.push({...item, x, y: offset, w, h: rh});
+        offset += rh;
+      }
+    });
+  }
+
+  function worstRatio(row, sideLen){
+    const sum = row.reduce((s,i)=>s+i.area,0);
+    if (sum===0) return Infinity;
+    const maxA = Math.max(...row.map(i=>i.area));
+    const minA = Math.min(...row.map(i=>i.area));
+    return Math.max((sideLen*sideLen*maxA)/(sum*sum), (sum*sum)/(sideLen*sideLen*minA));
+  }
+
+  let remaining = sorted, rx=x, ry=y, rw=w, rh=h;
+  while(remaining.length){
+    const vertical = rw < rh;
+    const sideLen = vertical ? rh : rw;
+    let row = [remaining[0]];
+    let i = 1;
+    while(i < remaining.length){
+      const next = [...row, remaining[i]];
+      if (worstRatio(next, sideLen) <= worstRatio(row, sideLen)) { row = next; i++; }
+      else break;
+    }
+    const rowArea = row.reduce((s,it)=>s+it.area,0);
+    if (vertical){
+      const rowW = sideLen>0 ? rowArea/sideLen : 0;
+      layoutRow(row, rx, ry, rowW, rh, false);
+      rx += rowW; rw -= rowW;
+    } else {
+      const rowH = sideLen>0 ? rowArea/sideLen : 0;
+      layoutRow(row, rx, ry, rw, rowH, true);
+      ry += rowH; rh -= rowH;
+    }
+    remaining = remaining.slice(row.length);
+  }
+  return result;
+}
+
+async function loadHeatmap(){
+  const market = document.getElementById('hm-market').value;
+  const limit = document.getElementById('hm-limit').value;
+  const box = document.getElementById('heatmap-container');
+  box.innerHTML = '<div style="color:#8b949e;text-align:center;padding:40px">로딩 중…</div>';
+  try{
+    const data = await fetch(`${API}/heatmap?limit=${limit}`).then(r=>r.ok?r.json():null);
+    if(!data || !data.items || !data.items.length){
+      box.innerHTML = '<div style="color:#8b949e;text-align:center;padding:40px">데이터 없음</div>';
+      return;
+    }
+    let items = data.items;
+    if (market) items = items.filter(i=>i.market===market);
+    document.getElementById('hm-info').textContent = `기준일: ${data.trading_date} · ${items.length}개 종목`;
+    renderHeatmap(items, box);
+    renderHeatmapLegend();
+  }catch(e){
+    console.error(e);
+    box.innerHTML = '<div style="color:#f85149;text-align:center;padding:40px">로딩 실패</div>';
+  }
+}
+
+function renderHeatmap(items, box){
+  const W = box.clientWidth || 1200, H = box.clientHeight || 640;
+  const bySector = {};
+  items.forEach(it=>{ (bySector[it.sector] = bySector[it.sector] || []).push(it); });
+  const sectorItems = Object.entries(bySector).map(([name, stocks])=>({
+    name, stocks, value: stocks.reduce((s,x)=>s+x.market_cap, 0),
+  }));
+  const sectorRects = squarify(sectorItems, 0, 0, W, H);
+
+  let html = '';
+  sectorRects.forEach(sec=>{
+    if (sec.w < 1 || sec.h < 1) return;
+    const headH = sec.h > 40 ? 18 : 0;
+    html += `<div style="position:absolute;left:${sec.x}px;top:${sec.y}px;width:${sec.w}px;height:${sec.h}px;border:1px solid #000;box-sizing:border-box;overflow:hidden;background:#161b22">`;
+    if (headH) html += `<div style="height:${headH}px;line-height:${headH}px;font-size:11px;color:#c9d1d9;text-align:center;background:#21262d;overflow:hidden;white-space:nowrap">${sec.name}</div>`;
+    const stockRects = squarify(sec.stocks.map(s=>({...s, value: s.market_cap})), 0, 0, sec.w, sec.h - headH);
+    stockRects.forEach(st=>{
+      if (st.w < 1 || st.h < 1) return;
+      const showText = st.w > 40 && st.h > 24;
+      const big = st.w > 90 && st.h > 60;
+      html += `<div title="${st.name} ${st.change_pct>=0?'+':''}${st.change_pct.toFixed(2)}%"
+        style="position:absolute;left:${st.x}px;top:${st.y+headH}px;width:${st.w}px;height:${st.h}px;background:${hmColor(st.change_pct)};border:1px solid #000;box-sizing:border-box;display:flex;flex-direction:column;align-items:center;justify-content:center;overflow:hidden;cursor:pointer"
+        onclick="showStockDetail('${st.code}','${st.name}')">
+        ${showText ? `<div style="color:#fff;font-weight:${big?'800':'600'};font-size:${big?'15px':'11px'};text-shadow:0 1px 2px #000;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:95%">${st.name}</div>
+        <div style="color:#fff;font-size:${big?'13px':'10px'};text-shadow:0 1px 2px #000">${st.change_pct>=0?'+':''}${st.change_pct.toFixed(2)}%</div>` : ''}
+      </div>`;
+    });
+    html += '</div>';
+  });
+  box.innerHTML = html;
+}
+
+function renderHeatmapLegend(){
+  const steps = [-3,-2,-1,0,1,2,3];
+  const html = steps.map(s=>`<div style="flex:1;text-align:center;padding:6px 0;background:${hmColor(s)};color:#fff;font-weight:600">${s>0?'+':''}${s}%</div>`).join('');
+  document.getElementById('heatmap-legend').innerHTML = html;
 }
 
 async function runPipeline(){
@@ -1121,6 +1279,7 @@ function showToast(msg,err=false){
 loadAll();
 loadPerformance();
 setInterval(loadAll,60000);
+if (location.hash) switchTab(location.hash.slice(1));
 </script>
 </body>
 </html>"""

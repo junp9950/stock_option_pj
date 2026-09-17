@@ -1016,6 +1016,58 @@ def get_data_quality(db: Session = Depends(get_db)):
     }
 
 
+@router.get("/heatmap")
+def get_heatmap(limit: int = 250, db: Session = Depends(get_db)):
+    """시총 상위 종목의 업종별 등락률 히트맵(트리맵)용 데이터."""
+    target_date = _latest_data_date(db)
+
+    stocks = list(
+        db.scalars(
+            select(Stock)
+            .where(Stock.is_active.is_(True), Stock.market_cap > 0)
+            .order_by(desc(Stock.market_cap))
+            .limit(limit)
+        )
+    )
+    codes = [s.code for s in stocks]
+
+    prices = {
+        p.stock_code: p
+        for p in db.scalars(
+            select(SpotDailyPrice).where(
+                SpotDailyPrice.trading_date == target_date, SpotDailyPrice.stock_code.in_(codes)
+            )
+        )
+    }
+
+    # 실제 KRX 업종 분류(krx_industry)는 아직 수집하지 않아 데이터가 없음 -> custom(수동 큐레이션 업종)으로 대체.
+    # custom도 커버리지가 낮아 매핑 안 된 종목은 전부 "기타"로 묶임.
+    sector_map: dict[str, str] = {}
+    rows = db.execute(
+        select(SectorStock.stock_code, Sector.sector_name)
+        .join(Sector, SectorStock.sector_id == Sector.id)
+        .where(SectorStock.stock_code.in_(codes), Sector.source == "custom", Sector.is_active.is_(True))
+    )
+    for code, sector_name in rows:
+        sector_map.setdefault(code, sector_name)
+
+    items = []
+    for s in stocks:
+        price = prices.get(s.code)
+        if price is None:
+            continue
+        items.append({
+            "code": s.code,
+            "name": s.name,
+            "market": s.market,
+            "sector": sector_map.get(s.code, "기타"),
+            "market_cap": s.market_cap,
+            "change_pct": float(price.change_pct or 0),
+        })
+
+    return {"trading_date": target_date.isoformat(), "items": items}
+
+
 @router.get("/universe")
 def get_universe(db: Session = Depends(get_db)):
     """현재 유니버스 종목 목록."""
