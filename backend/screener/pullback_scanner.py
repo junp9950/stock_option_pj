@@ -18,6 +18,27 @@ MAX_VOLUME_CONTRACTION = 0.6   # 되돌림 구간 평균거래량 / 스파이크
 DEFAULT_MIN_MARKET_CAP = 0.0   # 기본은 시총 필터 없음(0) - 거래량 급증이 1순위, 시총 필터는 선택 사항
 
 
+def _fetch_real_market_caps() -> dict[str, float]:
+    """FinanceDataReader 전체 KOSPI+KOSDAQ 상장목록에서 실제 시가총액을 가져온다.
+    Stock.market_cap은 유니버스(시총 상위) 편입 종목에만 채워져 있어, 유니버스 밖
+    종목(예: 섹터 보완 수집으로만 들어온 중소형주)은 0으로 남아있어 시총 필터가
+    무력화되는 문제가 있었음 - 필터링을 위해 실제 값을 매번 조회해 보정한다.
+    """
+    try:
+        import FinanceDataReader as fdr  # noqa: PLC0415
+
+        caps: dict[str, float] = {}
+        for market in ("KOSPI", "KOSDAQ"):
+            listing = fdr.StockListing(market)
+            listing = listing[listing["Marcap"].notna() & (listing["Marcap"] > 0)]
+            codes = listing["Code"].astype(str).str.zfill(6)
+            for code, marcap in zip(codes, listing["Marcap"]):
+                caps[code] = float(marcap)
+        return caps
+    except Exception:  # noqa: BLE001
+        return {}
+
+
 @dataclass
 class PullbackCandidate:
     code: str
@@ -134,6 +155,7 @@ def scan_pullback_candidates(
         prices_history.setdefault(p.stock_code, []).append(p)
 
     stocks = {s.code: s for s in db.scalars(select(Stock))}
+    real_caps = _fetch_real_market_caps()
 
     # 업종 매핑 (수동 큐레이션된 "custom" 섹터 태그 재사용 - 실제 KRX 업종 분류는 미수집)
     sector_map: dict[str, str] = {}
@@ -155,9 +177,11 @@ def scan_pullback_candidates(
         result = detect_pullback(hist)
         if result is None:
             continue
-        # 시총 필터 (선택적, 2순위) - 시총이 확인된 경우에만 적용. 0(불명)은 통과시킴.
-        cap = stock.market_cap or 0.0
-        if min_market_cap > 0 and 0 < cap < min_market_cap:
+        # 시총 필터 (선택적, 2순위) - FDR 실시간 상장목록으로 정확한 시총을 우선 사용.
+        # FDR 조회 자체가 실패한 경우(real_caps 비어있음)에만 DB의 market_cap(0=불명)을
+        # "확인 안 됨"으로 보고 통과시킨다 - 그 외에는 실제 시총 기준으로 정확히 필터링.
+        cap = real_caps.get(code, stock.market_cap or 0.0)
+        if min_market_cap > 0 and (real_caps or cap > 0) and cap < min_market_cap:
             continue
         today = hist[0]
         candidates.append(
@@ -166,7 +190,7 @@ def scan_pullback_candidates(
                 name=stock.name,
                 market=stock.market,
                 sector=sector_map.get(code, "기타"),
-                market_cap=stock.market_cap or 0.0,
+                market_cap=cap,
                 close_price=today.close_price,
                 change_pct=float(today.change_pct or 0),
                 **result,
