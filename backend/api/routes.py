@@ -1079,7 +1079,7 @@ def get_pullback_candidates(top_n: int = 30, db: Session = Depends(get_db)):
         "trading_date": target_date.isoformat(),
         "items": [
             {
-                "code": c.code, "name": c.name, "market": c.market, "market_cap": c.market_cap,
+                "code": c.code, "name": c.name, "market": c.market, "sector": c.sector, "market_cap": c.market_cap,
                 "close_price": c.close_price, "change_pct": c.change_pct,
                 "spike_date": c.spike_date, "spike_change_pct": c.spike_change_pct,
                 "spike_volume_ratio": c.spike_volume_ratio, "days_since_spike": c.days_since_spike,

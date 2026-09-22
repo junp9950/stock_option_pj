@@ -104,10 +104,9 @@ select{background:#21262d;border:1px solid #30363d;color:#c9d1d9;padding:6px 10p
 <div class="tabs">
   <div class="tab active" onclick="switchTab('dash')">대시보드</div>
   <div class="tab" onclick="switchTab('screener')">전종목 스크리너</div>
-  <div class="tab" onclick="switchTab('signal')">시장 시그널 상세</div>
+  <div class="tab" onclick="switchTab('pullback')">눌림목 스캐너</div>
   <div class="tab" onclick="switchTab('sector')">섹터 수급</div>
   <div class="tab" onclick="switchTab('heatmap')">시장 히트맵</div>
-  <div class="tab" onclick="switchTab('pullback')">눌림목 스캐너</div>
 </div>
 
 <!-- 대시보드 탭 -->
@@ -305,24 +304,6 @@ select{background:#21262d;border:1px solid #30363d;color:#c9d1d9;padding:6px 10p
 </div>
 
 
-<!-- 시장 시그널 상세 탭 -->
-<div id="panel-signal" class="panel content">
-  <div class="grid" id="sig-cards"></div>
-
-  <div style="font-size:12px;text-transform:uppercase;color:#8b949e;margin:16px 0 8px;letter-spacing:.06em">현물 수급</div>
-  <table>
-    <thead><tr><th>지표</th><th>실측값</th><th>정규화 점수</th><th>설명</th><th>소스</th><th>비고</th></tr></thead>
-    <tbody id="sig-detail-body-spot"><tr><td colspan="6" style="color:#8b949e;text-align:center;padding:20px">로딩 중…</td></tr></tbody>
-  </table>
-
-  <div style="font-size:12px;text-transform:uppercase;color:#8b949e;margin:16px 0 8px;letter-spacing:.06em">선물·파생 수급</div>
-  <table>
-    <thead><tr><th>지표</th><th>실측값</th><th>정규화 점수</th><th>설명</th><th>소스</th><th>비고</th></tr></thead>
-    <tbody id="sig-detail-body-futures"><tr><td colspan="6" style="color:#8b949e;text-align:center;padding:20px">로딩 중…</td></tr></tbody>
-  </table>
-</div>
-
-
 <!-- 섹터 수급 탭 -->
 <div id="panel-sector" class="panel content">
   <div class="toolbar" style="margin-bottom:12px">
@@ -413,10 +394,10 @@ select{background:#21262d;border:1px solid #30363d;color:#c9d1d9;padding:6px 10p
   </div>
   <table>
     <thead><tr>
-      <th>종목</th><th>스파이크일</th><th>급등률</th><th>거래량배수</th><th>경과일</th>
+      <th>종목</th><th>업종</th><th>스파이크일</th><th>급등률</th><th>거래량배수</th><th>경과일</th>
       <th>되돌림</th><th>거래량수축</th><th>품질점수</th><th>현재가</th>
     </tr></thead>
-    <tbody id="pb-body"><tr><td colspan="9" style="color:#8b949e;text-align:center;padding:20px">로딩 중…</td></tr></tbody>
+    <tbody id="pb-body"><tr><td colspan="10" style="color:#8b949e;text-align:center;padding:20px">로딩 중…</td></tr></tbody>
   </table>
 </div>
 
@@ -484,11 +465,10 @@ const tagHtml = tags => (tags||[]).map(t=>{
 }).join('');
 
 function switchTab(id) {
-  document.querySelectorAll('.tab').forEach((t,i)=>t.classList.toggle('active',['dash','screener','signal','sector','heatmap','pullback'][i]===id));
+  document.querySelectorAll('.tab').forEach((t,i)=>t.classList.toggle('active',['dash','screener','pullback','sector','heatmap'][i]===id));
   document.querySelectorAll('.panel').forEach(p=>p.classList.remove('active'));
   document.getElementById('panel-'+id).classList.add('active');
   if(id==='screener')loadScreener();
-  if(id==='signal')loadSignalDetail();
   if(id==='sector')loadSector();
   if(id==='heatmap')loadHeatmap();
   if(id==='pullback')loadPullback();
@@ -711,11 +691,11 @@ function renderHeatmapLegend(){
 // ── 눌림목 스캐너 ──────────────────────────────────────────────
 async function loadPullback(){
   const body = document.getElementById('pb-body');
-  body.innerHTML = '<tr><td colspan="9" style="color:#8b949e;text-align:center;padding:20px">로딩 중…</td></tr>';
+  body.innerHTML = '<tr><td colspan="10" style="color:#8b949e;text-align:center;padding:20px">로딩 중…</td></tr>';
   try{
     const data = await fetch(`${API}/screener/pullback?top_n=40`).then(r=>r.ok?r.json():null);
     if(!data || !data.items || !data.items.length){
-      body.innerHTML = '<tr><td colspan="9" style="color:#8b949e;text-align:center;padding:20px">조건에 맞는 종목이 없습니다</td></tr>';
+      body.innerHTML = '<tr><td colspan="10" style="color:#8b949e;text-align:center;padding:20px">조건에 맞는 종목이 없습니다</td></tr>';
       document.getElementById('pb-info').textContent = data ? `기준일: ${data.trading_date}` : '';
       return;
     }
@@ -724,6 +704,7 @@ async function loadPullback(){
       const qColor = it.quality_score>=0.75?'#3fb950':it.quality_score>=0.5?'#58a6ff':'#d29922';
       return `<tr style="cursor:pointer" onclick="openChartModal('${it.code}','${it.name}','${it.spike_date}')">
         <td><b>${it.name}</b> <span style="color:#8b949e;font-size:11px">${it.code}</span></td>
+        <td style="color:#8b949e;font-size:12px">${it.sector}</td>
         <td>${it.spike_date}</td>
         <td style="color:#3fb950">+${it.spike_change_pct.toFixed(1)}%</td>
         <td>${it.spike_volume_ratio.toFixed(1)}배</td>
@@ -1069,52 +1050,6 @@ function renderScreener(){
     <td>${tagHtml(i.tags)}</td>
     <td><button class="btn btn-gray btn-sm" onclick="showStockDetail('${i.code}','${i.name}')">상세</button></td>
   </tr>`;}).join('');
-}
-
-const SIGNAL_DETAIL_LABELS={
-  foreign_net_total:'외국인 순매수',
-  institution_net_total:'기관 순매수',
-  both_buy_ratio:'외인+기관 동시매수',
-  foreign_5d_trend:'외인 5일 추세',
-  avg_stock_score:'전종목 평균 점수',
-  score_up_ratio:'점수 상승 종목 비율',
-  program_trading_net:'프로그램매매 순매수',
-};
-const SIGNAL_DETAIL_GROUP={
-  program_trading_net:'futures',
-};
-
-function renderSignalDetailRows(rows){
-  if(!rows.length)return '<tr><td colspan="6" style="color:#8b949e;text-align:center;padding:20px">데이터 없음</td></tr>';
-  return rows.map(d=>`<tr style="opacity:${d.is_enabled?1:.5}">
-    <td><b>${SIGNAL_DETAIL_LABELS[d.key]||d.key}</b></td>
-    <td>${d.raw_value!=null?Number(d.raw_value).toLocaleString():'—'}</td>
-    <td>${scoreBar(d.normalized_score,2)}</td>
-    <td>${d.interpretation}</td>
-    <td><span class="badge ${d.source==='computed'?'real':'fallback'}">${d.source}</span></td>
-    <td class="ts">${d.note||''}</td>
-  </tr>`).join('');
-}
-
-async function loadSignalDetail(){
-  const [sig, details] = await Promise.all([
-    fetch(API+'/market-signal').then(r=>r.ok?r.json():null).catch(()=>null),
-    fetch(API+'/market-signal/details').then(r=>r.ok?r.json():null).catch(()=>null),
-  ]);
-  if(sig){
-    document.getElementById('sig-cards').innerHTML=`
-      <div class="card"><h3>시장 시그널</h3><div class="val signal-${sig.signal}">${sig.signal}</div></div>
-      <div class="card"><h3>종합 점수</h3><div class="val" style="color:${sig.score>0?'#3fb950':sig.score<0?'#f85149':'#d29922'}">${sig.score}</div></div>`;
-  }
-  if(!details){
-    document.getElementById('sig-detail-body-spot').innerHTML='<tr><td colspan="6" style="color:#f85149;text-align:center">로드 실패</td></tr>';
-    document.getElementById('sig-detail-body-futures').innerHTML='<tr><td colspan="6" style="color:#f85149;text-align:center">로드 실패</td></tr>';
-    return;
-  }
-  const spotRows=details.filter(d=>SIGNAL_DETAIL_GROUP[d.key]!=='futures');
-  const futuresRows=details.filter(d=>SIGNAL_DETAIL_GROUP[d.key]==='futures');
-  document.getElementById('sig-detail-body-spot').innerHTML=renderSignalDetailRows(spotRows);
-  document.getElementById('sig-detail-body-futures').innerHTML=renderSignalDetailRows(futuresRows);
 }
 
 

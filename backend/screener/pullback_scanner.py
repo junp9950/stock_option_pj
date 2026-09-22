@@ -6,7 +6,7 @@ from datetime import date, timedelta
 from sqlalchemy import desc, select
 from sqlalchemy.orm import Session
 
-from backend.db.models import SpotDailyPrice, Stock
+from backend.db.models import Sector, SectorStock, SpotDailyPrice, Stock
 
 # 큰 거래량(급등) 캔들이 나온 뒤, 지지선을 깨지 않고 조용히 눌린(눌림목) 종목을 찾는다.
 MIN_SPIKE_VOLUME_RATIO = 2.5   # 스파이크 당일 거래량 / 20일 평균 거래량
@@ -15,6 +15,7 @@ MIN_DAYS_SINCE_SPIKE = 2       # 스파이크 후 최소 경과일 (당일 급�
 MAX_DAYS_SINCE_SPIKE = 15      # 이 이상 지나면 눌림목이 아니라 그냥 다른 국면으로 간주
 MAX_PULLBACK_PCT = 15.0        # 스파이크 종가 대비 최대 되돌림 폭
 MAX_VOLUME_CONTRACTION = 0.6   # 되돌림 구간 평균거래량 / 스파이크 거래량 상한
+MIN_MARKET_CAP = 100_000_000_000  # 1000억원 미만 소형주 제외
 
 
 @dataclass
@@ -22,6 +23,7 @@ class PullbackCandidate:
     code: str
     name: str
     market: str
+    sector: str
     market_cap: float
     close_price: float
     change_pct: float
@@ -123,12 +125,22 @@ def scan_pullback_candidates(db: Session, trading_date: date, top_n: int = 30) -
 
     stocks = {s.code: s for s in db.scalars(select(Stock).where(Stock.is_active.is_(True)))}
 
+    # 업종 매핑 (수동 큐레이션된 "custom" 섹터 태그 재사용 - 실제 KRX 업종 분류는 미수집)
+    sector_map: dict[str, str] = {}
+    sector_rows = db.execute(
+        select(SectorStock.stock_code, Sector.sector_name)
+        .join(Sector, SectorStock.sector_id == Sector.id)
+        .where(Sector.source == "custom", Sector.is_active.is_(True))
+    )
+    for code, sector_name in sector_rows:
+        sector_map.setdefault(code, sector_name)
+
     candidates: list[PullbackCandidate] = []
     for code, hist in prices_history.items():
         if hist[0].trading_date != trading_date:
             continue  # 당일 데이터 없는 종목(거래정지 등) 제외
         stock = stocks.get(code)
-        if stock is None:
+        if stock is None or (stock.market_cap or 0) < MIN_MARKET_CAP:
             continue
         result = detect_pullback(hist)
         if result is None:
@@ -139,6 +151,7 @@ def scan_pullback_candidates(db: Session, trading_date: date, top_n: int = 30) -
                 code=code,
                 name=stock.name,
                 market=stock.market,
+                sector=sector_map.get(code, "기타"),
                 market_cap=stock.market_cap or 0.0,
                 close_price=today.close_price,
                 change_pct=float(today.change_pct or 0),
