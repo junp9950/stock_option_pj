@@ -1086,7 +1086,7 @@ def get_pullback_candidates(top_n: int = 30, min_market_cap: float = 0, db: Sess
                 "spike_date": c.spike_date, "spike_change_pct": c.spike_change_pct,
                 "spike_volume_ratio": c.spike_volume_ratio, "days_since_spike": c.days_since_spike,
                 "pullback_pct": c.pullback_pct, "volume_contraction": c.volume_contraction,
-                "quality_score": c.quality_score,
+                "repeat_cycles": c.repeat_cycles, "quality_score": c.quality_score,
             }
             for c in candidates
         ],

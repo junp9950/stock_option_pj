@@ -56,6 +56,7 @@ class PullbackCandidate:
     days_since_spike: int
     pullback_pct: float
     volume_contraction: float
+    repeat_cycles: int
     quality_score: float
 
 
@@ -81,6 +82,43 @@ def _find_spike(price_hist: list[SpotDailyPrice]) -> tuple[int, float, float] | 
         if volume_ratio >= MIN_SPIKE_VOLUME_RATIO and change_pct >= MIN_SPIKE_CHANGE_PCT:
             return (idx, volume_ratio, change_pct)
     return None
+
+
+REPEAT_LOOKBACK = 60   # 반복 사이클을 추가로 찾아볼 과거 구간(일)
+REPEAT_MIN_GAP = 3     # 같은 상승의 연속 스파이크를 중복 카운트하지 않기 위한 최소 간격
+
+
+def _count_repeat_cycles(price_hist: list[SpotDailyPrice], spike_idx: int) -> int:
+    """spike_idx보다 더 과거 구간에서 "스파이크 후 지지 유지"가 몇 번 더 있었는지 센다.
+    각 사이클을 찾을 때마다 그 사이클의 저가 밑으로 이후 구간이 깨진 적 없는지 확인해서
+    체인이 끊기면(지지 붕괴) 그 이전은 세지 않는다 - 계단식으로 힘을 모아온 경우만 인정.
+    """
+    count = 0
+    checkpoint = spike_idx
+    search_end = min(len(price_hist) - 21, spike_idx + REPEAT_LOOKBACK)
+    i = spike_idx + REPEAT_MIN_GAP
+    while i <= search_end:
+        p = price_hist[i]
+        window = [x.volume for x in price_hist[i + 1 : i + 21] if x.volume and x.volume > 0]
+        if len(window) < 15 or not p.volume:
+            i += 1
+            continue
+        avg_vol = sum(window) / len(window)
+        if avg_vol <= 0:
+            i += 1
+            continue
+        ratio = p.volume / avg_vol
+        chg = float(p.change_pct or 0)
+        if ratio >= MIN_SPIKE_VOLUME_RATIO and chg >= MIN_SPIKE_CHANGE_PCT:
+            segment = price_hist[checkpoint:i]  # 이 스파이크(과거) ~ 체크포인트(최근) 사이 구간
+            if any(seg.close_price < p.low_price for seg in segment):
+                break  # 지지 붕괴 - 체인이 여기서 끊김, 더 이전은 카운트 안 함
+            count += 1
+            checkpoint = i
+            i += REPEAT_MIN_GAP
+        else:
+            i += 1
+    return count
 
 
 def detect_pullback(price_hist: list[SpotDailyPrice]) -> dict | None:
@@ -122,6 +160,11 @@ def detect_pullback(price_hist: list[SpotDailyPrice]) -> dict | None:
     pullback_quality = max(0.0, 1 - max(pullback_pct, 0) / MAX_PULLBACK_PCT)
     contraction_quality = max(0.0, 1 - volume_contraction / MAX_VOLUME_CONTRACTION)
     volume_quality = min(volume_ratio / 5.0, 1.0)
+    # repeat_cycles: 참고 표시용으로만 계산 - 실측 결과 "반복 많을수록 좋다"는 가정이
+    # 틀렸음이 확인됨(단독 IC가 T+5 -0.036, T+10 -0.060로 오히려 역상관, 1회가 최적이고
+    # 3회 이상부터는 뚜렷하게 나빠짐 - 힘을 모으는 게 아니라 과열/소진에 가까움).
+    # 그래서 quality_score 계산에는 넣지 않고 정보 표시용으로만 반환한다.
+    repeat_cycles = _count_repeat_cycles(price_hist, spike_idx)
     quality_score = round(volume_quality * 0.35 + pullback_quality * 0.35 + contraction_quality * 0.30, 3)
 
     return {
@@ -131,6 +174,7 @@ def detect_pullback(price_hist: list[SpotDailyPrice]) -> dict | None:
         "days_since_spike": spike_idx,
         "pullback_pct": round(pullback_pct, 2),
         "volume_contraction": round(volume_contraction, 2),
+        "repeat_cycles": repeat_cycles,
         "quality_score": quality_score,
     }
 

@@ -400,9 +400,9 @@ select{background:#21262d;border:1px solid #30363d;color:#c9d1d9;padding:6px 10p
   <table>
     <thead><tr>
       <th>종목</th><th>업종</th><th>스파이크일</th><th>급등률</th><th>거래량배수</th><th>경과일</th>
-      <th>되돌림</th><th>거래량수축</th><th>품질점수</th><th>현재가</th>
+      <th>되돌림</th><th>거래량수축</th><th>반복</th><th>품질점수</th><th>현재가</th>
     </tr></thead>
-    <tbody id="pb-body"><tr><td colspan="10" style="color:#8b949e;text-align:center;padding:20px">로딩 중…</td></tr></tbody>
+    <tbody id="pb-body"><tr><td colspan="11" style="color:#8b949e;text-align:center;padding:20px">로딩 중…</td></tr></tbody>
   </table>
 </div>
 
@@ -696,13 +696,13 @@ function renderHeatmapLegend(){
 // ── 눌림목 스캐너 ──────────────────────────────────────────────
 async function loadPullback(){
   const body = document.getElementById('pb-body');
-  body.innerHTML = '<tr><td colspan="10" style="color:#8b949e;text-align:center;padding:20px">로딩 중…</td></tr>';
+  body.innerHTML = '<tr><td colspan="11" style="color:#8b949e;text-align:center;padding:20px">로딩 중…</td></tr>';
   try{
     const minCapEok = parseFloat(document.getElementById('pb-min-cap').value) || 0;
     const minCapWon = minCapEok * 1e8;
-    const data = await fetch(`${API}/screener/pullback?top_n=150&min_market_cap=${minCapWon}`).then(r=>r.ok?r.json():null);
+    const data = await fetch(`${API}/screener/pullback?top_n=1000&min_market_cap=${minCapWon}`).then(r=>r.ok?r.json():null);
     if(!data || !data.items || !data.items.length){
-      body.innerHTML = '<tr><td colspan="10" style="color:#8b949e;text-align:center;padding:20px">조건에 맞는 종목이 없습니다</td></tr>';
+      body.innerHTML = '<tr><td colspan="11" style="color:#8b949e;text-align:center;padding:20px">조건에 맞는 종목이 없습니다</td></tr>';
       document.getElementById('pb-info').textContent = data ? `기준일: ${data.trading_date}` : '';
       return;
     }
@@ -718,6 +718,7 @@ async function loadPullback(){
         <td>${it.days_since_spike}일전</td>
         <td>${it.pullback_pct.toFixed(1)}%</td>
         <td>${(it.volume_contraction*100).toFixed(0)}%</td>
+        <td>${it.repeat_cycles>=3?`<b style="color:#f85149">${it.repeat_cycles}회 ⚠</b>`:it.repeat_cycles>0?`${it.repeat_cycles}회`:'-'}</td>
         <td><b style="color:${qColor}">${(it.quality_score*100).toFixed(0)}</b></td>
         <td style="text-align:right">${it.close_price.toLocaleString()}원<br><span style="color:${it.change_pct>=0?'#3fb950':'#f85149'};font-size:11px">${it.change_pct>=0?'+':''}${it.change_pct.toFixed(2)}%</span></td>
       </tr>`;
