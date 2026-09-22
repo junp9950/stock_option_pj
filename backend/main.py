@@ -107,6 +107,7 @@ select{background:#21262d;border:1px solid #30363d;color:#c9d1d9;padding:6px 10p
   <div class="tab" onclick="switchTab('signal')">시장 시그널 상세</div>
   <div class="tab" onclick="switchTab('sector')">섹터 수급</div>
   <div class="tab" onclick="switchTab('heatmap')">시장 히트맵</div>
+  <div class="tab" onclick="switchTab('pullback')">눌림목 스캐너</div>
 </div>
 
 <!-- 대시보드 탭 -->
@@ -400,6 +401,36 @@ select{background:#21262d;border:1px solid #30363d;color:#c9d1d9;padding:6px 10p
   <div id="heatmap-legend" style="display:flex;margin-top:10px;border-radius:6px;overflow:hidden;font-size:12px"></div>
 </div>
 
+<!-- 눌림목 스캐너 탭 -->
+<div id="panel-pullback" class="panel content">
+  <p class="note" style="color:#8b949e;font-size:12.5px;margin:0 0 12px">
+    큰 거래량(20일 평균 대비 2.5배↑)을 동반한 상승(+3%↑) 캔들이 나온 뒤, 그 캔들의 저가를 깨지 않고
+    거래량이 잦아들며 조용히 눌린(눌림목) 종목을 찾습니다. 종목을 클릭하면 토스증권 실시간 캔들차트로 확인할 수 있습니다.
+  </p>
+  <div class="toolbar" style="margin-bottom:12px">
+    <button class="btn btn-gray btn-sm" onclick="loadPullback()">⟳ 새로고침</button>
+    <span class="ts" id="pb-info"></span>
+  </div>
+  <table>
+    <thead><tr>
+      <th>종목</th><th>스파이크일</th><th>급등률</th><th>거래량배수</th><th>경과일</th>
+      <th>되돌림</th><th>거래량수축</th><th>품질점수</th><th>현재가</th>
+    </tr></thead>
+    <tbody id="pb-body"><tr><td colspan="9" style="color:#8b949e;text-align:center;padding:20px">로딩 중…</td></tr></tbody>
+  </table>
+</div>
+
+<!-- 캔들차트 모달 (토스증권 실시간) -->
+<div class="modal-bg" id="chart-modal-bg" onclick="if(event.target===this)closeChartModal()">
+  <div class="modal">
+    <span class="close-btn" onclick="closeChartModal()">✕</span>
+    <h2 id="chart-modal-title">종목 차트</h2>
+    <div class="note" id="chart-modal-note" style="margin-bottom:8px"></div>
+    <canvas id="pb-candle-canvas" style="width:100%;height:340px;display:block"></canvas>
+    <canvas id="pb-volume-canvas" style="width:100%;height:100px;display:block;margin-top:4px"></canvas>
+  </div>
+</div>
+
 <!-- 종목 상세 모달 -->
 <div class="modal-bg" id="modal-bg" onclick="if(event.target===this)closeModal()">
   <div class="modal">
@@ -453,13 +484,14 @@ const tagHtml = tags => (tags||[]).map(t=>{
 }).join('');
 
 function switchTab(id) {
-  document.querySelectorAll('.tab').forEach((t,i)=>t.classList.toggle('active',['dash','screener','signal','sector','heatmap'][i]===id));
+  document.querySelectorAll('.tab').forEach((t,i)=>t.classList.toggle('active',['dash','screener','signal','sector','heatmap','pullback'][i]===id));
   document.querySelectorAll('.panel').forEach(p=>p.classList.remove('active'));
   document.getElementById('panel-'+id).classList.add('active');
   if(id==='screener')loadScreener();
   if(id==='signal')loadSignalDetail();
   if(id==='sector')loadSector();
   if(id==='heatmap')loadHeatmap();
+  if(id==='pullback')loadPullback();
 }
 
 // ── 섹터 수급 ──────────────────────────────────────────────────
@@ -674,6 +706,119 @@ function renderHeatmapLegend(){
   const steps = [-3,-2,-1,0,1,2,3];
   const html = steps.map(s=>`<div style="flex:1;text-align:center;padding:6px 0;background:${hmColor(s)};color:#fff;font-weight:600">${s>0?'+':''}${s}%</div>`).join('');
   document.getElementById('heatmap-legend').innerHTML = html;
+}
+
+// ── 눌림목 스캐너 ──────────────────────────────────────────────
+async function loadPullback(){
+  const body = document.getElementById('pb-body');
+  body.innerHTML = '<tr><td colspan="9" style="color:#8b949e;text-align:center;padding:20px">로딩 중…</td></tr>';
+  try{
+    const data = await fetch(`${API}/screener/pullback?top_n=40`).then(r=>r.ok?r.json():null);
+    if(!data || !data.items || !data.items.length){
+      body.innerHTML = '<tr><td colspan="9" style="color:#8b949e;text-align:center;padding:20px">조건에 맞는 종목이 없습니다</td></tr>';
+      document.getElementById('pb-info').textContent = data ? `기준일: ${data.trading_date}` : '';
+      return;
+    }
+    document.getElementById('pb-info').textContent = `기준일: ${data.trading_date} · ${data.items.length}개 종목`;
+    body.innerHTML = data.items.map(it=>{
+      const qColor = it.quality_score>=0.75?'#3fb950':it.quality_score>=0.5?'#58a6ff':'#d29922';
+      return `<tr style="cursor:pointer" onclick="openChartModal('${it.code}','${it.name}','${it.spike_date}')">
+        <td><b>${it.name}</b> <span style="color:#8b949e;font-size:11px">${it.code}</span></td>
+        <td>${it.spike_date}</td>
+        <td style="color:#3fb950">+${it.spike_change_pct.toFixed(1)}%</td>
+        <td>${it.spike_volume_ratio.toFixed(1)}배</td>
+        <td>${it.days_since_spike}일전</td>
+        <td>${it.pullback_pct.toFixed(1)}%</td>
+        <td>${(it.volume_contraction*100).toFixed(0)}%</td>
+        <td><b style="color:${qColor}">${(it.quality_score*100).toFixed(0)}</b></td>
+        <td style="text-align:right">${it.close_price.toLocaleString()}원<br><span style="color:${it.change_pct>=0?'#3fb950':'#f85149'};font-size:11px">${it.change_pct>=0?'+':''}${it.change_pct.toFixed(2)}%</span></td>
+      </tr>`;
+    }).join('');
+  }catch(e){
+    console.error(e);
+    body.innerHTML = '<tr><td colspan="9" style="color:#f85149;text-align:center;padding:20px">로딩 실패</td></tr>';
+  }
+}
+
+async function openChartModal(code, name, spikeDate){
+  document.getElementById('chart-modal-title').textContent = `${name} (${code}) — 토스증권 실시간 일봉`;
+  document.getElementById('chart-modal-note').textContent = '로딩 중…';
+  document.getElementById('chart-modal-bg').classList.add('show');
+  try{
+    const data = await fetch(`${API}/toss/candles/${code}?interval=1d&count=90`).then(r=>r.ok?r.json():null);
+    if(!data || !data.candles || !data.candles.length){
+      document.getElementById('chart-modal-note').textContent = '토스 API에서 차트 데이터를 가져오지 못했습니다.';
+      return;
+    }
+    document.getElementById('chart-modal-note').textContent = `스파이크일: ${spikeDate}`;
+    drawCandleChart(data.candles, spikeDate);
+  }catch(e){
+    console.error(e);
+    document.getElementById('chart-modal-note').textContent = '차트 로딩 실패';
+  }
+}
+function closeChartModal(){ document.getElementById('chart-modal-bg').classList.remove('show'); }
+
+// 외부 라이브러리 없이 순수 canvas로 캔들차트 + 거래량 + 눌림목 지지선 그리기
+function drawCandleChart(candles, spikeDate){
+  const cvCandle = document.getElementById('pb-candle-canvas');
+  const cvVol = document.getElementById('pb-volume-canvas');
+  const dpr = window.devicePixelRatio || 1;
+  const W = cvCandle.clientWidth || 760;
+  [[cvCandle,340],[cvVol,100]].forEach(([cv,h])=>{ cv.width=W*dpr; cv.height=h*dpr; });
+
+  const ctxC = cvCandle.getContext('2d'); ctxC.scale(dpr,dpr);
+  const ctxV = cvVol.getContext('2d'); ctxV.scale(dpr,dpr);
+  const H = 340, HV = 100;
+  ctxC.clearRect(0,0,W,H); ctxV.clearRect(0,0,W,HV);
+  ctxC.fillStyle = '#0d1117'; ctxC.fillRect(0,0,W,H);
+  ctxV.fillStyle = '#0d1117'; ctxV.fillRect(0,0,W,HV);
+
+  const n = candles.length;
+  const cw = W/n, bw = Math.max(1, cw*0.6);
+  const lows = candles.map(c=>+c.lowPrice), highs = candles.map(c=>+c.highPrice);
+  const minP = Math.min(...lows), maxP = Math.max(...highs);
+  const pad = (maxP-minP)*0.06 || 1;
+  const yP = p => H - 10 - (p-(minP-pad))/((maxP+pad)-(minP-pad))*(H-20);
+  const maxV = Math.max(...candles.map(c=>+c.volume), 1);
+  const yV = v => HV - 4 - (v/maxV)*(HV-8);
+
+  const UP='#f85149', DOWN='#3b82f6'; // 국내 관례: 상승=빨강, 하락=파랑
+  let spikeIdx = -1, spikeLow = null;
+  candles.forEach((c,i)=>{
+    const dateStr = (c.timestamp||'').slice(0,10);
+    if (dateStr === spikeDate) { spikeIdx = i; spikeLow = +c.lowPrice; }
+  });
+
+  candles.forEach((c,i)=>{
+    const x = i*cw + cw/2;
+    const o=+c.openPrice, h=+c.highPrice, l=+c.lowPrice, cl=+c.closePrice, v=+c.volume;
+    const up = cl >= o;
+    const color = up ? UP : DOWN;
+    ctxC.strokeStyle = color; ctxC.fillStyle = color;
+    ctxC.beginPath(); ctxC.moveTo(x, yP(h)); ctxC.lineTo(x, yP(l)); ctxC.stroke();
+    const bodyTop = yP(Math.max(o,cl)), bodyBot = yP(Math.min(o,cl));
+    ctxC.fillRect(x-bw/2, bodyTop, bw, Math.max(1, bodyBot-bodyTop));
+    if (i === spikeIdx){
+      ctxC.strokeStyle = '#d29922'; ctxC.lineWidth = 2;
+      ctxC.strokeRect(x-bw/2-2, bodyTop-2, bw+4, Math.max(1,bodyBot-bodyTop)+4);
+      ctxC.lineWidth = 1;
+    }
+    ctxV.fillStyle = color;
+    ctxV.fillRect(x-bw/2, yV(v), bw, HV-4-yV(v));
+  });
+
+  // 눌림목 지지선: 스파이크 저가 -> 최근 저점을 잇는 완만한 상승 트렌드라인(참고용 근사치)
+  if (spikeIdx >= 0 && spikeIdx < n-1){
+    const after = candles.slice(spikeIdx);
+    let minIdx = spikeIdx;
+    after.forEach((c,off)=>{ if(+c.lowPrice < +candles[minIdx].lowPrice) minIdx = spikeIdx+off; });
+    const x1 = spikeIdx*cw+cw/2, y1 = yP(spikeLow);
+    const x2 = (n-1)*cw+cw/2, y2 = yP(Math.min(+candles[n-1].lowPrice, spikeLow));
+    ctxC.strokeStyle = '#58a6ff'; ctxC.setLineDash([4,3]);
+    ctxC.beginPath(); ctxC.moveTo(x1,y1); ctxC.lineTo(x2, Math.min(y1,y2)); ctxC.stroke();
+    ctxC.setLineDash([]);
+  }
 }
 
 async function runPipeline(){

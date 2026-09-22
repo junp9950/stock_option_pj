@@ -13,7 +13,9 @@ from backend.collector.backfill import run_backfill as run_data_backfill
 from backend.db.database import get_db
 from backend.db.models import JobLog, MarketSignal, MarketSignalDetail, Recommendation, Sector, SectorFlowDaily, SectorStock, Setting, ShortSellingDaily, SpotDailyPrice, SpotInvestorFlow, Stock, StockSignal, StockSignalDetail
 from backend.db.seed import refresh_universe
+from backend.screener.pullback_scanner import scan_pullback_candidates
 from backend.services.daily_pipeline import run_backfill_pipeline, run_daily_pipeline
+from backend.services.toss_client import fetch_candles
 from backend.utils.dates import latest_trading_day
 
 
@@ -1066,6 +1068,36 @@ def get_heatmap(limit: int = 250, db: Session = Depends(get_db)):
         })
 
     return {"trading_date": target_date.isoformat(), "items": items}
+
+
+@router.get("/screener/pullback")
+def get_pullback_candidates(top_n: int = 30, db: Session = Depends(get_db)):
+    """장대양봉(거래량 급증+상승) 이후 지지선을 지키며 조용히 눌린(눌림목) 종목 스캔."""
+    target_date = _latest_data_date(db)
+    candidates = scan_pullback_candidates(db, target_date, top_n=top_n)
+    return {
+        "trading_date": target_date.isoformat(),
+        "items": [
+            {
+                "code": c.code, "name": c.name, "market": c.market, "market_cap": c.market_cap,
+                "close_price": c.close_price, "change_pct": c.change_pct,
+                "spike_date": c.spike_date, "spike_change_pct": c.spike_change_pct,
+                "spike_volume_ratio": c.spike_volume_ratio, "days_since_spike": c.days_since_spike,
+                "pullback_pct": c.pullback_pct, "volume_contraction": c.volume_contraction,
+                "quality_score": c.quality_score,
+            }
+            for c in candidates
+        ],
+    }
+
+
+@router.get("/toss/candles/{code}")
+def get_toss_candles(code: str, interval: str = "1d", count: int = 60):
+    """토스증권 Open API로 실시간 일봉 캔들 조회 (차트 렌더링용)."""
+    candles = fetch_candles(code, interval=interval, count=count)
+    if candles is None:
+        raise HTTPException(status_code=502, detail="토스 API에서 캔들 데이터를 가져오지 못했습니다")
+    return {"code": code, "interval": interval, "candles": candles}
 
 
 @router.get("/universe")

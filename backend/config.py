@@ -47,6 +47,8 @@ class AppConfig:
     telegram_chat_id: str = field(default_factory=lambda: os.getenv("TELEGRAM_CHAT_ID", ""))
     dart_api_key: str = field(default_factory=lambda: os.getenv("DART_API_KEY", ""))
     dart_earnings_pool: int = 20
+    toss_client_id: str = field(default_factory=lambda: os.getenv("TOSS_CLIENT_ID", ""))
+    toss_client_secret: str = field(default_factory=lambda: os.getenv("TOSS_CLIENT_SECRET", ""))
     frontend_origin: str = "http://localhost:5173"
     market_signal_weights: dict[str, float] = field(
         default_factory=lambda: {
