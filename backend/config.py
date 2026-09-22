@@ -17,7 +17,7 @@ def _float_env(name: str, default: float) -> float:
 
 @dataclass(slots=True)
 class AppConfig:
-    app_name: str = "Futures Options Analyzer"
+    app_name: str = "눌림목 스캐너"
     api_prefix: str = "/api"
     backend_host: str = "127.0.0.1"
     backend_port: int = 8000
