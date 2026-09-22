@@ -14,6 +14,8 @@ MIN_SPIKE_CHANGE_PCT = 3.0     # 스파이크 당일 최소 상승률
 MIN_DAYS_SINCE_SPIKE = 2       # 스파이크 후 최소 경과일 (당일 급등주 제외)
 MAX_DAYS_SINCE_SPIKE = 15      # 이 이상 지나면 눌림목이 아니라 그냥 다른 국면으로 간주
 MAX_PULLBACK_PCT = 15.0        # 스파이크 종가 대비 최대 되돌림 폭
+MAX_UPSIDE_PAST_SPIKE = 12.0   # 스파이크 이후 추가 상승 허용폭 - 빠지지 않고 고점 부근에서
+                                # 좁게 다지는(플래그형) 눌림목도 정상 케이스로 인정하기 위함
 MAX_VOLUME_CONTRACTION = 0.6   # 되돌림 구간 평균거래량 / 스파이크 거래량 상한
 DEFAULT_MIN_MARKET_CAP = 0.0   # 기본은 시총 필터 없음(0) - 거래량 급증이 1순위, 시총 필터는 선택 사항
 
@@ -104,8 +106,9 @@ def detect_pullback(price_hist: list[SpotDailyPrice]) -> dict | None:
     if not spike_day.close_price:
         return None
     pullback_pct = (spike_day.close_price - today.close_price) / spike_day.close_price * 100
-    if pullback_pct < -1.0 or pullback_pct > MAX_PULLBACK_PCT:
-        # 음수(=스파이크 이후 더 상승)면 이미 다음 국면 - 제외
+    if pullback_pct < -MAX_UPSIDE_PAST_SPIKE or pullback_pct > MAX_PULLBACK_PCT:
+        # 너무 많이 더 올랐으면(추세 지속 중) 눌림목이 아니라 별개 국면으로 보고 제외.
+        # 다만 소폭 더 오르며 고점 부근에서 좁게 다지는 것(플래그형)은 정상적인 눌림목으로 허용.
         return None
 
     recent_vols = [p.volume for p in since_spike if p.volume and p.volume > 0]
