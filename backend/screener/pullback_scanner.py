@@ -11,7 +11,7 @@ from backend.db.models import Sector, SectorStock, SpotDailyPrice, Stock
 # 큰 거래량(급등) 캔들이 나온 뒤, 지지선을 깨지 않고 조용히 눌린(눌림목) 종목을 찾는다.
 MIN_SPIKE_VOLUME_RATIO = 2.5   # 스파이크 당일 거래량 / 20일 평균 거래량
 MIN_SPIKE_CHANGE_PCT = 3.0     # 스파이크 당일 최소 상승률
-MIN_DAYS_SINCE_SPIKE = 2       # 스파이크 후 최소 경과일 (당일 급등주 제외)
+MIN_DAYS_SINCE_SPIKE = 1       # 스파이크 후 최소 경과일 (당일 급등주만 제외, 전일 스파이크는 포함)
 MAX_DAYS_SINCE_SPIKE = 15      # 이 이상 지나면 눌림목이 아니라 그냥 다른 국면으로 간주
 MAX_PULLBACK_PCT = 15.0        # 스파이크 종가 대비 최대 되돌림 폭
 MAX_UPSIDE_PAST_SPIKE = 12.0   # 스파이크 이후 추가 상승 허용폭 - 빠지지 않고 고점 부근에서
@@ -61,9 +61,12 @@ class PullbackCandidate:
 
 def _find_spike(price_hist: list[SpotDailyPrice]) -> tuple[int, float, float] | None:
     """price_hist: 최신순(내림차순) 정렬. 룩백 구간에서 거래량 급증+상승 캔들을 찾는다.
-    반환: (price_hist 상의 인덱스, volume_ratio, change_pct) 중 volume_ratio가 가장 큰 것.
+    반환: (price_hist 상의 인덱스, volume_ratio, change_pct) 중 "가장 최근" 것.
+
+    예전엔 구간 내 volume_ratio가 가장 큰 날을 스파이크로 골랐는데, 이러면 최근에
+    새로 스파이크가 났어도 몇 주 전에 더 컸던 스파이크가 있으면 그쪽으로 잘못
+    고정돼 되돌림%가 왜곡되는 문제가 있었음(디아이 사례) - 최근 것을 우선한다.
     """
-    best: tuple[int, float, float] | None = None
     max_idx = min(len(price_hist) - 21, MAX_DAYS_SINCE_SPIKE)
     for idx in range(MIN_DAYS_SINCE_SPIKE, max_idx + 1):
         p = price_hist[idx]
@@ -76,9 +79,8 @@ def _find_spike(price_hist: list[SpotDailyPrice]) -> tuple[int, float, float] | 
         volume_ratio = p.volume / avg_vol_20d
         change_pct = float(p.change_pct or 0)
         if volume_ratio >= MIN_SPIKE_VOLUME_RATIO and change_pct >= MIN_SPIKE_CHANGE_PCT:
-            if best is None or volume_ratio > best[1]:
-                best = (idx, volume_ratio, change_pct)
-    return best
+            return (idx, volume_ratio, change_pct)
+    return None
 
 
 def detect_pullback(price_hist: list[SpotDailyPrice]) -> dict | None:
