@@ -15,7 +15,7 @@ MIN_DAYS_SINCE_SPIKE = 2       # 스파이크 후 최소 경과일 (당일 급�
 MAX_DAYS_SINCE_SPIKE = 15      # 이 이상 지나면 눌림목이 아니라 그냥 다른 국면으로 간주
 MAX_PULLBACK_PCT = 15.0        # 스파이크 종가 대비 최대 되돌림 폭
 MAX_VOLUME_CONTRACTION = 0.6   # 되돌림 구간 평균거래량 / 스파이크 거래량 상한
-MIN_MARKET_CAP = 100_000_000_000  # 1000억원 미만 소형주 제외
+DEFAULT_MIN_MARKET_CAP = 0.0   # 기본은 시총 필터 없음(0) - 거래량 급증이 1순위, 시총 필터는 선택 사항
 
 
 @dataclass
@@ -109,8 +109,18 @@ def detect_pullback(price_hist: list[SpotDailyPrice]) -> dict | None:
     }
 
 
-def scan_pullback_candidates(db: Session, trading_date: date, top_n: int = 30) -> list[PullbackCandidate]:
-    """전종목을 스캔해 '급등 후 눌림목' 패턴에 맞는 종목을 품질순으로 반환한다."""
+def scan_pullback_candidates(
+    db: Session, trading_date: date, top_n: int = 30, min_market_cap: float = DEFAULT_MIN_MARKET_CAP
+) -> list[PullbackCandidate]:
+    """전종목(유니버스 소속 여부·활성 상태 무관 - 가격 데이터가 있는 모든 종목)을 스캔해
+    '급등 후 눌림목' 패턴에 맞는 종목을 품질순으로 반환한다.
+
+    거래량 급증 탐지가 1순위이므로 Stock.is_active 여부로 미리 걸러내지 않는다 -
+    섹터 보완 수집 등으로 가격 데이터만 있고 유니버스에는 편입 안 된 중소형 급등주도
+    빠짐없이 검토 대상에 포함시키기 위함. 시가총액 필터는 그 다음 단계의 선택적 필터.
+    시가총액이 0(수집 안 됨/불명)인 경우는 "작다고 확인된 것"이 아니라 "몰라서 0"인
+    경우가 많아 필터에서 제외하지 않고 통과시킨다.
+    """
     history_start = trading_date - timedelta(days=int((MAX_DAYS_SINCE_SPIKE + 30) * 1.6))
     all_prices = list(
         db.scalars(
@@ -123,7 +133,7 @@ def scan_pullback_candidates(db: Session, trading_date: date, top_n: int = 30) -
     for p in all_prices:
         prices_history.setdefault(p.stock_code, []).append(p)
 
-    stocks = {s.code: s for s in db.scalars(select(Stock).where(Stock.is_active.is_(True)))}
+    stocks = {s.code: s for s in db.scalars(select(Stock))}
 
     # 업종 매핑 (수동 큐레이션된 "custom" 섹터 태그 재사용 - 실제 KRX 업종 분류는 미수집)
     sector_map: dict[str, str] = {}
@@ -140,10 +150,14 @@ def scan_pullback_candidates(db: Session, trading_date: date, top_n: int = 30) -
         if hist[0].trading_date != trading_date:
             continue  # 당일 데이터 없는 종목(거래정지 등) 제외
         stock = stocks.get(code)
-        if stock is None or (stock.market_cap or 0) < MIN_MARKET_CAP:
+        if stock is None:
             continue
         result = detect_pullback(hist)
         if result is None:
+            continue
+        # 시총 필터 (선택적, 2순위) - 시총이 확인된 경우에만 적용. 0(불명)은 통과시킴.
+        cap = stock.market_cap or 0.0
+        if min_market_cap > 0 and 0 < cap < min_market_cap:
             continue
         today = hist[0]
         candidates.append(

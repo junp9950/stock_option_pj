@@ -1071,10 +1071,12 @@ def get_heatmap(limit: int = 250, db: Session = Depends(get_db)):
 
 
 @router.get("/screener/pullback")
-def get_pullback_candidates(top_n: int = 30, db: Session = Depends(get_db)):
-    """장대양봉(거래량 급증+상승) 이후 지지선을 지키며 조용히 눌린(눌림목) 종목 스캔."""
+def get_pullback_candidates(top_n: int = 30, min_market_cap: float = 0, db: Session = Depends(get_db)):
+    """장대양봉(거래량 급증+상승) 이후 지지선을 지키며 조용히 눌린(눌림목) 종목 스캔.
+    거래량 급증 탐지가 1순위라 유니버스(is_active) 제한 없이 전체 종목을 스캔하며,
+    min_market_cap(원 단위)은 그 다음 단계의 선택적 필터."""
     target_date = _latest_data_date(db)
-    candidates = scan_pullback_candidates(db, target_date, top_n=top_n)
+    candidates = scan_pullback_candidates(db, target_date, top_n=top_n, min_market_cap=min_market_cap)
     return {
         "trading_date": target_date.isoformat(),
         "items": [

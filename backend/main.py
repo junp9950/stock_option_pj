@@ -389,6 +389,11 @@ select{background:#21262d;border:1px solid #30363d;color:#c9d1d9;padding:6px 10p
     거래량이 잦아들며 조용히 눌린(눌림목) 종목을 찾습니다. 종목을 클릭하면 토스증권 실시간 캔들차트로 확인할 수 있습니다.
   </p>
   <div class="toolbar" style="margin-bottom:12px">
+    <label style="display:flex;align-items:center;gap:6px;font-size:13px;color:#8b949e">
+      최소 시가총액(억원)
+      <input type="number" id="pb-min-cap" value="0" min="0" step="100" onchange="loadPullback()"
+             style="width:90px;background:#0d1117;border:1px solid #30363d;color:#c9d1d9;padding:4px 8px;border-radius:4px">
+    </label>
     <button class="btn btn-gray btn-sm" onclick="loadPullback()">⟳ 새로고침</button>
     <span class="ts" id="pb-info"></span>
   </div>
@@ -693,7 +698,9 @@ async function loadPullback(){
   const body = document.getElementById('pb-body');
   body.innerHTML = '<tr><td colspan="10" style="color:#8b949e;text-align:center;padding:20px">로딩 중…</td></tr>';
   try{
-    const data = await fetch(`${API}/screener/pullback?top_n=40`).then(r=>r.ok?r.json():null);
+    const minCapEok = parseFloat(document.getElementById('pb-min-cap').value) || 0;
+    const minCapWon = minCapEok * 1e8;
+    const data = await fetch(`${API}/screener/pullback?top_n=150&min_market_cap=${minCapWon}`).then(r=>r.ok?r.json():null);
     if(!data || !data.items || !data.items.length){
       body.innerHTML = '<tr><td colspan="10" style="color:#8b949e;text-align:center;padding:20px">조건에 맞는 종목이 없습니다</td></tr>';
       document.getElementById('pb-info').textContent = data ? `기준일: ${data.trading_date}` : '';
