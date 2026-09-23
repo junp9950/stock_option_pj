@@ -22,8 +22,10 @@ _MIN_TRADING_VALUE = 5_000_000_000
 _MIN_FLOAT_RATIO = 0.03
 _MIN_MARKET_CAP = 300_000_000_000
 _LOOKBACK_DAYS = 90
-_EVENT_WINDOW = 3
 _MAX_VWAP_GAP = 10.0  # VWAP 대비 +10% 초과 = 이미 오른 종목
+_MIN_CLOSE_STRENGTH = 0.6  # 폭발일 종가가 고저 범위 상위 60% 이상 (윗꼬리 긴 캔들 제외)
+_MAX_NEXT_DAY_DROP = -4.0  # 폭발 다음날 등락률이 이 이하면 분배로 판단
+_MAX_REBOUND = 6.0  # 이벤트 이후 종가 저점 대비 회복률 상한(%)
 
 
 def scan(db: Session, top_n_by_value: int | None = None) -> list[dict]:
@@ -86,11 +88,17 @@ def scan(db: Session, top_n_by_value: int | None = None) -> list[dict]:
         latest_event = max(events, key=lambda e: e["date"])
         event_idx = latest_event["idx"]
         event_day = price_list[event_idx]
-        window = price_list[event_idx: event_idx + _EVENT_WINDOW]
+        # 폭발 다음날 큰 음봉 = 분배 신호
+        after = price_list[event_idx + 1: event_idx + 2]
+        if after and float(after[0].change_pct or 0) <= _MAX_NEXT_DAY_DROP:
+            continue
 
-        total_value = sum(p.trading_value for p in window if p.trading_value)
-        total_vol = sum(p.volume for p in window if p.volume)
-        vwap = total_value / total_vol if total_vol > 0 else event_day.close_price
+        # 세력 평단 = 폭발일 하루의 실제 체결 평균가 (이후 하락일이 섞이지 않게)
+        vwap = (
+            event_day.trading_value / event_day.volume
+            if event_day.volume and event_day.trading_value
+            else event_day.close_price
+        )
         event_close = event_day.close_price
         stop_price = min(event_day.open_price, event_day.close_price)  # 폭발일 몸통 하단
 
@@ -100,6 +108,14 @@ def scan(db: Session, top_n_by_value: int | None = None) -> list[dict]:
 
         # 손절선 이탈(매집 무효), 이벤트 종가 위(눌림 아님), VWAP 대비 과열은 제외
         if current < stop_price or retrace_pct < 0 or vwap_gap > _MAX_VWAP_GAP:
+            continue
+
+        # 이미 반등 중: 3일 연속 상승이거나 이벤트 이후 종가 저점 대비 크게 회복
+        recent3 = price_list[-3:]
+        if len(recent3) == 3 and all(float(p.change_pct or 0) > 0 for p in recent3):
+            continue
+        post_low = min(p.close_price for p in price_list[event_idx + 1:] or [price_list[-1]])
+        if post_low > 0 and (current - post_low) / post_low * 100 > _MAX_REBOUND:
             continue
 
         event_vol = event_day.volume
@@ -152,6 +168,9 @@ def _find_events(price_list: list, cutoff: date, shares: float) -> list[dict]:
             continue
         change = float(p.change_pct or 0)
         if change <= 0:
+            continue
+        day_range = p.high_price - p.low_price
+        if day_range > 0 and (p.close_price - p.low_price) / day_range < _MIN_CLOSE_STRENGTH:
             continue
 
         prev_vols = [price_list[j].volume for j in range(max(0, i - 20), i) if price_list[j].volume]
