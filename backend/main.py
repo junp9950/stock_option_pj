@@ -84,6 +84,26 @@ select{background:#21262d;border:1px solid #30363d;color:#c9d1d9;padding:6px 10p
 .modal-tab.active{color:#58a6ff;border-bottom-color:#58a6ff}
 .ts{color:#8b949e;font-size:11px}
 .log-ok{color:#3fb950}.log-err{color:#f85149}.log-run{color:#d29922}
+@media (max-width:720px){
+  header{padding:12px 14px;flex-wrap:wrap;gap:8px}
+  header h1{font-size:16px}
+  .tabs{padding:0 6px;overflow-x:auto;-webkit-overflow-scrolling:touch}
+  .tab{padding:10px 12px;white-space:nowrap;flex:0 0 auto}
+  .toolbar{padding:10px 14px}
+  .content{padding:14px}
+  .err-bar{padding:8px 14px}
+  .modal{padding:14px}
+  .toast{left:14px;right:14px;bottom:14px}
+  table:not(.pb-table){display:block;overflow-x:auto;white-space:nowrap}
+  .pb-table,.pb-table tbody{display:block;border:none;background:transparent}
+  .pb-table thead{display:none}
+  .pb-table tr{display:block;background:#161b22;border:1px solid #30363d;border-radius:10px;padding:10px 12px;margin-bottom:10px}
+  .pb-table td{display:block;text-align:right;padding:4px 0;border:none}
+  .pb-table td:first-child{text-align:left;font-size:15px;padding-bottom:6px;margin-bottom:4px;border-bottom:1px solid #21262d}
+  .pb-table td[data-label]::before{content:attr(data-label);float:left;color:#8b949e;font-size:12px}
+  .pb-table td::after{content:"";display:block;clear:both}
+  .pb-table tr:hover td{background:transparent}
+}
 </style>
 <script src="https://cdn.jsdelivr.net/npm/chart.js@4/dist/chart.umd.min.js"></script>
 </head>
@@ -334,7 +354,7 @@ select{background:#21262d;border:1px solid #30363d;color:#c9d1d9;padding:6px 10p
     <button class="btn btn-gray btn-sm" onclick="loadPullback()">⟳ 새로고침</button>
     <span class="ts" id="pb-info"></span>
   </div>
-  <table>
+  <table class="pb-table">
     <thead><tr>
       <th>종목</th><th>종합점수</th><th>현재가</th><th>VWAP 대비</th><th>손절선</th>
       <th>급등</th><th>되돌림</th><th>근거</th>
@@ -663,13 +683,13 @@ async function loadPullback(){
       (it.signal_reasons||[]).forEach(r=>tags.push(r));
       return `<tr style="cursor:pointer" onclick="openChartModal('${it.code}','${it.name}','${it.spike_date}')">
         <td><b>${it.name}</b> <span style="color:#8b949e;font-size:11px">${it.code}</span><br><span style="color:#8b949e;font-size:11px">${it.sector}</span></td>
-        <td><b style="color:${gradeColor(it.grade)};font-size:16px">${it.total_score}</b> <span style="color:${gradeColor(it.grade)};font-size:11px">${it.grade}</span><br><span class="ts">신호 ${has?it.signal_score:'—'} · 품질 ${(it.quality_score*100).toFixed(0)}</span></td>
-        <td style="text-align:right">${it.close_price.toLocaleString()}원<br><span style="color:${it.change_pct>=0?'#f85149':'#3b82f6'};font-size:11px">${it.change_pct>=0?'+':''}${it.change_pct.toFixed(2)}%</span></td>
-        <td style="color:${has&&Math.abs(gap)<=3?'#3fb950':'#c9d1d9'}">${has?`${gap>=0?'+':''}${gap}%<br><span class="ts">${it.vwap.toLocaleString()}</span>`:dash}</td>
-        <td style="color:#f85149">${has?it.stop_price.toLocaleString():dash}</td>
-        <td>${it.spike_date}<br><span class="ts">+${it.spike_change_pct.toFixed(1)}% · ${it.spike_volume_ratio.toFixed(1)}배 · ${it.days_since_spike}일 전</span></td>
-        <td>${it.pullback_pct.toFixed(1)}%<br><span class="ts">거래량 ${(it.volume_contraction*100).toFixed(0)}%</span></td>
-        <td style="font-size:12px;color:#c9d1d9">${tags.join(' · ')||dash}</td>
+        <td data-label="점수"><b style="color:${gradeColor(it.grade)};font-size:16px">${it.total_score}</b> <span style="color:${gradeColor(it.grade)};font-size:11px">${it.grade}</span><br><span class="ts">신호 ${has?it.signal_score:'—'} · 품질 ${(it.quality_score*100).toFixed(0)}</span></td>
+        <td data-label="현재가" style="text-align:right">${it.close_price.toLocaleString()}원<br><span style="color:${it.change_pct>=0?'#f85149':'#3b82f6'};font-size:11px">${it.change_pct>=0?'+':''}${it.change_pct.toFixed(2)}%</span></td>
+        <td data-label="VWAP 대비" style="color:${has&&Math.abs(gap)<=3?'#3fb950':'#c9d1d9'}">${has?`${gap>=0?'+':''}${gap}%<br><span class="ts">${it.vwap.toLocaleString()}</span>`:dash}</td>
+        <td data-label="손절선" style="color:#f85149">${has?it.stop_price.toLocaleString():dash}</td>
+        <td data-label="급등">${it.spike_date}<br><span class="ts">+${it.spike_change_pct.toFixed(1)}% · ${it.spike_volume_ratio.toFixed(1)}배 · ${it.days_since_spike}일 전</span></td>
+        <td data-label="되돌림">${it.pullback_pct.toFixed(1)}%<br><span class="ts">거래량 ${(it.volume_contraction*100).toFixed(0)}%</span></td>
+        <td data-label="근거" style="font-size:12px;color:#c9d1d9">${tags.join(' · ')||dash}</td>
       </tr>`;
     }).join('');
   }catch(e){
