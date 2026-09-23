@@ -1,9 +1,10 @@
 """거래량 비정상 감지 기반 세력 포착 스크리너.
 
 달빛속삭임 방법론:
-- 유통주식수 대비 / 평균 대비 비정상 거래량 발생일 = 세력 개입 신호
-- 해당 구간 VWAP = 세력 평단가(코어라인)
-- 현재가가 코어 하단 근처 + 거래량 수렴 = 매수 구간
+- 평균 대비 비정상 거래량 양봉일 = 세력 개입(흡수) 신호
+- 이벤트 구간 VWAP = 세력 평단가(코어라인)
+- 현재가가 VWAP 부근 + 거래량 수렴 + 몸통 하단 유지 = 매수 구간
+결과는 0~100 종합 점수로 요약한다.
 """
 from __future__ import annotations
 
@@ -16,14 +17,13 @@ from sqlalchemy.orm import Session
 from backend.db.models import SpotDailyPrice, Stock
 
 
-# 비정상 거래량 감지 기준
-_MIN_VOL_MULTIPLIER = 3.0      # 20일 평균 거래량 대비 N배 이상
-_MIN_TRADING_VALUE = 5_000_000_000  # 50억 이상
-_MIN_FLOAT_RATIO = 0.03         # 발행주식수의 3% 이상 거래
-_MIN_MARKET_CAP = 300_000_000_000   # 시총 3,000억 이상
-_LOOKBACK_DAYS = 90             # 최대 90일 이전 이벤트까지 탐지
-_MAX_POSITION = 0.6             # 코어 범위 내 현재 위치 상한 (초과 시 이미 상승한 종목)
-_EVENT_WINDOW = 3              # 이벤트 발생 후 N일을 코어 구간으로 산정
+_MIN_VOL_MULTIPLIER = 3.0
+_MIN_TRADING_VALUE = 5_000_000_000
+_MIN_FLOAT_RATIO = 0.03
+_MIN_MARKET_CAP = 300_000_000_000
+_LOOKBACK_DAYS = 90
+_EVENT_WINDOW = 3
+_MAX_VWAP_GAP = 10.0  # VWAP 대비 +10% 초과 = 이미 오른 종목
 
 
 def scan(db: Session, top_n_by_value: int | None = None) -> list[dict]:
@@ -52,7 +52,6 @@ def scan(db: Session, top_n_by_value: int | None = None) -> list[dict]:
 
     by_code: dict[str, list] = defaultdict(list)
     meta: dict[str, dict] = {}
-
     for r in rows:
         by_code[r.stock_code].append(r)
         meta[r.stock_code] = {
@@ -62,12 +61,10 @@ def scan(db: Session, top_n_by_value: int | None = None) -> list[dict]:
             "shares_outstanding": r.shares_outstanding or 0,
         }
 
-    # 거래대금 상위 N 필터: 최근 5일 평균 거래대금으로 랭킹
     if top_n_by_value:
         value_scores: dict[str, float] = {}
         for code, price_list in by_code.items():
-            recent = price_list[-5:]
-            vals = [p.trading_value for p in recent if p.trading_value]
+            vals = [p.trading_value for p in price_list[-5:] if p.trading_value]
             value_scores[code] = sum(vals) / len(vals) if vals else 0.0
         top_codes = set(sorted(value_scores, key=lambda c: -value_scores[c])[:top_n_by_value])
         by_code = {c: v for c, v in by_code.items() if c in top_codes}
@@ -78,58 +75,43 @@ def scan(db: Session, top_n_by_value: int | None = None) -> list[dict]:
     for code, price_list in by_code.items():
         if len(price_list) < 20:
             continue
-        # top_n 모드에서는 거래대금으로 이미 상위 종목만 선별했으므로 시총 필터 제외
         if not top_n_by_value and meta[code]["market_cap"] < _MIN_MARKET_CAP:
             continue
 
         shares = meta[code]["shares_outstanding"]
         events = _find_events(price_list, cutoff, shares)
-
         if not events:
             continue
 
         latest_event = max(events, key=lambda e: e["date"])
         event_idx = latest_event["idx"]
+        event_day = price_list[event_idx]
         window = price_list[event_idx: event_idx + _EVENT_WINDOW]
 
         total_value = sum(p.trading_value for p in window if p.trading_value)
         total_vol = sum(p.volume for p in window if p.volume)
-        core_vwap = total_value / total_vol if total_vol > 0 else price_list[event_idx].close_price
-        core_low = min(p.low_price for p in window)
-        core_high = max(p.high_price for p in window)
-        event_close = price_list[event_idx].close_price
+        vwap = total_value / total_vol if total_vol > 0 else event_day.close_price
+        event_close = event_day.close_price
+        stop_price = min(event_day.open_price, event_day.close_price)  # 폭발일 몸통 하단
 
-        latest = price_list[-1]
-        current_price = latest.close_price
+        current = price_list[-1].close_price
+        vwap_gap = (current - vwap) / vwap * 100 if vwap > 0 else 0.0
+        retrace_pct = (event_close - current) / event_close * 100 if event_close > 0 else 0.0
 
-        core_range = core_high - core_low
-        position = (current_price - core_low) / core_range if core_range > 0 else 0.5
-
-        below_core = current_price < core_low * 0.97  # 3% 여유
-
-        event_vol = price_list[event_idx].volume
-        recent_vols = [p.volume for p in price_list[-5:] if p.volume]
-        avg_recent_vol = sum(recent_vols) / len(recent_vols) if recent_vols else 0
-        vol_converging = avg_recent_vol < event_vol * 0.35 if event_vol > 0 else False
-
-        # 구라하락 감지: 이벤트 종가 대비 현재가가 3% 이상 하락 + 거래량 수렴
-        # = 가격은 내려왔지만 세력은 안 팔고 있음
-        retrace_pct = (event_close - current_price) / event_close * 100 if event_close > 0 else 0
-        fake_drop = retrace_pct >= 3.0 and vol_converging and not below_core
-
-        # 이미 코어 상단으로 올라갔거나 이벤트 종가 위에 있으면 눌림이 아니므로 제외
-        if position > _MAX_POSITION or retrace_pct < 0:
+        # 손절선 이탈(매집 무효), 이벤트 종가 위(눌림 아님), VWAP 대비 과열은 제외
+        if current < stop_price or retrace_pct < 0 or vwap_gap > _MAX_VWAP_GAP:
             continue
 
-        days_since = (date.today() - latest_event["date"]).days
-        float_ratio = (event_vol / shares * 100) if shares > 0 else 0
+        event_vol = event_day.volume
+        recent_vols = [p.volume for p in price_list[-5:] if p.volume]
+        avg_recent = sum(recent_vols) / len(recent_vols) if recent_vols else 0
+        vol_ratio = avg_recent / event_vol if event_vol > 0 else 1.0
 
-        score = _calc_score(
-            position=position,
-            below_core=below_core,
-            vol_converging=vol_converging,
-            fake_drop=fake_drop,
-            float_ratio=float_ratio,
+        days_since = (date.today() - latest_event["date"]).days
+        score, reasons = _calc_score(
+            vwap_gap=vwap_gap,
+            vol_ratio=vol_ratio,
+            retrace_pct=retrace_pct,
             vol_multiplier=latest_event["vol_multiplier"],
             days_since=days_since,
         )
@@ -139,41 +121,33 @@ def scan(db: Session, top_n_by_value: int | None = None) -> list[dict]:
             "name": meta[code]["name"],
             "market": meta[code]["market"],
             "market_cap": meta[code]["market_cap"],
-            "current_price": round(current_price),
-            "change_pct": round(float(latest.change_pct or 0), 2),
+            "score": score,
+            "grade": "강력" if score >= 75 else "관심" if score >= 60 else "관찰",
+            "reasons": reasons,
+            "current_price": round(current),
+            "change_pct": round(float(price_list[-1].change_pct or 0), 2),
+            "vwap": round(vwap),
+            "vwap_gap_pct": round(vwap_gap, 1),
+            "stop_price": round(stop_price),
             "event_date": str(latest_event["date"]),
-            "event_close": round(event_close),
             "days_since_event": days_since,
             "vol_multiplier": round(latest_event["vol_multiplier"], 1),
-            "trading_value_b": round(latest_event["trading_value"] / 1e8, 0),
-            "float_ratio": round(float_ratio, 1),
-            "core_vwap": round(core_vwap),
-            "core_low": round(core_low),
-            "core_high": round(core_high),
-            "position": round(position, 2),
             "retrace_pct": round(retrace_pct, 1),
-            "below_core": below_core,
-            "vol_converging": vol_converging,
-            "fake_drop": fake_drop,
-            "signal_score": score,
+            "vol_ratio": round(vol_ratio, 2),
         })
 
-    results.sort(key=lambda x: (-x["signal_score"], x["days_since_event"]))
+    results.sort(key=lambda x: (-x["score"], x["days_since_event"]))
     return results
 
 
 def _find_events(price_list: list, cutoff: date, shares: float) -> list[dict]:
     events = []
     for i, p in enumerate(price_list):
-        if p.trading_date < cutoff:
-            continue
-        if i < 10:
+        if p.trading_date < cutoff or i < 10:
             continue
         if not p.volume or not p.trading_value:
             continue
-
-        # 흡수 조건: 양봉 + 등락률 양수여야 세력 매집 신호
-        # 음봉(하락) 거래량 폭발은 분배/털기 — 제외
+        # 흡수 조건: 양봉 + 등락률 양수 (음봉 폭발은 분배/털기)
         if p.close_price <= p.open_price:
             continue
         change = float(p.change_pct or 0)
@@ -189,7 +163,6 @@ def _find_events(price_list: list, cutoff: date, shares: float) -> list[dict]:
 
         vol_mult = p.volume / avg_vol
         float_ok = (p.volume / shares >= _MIN_FLOAT_RATIO) if shares > 0 else False
-
         if vol_mult >= _MIN_VOL_MULTIPLIER and p.trading_value >= _MIN_TRADING_VALUE:
             if shares == 0 or float_ok or vol_mult >= 5.0:
                 events.append({
@@ -203,35 +176,55 @@ def _find_events(price_list: list, cutoff: date, shares: float) -> list[dict]:
 
 
 def _calc_score(
-    position: float,
-    below_core: bool,
-    vol_converging: bool,
-    fake_drop: bool,
-    float_ratio: float,
+    vwap_gap: float,
+    vol_ratio: float,
+    retrace_pct: float,
     vol_multiplier: float,
     days_since: int,
-) -> int:
+) -> tuple[int, list[str]]:
+    """0~100점. VWAP 근접 35 + 거래량 수렴 25 + 눌림 깊이 20 + 이벤트 강도 10 + 신선도 10."""
+    reasons: list[str] = []
     score = 0
-    if not below_core:
-        score += 2
-    if 0 <= position <= 0.35:
-        score += 3  # 코어 하단 근처 = 최적 매수 구간
-    elif 0.35 < position <= 0.6:
-        score += 1
-    if vol_converging:
-        score += 2  # 거래량 수렴 = 기간조정 중
-    if fake_drop:
-        score += 3  # 구라하락 = 핵심 패턴 (거래량 줄며 가격 하락)
-    if float_ratio >= 10:
-        score += 2
-    elif float_ratio >= 5:
-        score += 1
+
+    if -5 <= vwap_gap <= 3:
+        score += 35
+        reasons.append("VWAP 부근")
+    elif 3 < vwap_gap <= 6:
+        score += 25
+    elif vwap_gap < -5:
+        score += 20
+        reasons.append("VWAP 하회")
+    else:
+        score += 10
+
+    if vol_ratio <= 0.2:
+        score += 25
+        reasons.append("거래량 급감")
+    elif vol_ratio <= 0.35:
+        score += 18
+        reasons.append("거래량 수렴")
+    elif vol_ratio <= 0.5:
+        score += 8
+
+    if 3 <= retrace_pct <= 15:
+        score += 20
+        reasons.append(f"구라하락 -{retrace_pct:.0f}%")
+    elif retrace_pct > 15:
+        score += 10
+    else:
+        score += 8
+
     if vol_multiplier >= 5:
-        score += 2
+        score += 10
+        reasons.append(f"거래량 {vol_multiplier:.0f}배")
     elif vol_multiplier >= 3:
-        score += 1
-    if days_since <= 15:
-        score += 2
-    elif days_since <= 30:
-        score += 1
-    return score
+        score += 6
+
+    if days_since <= 10:
+        score += 10
+    elif days_since <= 20:
+        score += 7
+    elif days_since <= 40:
+        score += 4
+
+    return score, reasons

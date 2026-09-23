@@ -395,20 +395,14 @@ select{background:#21262d;border:1px solid #30363d;color:#c9d1d9;padding:6px 10p
     </div>
   </div>
   <div style="background:#161b22;border:1px solid #30363d;border-radius:8px;padding:12px 16px;margin-bottom:14px;font-size:12px;color:#8b949e;line-height:1.8">
-    <b style="color:#d29922">판단 기준:</b>
-    평균 거래량 3배+ / 거래대금 50억+ 양봉 거래량 폭발일을 이벤트로 탐지.
-    이벤트 구간 VWAP = <b style="color:#c9d1d9">세력 평단가(코어)</b>.
-    현재가가 코어 하단 근처 + 거래량 수렴 = 매수 구간.
-    <b style="color:#f85149">코어 하단 이탈 시 손절 고려.</b>
+    거래량 폭발(양봉) 뒤 <b style="color:#c9d1d9">세력 평단가(VWAP) 부근으로 조용히 내려온 종목</b>을 0~100점으로 채점합니다.
+    <b style="color:#3fb950">75+ 강력</b> · <b style="color:#d29922">60+ 관심</b>.
+    손절선(폭발일 몸통 하단)을 이탈했거나 이미 오른 종목은 제외됩니다.
   </div>
   <div id="anomaly-info" style="color:#8b949e;font-size:12px;margin-bottom:8px"></div>
   <table>
-    <thead><tr>
-      <th>#</th><th>종목</th><th>신호점수</th><th>현재가</th><th>등락</th><th>이벤트일</th><th>경과일</th>
-      <th>거래량배수</th><th>거래대금</th><th>유통비율</th><th>코어 하단</th><th>코어 VWAP</th><th>코어 상단</th>
-      <th>현재위치</th><th>수렴</th><th>구라하락</th><th>상태</th>
-    </tr></thead>
-    <tbody id="anomaly-body"><tr><td colspan="17" style="color:#8b949e;text-align:center;padding:20px">세력 포착 탭을 클릭하면 분석을 시작합니다</td></tr></tbody>
+    <thead><tr><th>#</th><th>종목</th><th>점수</th><th>현재가</th><th>VWAP 대비</th><th>손절선</th><th>이벤트</th><th>근거</th></tr></thead>
+    <tbody id="anomaly-body"><tr><td colspan="8" style="color:#8b949e;text-align:center;padding:20px">세력 포착 탭을 클릭하면 분석을 시작합니다</td></tr></tbody>
   </table>
 </div>
 
@@ -891,7 +885,7 @@ function renderScreener(){
     return scrSortAsc?(av>bv?1:-1):(av<bv?1:-1);
   });
   document.getElementById('scr-info').textContent=`${data.length}/${scrData.length}종목`;
-  if(!data.length){document.getElementById('scr-body').innerHTML='<tr><td colspan="17" style="color:#8b949e;text-align:center;padding:16px">검색 결과 없음</td></tr>';return;}
+  if(!data.length){document.getElementById('scr-body').innerHTML='<tr><td colspan="8" style="color:#8b949e;text-align:center;padding:16px">검색 결과 없음</td></tr>';return;}
   document.getElementById('scr-body').innerHTML=data.map((i,idx)=>{
     const instCol = i.institution_net_buy>0?'#3fb950':i.institution_net_buy<0?'#f85149':'#8b949e';
     const fgnCol = i.foreign_net_buy>0?'#3fb950':i.foreign_net_buy<0?'#f85149':'#8b949e';
@@ -1171,7 +1165,7 @@ function setAnomalyMode(mode){
 
 async function loadAnomaly(){
   const body = document.getElementById('anomaly-body');
-  const msg = (c,t)=>`<tr><td colspan="17" style="color:${c};text-align:center;padding:20px">${t}</td></tr>`;
+  const msg = (c,t)=>`<tr><td colspan="8" style="color:${c};text-align:center;padding:20px">${t}</td></tr>`;
   body.innerHTML = msg('#8b949e','분석 중… (수초 소요)');
   document.getElementById('anomaly-info').textContent='';
   try{
@@ -1180,38 +1174,20 @@ async function loadAnomaly(){
     if(!data){body.innerHTML = msg('#f85149','로드 실패');return;}
     document.getElementById('anomaly-info').textContent=`총 ${data.length}종목 감지`;
     if(!data.length){body.innerHTML = msg('#8b949e','감지된 종목 없음');return;}
-    const scoreColor = s => s>=8?'#3fb950':s>=5?'#d29922':'#8b949e';
+    const gradeColor = g => g==='강력'?'#3fb950':g==='관심'?'#d29922':'#8b949e';
     body.innerHTML = data.map((d,i)=>{
-      const chgColor = d.change_pct>=0?'#3fb950':'#f85149';
-      const posColor = d.position<=0.35?'#3fb950':d.position<=0.6?'#d29922':'#f85149';
-      const status = d.below_core
-        ? '<span style="color:#f85149;font-weight:600">⚠ 코어이탈</span>'
-        : d.fake_drop
-          ? '<span style="color:#3fb950;font-weight:700">★★ 구라하락</span>'
-          : d.position<=0.35&&d.vol_converging
-            ? '<span style="color:#3fb950;font-weight:600">★ 매수구간</span>'
-            : d.vol_converging
-              ? '<span style="color:#d29922">수렴중</span>'
-              : '<span style="color:#8b949e">관찰</span>';
+      const chgColor = d.change_pct>=0?'#f85149':'#3b82f6';
       const mktColor = d.market==='KOSPI'?'#58a6ff':'#39d0d0';
-      return `<tr>
+      const gapColor = Math.abs(d.vwap_gap_pct)<=3?'#3fb950':'#c9d1d9';
+      return `<tr style="cursor:pointer" onclick="openChartModal('${d.code}','${d.name}','${d.event_date}')">
         <td style="color:#8b949e">${i+1}</td>
-        <td style="cursor:pointer" onclick="openChartModal('${d.code}','${d.name}','${d.event_date}')"><b style="color:#e6edf3">${d.name}</b><br><span class="ts">${d.code} · <span style="color:${mktColor}">${d.market}</span></span></td>
-        <td><span style="color:${scoreColor(d.signal_score)};font-weight:700;font-size:15px">${d.signal_score}</span></td>
-        <td style="font-weight:600">${d.current_price.toLocaleString()}원</td>
-        <td style="color:${chgColor}">${d.change_pct>=0?'+':''}${d.change_pct}%</td>
-        <td class="ts">${d.event_date}</td>
-        <td style="color:${d.days_since_event<=15?'#3fb950':d.days_since_event<=30?'#d29922':'#8b949e'}">${d.days_since_event}일</td>
-        <td style="color:#d29922;font-weight:600">${d.vol_multiplier}x</td>
-        <td class="ts">${d.trading_value_b}억</td>
-        <td style="color:${d.float_ratio>=10?'#3fb950':d.float_ratio>=5?'#d29922':'#8b949e'}">${d.float_ratio>0?d.float_ratio+'%':'—'}</td>
-        <td style="color:#58a6ff">${d.core_low.toLocaleString()}</td>
-        <td style="color:#c9d1d9">${d.core_vwap.toLocaleString()}</td>
-        <td style="color:#f85149">${d.core_high.toLocaleString()}</td>
-        <td style="color:${posColor}">${Math.round(d.position*100)}%</td>
-        <td>${d.vol_converging?'<span style="color:#3fb950">✓</span>':'<span style="color:#444">—</span>'}</td>
-        <td>${d.fake_drop?`<span style="color:#3fb950;font-weight:600">✓ -${d.retrace_pct}%</span>`:'<span style="color:#444">—</span>'}</td>
-        <td>${status}</td>
+        <td><b style="color:#e6edf3">${d.name}</b><br><span class="ts">${d.code} · <span style="color:${mktColor}">${d.market}</span></span></td>
+        <td><b style="color:${gradeColor(d.grade)};font-size:16px">${d.score}</b> <span style="color:${gradeColor(d.grade)};font-size:11px">${d.grade}</span></td>
+        <td style="text-align:right;font-weight:600">${d.current_price.toLocaleString()}원<br><span style="color:${chgColor};font-size:11px">${d.change_pct>=0?'+':''}${d.change_pct}%</span></td>
+        <td style="color:${gapColor}">${d.vwap_gap_pct>=0?'+':''}${d.vwap_gap_pct}%<br><span class="ts">${d.vwap.toLocaleString()}</span></td>
+        <td style="color:#f85149">${d.stop_price.toLocaleString()}</td>
+        <td class="ts">${d.event_date}<br>${d.days_since_event}일 전 · ${d.vol_multiplier}배</td>
+        <td style="font-size:12px;color:#c9d1d9">${(d.reasons||[]).join(' · ')||'—'}</td>
       </tr>`;
     }).join('');
   }catch(e){body.innerHTML = msg('#f85149','오류: '+e.message);}
