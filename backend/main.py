@@ -105,6 +105,7 @@ select{background:#21262d;border:1px solid #30363d;color:#c9d1d9;padding:6px 10p
   <div class="tab" onclick="switchTab('screener')">전종목 스크리너</div>
   <div class="tab" onclick="switchTab('sector')">섹터 수급</div>
   <div class="tab" onclick="switchTab('heatmap')">시장 히트맵</div>
+  <div class="tab" onclick="switchTab('anomaly')">세력 포착</div>
 </div>
 
 <!-- 전종목 스크리너 탭 -->
@@ -380,6 +381,37 @@ select{background:#21262d;border:1px solid #30363d;color:#c9d1d9;padding:6px 10p
   </div>
 </div>
 
+<!-- 세력 포착 탭 -->
+<div id="panel-anomaly" class="panel content">
+  <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:16px;flex-wrap:wrap;gap:8px">
+    <div>
+      <span style="font-weight:800;color:#d29922;font-size:17px">세력 포착 스크리너</span>
+      <span style="font-size:12px;color:#8b949e;margin-left:8px">비정상 거래량 이벤트 · 코어라인(세력 평단가) · 현재 위치 분석</span>
+    </div>
+    <div style="display:flex;gap:6px;align-items:center;flex-wrap:wrap">
+      <button id="anomaly-btn-cap" class="btn btn-sm" style="background:#d29922;color:#000;font-weight:700" onclick="setAnomalyMode('cap')">시총 3천억+</button>
+      <button id="anomaly-btn-top100" class="btn btn-gray btn-sm" onclick="setAnomalyMode('top100')">거래대금 상위 100</button>
+      <button class="btn btn-gray btn-sm" onclick="loadAnomaly()">⟳ 새로고침</button>
+    </div>
+  </div>
+  <div style="background:#161b22;border:1px solid #30363d;border-radius:8px;padding:12px 16px;margin-bottom:14px;font-size:12px;color:#8b949e;line-height:1.8">
+    <b style="color:#d29922">판단 기준:</b>
+    평균 거래량 3배+ / 거래대금 50억+ 양봉 거래량 폭발일을 이벤트로 탐지.
+    이벤트 구간 VWAP = <b style="color:#c9d1d9">세력 평단가(코어)</b>.
+    현재가가 코어 하단 근처 + 거래량 수렴 = 매수 구간.
+    <b style="color:#f85149">코어 하단 이탈 시 손절 고려.</b>
+  </div>
+  <div id="anomaly-info" style="color:#8b949e;font-size:12px;margin-bottom:8px"></div>
+  <table>
+    <thead><tr>
+      <th>#</th><th>종목</th><th>신호점수</th><th>현재가</th><th>등락</th><th>이벤트일</th><th>경과일</th>
+      <th>거래량배수</th><th>거래대금</th><th>유통비율</th><th>코어 하단</th><th>코어 VWAP</th><th>코어 상단</th>
+      <th>현재위치</th><th>수렴</th><th>구라하락</th><th>상태</th>
+    </tr></thead>
+    <tbody id="anomaly-body"><tr><td colspan="17" style="color:#8b949e;text-align:center;padding:20px">세력 포착 탭을 클릭하면 분석을 시작합니다</td></tr></tbody>
+  </table>
+</div>
+
 <div class="toast" id="toast"></div>
 
 <script>
@@ -402,9 +434,10 @@ const tagHtml = tags => (tags||[]).map(t=>{
 }).join('');
 
 function switchTab(id) {
-  document.querySelectorAll('.tab').forEach((t,i)=>t.classList.toggle('active',['pullback','screener','sector','heatmap'][i]===id));
+  document.querySelectorAll('.tab').forEach((t,i)=>t.classList.toggle('active',['pullback','screener','sector','heatmap','anomaly'][i]===id));
   document.querySelectorAll('.panel').forEach(p=>p.classList.remove('active'));
   document.getElementById('panel-'+id).classList.add('active');
+  if(id==='anomaly')loadAnomaly();
   if(id==='screener')loadScreener();
   if(id==='sector')loadSector();
   if(id==='heatmap')loadHeatmap();
@@ -1125,6 +1158,65 @@ function showToast(msg,err=false){
   t.style.display='block';setTimeout(()=>t.style.display='none',5000);
 }
 
+let anomalyMode = 'cap';
+function setAnomalyMode(mode){
+  anomalyMode = mode;
+  const isCap = mode==='cap';
+  const on = 'background:#d29922;color:#000;font-weight:700';
+  const b1 = document.getElementById('anomaly-btn-cap'), b2 = document.getElementById('anomaly-btn-top100');
+  b1.className = isCap?'btn btn-sm':'btn btn-gray btn-sm'; b1.style.cssText = isCap?on:'';
+  b2.className = isCap?'btn btn-gray btn-sm':'btn btn-sm'; b2.style.cssText = isCap?'':on;
+  loadAnomaly();
+}
+
+async function loadAnomaly(){
+  const body = document.getElementById('anomaly-body');
+  const msg = (c,t)=>`<tr><td colspan="17" style="color:${c};text-align:center;padding:20px">${t}</td></tr>`;
+  body.innerHTML = msg('#8b949e','분석 중… (수초 소요)');
+  document.getElementById('anomaly-info').textContent='';
+  try{
+    const url = API+'/screener/volume-anomaly'+(anomalyMode==='top100'?'?top_n=100':'');
+    const data = await fetch(url).then(r=>r.ok?r.json():null);
+    if(!data){body.innerHTML = msg('#f85149','로드 실패');return;}
+    document.getElementById('anomaly-info').textContent=`총 ${data.length}종목 감지`;
+    if(!data.length){body.innerHTML = msg('#8b949e','감지된 종목 없음');return;}
+    const scoreColor = s => s>=8?'#3fb950':s>=5?'#d29922':'#8b949e';
+    body.innerHTML = data.map((d,i)=>{
+      const chgColor = d.change_pct>=0?'#3fb950':'#f85149';
+      const posColor = d.position<=0.35?'#3fb950':d.position<=0.6?'#d29922':'#f85149';
+      const status = d.below_core
+        ? '<span style="color:#f85149;font-weight:600">⚠ 코어이탈</span>'
+        : d.fake_drop
+          ? '<span style="color:#3fb950;font-weight:700">★★ 구라하락</span>'
+          : d.position<=0.35&&d.vol_converging
+            ? '<span style="color:#3fb950;font-weight:600">★ 매수구간</span>'
+            : d.vol_converging
+              ? '<span style="color:#d29922">수렴중</span>'
+              : '<span style="color:#8b949e">관찰</span>';
+      const mktColor = d.market==='KOSPI'?'#58a6ff':'#39d0d0';
+      return `<tr>
+        <td style="color:#8b949e">${i+1}</td>
+        <td><b style="color:#e6edf3">${d.name}</b><br><span class="ts">${d.code} · <span style="color:${mktColor}">${d.market}</span></span></td>
+        <td><span style="color:${scoreColor(d.signal_score)};font-weight:700;font-size:15px">${d.signal_score}</span></td>
+        <td style="font-weight:600">${d.current_price.toLocaleString()}원</td>
+        <td style="color:${chgColor}">${d.change_pct>=0?'+':''}${d.change_pct}%</td>
+        <td class="ts">${d.event_date}</td>
+        <td style="color:${d.days_since_event<=15?'#3fb950':d.days_since_event<=30?'#d29922':'#8b949e'}">${d.days_since_event}일</td>
+        <td style="color:#d29922;font-weight:600">${d.vol_multiplier}x</td>
+        <td class="ts">${d.trading_value_b}억</td>
+        <td style="color:${d.float_ratio>=10?'#3fb950':d.float_ratio>=5?'#d29922':'#8b949e'}">${d.float_ratio>0?d.float_ratio+'%':'—'}</td>
+        <td style="color:#58a6ff">${d.core_low.toLocaleString()}</td>
+        <td style="color:#c9d1d9">${d.core_vwap.toLocaleString()}</td>
+        <td style="color:#f85149">${d.core_high.toLocaleString()}</td>
+        <td style="color:${posColor}">${Math.round(d.position*100)}%</td>
+        <td>${d.vol_converging?'<span style="color:#3fb950">✓</span>':'<span style="color:#444">—</span>'}</td>
+        <td>${d.fake_drop?`<span style="color:#3fb950;font-weight:600">✓ -${d.retrace_pct}%</span>`:'<span style="color:#444">—</span>'}</td>
+        <td>${status}</td>
+      </tr>`;
+    }).join('');
+  }catch(e){body.innerHTML = msg('#f85149','오류: '+e.message);}
+}
+
 loadPullback();
 setInterval(loadPullback,60000);
 if (location.hash) switchTab(location.hash.slice(1));
@@ -1137,6 +1229,9 @@ if (location.hash) switchTab(location.hash.slice(1));
 def startup_event() -> None:
     import threading
     Base.metadata.create_all(bind=engine)
+    from sqlalchemy import text  # noqa: PLC0415
+    with engine.begin() as conn:
+        conn.execute(text("ALTER TABLE stocks ADD COLUMN IF NOT EXISTS shares_outstanding FLOAT DEFAULT 0.0"))
     db = SessionLocal()
     try:
         seed_reference_data(db)

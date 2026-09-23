@@ -25,10 +25,29 @@ MANUAL_STOCKS: list[dict] = [
 ]
 
 
+def _fetch_shares_from_pykrx() -> dict[str, float]:
+    """pykrx로 전종목 상장주식수 조회. 실패 시 빈 dict."""
+    try:
+        from pykrx import stock as pykrx_stock  # noqa: PLC0415
+        from datetime import date as _date  # noqa: PLC0415
+        today = _date.today().strftime("%Y%m%d")
+        df = pykrx_stock.get_market_cap_by_ticker(today, market="ALL")
+        if df is None or df.empty:
+            return {}
+        col = next((c for c in df.columns if "상장" in c or "Shares" in c.lower()), None)
+        if col is None:
+            return {}
+        return {str(code).zfill(6): float(val) for code, val in df[col].items() if val and float(val) > 0}
+    except Exception as exc:  # noqa: BLE001
+        logger.warning("pykrx shares fetch failed: %s", exc)
+        return {}
+
+
 def _fetch_top_stocks(n: int = _TOP_N) -> list[dict]:
     """FinanceDataReader로 KOSPI + KOSDAQ 시총 상위 n종목씩 조회. 실패 시 빈 리스트."""
     try:
         import FinanceDataReader as fdr  # noqa: PLC0415
+        shares_map = _fetch_shares_from_pykrx()
         result = []
         for market in ("KOSPI", "KOSDAQ"):
             listing = fdr.StockListing(market)
@@ -36,11 +55,18 @@ def _fetch_top_stocks(n: int = _TOP_N) -> list[dict]:
             listing = listing.sort_values("Marcap", ascending=False).head(n)
             listing["Code"] = listing["Code"].astype(str).str.zfill(6)
             for _, row in listing.iterrows():
+                code = str(row["Code"])
+                shares = shares_map.get(code, 0.0)
+                if shares == 0.0:
+                    shares_col = next((c for c in listing.columns if c in ("Stocks", "Shares", "shares")), None)
+                    if shares_col:
+                        shares = float(row.get(shares_col, 0) or 0)
                 result.append({
-                    "code": str(row["Code"]),
-                    "name": str(row.get("Name", row.get("ISU_ABBRV", row["Code"]))),
+                    "code": code,
+                    "name": str(row.get("Name", row.get("ISU_ABBRV", code))),
                     "market": market,
                     "market_cap": float(row["Marcap"]),
+                    "shares_outstanding": shares,
                 })
         logger.info("FDR universe loaded: %d stocks (KOSPI+KOSDAQ top %d each)", len(result), n)
         return result
@@ -58,10 +84,36 @@ def seed_reference_data(db: Session) -> None:
     for stock_data in stocks:
         existing = db.scalar(select(Stock).where(Stock.code == stock_data["code"]))
         if existing is None:
-            db.add(Stock(**stock_data))
+            db.add(Stock(
+                code=stock_data["code"],
+                name=stock_data["name"],
+                market=stock_data["market"],
+                market_cap=stock_data.get("market_cap", 0.0),
+                shares_outstanding=stock_data.get("shares_outstanding", 0.0),
+            ))
 
     db.commit()
     logger.info("Universe seeded with %d stocks", len(stocks))
+
+
+def _fetch_all_shares_from_fdr() -> dict[str, float]:
+    """FDR StockListing으로 전종목 상장주식수 조회."""
+    try:
+        import FinanceDataReader as fdr  # noqa: PLC0415
+        result: dict[str, float] = {}
+        for market in ("KOSPI", "KOSDAQ"):
+            listing = fdr.StockListing(market)
+            listing["Code"] = listing["Code"].astype(str).str.zfill(6)
+            shares_col = next((c for c in listing.columns if c in ("Stocks", "Shares", "shares")), None)
+            if shares_col:
+                for _, row in listing.iterrows():
+                    v = row.get(shares_col, 0)
+                    if v and float(v) > 0:
+                        result[str(row["Code"])] = float(v)
+        return result
+    except Exception as exc:  # noqa: BLE001
+        logger.warning("FDR all shares fetch failed: %s", exc)
+        return {}
 
 
 def refresh_universe(db: Session) -> int:
@@ -76,6 +128,16 @@ def refresh_universe(db: Session) -> int:
     manual_codes = {s["code"] for s in MANUAL_STOCKS}
     stocks = [s for s in stocks if s["code"] not in manual_codes] + MANUAL_STOCKS
 
+    # 전종목 상장주식수 (FDR) — DB에 있는 모든 종목에 일괄 적용
+    all_shares = _fetch_all_shares_from_fdr()
+    if all_shares:
+        for stock in db.scalars(select(Stock)).all():
+            s = all_shares.get(stock.code, 0)
+            if s > 0 and stock.shares_outstanding != s:
+                stock.shares_outstanding = s
+        db.commit()
+        logger.info("shares_outstanding 갱신 완료: %d종목", len(all_shares))
+
     existing_codes = {s.code for s in db.scalars(select(Stock))}
     added = 0
     for stock_data in stocks:
@@ -83,11 +145,12 @@ def refresh_universe(db: Session) -> int:
             db.add(Stock(**stock_data))
             added += 1
         else:
-            # 시총만 업데이트
             stock = db.scalar(select(Stock).where(Stock.code == stock_data["code"]))
             if stock:
                 stock.market_cap = stock_data["market_cap"]
                 stock.name = stock_data["name"]
+                if stock_data.get("shares_outstanding", 0) > 0:
+                    stock.shares_outstanding = stock_data["shares_outstanding"]
     db.commit()
     logger.info("Universe refreshed: %d new stocks added", added)
     return added

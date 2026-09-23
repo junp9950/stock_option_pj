@@ -21,6 +21,7 @@ class Stock(Base, TimestampMixin):
     name: Mapped[str] = mapped_column(String(100))
     market: Mapped[str] = mapped_column(String(20))
     market_cap: Mapped[float] = mapped_column(Float, default=0.0)
+    shares_outstanding: Mapped[float] = mapped_column(Float, default=0.0)
     is_active: Mapped[bool] = mapped_column(Boolean, default=True)
 
 

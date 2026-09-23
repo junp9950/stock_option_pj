@@ -1345,3 +1345,12 @@ def refresh_sectors(db: Session = Depends(get_db)):
     except Exception as exc:  # noqa: BLE001
         raise HTTPException(status_code=500, detail=str(exc)) from exc
 
+
+@router.get("/screener/volume-anomaly")
+def screener_volume_anomaly(top_n: int | None = None, db: Session = Depends(get_db)):
+    """세력 포착 스크리너 — 비정상 거래량 이벤트 기반 코어라인 분석.
+    top_n: 최근 5일 거래대금 상위 N 종목으로 제한 (예: top_n=100).
+    """
+    from backend.screener.volume_anomaly import scan  # noqa: PLC0415
+    return scan(db, top_n_by_value=top_n)
+
