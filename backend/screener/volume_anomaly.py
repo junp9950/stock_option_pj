@@ -20,7 +20,6 @@ from backend.db.models import SpotDailyPrice, Stock
 _MIN_VOL_MULTIPLIER = 3.0
 _MIN_TRADING_VALUE = 5_000_000_000
 _MIN_FLOAT_RATIO = 0.03
-_MIN_MARKET_CAP = 100_000_000_000
 _MIN_AVG_TRADING_VALUE = 5_000_000_000  # 최근 5일 평균 거래대금 50억 미만은 유동성 부족
 _LOOKBACK_DAYS = 40  # 이벤트 경과 상한(일). 오래된 이벤트는 눌림이 아니라 추세 하락이 섞임
 _MAX_VWAP_GAP = 6.0  # VWAP 대비 +6% 초과 = 이미 오른 종목
@@ -83,8 +82,6 @@ def scan(db: Session, top_n_by_value: int | None = None) -> list[dict]:
         if len(price_list) < 20:
             continue
         mcap = meta[code]["market_cap"] or meta[code]["shares_outstanding"] * price_list[-1].close_price
-        if not top_n_by_value and mcap < _MIN_MARKET_CAP:
-            continue
 
         recent_tv = [p.trading_value for p in price_list[-5:] if p.trading_value]
         avg_tv = sum(recent_tv) / len(recent_tv) if recent_tv else 0.0
