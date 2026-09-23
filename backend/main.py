@@ -389,7 +389,7 @@ select{background:#21262d;border:1px solid #30363d;color:#c9d1d9;padding:6px 10p
       <span style="font-size:12px;color:#8b949e;margin-left:8px">비정상 거래량 이벤트 · 코어라인(세력 평단가) · 현재 위치 분석</span>
     </div>
     <div style="display:flex;gap:6px;align-items:center;flex-wrap:wrap">
-      <button id="anomaly-btn-cap" class="btn btn-sm" style="background:#d29922;color:#000;font-weight:700" onclick="setAnomalyMode('cap')">시총 3천억+</button>
+      <button id="anomaly-btn-cap" class="btn btn-sm" style="background:#d29922;color:#000;font-weight:700" onclick="setAnomalyMode('cap')">시총 1천억+</button>
       <button id="anomaly-btn-top100" class="btn btn-gray btn-sm" onclick="setAnomalyMode('top100')">거래대금 상위 100</button>
       <button class="btn btn-gray btn-sm" onclick="loadAnomaly()">⟳ 새로고침</button>
     </div>
