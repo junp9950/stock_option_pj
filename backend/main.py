@@ -659,9 +659,9 @@ function renderHeatmapLegend(){
 }
 
 // ── 눌림목 스캐너 ──────────────────────────────────────────────
-async function loadPullback(silent=false){
+async function loadPullback(){
   const body = document.getElementById('pb-body');
-  if(!silent) body.innerHTML = '<tr><td colspan="11" style="color:#8b949e;text-align:center;padding:20px">로딩 중…</td></tr>';
+  body.innerHTML = '<tr><td colspan="11" style="color:#8b949e;text-align:center;padding:20px">로딩 중…</td></tr>';
   try{
     const minCapEok = parseFloat(document.getElementById('pb-min-cap').value) || 0;
     const minCapWon = minCapEok * 1e8;
@@ -690,7 +690,7 @@ async function loadPullback(silent=false){
     }).join('');
   }catch(e){
     console.error(e);
-    if(!silent) body.innerHTML = '<tr><td colspan="11" style="color:#f85149;text-align:center;padding:20px">로딩 실패</td></tr>';
+    body.innerHTML = '<tr><td colspan="11" style="color:#f85149;text-align:center;padding:20px">로딩 실패</td></tr>';
   }
 }
 
@@ -1218,11 +1218,6 @@ async function loadAnomaly(){
 }
 
 loadPullback();
-setInterval(()=>{
-  const active = document.getElementById('panel-pullback').classList.contains('active');
-  const modalOpen = document.getElementById('chart-modal-bg').classList.contains('show');
-  if(active && !modalOpen && !document.hidden) loadPullback(true);
-}, 5*60000);
 if (location.hash) switchTab(location.hash.slice(1));
 </script>
 </body>
