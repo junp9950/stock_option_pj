@@ -1077,20 +1077,52 @@ def get_pullback_candidates(top_n: int = 30, min_market_cap: float = 0, db: Sess
     min_market_cap(원 단위)은 그 다음 단계의 선택적 필터."""
     target_date = _latest_data_date(db)
     candidates = scan_pullback_candidates(db, target_date, top_n=top_n, min_market_cap=min_market_cap)
-    return {
-        "trading_date": target_date.isoformat(),
-        "items": [
-            {
-                "code": c.code, "name": c.name, "market": c.market, "sector": c.sector, "market_cap": c.market_cap,
-                "close_price": c.close_price, "change_pct": c.change_pct,
-                "spike_date": c.spike_date, "spike_change_pct": c.spike_change_pct,
-                "spike_volume_ratio": c.spike_volume_ratio, "days_since_spike": c.days_since_spike,
-                "pullback_pct": c.pullback_pct, "volume_contraction": c.volume_contraction,
-                "repeat_cycles": c.repeat_cycles, "quality_score": c.quality_score,
-            }
-            for c in candidates
-        ],
-    }
+    try:
+        from backend.screener.volume_anomaly import scan as scan_signal  # noqa: PLC0415
+        signals = {x["code"]: x for x in scan_signal(db)}
+    except Exception:  # noqa: BLE001
+        signals = {}
+    items = []
+    for c in candidates:
+        sig = signals.get(c.code)
+        signal_score = sig["score"] if sig else None
+        # 종합점수 = 세력 신호 60% + 눌림목 품질 40% (신호 없으면 신호 부분 0점)
+        total = round(0.6 * (signal_score or 0) + 0.4 * c.quality_score * 100)
+        items.append({
+            "code": c.code, "name": c.name, "market": c.market, "sector": c.sector, "market_cap": c.market_cap,
+            "close_price": c.close_price, "change_pct": c.change_pct,
+            "spike_date": c.spike_date, "spike_change_pct": c.spike_change_pct,
+            "spike_volume_ratio": c.spike_volume_ratio, "days_since_spike": c.days_since_spike,
+            "pullback_pct": c.pullback_pct, "volume_contraction": c.volume_contraction,
+            "repeat_cycles": c.repeat_cycles, "quality_score": c.quality_score,
+            "total_score": total,
+            "grade": "강력" if total >= 75 else "관심" if total >= 60 else "관찰",
+            "signal_score": signal_score,
+            "signal_reasons": sig["reasons"] if sig else [],
+            "vwap": sig["vwap"] if sig else None,
+            "vwap_gap_pct": sig["vwap_gap_pct"] if sig else None,
+            "stop_price": sig["stop_price"] if sig else None,
+        })
+    # 눌림목 스캐너에는 안 잡히지만 세력 신호가 있는 종목도 누락 없이 포함 (품질점수는 신호점수로 대체)
+    seen = {c.code for c in candidates}
+    for code, sig in signals.items():
+        if code in seen or sig["market_cap"] < min_market_cap:
+            continue
+        items.append({
+            "code": code, "name": sig["name"], "market": sig["market"], "sector": "-", "market_cap": sig["market_cap"],
+            "close_price": sig["current_price"], "change_pct": sig["change_pct"],
+            "spike_date": sig["event_date"], "spike_change_pct": sig["event_change_pct"],
+            "spike_volume_ratio": sig["vol_multiplier"], "days_since_spike": sig["days_since_event"],
+            "pullback_pct": sig["retrace_pct"], "volume_contraction": sig["vol_ratio"],
+            "repeat_cycles": 0, "quality_score": sig["score"] / 100,
+            "total_score": sig["score"],
+            "grade": sig["grade"],
+            "signal_score": sig["score"],
+            "signal_reasons": sig["reasons"],
+            "vwap": sig["vwap"], "vwap_gap_pct": sig["vwap_gap_pct"], "stop_price": sig["stop_price"],
+        })
+    items.sort(key=lambda x: -x["total_score"])
+    return {"trading_date": target_date.isoformat(), "items": items}
 
 
 @router.get("/toss/candles/{code}")

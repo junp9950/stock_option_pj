@@ -177,6 +177,7 @@ def scan(db: Session, top_n_by_value: int | None = None) -> list[dict]:
             "vwap_gap_pct": round(vwap_gap, 1),
             "stop_price": round(stop_price),
             "event_date": str(latest_event["date"]),
+            "event_change_pct": round(latest_event["change_pct"], 1),
             "days_since_event": days_since,
             "vol_multiplier": round(latest_event["vol_multiplier"], 1),
             "retrace_pct": round(retrace_pct, 1),

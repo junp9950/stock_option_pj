@@ -34,7 +34,7 @@ def status_dashboard() -> str:
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
-<title>눌림목 스캐너</title>
+<title>눌림목 레이더</title>
 <link rel="icon" href="data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 100 100%22><rect width=%22100%22 height=%22100%22 rx=%2222%22 fill=%22%231f6feb%22/><text x=%2250%22 y=%2270%22 font-size=%2258%22 text-anchor=%22middle%22>%F0%9F%93%88</text></svg>">
 <style>
 *{box-sizing:border-box;margin:0;padding:0}
@@ -90,8 +90,8 @@ select{background:#21262d;border:1px solid #30363d;color:#c9d1d9;padding:6px 10p
 <body>
 <header>
   <div>
-    <h1>눌림목 스캐너</h1>
-    <div class="sub">1분 자동 갱신</div>
+    <h1>눌림목 레이더</h1>
+    <div class="sub">급등 후 조용히 눌린 종목 · 세력 매집 신호 점수 · 매일 16:30 갱신</div>
   </div>
   <div style="display:flex;gap:8px">
     <button class="btn" id="btn-run-pipeline" onclick="runPipeline()">▶ 파이프라인 실행</button>
@@ -101,11 +101,10 @@ select{background:#21262d;border:1px solid #30363d;color:#c9d1d9;padding:6px 10p
 <div class="err-bar" id="err-bar">백엔드 연결 실패 — 서버가 실행 중인지 확인하세요</div>
 
 <div class="tabs">
-  <div class="tab active" onclick="switchTab('pullback')">눌림목 스캐너</div>
-  <div class="tab" onclick="switchTab('screener')">전종목 스크리너</div>
+  <div class="tab active" onclick="switchTab('pullback')">눌림목 레이더</div>
+  <div class="tab" onclick="switchTab('screener')">수급 스크리너</div>
   <div class="tab" onclick="switchTab('sector')">섹터 수급</div>
   <div class="tab" onclick="switchTab('heatmap')">시장 히트맵</div>
-  <div class="tab" onclick="switchTab('anomaly')">세력 포착</div>
 </div>
 
 <!-- 전종목 스크리너 탭 -->
@@ -315,11 +314,13 @@ select{background:#21262d;border:1px solid #30363d;color:#c9d1d9;padding:6px 10p
   <div id="heatmap-legend" style="display:flex;margin-top:10px;border-radius:6px;overflow:hidden;font-size:12px"></div>
 </div>
 
-<!-- 눌림목 스캐너 탭 -->
+<!-- 눌림목 레이더 탭 -->
 <div id="panel-pullback" class="panel active content">
   <p class="note" style="color:#8b949e;font-size:12.5px;margin:0 0 12px">
-    큰 거래량(20일 평균 대비 2.5배↑)을 동반한 상승(+3%↑) 캔들이 나온 뒤, 그 캔들의 저가를 깨지 않고
-    거래량이 잦아들며 조용히 눌린(눌림목) 종목을 찾습니다. 종목을 클릭하면 토스증권 실시간 캔들차트로 확인할 수 있습니다.
+    큰 거래량을 동반한 상승 캔들 뒤에 지지선을 지키며 거래량이 잦아든 눌림목 종목입니다.
+    <b style="color:#c9d1d9">종합점수</b> = 세력 신호점수(VWAP 근접·거래량 수렴·눌림 깊이 등) 60% + 눌림목 품질 40%.
+    <b style="color:#3fb950">75+ 강력</b> · <b style="color:#d29922">60+ 관심</b>.
+    손절선을 이탈했거나 이미 오른 종목은 신호에서 제외됩니다. 종목을 클릭하면 토스증권 차트가 열립니다.
   </p>
   <div class="toolbar" style="margin-bottom:12px">
     <label style="display:flex;align-items:center;gap:6px;font-size:13px;color:#8b949e">
@@ -327,15 +328,18 @@ select{background:#21262d;border:1px solid #30363d;color:#c9d1d9;padding:6px 10p
       <input type="number" id="pb-min-cap" value="0" min="0" step="100" onchange="loadPullback()"
              style="width:90px;background:#0d1117;border:1px solid #30363d;color:#c9d1d9;padding:4px 8px;border-radius:4px">
     </label>
+    <label style="display:flex;align-items:center;gap:6px;font-size:13px;color:#c9d1d9;cursor:pointer">
+      <input type="checkbox" id="pb-only-signal" checked onchange="loadPullback()"> 신호 종목만
+    </label>
     <button class="btn btn-gray btn-sm" onclick="loadPullback()">⟳ 새로고침</button>
     <span class="ts" id="pb-info"></span>
   </div>
   <table>
     <thead><tr>
-      <th>종목</th><th>업종</th><th>스파이크일</th><th>급등률</th><th>거래량배수</th><th>경과일</th>
-      <th>되돌림</th><th>거래량수축</th><th>반복</th><th>품질점수</th><th>현재가</th>
+      <th>종목</th><th>종합점수</th><th>현재가</th><th>VWAP 대비</th><th>손절선</th>
+      <th>급등</th><th>되돌림</th><th>근거</th>
     </tr></thead>
-    <tbody id="pb-body"><tr><td colspan="11" style="color:#8b949e;text-align:center;padding:20px">로딩 중…</td></tr></tbody>
+    <tbody id="pb-body"><tr><td colspan="8" style="color:#8b949e;text-align:center;padding:20px">로딩 중…</td></tr></tbody>
   </table>
 </div>
 
@@ -381,31 +385,6 @@ select{background:#21262d;border:1px solid #30363d;color:#c9d1d9;padding:6px 10p
   </div>
 </div>
 
-<!-- 세력 포착 탭 -->
-<div id="panel-anomaly" class="panel content">
-  <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:16px;flex-wrap:wrap;gap:8px">
-    <div>
-      <span style="font-weight:800;color:#d29922;font-size:17px">세력 포착 스크리너</span>
-      <span style="font-size:12px;color:#8b949e;margin-left:8px">비정상 거래량 이벤트 · 코어라인(세력 평단가) · 현재 위치 분석</span>
-    </div>
-    <div style="display:flex;gap:6px;align-items:center;flex-wrap:wrap">
-      <button id="anomaly-btn-cap" class="btn btn-sm" style="background:#d29922;color:#000;font-weight:700" onclick="setAnomalyMode('cap')">시총 1천억+</button>
-      <button id="anomaly-btn-top100" class="btn btn-gray btn-sm" onclick="setAnomalyMode('top100')">거래대금 상위 100</button>
-      <button class="btn btn-gray btn-sm" onclick="loadAnomaly()">⟳ 새로고침</button>
-    </div>
-  </div>
-  <div style="background:#161b22;border:1px solid #30363d;border-radius:8px;padding:12px 16px;margin-bottom:14px;font-size:12px;color:#8b949e;line-height:1.8">
-    거래량 폭발(양봉) 뒤 <b style="color:#c9d1d9">세력 평단가(VWAP) 부근으로 조용히 내려온 종목</b>을 0~100점으로 채점합니다.
-    <b style="color:#3fb950">75+ 강력</b> · <b style="color:#d29922">60+ 관심</b>.
-    손절선(폭발일 몸통 하단)을 이탈했거나 이미 오른 종목은 제외됩니다.
-  </div>
-  <div id="anomaly-info" style="color:#8b949e;font-size:12px;margin-bottom:8px"></div>
-  <table>
-    <thead><tr><th>#</th><th>종목</th><th>점수</th><th>현재가</th><th>VWAP 대비</th><th>손절선</th><th>이벤트</th><th>근거</th></tr></thead>
-    <tbody id="anomaly-body"><tr><td colspan="8" style="color:#8b949e;text-align:center;padding:20px">세력 포착 탭을 클릭하면 분석을 시작합니다</td></tr></tbody>
-  </table>
-</div>
-
 <div class="toast" id="toast"></div>
 
 <script>
@@ -428,10 +407,9 @@ const tagHtml = tags => (tags||[]).map(t=>{
 }).join('');
 
 function switchTab(id) {
-  document.querySelectorAll('.tab').forEach((t,i)=>t.classList.toggle('active',['pullback','screener','sector','heatmap','anomaly'][i]===id));
+  document.querySelectorAll('.tab').forEach((t,i)=>t.classList.toggle('active',['pullback','screener','sector','heatmap'][i]===id));
   document.querySelectorAll('.panel').forEach(p=>p.classList.remove('active'));
   document.getElementById('panel-'+id).classList.add('active');
-  if(id==='anomaly')loadAnomaly();
   if(id==='screener')loadScreener();
   if(id==='sector')loadSector();
   if(id==='heatmap')loadHeatmap();
@@ -655,36 +633,48 @@ function renderHeatmapLegend(){
 // ── 눌림목 스캐너 ──────────────────────────────────────────────
 async function loadPullback(){
   const body = document.getElementById('pb-body');
-  body.innerHTML = '<tr><td colspan="11" style="color:#8b949e;text-align:center;padding:20px">로딩 중…</td></tr>';
+  body.innerHTML = '<tr><td colspan="8" style="color:#8b949e;text-align:center;padding:20px">로딩 중…</td></tr>';
   try{
     const minCapEok = parseFloat(document.getElementById('pb-min-cap').value) || 0;
     const minCapWon = minCapEok * 1e8;
     const data = await fetch(`${API}/screener/pullback?top_n=1000&min_market_cap=${minCapWon}`).then(r=>r.ok?r.json():null);
     if(!data || !data.items || !data.items.length){
-      body.innerHTML = '<tr><td colspan="11" style="color:#8b949e;text-align:center;padding:20px">조건에 맞는 종목이 없습니다</td></tr>';
+      body.innerHTML = '<tr><td colspan="8" style="color:#8b949e;text-align:center;padding:20px">조건에 맞는 종목이 없습니다</td></tr>';
       document.getElementById('pb-info').textContent = data ? `기준일: ${data.trading_date}` : '';
       return;
     }
-    document.getElementById('pb-info').textContent = `기준일: ${data.trading_date} · ${data.items.length}개 종목`;
-    body.innerHTML = data.items.map(it=>{
-      const qColor = it.quality_score>=0.75?'#3fb950':it.quality_score>=0.5?'#58a6ff':'#d29922';
+    const onlySignal = document.getElementById('pb-only-signal').checked;
+    let items = data.items.slice().sort((x,y)=>y.total_score-x.total_score);
+    const signalCount = items.filter(x=>x.signal_score!=null).length;
+    if(onlySignal) items = items.filter(x=>x.signal_score!=null);
+    document.getElementById('pb-info').textContent = `기준일: ${data.trading_date} · 신호 ${signalCount}개 / 전체 ${data.items.length}개`;
+    if(!items.length){
+      body.innerHTML = '<tr><td colspan="8" style="color:#8b949e;text-align:center;padding:20px">신호 종목이 없습니다</td></tr>';
+      return;
+    }
+    const gradeColor = g => g==='강력'?'#3fb950':g==='관심'?'#d29922':'#8b949e';
+    const dash = '<span style="color:#444">—</span>';
+    body.innerHTML = items.map(it=>{
+      const has = it.signal_score!=null;
+      const gap = it.vwap_gap_pct;
+      const tags = [];
+      if(it.repeat_cycles>=3) tags.push(`<b style="color:#f85149">⚠ 반복 ${it.repeat_cycles}회</b>`);
+      else if(it.repeat_cycles>0) tags.push(`반복 ${it.repeat_cycles}회`);
+      (it.signal_reasons||[]).forEach(r=>tags.push(r));
       return `<tr style="cursor:pointer" onclick="openChartModal('${it.code}','${it.name}','${it.spike_date}')">
-        <td><b>${it.name}</b> <span style="color:#8b949e;font-size:11px">${it.code}</span></td>
-        <td style="color:#8b949e;font-size:12px">${it.sector}</td>
-        <td>${it.spike_date}</td>
-        <td style="color:#3fb950">+${it.spike_change_pct.toFixed(1)}%</td>
-        <td>${it.spike_volume_ratio.toFixed(1)}배</td>
-        <td>${it.days_since_spike}일전</td>
-        <td>${it.pullback_pct.toFixed(1)}%</td>
-        <td>${(it.volume_contraction*100).toFixed(0)}%</td>
-        <td>${it.repeat_cycles>=3?`<b style="color:#f85149">${it.repeat_cycles}회 ⚠</b>`:it.repeat_cycles>0?`${it.repeat_cycles}회`:'-'}</td>
-        <td><b style="color:${qColor}">${(it.quality_score*100).toFixed(0)}</b></td>
-        <td style="text-align:right">${it.close_price.toLocaleString()}원<br><span style="color:${it.change_pct>=0?'#3fb950':'#f85149'};font-size:11px">${it.change_pct>=0?'+':''}${it.change_pct.toFixed(2)}%</span></td>
+        <td><b>${it.name}</b> <span style="color:#8b949e;font-size:11px">${it.code}</span><br><span style="color:#8b949e;font-size:11px">${it.sector}</span></td>
+        <td><b style="color:${gradeColor(it.grade)};font-size:16px">${it.total_score}</b> <span style="color:${gradeColor(it.grade)};font-size:11px">${it.grade}</span><br><span class="ts">신호 ${has?it.signal_score:'—'} · 품질 ${(it.quality_score*100).toFixed(0)}</span></td>
+        <td style="text-align:right">${it.close_price.toLocaleString()}원<br><span style="color:${it.change_pct>=0?'#f85149':'#3b82f6'};font-size:11px">${it.change_pct>=0?'+':''}${it.change_pct.toFixed(2)}%</span></td>
+        <td style="color:${has&&Math.abs(gap)<=3?'#3fb950':'#c9d1d9'}">${has?`${gap>=0?'+':''}${gap}%<br><span class="ts">${it.vwap.toLocaleString()}</span>`:dash}</td>
+        <td style="color:#f85149">${has?it.stop_price.toLocaleString():dash}</td>
+        <td>${it.spike_date}<br><span class="ts">+${it.spike_change_pct.toFixed(1)}% · ${it.spike_volume_ratio.toFixed(1)}배 · ${it.days_since_spike}일 전</span></td>
+        <td>${it.pullback_pct.toFixed(1)}%<br><span class="ts">거래량 ${(it.volume_contraction*100).toFixed(0)}%</span></td>
+        <td style="font-size:12px;color:#c9d1d9">${tags.join(' · ')||dash}</td>
       </tr>`;
     }).join('');
   }catch(e){
     console.error(e);
-    body.innerHTML = '<tr><td colspan="11" style="color:#f85149;text-align:center;padding:20px">로딩 실패</td></tr>';
+    body.innerHTML = '<tr><td colspan="8" style="color:#f85149;text-align:center;padding:20px">로딩 실패</td></tr>';
   }
 }
 
@@ -1150,47 +1140,6 @@ function showToast(msg,err=false){
   const t=document.getElementById('toast');
   t.textContent=msg;t.style.background=err?'#da3633':'#238636';
   t.style.display='block';setTimeout(()=>t.style.display='none',5000);
-}
-
-let anomalyMode = 'cap';
-function setAnomalyMode(mode){
-  anomalyMode = mode;
-  const isCap = mode==='cap';
-  const on = 'background:#d29922;color:#000;font-weight:700';
-  const b1 = document.getElementById('anomaly-btn-cap'), b2 = document.getElementById('anomaly-btn-top100');
-  b1.className = isCap?'btn btn-sm':'btn btn-gray btn-sm'; b1.style.cssText = isCap?on:'';
-  b2.className = isCap?'btn btn-gray btn-sm':'btn btn-sm'; b2.style.cssText = isCap?'':on;
-  loadAnomaly();
-}
-
-async function loadAnomaly(){
-  const body = document.getElementById('anomaly-body');
-  const msg = (c,t)=>`<tr><td colspan="8" style="color:${c};text-align:center;padding:20px">${t}</td></tr>`;
-  body.innerHTML = msg('#8b949e','분석 중… (수초 소요)');
-  document.getElementById('anomaly-info').textContent='';
-  try{
-    const url = API+'/screener/volume-anomaly'+(anomalyMode==='top100'?'?top_n=100':'');
-    const data = await fetch(url).then(r=>r.ok?r.json():null);
-    if(!data){body.innerHTML = msg('#f85149','로드 실패');return;}
-    document.getElementById('anomaly-info').textContent=`총 ${data.length}종목 감지`;
-    if(!data.length){body.innerHTML = msg('#8b949e','감지된 종목 없음');return;}
-    const gradeColor = g => g==='강력'?'#3fb950':g==='관심'?'#d29922':'#8b949e';
-    body.innerHTML = data.map((d,i)=>{
-      const chgColor = d.change_pct>=0?'#f85149':'#3b82f6';
-      const mktColor = d.market==='KOSPI'?'#58a6ff':'#39d0d0';
-      const gapColor = Math.abs(d.vwap_gap_pct)<=3?'#3fb950':'#c9d1d9';
-      return `<tr style="cursor:pointer" onclick="openChartModal('${d.code}','${d.name}','${d.event_date}')">
-        <td style="color:#8b949e">${i+1}</td>
-        <td><b style="color:#e6edf3">${d.name}</b><br><span class="ts">${d.code} · <span style="color:${mktColor}">${d.market}</span> · 일평균 ${d.avg_tv_b}억</span></td>
-        <td><b style="color:${gradeColor(d.grade)};font-size:16px">${d.score}</b> <span style="color:${gradeColor(d.grade)};font-size:11px">${d.grade}</span></td>
-        <td style="text-align:right;font-weight:600">${d.current_price.toLocaleString()}원<br><span style="color:${chgColor};font-size:11px">${d.change_pct>=0?'+':''}${d.change_pct}%</span></td>
-        <td style="color:${gapColor}">${d.vwap_gap_pct>=0?'+':''}${d.vwap_gap_pct}%<br><span class="ts">${d.vwap.toLocaleString()}</span></td>
-        <td style="color:#f85149">${d.stop_price.toLocaleString()}</td>
-        <td class="ts">${d.event_date}<br>${d.days_since_event}일 전 · ${d.vol_multiplier}배</td>
-        <td style="font-size:12px;color:#c9d1d9">${(d.reasons||[]).join(' · ')||'—'}</td>
-      </tr>`;
-    }).join('');
-  }catch(e){body.innerHTML = msg('#f85149','오류: '+e.message);}
 }
 
 loadPullback();
