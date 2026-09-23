@@ -1181,7 +1181,7 @@ async function loadAnomaly(){
       const gapColor = Math.abs(d.vwap_gap_pct)<=3?'#3fb950':'#c9d1d9';
       return `<tr style="cursor:pointer" onclick="openChartModal('${d.code}','${d.name}','${d.event_date}')">
         <td style="color:#8b949e">${i+1}</td>
-        <td><b style="color:#e6edf3">${d.name}</b><br><span class="ts">${d.code} · <span style="color:${mktColor}">${d.market}</span></span></td>
+        <td><b style="color:#e6edf3">${d.name}</b><br><span class="ts">${d.code} · <span style="color:${mktColor}">${d.market}</span> · 일평균 ${d.avg_tv_b}억</span></td>
         <td><b style="color:${gradeColor(d.grade)};font-size:16px">${d.score}</b> <span style="color:${gradeColor(d.grade)};font-size:11px">${d.grade}</span></td>
         <td style="text-align:right;font-weight:600">${d.current_price.toLocaleString()}원<br><span style="color:${chgColor};font-size:11px">${d.change_pct>=0?'+':''}${d.change_pct}%</span></td>
         <td style="color:${gapColor}">${d.vwap_gap_pct>=0?'+':''}${d.vwap_gap_pct}%<br><span class="ts">${d.vwap.toLocaleString()}</span></td>
