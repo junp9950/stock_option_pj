@@ -26,6 +26,8 @@ _LOOKBACK_DAYS = 40  # 이벤트 경과 상한(일). 오래된 이벤트는 눌�
 _MAX_VWAP_GAP = 6.0  # VWAP 대비 +6% 초과 = 이미 오른 종목
 _MIN_CLOSE_STRENGTH = 0.6  # 폭발일 종가가 고저 범위 상위 60% 이상 (윗꼬리 긴 캔들 제외)
 _MAX_NEXT_DAY_DROP = -4.0  # 폭발 다음날 등락률이 이 이하면 분배로 판단
+_DUMP_PCT = 8.0  # 시장 대비 이 % 이상 급락한 날을 급락일로 집계
+_ROUND_TRIP = 0.90  # 이벤트 사이 종가가 이전 이벤트 종가의 90% 아래로 내려가면 되돌림(왕복)
 _MAX_REBOUND = 6.0  # 이벤트 이후 종가 저점 대비 회복률 상한(%)
 
 
@@ -64,6 +66,8 @@ def scan(db: Session, top_n_by_value: int | None = None) -> list[dict]:
             "shares_outstanding": r.shares_outstanding or 0,
         }
 
+    market_mult, market_chg = _market_stats(by_code)
+
     if top_n_by_value:
         value_scores: dict[str, float] = {}
         for code, price_list in by_code.items():
@@ -88,13 +92,16 @@ def scan(db: Session, top_n_by_value: int | None = None) -> list[dict]:
             continue
 
         shares = meta[code]["shares_outstanding"]
-        events = _find_events(price_list, cutoff, shares)
+        events = _find_events(price_list, cutoff, shares, market_mult)
         if not events:
             continue
 
         latest_event = max(events, key=lambda e: e["date"])
         event_idx = latest_event["idx"]
         event_day = price_list[event_idx]
+        bars_since = len(price_list) - 1 - event_idx
+        if bars_since < 2:  # 이벤트 직후 1일 이내는 아직 눌림이 아님
+            continue
         # 폭발 다음날 큰 음봉 = 분배 신호
         after = price_list[event_idx + 1: event_idx + 2]
         if after and float(after[0].change_pct or 0) <= _MAX_NEXT_DAY_DROP:
@@ -131,12 +138,25 @@ def scan(db: Session, top_n_by_value: int | None = None) -> list[dict]:
         vol_ratio = avg_recent / event_vol if event_vol > 0 else 1.0
 
         days_since = (date.today() - latest_event["date"]).days
+        ev_sorted = sorted(events, key=lambda e: e["idx"])
+        round_trips = 0
+        for a, b in zip(ev_sorted, ev_sorted[1:]):
+            seg = price_list[a["idx"] + 1: b["idx"]]
+            if seg and min(x.close_price for x in seg) < price_list[a["idx"]].close_price * _ROUND_TRIP:
+                round_trips += 1
+        dump_days = sum(
+            1 for p in price_list
+            if p.trading_date >= cutoff
+            and float(p.change_pct or 0) - market_chg.get(p.trading_date, 0.0) <= -_DUMP_PCT
+        )
         score, reasons = _calc_score(
+            round_trips=round_trips,
+            dump_days=dump_days,
+            bars_since=bars_since,
             vwap_gap=vwap_gap,
             vol_ratio=vol_ratio,
             retrace_pct=retrace_pct,
             vol_multiplier=latest_event["vol_multiplier"],
-            days_since=days_since,
         )
 
         results.append({
@@ -164,7 +184,7 @@ def scan(db: Session, top_n_by_value: int | None = None) -> list[dict]:
     return results
 
 
-def _find_events(price_list: list, cutoff: date, shares: float) -> list[dict]:
+def _find_events(price_list: list, cutoff: date, shares: float, market_mult: dict) -> list[dict]:
     events = []
     for i, p in enumerate(price_list):
         if p.trading_date < cutoff or i < 10:
@@ -188,7 +208,8 @@ def _find_events(price_list: list, cutoff: date, shares: float) -> list[dict]:
         if avg_vol == 0:
             continue
 
-        vol_mult = p.volume / avg_vol
+        # 시장 전체 거래량 급증일(폭락/반등장)은 배수에서 제외해 종목 고유 급증만 본다
+        vol_mult = p.volume / avg_vol / max(market_mult.get(p.trading_date, 1.0), 1.0)
         float_ok = (p.volume / shares >= _MIN_FLOAT_RATIO) if shares > 0 else False
         if vol_mult >= _MIN_VOL_MULTIPLIER and p.trading_value >= _MIN_TRADING_VALUE:
             if shares == 0 or float_ok or vol_mult >= 5.0:
@@ -202,14 +223,36 @@ def _find_events(price_list: list, cutoff: date, shares: float) -> list[dict]:
     return events
 
 
+def _market_stats(by_code: dict) -> tuple[dict, dict]:
+    """날짜별 시장 거래량 배수(직전 20일 평균 대비)와 평균 등락률."""
+    vol_by_date: dict = defaultdict(float)
+    chg_sum: dict = defaultdict(float)
+    chg_cnt: dict = defaultdict(int)
+    for price_list in by_code.values():
+        for p in price_list:
+            vol_by_date[p.trading_date] += p.volume or 0
+            chg_sum[p.trading_date] += float(p.change_pct or 0)
+            chg_cnt[p.trading_date] += 1
+    dates = sorted(vol_by_date)
+    mult: dict = {}
+    for i, d in enumerate(dates):
+        prev = [vol_by_date[x] for x in dates[max(0, i - 20): i]]
+        base = sum(prev) / len(prev) if len(prev) >= 10 else 0
+        mult[d] = vol_by_date[d] / base if base > 0 else 1.0
+    chg = {d: chg_sum[d] / chg_cnt[d] for d in dates if chg_cnt[d]}
+    return mult, chg
+
+
 def _calc_score(
+    round_trips: int,
+    dump_days: int,
+    bars_since: int,
     vwap_gap: float,
     vol_ratio: float,
     retrace_pct: float,
     vol_multiplier: float,
-    days_since: int,
 ) -> tuple[int, list[str]]:
-    """0~100점. VWAP 근접 35 + 거래량 수렴 25 + 눌림 깊이 20 + 이벤트 강도 10 + 신선도 10."""
+    """0~100점. VWAP 근접 35 + 거래량 수렴 25 + 눌림 깊이 20 + 이벤트 강도 10 + 조정 유지 10, 왕복/급락 감점."""
     reasons: list[str] = []
     score = 0
 
@@ -247,11 +290,25 @@ def _calc_score(
     elif vol_multiplier >= 3:
         score += 6
 
-    if days_since <= 10:
+    # 조정이 유지된 기간: 며칠 버틸수록 가산, 너무 오래되면 감소
+    if bars_since <= 5:
+        score += 2 * bars_since
+    elif bars_since <= 15:
         score += 10
-    elif days_since <= 20:
+    elif bars_since <= 25:
         score += 7
-    elif days_since <= 40:
+    else:
         score += 4
+    reasons.append(f"조정 {bars_since}일째")
 
-    return score, reasons
+    if round_trips >= 2:
+        score -= 25
+        reasons.append(f"⚠ 왕복 {round_trips}회")
+    elif round_trips == 1:
+        score -= 15
+        reasons.append("왕복 1회")
+    if dump_days >= 2:
+        score -= 10
+        reasons.append(f"급락 {dump_days}일")
+
+    return max(score, 0), reasons
