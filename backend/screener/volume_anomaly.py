@@ -21,8 +21,8 @@ _MIN_VOL_MULTIPLIER = 3.0
 _MIN_TRADING_VALUE = 5_000_000_000
 _MIN_FLOAT_RATIO = 0.03
 _MIN_MARKET_CAP = 300_000_000_000
-_LOOKBACK_DAYS = 90
-_MAX_VWAP_GAP = 10.0  # VWAP 대비 +10% 초과 = 이미 오른 종목
+_LOOKBACK_DAYS = 40  # 이벤트 경과 상한(일). 오래된 이벤트는 눌림이 아니라 추세 하락이 섞임
+_MAX_VWAP_GAP = 6.0  # VWAP 대비 +6% 초과 = 이미 오른 종목
 _MIN_CLOSE_STRENGTH = 0.6  # 폭발일 종가가 고저 범위 상위 60% 이상 (윗꼬리 긴 캔들 제외)
 _MAX_NEXT_DAY_DROP = -4.0  # 폭발 다음날 등락률이 이 이하면 분배로 판단
 _MAX_REBOUND = 6.0  # 이벤트 이후 종가 저점 대비 회복률 상한(%)
@@ -77,7 +77,8 @@ def scan(db: Session, top_n_by_value: int | None = None) -> list[dict]:
     for code, price_list in by_code.items():
         if len(price_list) < 20:
             continue
-        if not top_n_by_value and meta[code]["market_cap"] < _MIN_MARKET_CAP:
+        mcap = meta[code]["market_cap"] or meta[code]["shares_outstanding"] * price_list[-1].close_price
+        if not top_n_by_value and mcap < _MIN_MARKET_CAP:
             continue
 
         shares = meta[code]["shares_outstanding"]
@@ -106,8 +107,8 @@ def scan(db: Session, top_n_by_value: int | None = None) -> list[dict]:
         vwap_gap = (current - vwap) / vwap * 100 if vwap > 0 else 0.0
         retrace_pct = (event_close - current) / event_close * 100 if event_close > 0 else 0.0
 
-        # 손절선 이탈(매집 무효), 이벤트 종가 위(눌림 아님), VWAP 대비 과열은 제외
-        if current < stop_price or retrace_pct < 0 or vwap_gap > _MAX_VWAP_GAP:
+        # 손절선 이탈(매집 무효) 또는 VWAP 대비 과열은 제외. 이벤트 종가 위 횡보는 허용
+        if current < stop_price or vwap_gap > _MAX_VWAP_GAP:
             continue
 
         # 이미 반등 중: 3일 연속 상승이거나 이벤트 이후 종가 저점 대비 크게 회복
@@ -136,7 +137,7 @@ def scan(db: Session, top_n_by_value: int | None = None) -> list[dict]:
             "code": code,
             "name": meta[code]["name"],
             "market": meta[code]["market"],
-            "market_cap": meta[code]["market_cap"],
+            "market_cap": mcap,
             "score": score,
             "grade": "강력" if score >= 75 else "관심" if score >= 60 else "관찰",
             "reasons": reasons,
