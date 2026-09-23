@@ -1196,7 +1196,7 @@ async function loadAnomaly(){
       const mktColor = d.market==='KOSPI'?'#58a6ff':'#39d0d0';
       return `<tr>
         <td style="color:#8b949e">${i+1}</td>
-        <td><b style="color:#e6edf3">${d.name}</b><br><span class="ts">${d.code} · <span style="color:${mktColor}">${d.market}</span></span></td>
+        <td style="cursor:pointer" onclick="openChartModal('${d.code}','${d.name}','${d.event_date}')"><b style="color:#e6edf3">${d.name}</b><br><span class="ts">${d.code} · <span style="color:${mktColor}">${d.market}</span></span></td>
         <td><span style="color:${scoreColor(d.signal_score)};font-weight:700;font-size:15px">${d.signal_score}</span></td>
         <td style="font-weight:600">${d.current_price.toLocaleString()}원</td>
         <td style="color:${chgColor}">${d.change_pct>=0?'+':''}${d.change_pct}%</td>

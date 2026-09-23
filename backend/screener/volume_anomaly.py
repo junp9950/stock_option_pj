@@ -22,7 +22,8 @@ _MIN_TRADING_VALUE = 5_000_000_000  # 50억 이상
 _MIN_FLOAT_RATIO = 0.03         # 발행주식수의 3% 이상 거래
 _MIN_MARKET_CAP = 300_000_000_000   # 시총 3,000억 이상
 _LOOKBACK_DAYS = 90             # 최대 90일 이전 이벤트까지 탐지
-_EVENT_WINDOW = 3               # 이벤트 발생 후 N일을 코어 구간으로 산정
+_MAX_POSITION = 0.6             # 코어 범위 내 현재 위치 상한 (초과 시 이미 상승한 종목)
+_EVENT_WINDOW = 3              # 이벤트 발생 후 N일을 코어 구간으로 산정
 
 
 def scan(db: Session, top_n_by_value: int | None = None) -> list[dict]:
@@ -115,6 +116,10 @@ def scan(db: Session, top_n_by_value: int | None = None) -> list[dict]:
         # = 가격은 내려왔지만 세력은 안 팔고 있음
         retrace_pct = (event_close - current_price) / event_close * 100 if event_close > 0 else 0
         fake_drop = retrace_pct >= 3.0 and vol_converging and not below_core
+
+        # 이미 코어 상단으로 올라갔거나 이벤트 종가 위에 있으면 눌림이 아니므로 제외
+        if position > _MAX_POSITION or retrace_pct < 0:
+            continue
 
         days_since = (date.today() - latest_event["date"]).days
         float_ratio = (event_vol / shares * 100) if shares > 0 else 0
