@@ -159,6 +159,9 @@ def scan(db: Session, top_n_by_value: int | None = None) -> list[dict]:
             vol_multiplier=latest_event["vol_multiplier"],
         )
 
+        if _is_squeezing(price_list[event_idx + 1:]):
+            reasons.append("변동폭 축소")
+
         results.append({
             "code": code,
             "name": meta[code]["name"],
@@ -221,6 +224,17 @@ def _find_events(price_list: list, cutoff: date, shares: float, market_mult: dic
                     "change_pct": change,
                 })
     return events
+
+
+def _is_squeezing(post: list) -> bool:
+    """이벤트 이후 구간의 후반부 등락 폭이 전반부의 75% 이하로 줄었는지."""
+    if len(post) < 4:
+        return False
+    half = len(post) // 2
+    first, second = post[:half], post[half:]
+    r1 = max(p.high_price for p in first) - min(p.low_price for p in first)
+    r2 = max(p.high_price for p in second) - min(p.low_price for p in second)
+    return r1 > 0 and r2 / r1 <= 0.75
 
 
 def _market_stats(by_code: dict) -> tuple[dict, dict]:
