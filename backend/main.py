@@ -111,7 +111,7 @@ select{background:#21262d;border:1px solid #30363d;color:#c9d1d9;padding:6px 10p
 <header>
   <div>
     <h1>눌림목 레이더</h1>
-    <div class="sub">급등 후 조용히 눌린 종목 · 세력 매집 신호 점수 · 매일 16:30 갱신</div>
+    <div class="sub">불플래그 · 상승삼각형 · 기준봉 눌림 후보를 섹터 강도 순으로 · 매일 16:30 갱신</div>
   </div>
   <div style="display:flex;gap:8px">
     <button class="btn" id="btn-run-pipeline" onclick="runPipeline()">▶ 파이프라인 실행</button>
@@ -121,10 +121,11 @@ select{background:#21262d;border:1px solid #30363d;color:#c9d1d9;padding:6px 10p
 <div class="err-bar" id="err-bar">백엔드 연결 실패 — 서버가 실행 중인지 확인하세요</div>
 
 <div class="tabs">
-  <div class="tab active" onclick="switchTab('pullback')">눌림목 레이더</div>
+  <div class="tab active" onclick="switchTab('candidates')">차트 후보</div>
   <div class="tab" onclick="switchTab('screener')">수급 스크리너</div>
   <div class="tab" onclick="switchTab('sector')">섹터 수급</div>
   <div class="tab" onclick="switchTab('heatmap')">시장 히트맵</div>
+  <div class="tab" onclick="switchTab('backtest')">백테스트</div>
 </div>
 
 <!-- 전종목 스크리너 탭 -->
@@ -266,10 +267,9 @@ select{background:#21262d;border:1px solid #30363d;color:#c9d1d9;padding:6px 10p
       <option value="inst">기관 순매수순</option>
     </select>
     <select id="sec-source" onchange="loadSector()">
-      <option value="">전체 분류</option>
+      <option value="">전체</option>
       <option value="custom">커스텀</option>
       <option value="naver_theme">네이버 테마</option>
-      <option value="krx_industry">KRX 업종</option>
     </select>
     <button class="btn btn-gray btn-sm" onclick="loadSector()">⟳ 새로고침</button>
     <button class="btn btn-gray btn-sm" onclick="refreshSectorMapping()">↺ 매핑 갱신</button>
@@ -335,32 +335,69 @@ select{background:#21262d;border:1px solid #30363d;color:#c9d1d9;padding:6px 10p
 </div>
 
 <!-- 눌림목 레이더 탭 -->
-<div id="panel-pullback" class="panel active content">
+<div id="panel-candidates" class="panel active content">
+  <div id="pb-market" hidden style="border-radius:10px;padding:12px 16px;margin-bottom:14px;border:1px solid #30363d"></div>
   <p class="note" style="color:#8b949e;font-size:12.5px;margin:0 0 12px">
-    큰 거래량을 동반한 상승 캔들 뒤에 지지선을 지키며 거래량이 잦아든 눌림목 종목입니다.
-    <b style="color:#c9d1d9">종합점수</b> = 세력 신호점수(VWAP 근접·거래량 수렴·눌림 깊이 등) 60% + 눌림목 품질 40%.
-    <b style="color:#3fb950">75+ 강력</b> · <b style="color:#d29922">60+ 관심</b>.
-    손절선을 이탈했거나 이미 오른 종목은 신호에서 제외됩니다. 종목을 클릭하면 토스증권 차트가 열립니다.
+    원하는 모양(<b style="color:#c9d1d9">불플래그</b> · <b style="color:#c9d1d9">상승삼각형</b> · <b style="color:#c9d1d9">기준봉 눌림</b>) 중 하나라도 해당하는 종목을 <b style="color:#c9d1d9">섹터 점수</b> 순으로 보여줍니다.
+    섹터 점수(0~100)는 종목의 <b style="color:#c9d1d9">대표 테마</b>(네이버 테마 중 최근 60일 주가가 가장 비슷하게 움직인 테마)의 최근 20일 수익률 순위이고, <b style="color:#3fb950">80점 이상이 강한 섹터</b>입니다.
+    3년 백테스트에서 <b>강한 대표 테마 + 차트 후보</b>는 탐색·검증 두 기간 모두 같은 날 아무 종목보다 20일 평균 +1.4~1.6%p 높았습니다(상승삼각형이 가장 일관, 중간값은 마이너스).
+    손절선까지 거리는 <b style="color:#3fb950">3~6%가 적정</b>입니다(같은 백테스트에서 종가 매수 기준 두 기간 모두 최고, 3% 미만은 흔들림에 거의 다 털려 마이너스, 10% 이상도 부진).
+    <b style="color:#e3b341">★</b>는 강한 섹터 + 손절 3~6%로 두 기간 모두 가장 좋았던 조합입니다. 점수는 <b>먼저 볼 순서</b>이지 오를 확률이 아닙니다. 종목을 누르면 차트가 열립니다.
   </p>
   <div class="toolbar" style="margin-bottom:12px">
     <label style="display:flex;align-items:center;gap:6px;font-size:13px;color:#8b949e">
       최소 시가총액(억원)
-      <input type="number" id="pb-min-cap" value="0" min="0" step="100" onchange="loadPullback()"
+      <input type="number" id="cd-min-cap" value="0" min="0" step="100" onchange="loadCandidates()"
              style="width:90px;background:#0d1117;border:1px solid #30363d;color:#c9d1d9;padding:4px 8px;border-radius:4px">
     </label>
     <label style="display:flex;align-items:center;gap:6px;font-size:13px;color:#c9d1d9;cursor:pointer">
-      <input type="checkbox" id="pb-only-signal" checked onchange="loadPullback()"> 신호 종목만
+      <input type="checkbox" id="cd-strong" onchange="renderCandidates()"> 강한 섹터만 (80+)
     </label>
-    <button class="btn btn-gray btn-sm" onclick="loadPullback()">⟳ 새로고침</button>
-    <span class="ts" id="pb-info"></span>
+    <label style="display:flex;align-items:center;gap:6px;font-size:13px;color:#c9d1d9;cursor:pointer">
+      <input type="checkbox" id="cd-stop" onchange="renderCandidates()"> 손절 3~6%만
+    </label>
+    <select id="cd-pattern" onchange="renderCandidates()">
+      <option value="">모든 모양</option>
+      <option value="불플래그">불플래그</option>
+      <option value="상승삼각형">상승삼각형</option>
+      <option value="기준봉 눌림">기준봉 눌림</option>
+    </select>
+    <button class="btn btn-gray btn-sm" onclick="loadCandidates()">⟳ 새로고침</button>
+    <span class="ts" id="cd-info"></span>
   </div>
   <table class="pb-table">
     <thead><tr>
-      <th>종목</th><th>종합점수</th><th>현재가</th><th>VWAP 대비</th><th>손절선</th>
-      <th>급등</th><th>되돌림</th><th>근거</th>
+      <th>종목</th><th>섹터 점수</th><th>모양</th><th>현재가</th><th>손절선</th>
     </tr></thead>
-    <tbody id="pb-body"><tr><td colspan="8" style="color:#8b949e;text-align:center;padding:20px">로딩 중…</td></tr></tbody>
+    <tbody id="cd-body"><tr><td colspan="5" style="color:#8b949e;text-align:center;padding:20px">로딩 중…</td></tr></tbody>
   </table>
+</div>
+
+<div id="panel-backtest" class="panel content">
+  <div id="pick-record" style="background:#161b22;border:1px solid #30363d;border-radius:10px;padding:16px;margin-bottom:20px">
+    <div style="color:#8b949e">실전 기록 불러오는 중…</div>
+  </div>
+  <p class="note" style="color:#8b949e;font-size:12.5px;margin:0 0 12px">
+    과거 세력 신호를 기반으로 <b style="color:#c9d1d9">승률 검증</b>(N일 후 수익률)과
+    <b style="color:#c9d1d9">모의 매매</b>(200만원 진입, 손절선 이탈 시 손절, 5일 보유 후 고점 대비 -7% 하락 시 매도, 20일 타임아웃, 시장 하락 시 진입 보류)를 시뮬레이션합니다.
+  </p>
+  <div class="toolbar" style="margin-bottom:12px">
+    <label style="display:flex;align-items:center;gap:6px;font-size:13px;color:#8b949e">
+      기간
+      <select id="bt-months" onchange="_btLoaded=false" style="background:#0d1117;border:1px solid #30363d;color:#c9d1d9;padding:4px 8px;border-radius:4px">
+        <option value="3">3개월</option><option value="6" selected>6개월</option><option value="12">12개월</option>
+      </select>
+    </label>
+    <label style="display:flex;align-items:center;gap:6px;font-size:13px;color:#8b949e">
+      최소 점수
+      <select id="bt-score" onchange="_btLoaded=false" style="background:#0d1117;border:1px solid #30363d;color:#c9d1d9;padding:4px 8px;border-radius:4px">
+        <option value="50">50+</option><option value="60" selected>60+ 관심</option><option value="75">75+ 강력</option><option value="80">80+</option>
+      </select>
+    </label>
+    <button class="btn btn-blue btn-sm" onclick="loadBacktest()">▶ 백테스트 실행</button>
+    <span class="ts" id="bt-info"></span>
+  </div>
+  <div id="bt-result" style="color:#8b949e;text-align:center;padding:40px">백테스트 버튼을 눌러 실행하세요</div>
 </div>
 
 <!-- 캔들차트 모달 (토스증권 실시간) -->
@@ -427,13 +464,14 @@ const tagHtml = tags => (tags||[]).map(t=>{
 }).join('');
 
 function switchTab(id) {
-  document.querySelectorAll('.tab').forEach((t,i)=>t.classList.toggle('active',['pullback','screener','sector','heatmap'][i]===id));
+  document.querySelectorAll('.tab').forEach((t,i)=>t.classList.toggle('active',['candidates','screener','sector','heatmap','backtest'][i]===id));
   document.querySelectorAll('.panel').forEach(p=>p.classList.remove('active'));
   document.getElementById('panel-'+id).classList.add('active');
   if(id==='screener')loadScreener();
   if(id==='sector')loadSector();
   if(id==='heatmap')loadHeatmap();
-  if(id==='pullback')loadPullback();
+  if(id==='backtest'){loadPickRecord();loadBacktest();}
+  if(id==='candidates')loadCandidates();
 }
 
 // ── 섹터 수급 ──────────────────────────────────────────────────
@@ -443,9 +481,8 @@ function setSectorSort(s){document.getElementById('sec-sort').value=s;loadSector
 async function loadSector(){
   const sort=document.getElementById('sec-sort').value;
   const source=document.getElementById('sec-source').value;
-  const q=source?`sort=${sort}&source=${source}`:`sort=${sort}`;
   try{
-    const data=await fetch(`${API}/sectors/flow?${q}&limit=200`).then(r=>r.ok?r.json():[]);
+    const data=await fetch(`${API}/sectors/flow?sort=${sort}${source?`&source=${source}`:''}&limit=300`).then(r=>r.ok?r.json():[]);
     _sectorData=data;
     renderSector(data);
     document.getElementById('sec-info').textContent=data.length?`기준일: ${data[0].date}`:'';
@@ -456,7 +493,7 @@ function renderSector(data){
   const stealth=data.filter(d=>d.combined_net_buy>0&&!d.is_surged).sort((a,b)=>b.stealth_score-a.stealth_score);
   const surged=[...data].sort((a,b)=>b.flow_score-a.flow_score);
 
-  const srcBadge=s=>({custom:'<span class="badge real">커스텀</span>',naver_theme:'<span class="badge rfb">네이버</span>',krx_industry:'<span class="badge fallback">KRX</span>'}[s]||s);
+  const srcBadge=s=>({custom:'<span class="badge real">커스텀</span>',naver_theme:'<span class="badge rfb">네이버</span>'}[s]||s);
   const fmtBil=n=>n==null?'—':(n>=0?'<span style="color:#3fb950">':' <span style="color:#58a6ff">')+((n>=0?'+':'')+Math.round(n/1e8))+'억</span>';
   const chgColor=n=>n>0?'#3fb950':n<0?'#f85149':'#8b949e';
   const scoreBar10=s=>{const w=Math.min(s/10*80,80);const c=s>=7?'#3fb950':s>=4?'#58a6ff':'#d29922';return `<span style="display:inline-flex;align-items:center;gap:4px"><b style="color:${c}">${s.toFixed(1)}</b><span style="display:inline-block;width:${w}px;height:5px;border-radius:3px;background:${c}"></span></span>`;};
@@ -505,7 +542,7 @@ async function openSectorModal(sectorId, name){
 function closeSectorModal(){document.getElementById('sector-modal-bg').classList.remove('show');}
 
 async function refreshSectorMapping(){
-  if(!confirm('섹터 매핑을 갱신합니다. 네이버 크롤링이 포함되어 수분 소요될 수 있습니다. 계속할까요?'))return;
+  if(!confirm('섹터 매핑(커스텀 + 네이버 테마 264개)을 갱신합니다. 네이버 테마를 받느라 3~5분 걸립니다. 계속할까요?'))return;
   document.getElementById('sec-info').textContent='갱신 중…';
   try{
     const r=await fetch(`${API}/sectors/refresh`,{method:'POST'}).then(res=>res.json());
@@ -651,51 +688,230 @@ function renderHeatmapLegend(){
 }
 
 // ── 눌림목 스캐너 ──────────────────────────────────────────────
-async function loadPullback(){
-  const body = document.getElementById('pb-body');
-  body.innerHTML = '<tr><td colspan="8" style="color:#8b949e;text-align:center;padding:20px">로딩 중…</td></tr>';
+// ── 차트 후보 ─────────────────────────────────────────────────
+let _cdData = null;
+async function loadCandidates(){
+  const body = document.getElementById('cd-body');
+  body.innerHTML = '<tr><td colspan="5" style="color:#8b949e;text-align:center;padding:20px">로딩 중…</td></tr>';
   try{
-    const minCapEok = parseFloat(document.getElementById('pb-min-cap').value) || 0;
-    const minCapWon = minCapEok * 1e8;
-    const data = await fetch(`${API}/screener/pullback?top_n=1000&min_market_cap=${minCapWon}`).then(r=>r.ok?r.json():null);
-    if(!data || !data.items || !data.items.length){
-      body.innerHTML = '<tr><td colspan="8" style="color:#8b949e;text-align:center;padding:20px">조건에 맞는 종목이 없습니다</td></tr>';
-      document.getElementById('pb-info').textContent = data ? `기준일: ${data.trading_date}` : '';
-      return;
-    }
-    const onlySignal = document.getElementById('pb-only-signal').checked;
-    let items = data.items.slice().sort((x,y)=>y.total_score-x.total_score);
-    const signalCount = items.filter(x=>x.signal_score!=null).length;
-    if(onlySignal) items = items.filter(x=>x.signal_score!=null);
-    document.getElementById('pb-info').textContent = `기준일: ${data.trading_date} · 신호 ${signalCount}개 / 전체 ${data.items.length}개`;
-    if(!items.length){
-      body.innerHTML = '<tr><td colspan="8" style="color:#8b949e;text-align:center;padding:20px">신호 종목이 없습니다</td></tr>';
-      return;
-    }
-    const gradeColor = g => g==='강력'?'#3fb950':g==='관심'?'#d29922':'#8b949e';
-    const dash = '<span style="color:#444">—</span>';
-    body.innerHTML = items.map(it=>{
-      const has = it.signal_score!=null;
-      const gap = it.vwap_gap_pct;
-      const tags = [];
-      if(it.repeat_cycles>=3) tags.push(`<b style="color:#f85149">⚠ 반복 ${it.repeat_cycles}회</b>`);
-      else if(it.repeat_cycles>0) tags.push(`반복 ${it.repeat_cycles}회`);
-      (it.signal_reasons||[]).forEach(r=>tags.push(r));
-      return `<tr style="cursor:pointer" onclick="openChartModal('${it.code}','${it.name}','${it.spike_date}')">
-        <td><b>${it.name}</b> <span style="color:#8b949e;font-size:11px">${it.code}</span><br><span style="color:#8b949e;font-size:11px">${it.sector}</span></td>
-        <td data-label="점수"><b style="color:${gradeColor(it.grade)};font-size:16px">${it.total_score}</b> <span style="color:${gradeColor(it.grade)};font-size:11px">${it.grade}</span><br><span class="ts">신호 ${has?it.signal_score:'—'} · 품질 ${(it.quality_score*100).toFixed(0)}</span></td>
-        <td data-label="현재가" style="text-align:right">${it.close_price.toLocaleString()}원<br><span style="color:${it.change_pct>=0?'#f85149':'#3b82f6'};font-size:11px">${it.change_pct>=0?'+':''}${it.change_pct.toFixed(2)}%</span></td>
-        <td data-label="VWAP 대비" style="color:${has&&Math.abs(gap)<=3?'#3fb950':'#c9d1d9'}">${has?`${gap>=0?'+':''}${gap}%<br><span class="ts">${it.vwap.toLocaleString()}</span>`:dash}</td>
-        <td data-label="손절선" style="color:#f85149">${has?it.stop_price.toLocaleString():dash}</td>
-        <td data-label="급등">${it.spike_date}<br><span class="ts">+${it.spike_change_pct.toFixed(1)}% · ${it.spike_volume_ratio.toFixed(1)}배 · ${it.days_since_spike}일 전</span></td>
-        <td data-label="되돌림">${it.pullback_pct.toFixed(1)}%<br><span class="ts">거래량 ${(it.volume_contraction*100).toFixed(0)}%</span></td>
-        <td data-label="근거" style="font-size:12px;color:#c9d1d9">${tags.join(' · ')||dash}</td>
-      </tr>`;
-    }).join('');
+    const cap = parseFloat(document.getElementById('cd-min-cap').value) || 0;
+    _cdData = await fetch(`${API}/screener/chart-candidates?min_cap=${cap}`).then(r=>r.ok?r.json():null);
+    renderMarket(_cdData && _cdData.market);
+    renderCandidates();
   }catch(e){
     console.error(e);
-    body.innerHTML = '<tr><td colspan="8" style="color:#f85149;text-align:center;padding:20px">로딩 실패</td></tr>';
+    body.innerHTML = '<tr><td colspan="5" style="color:#f85149;text-align:center;padding:20px">로딩 실패</td></tr>';
   }
+}
+
+function renderCandidates(){
+  const body = document.getElementById('cd-body');
+  const d = _cdData;
+  if(!d){ return; }
+  const strong = document.getElementById('cd-strong').checked;
+  const goodStop = document.getElementById('cd-stop').checked;
+  const pat = document.getElementById('cd-pattern').value;
+  const items = d.items
+    .filter(it=>(!strong||it.strong_sector) && (!goodStop||it.stop_zone==='적정') && (!pat||it.patterns.some(p=>p.type===pat)));
+  const nStrong = d.items.filter(x=>x.strong_sector).length;
+  const nBest = d.items.filter(x=>x.best_combo).length;
+  document.getElementById('cd-info').textContent = d.trading_date ? `기준일: ${d.trading_date} · ${d.items.length}개 (강한 섹터 ${nStrong}개 · ★ ${nBest}개)` : '';
+  if(!items.length){
+    body.innerHTML = '<tr><td colspan="5" style="color:#8b949e;text-align:center;padding:20px">조건에 맞는 종목이 없습니다</td></tr>';
+    return;
+  }
+  const tagColor = {'불플래그':'#58a6ff','상승삼각형':'#bc8cff','기준봉 눌림':'#d29922'};
+  body.innerHTML = items.map(it=>{
+    const sc = it.sector_score;
+    const scHtml = sc==null ? '<span class="ts">테마 없음</span>'
+      : `<b style="font-size:16px;color:${sc>=80?'#3fb950':sc>=50?'#c9d1d9':'#8b949e'}">${sc}</b><br><span class="ts">${it.sector_name} · 20일 ${it.sector_ret20>=0?'+':''}${it.sector_ret20}%</span>`;
+    const pats = it.patterns.map(p=>`<span style="display:inline-block;margin:0 4px 3px 0;padding:1px 7px;border-radius:10px;border:1px solid ${tagColor[p.type]};color:${tagColor[p.type]};font-size:11.5px">${p.type}${p.grade?'·'+p.grade:''}</span><br><span class="ts">${p.detail}</span>`).join('<br>');
+    const dim = it.stop_zone==='얕음'||it.stop_zone==='깊음'||!it.stop_price;
+    return `<tr style="cursor:pointer;${dim?'opacity:.5':''}" onclick="openChartModal('${it.code}','${it.name}','')">
+      <td>${it.best_combo?'<b style="color:#e3b341">★</b> ':''}<b>${it.name}</b> <span style="color:#8b949e;font-size:11px">${it.code}</span></td>
+      <td data-label="섹터 점수">${scHtml}</td>
+      <td data-label="모양" style="font-size:12px">${pats}</td>
+      <td data-label="현재가" style="text-align:right">${it.close_price.toLocaleString()}원<br><span style="color:${it.change_pct>=0?'#f85149':'#3b82f6'};font-size:11px">${it.change_pct>=0?'+':''}${it.change_pct.toFixed(2)}%</span></td>
+      <td data-label="손절선" style="color:#f85149">${it.stop_price?it.stop_price.toLocaleString()+'원<br><span style="font-size:11px;color:'+({적정:'#3fb950',보통:'#c9d1d9',얕음:'#8b949e',깊음:'#8b949e'}[it.stop_zone])+'">-'+it.stop_dist_pct+'% · '+it.stop_zone+'</span>':'—'}</td>
+    </tr>`;
+  }).join('');
+}
+
+// ── 실전 기록 ─────────────────────────────────────────────────
+async function loadPickRecord(){
+  const el = document.getElementById('pick-record');
+  try{
+    const d = await fetch(`${API}/screener/picks/performance`).then(r=>r.ok?r.json():null);
+    if(!d){ el.innerHTML = '<div style="color:#f85149">실전 기록 로딩 실패</div>'; return; }
+    const head = `<h3 style="font-size:14px;color:#58a6ff;margin-bottom:6px">📌 실전 기록</h3>`;
+    if(!d.since){
+      el.innerHTML = head + '<div class="ts">아직 기록이 없습니다. 거래일 장 마감 후(17:30~) 레이더 신호 종목이 자동으로 쌓입니다.</div>';
+      return;
+    }
+    const won = n => (n>=0?'+':'')+Math.round(n).toLocaleString()+'원';
+    const pc = n => n==null?'—':`<span style="color:${n>=0?'#3fb950':'#f85149'}">${n>=0?'+':''}${n}%</span>`;
+    const col = n => `color:${n>=0?'#3fb950':'#f85149'}`;
+    const statusKo = {stop_loss:'<span style="color:#f85149">손절</span>', trailing:'<span style="color:#3fb950">트레일링</span>', timeout:'만기', '보유중':'<span style="color:#d29922">보유중</span>'};
+    el.innerHTML = head + `
+      <div class="ts" style="margin-bottom:10px">${d.since}부터 ${d.record_days}거래일 기록 (마지막 ${d.last_pick_date}) · 튜닝에 안 쓴 실제 데이터 · 백테스트와 같은 조건: 시총 ${Math.round(d.min_market_cap/1e8).toLocaleString()}억+, 차트 후보 페이지의 섹터 점수 기준, 포착일 종가(시간외 단일가 근사)에 200만원 매수, 같은 매도 규칙, 시장 하락일 제외</div>
+      <div style="overflow-x:auto"><table style="width:100%;font-size:13px;white-space:nowrap">
+        <tr style="color:#8b949e"><td>섹터 점수</td><td>청산</td><td>보유중</td><td>승률</td><td>평균</td><td>실현손익</td><td>평가손익</td></tr>
+        ${d.thresholds.map(t=>`<tr>
+          <td style="color:#c9d1d9;font-weight:700">${t.min_score}+</td><td>${t.closed}</td><td>${t.open}</td>
+          <td>${t.win_rate==null?'—':t.win_rate+'%'}</td><td>${pc(t.avg_pnl_pct)}</td>
+          <td style="${col(t.realized_krw)}">${won(t.realized_krw)}</td><td style="${col(t.unrealized_krw)}">${won(t.unrealized_krw)}</td>
+        </tr>`).join('')}
+      </table></div>
+      ${d.trades.length?`<div style="overflow-x:auto;margin-top:12px"><table style="width:100%;font-size:12px;white-space:nowrap">
+        <tr style="color:#8b949e"><td>종목</td><td>점수</td><td>포착일</td><td>매수가(종가)</td><td>현재/청산가</td><td>상태</td><td>수익률</td><td>손익</td><td>보유</td></tr>
+        ${d.trades.map(t=>`<tr>
+          <td style="color:#c9d1d9"><b>${t.name}</b></td><td>${t.score}</td><td>${t.pick_date}</td>
+          <td>${t.entry_price.toLocaleString()}</td><td>${t.last_price.toLocaleString()}</td><td>${statusKo[t.status]||t.status}</td>
+          <td>${pc(t.pnl_pct)}</td><td style="${col(t.pnl_krw)}">${won(t.pnl_krw)}</td><td>${t.hold_days}일</td>
+        </tr>`).join('')}
+      </table></div>`:'<div class="ts" style="margin-top:8px">아직 기록된 종목이 없습니다.</div>'}`;
+  }catch(e){
+    console.error(e);
+    el.innerHTML = '<div style="color:#f85149">실전 기록 로딩 실패</div>';
+  }
+}
+
+// ── 백테스트 ──────────────────────────────────────────────────
+let _btLoaded = false;
+async function loadBacktest(){
+  if(_btLoaded) return;
+  const el = document.getElementById('bt-result');
+  const months = document.getElementById('bt-months').value;
+  const minScore = document.getElementById('bt-score').value;
+  el.innerHTML = '<div style="color:#8b949e;text-align:center;padding:40px">⏳ 백테스트 실행 중… (30초~1분 소요)</div>';
+  try{
+    const data = await fetch(`${API}/screener/backtest?months=${months}&min_score=${minScore}`).then(r=>r.ok?r.json():null);
+    if(!data){el.innerHTML='<div style="color:#f85149;padding:20px">실행 실패</div>';return;}
+    _btLoaded = true;
+    document.getElementById('bt-info').textContent = `${data.period} · 거래량 이벤트 ${data.total_signals}건 → ${data.min_score}점 통과 ${data.filtered_signals}건 → 실제 매매 ${data.trades.count}건 (보유 중 중복 제외)`;
+    const wr = data.win_rate;
+    const tr = data.trades;
+    const pnlColor = n => n>=0?'#3fb950':'#f85149';
+    const fmtW = n => n>=0?`+${n.toLocaleString()}`:`${n.toLocaleString()}`;
+    let html = `
+    <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(280px,1fr));gap:16px;margin-bottom:20px">
+      <div style="background:#161b22;border:1px solid #30363d;border-radius:10px;padding:16px">
+        <h3 style="font-size:14px;color:#58a6ff;margin-bottom:12px">📊 N일 후 승률</h3>
+        <table style="width:100%;font-size:13px">
+          <tr style="color:#8b949e"><td></td><td>건수</td><td>승률</td><td>평균</td><td>중앙값</td><td>최대↑</td><td>최대↓</td></tr>
+          ${['5d','10d','20d'].map(k=>{const w=wr[k];return `<tr>
+            <td style="color:#c9d1d9;font-weight:700">${k.replace('d','일')}</td>
+            <td>${w.count}</td>
+            <td style="color:${w.win_rate>=50?'#3fb950':'#f85149'};font-weight:700">${w.win_rate}%</td>
+            <td style="color:${pnlColor(w.avg_return)}">${w.avg_return>=0?'+':''}${w.avg_return}%</td>
+            <td style="color:${pnlColor(w.median_return)}">${w.median_return>=0?'+':''}${w.median_return}%</td>
+            <td style="color:#3fb950">+${w.max_gain}%</td>
+            <td style="color:#f85149">${w.max_loss}%</td>
+          </tr>`;}).join('')}
+        </table>
+      </div>
+      <div style="background:#161b22;border:1px solid #30363d;border-radius:10px;padding:16px">
+        <h3 style="font-size:14px;color:#58a6ff;margin-bottom:12px">💰 모의 매매 (200만원/건)</h3>
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;font-size:13px">
+          <div>총 거래: <b>${tr.count}건</b></div>
+          <div>승률: <b style="color:${tr.win_rate>=50?'#3fb950':'#f85149'}">${tr.win_rate}%</b> (${tr.win_count}승 ${tr.loss_count}패)</div>
+          <div>총 손익: <b style="color:${pnlColor(tr.total_pnl_krw)}">${fmtW(tr.total_pnl_krw)}원</b></div>
+          <div>평균 수익률: <b style="color:${pnlColor(tr.avg_pnl_pct)}">${tr.avg_pnl_pct>=0?'+':''}${tr.avg_pnl_pct}%</b></div>
+          <div>평균 수익: <b style="color:#3fb950">+${tr.avg_win_pct}%</b></div>
+          <div>평균 손실: <b style="color:#f85149">${tr.avg_loss_pct}%</b></div>
+          <div>손익비: <b style="color:#c9d1d9">${tr.profit_factor}</b></div>
+          <div>평균 보유: <b>${tr.avg_hold_days}일</b></div>
+          <div>트레일링 익절: <b style="color:#3fb950">${tr.target_count}건</b></div>
+          <div>손절: <b style="color:#f85149">${tr.stop_loss_count}건</b></div>
+          <div>타임아웃: <b>${tr.timeout_count}건</b></div>
+          <div>최대 연속 손실: <b style="color:#f85149">${tr.max_consecutive_loss}연패</b></div>
+          <div>MDD: <b style="color:#f85149">${fmtW(-tr.mdd_krw)}원</b></div>
+          <div>최고/최악: <b style="color:#3fb950">+${tr.best_trade}%</b> / <b style="color:#f85149">${tr.worst_trade}%</b></div>
+        </div>
+      </div>
+    </div>`;
+
+    // 월별 breakdown
+    if(data.monthly && data.monthly.length){
+      html += `<div style="background:#161b22;border:1px solid #30363d;border-radius:10px;padding:16px;margin-bottom:20px">
+        <h3 style="font-size:14px;color:#58a6ff;margin-bottom:12px">📅 월별 성과</h3>
+        <table style="width:100%;font-size:13px">
+          <tr style="color:#8b949e"><td>월</td><td>거래</td><td>승률</td><td>평균 수익률</td><td>총 손익</td></tr>
+          ${data.monthly.map(m=>`<tr>
+            <td style="color:#c9d1d9">${m.month}</td>
+            <td>${m.trades}건 (${m.wins}승)</td>
+            <td style="color:${m.win_rate>=50?'#3fb950':'#f85149'};font-weight:700">${m.win_rate}%</td>
+            <td style="color:${pnlColor(m.avg_pnl_pct)}">${m.avg_pnl_pct>=0?'+':''}${m.avg_pnl_pct}%</td>
+            <td style="color:${pnlColor(m.total_pnl)}">${fmtW(m.total_pnl)}원</td>
+          </tr>`).join('')}
+        </table>
+      </div>`;
+    }
+
+    // 점수 분포
+    if(data.score_distribution){
+      html += `<div style="background:#161b22;border:1px solid #30363d;border-radius:10px;padding:16px;margin-bottom:20px">
+        <h3 style="font-size:14px;color:#58a6ff;margin-bottom:12px">📊 점수 분포 (전체 신호)</h3>
+        <div style="display:flex;gap:12px;flex-wrap:wrap">
+          ${data.score_distribution.map(d=>{
+            const maxC = Math.max(...data.score_distribution.map(x=>x.count));
+            const w = Math.max(d.count/maxC*120,4);
+            const c = d.range.startsWith('90')?'#3fb950':d.range.startsWith('75')?'#58a6ff':d.range.startsWith('60')?'#d29922':'#8b949e';
+            return `<div style="text-align:center"><div style="font-size:12px;color:#8b949e">${d.range}점</div>
+              <div style="width:${w}px;height:20px;background:${c};border-radius:4px;margin:4px auto"></div>
+              <div style="font-size:13px;color:#c9d1d9;font-weight:700">${d.count}건</div></div>`;
+          }).join('')}
+        </div>
+      </div>`;
+    }
+
+    // 최근 거래 리스트
+    html += `<div style="background:#161b22;border:1px solid #30363d;border-radius:10px;padding:16px">
+      <h3 style="font-size:14px;color:#58a6ff;margin-bottom:12px">📋 거래 내역 (최근 50건)</h3>
+      <div style="overflow-x:auto">
+      <table style="width:100%;font-size:12px;white-space:nowrap">
+        <tr style="color:#8b949e"><td>종목</td><td>점수</td><td>진입일</td><td>진입가</td><td>청산일</td><td>청산가</td><td>사유</td><td>수익률</td><td>손익</td><td>보유</td></tr>
+        ${data.trade_list.slice(-50).reverse().map(t=>{
+          const reason = t.exit_reason==='stop_loss'?'<span style="color:#f85149">손절</span>':t.exit_reason==='trailing'?'<span style="color:#3fb950">트레일링</span>':'만기';
+          return `<tr>
+            <td style="color:#c9d1d9"><b>${t.name}</b></td>
+            <td style="color:${t.score>=75?'#3fb950':t.score>=60?'#d29922':'#8b949e'}">${t.score}</td>
+            <td>${t.entry_date}</td><td>${t.entry_price.toLocaleString()}</td>
+            <td>${t.exit_date}</td><td>${t.exit_price.toLocaleString()}</td>
+            <td>${reason}</td>
+            <td style="color:${pnlColor(t.pnl_pct)};font-weight:700">${t.pnl_pct>=0?'+':''}${t.pnl_pct}%</td>
+            <td style="color:${pnlColor(t.pnl_krw)}">${fmtW(t.pnl_krw)}원</td>
+            <td>${t.hold_days}일</td>
+          </tr>`;}).join('')}
+      </table></div>
+    </div>`;
+    if(data.notes && data.notes.length){
+      html += `<div style="margin-top:16px;padding:12px;background:#1c1c1c;border-radius:8px;font-size:12px;color:#8b949e">
+        <b style="color:#d29922">⚠ 주의사항</b><br>${data.notes.map(n=>`· ${n}`).join('<br>')}
+      </div>`;
+    }
+    el.innerHTML = html;
+  }catch(e){
+    console.error(e);
+    el.innerHTML='<div style="color:#f85149;padding:20px">백테스트 실행 실패</div>';
+  }
+}
+
+function renderMarket(m){
+  const el = document.getElementById('pb-market');
+  if(!m){ el.hidden = true; return; }
+  const style = {
+    '상승': {bg:'rgba(63,185,80,.10)', bd:'#3fb950', msg:'매매 가능'},
+    '횡보': {bg:'rgba(210,153,34,.10)', bd:'#d29922', msg:'매매 가능 · 점수 높은 종목 위주'},
+    '하락': {bg:'rgba(248,81,73,.12)', bd:'#f85149', msg:'매매 쉬기'},
+  }[m.state];
+  el.style.background = style.bg;
+  el.style.borderColor = style.bd;
+  const sign = n => (n>=0?'+':'')+n.toFixed(1)+'%';
+  el.innerHTML = `<b style="color:${style.bd};font-size:15px">시장 ${m.state}</b>
+    <span style="color:#e6edf3;margin-left:8px">${style.msg}</span>
+    <div class="ts" style="margin-top:4px">전종목 평균 지수 · 20일선 대비 ${sign(m.vs_ma20_pct)} · 최근 20일 ${sign(m.cum20_pct)} · ${m.as_of} 마감 기준</div>`;
+  el.hidden = false;
 }
 
 async function openChartModal(code, name, spikeDate){
@@ -708,7 +924,7 @@ async function openChartModal(code, name, spikeDate){
       document.getElementById('chart-modal-note').textContent = '토스 API에서 차트 데이터를 가져오지 못했습니다.';
       return;
     }
-    document.getElementById('chart-modal-note').textContent = `스파이크일: ${spikeDate}`;
+    document.getElementById('chart-modal-note').textContent = spikeDate ? `스파이크일: ${spikeDate}` : `최근 90거래일 일봉`;
     drawCandleChart(data.candles, spikeDate);
   }catch(e){
     console.error(e);
@@ -786,7 +1002,7 @@ async function runPipeline(){
     const r=await fetch(`${API}/jobs/run-daily`,{method:'POST'}).then(res=>res.json());
     btn.textContent='▶ 파이프라인 실행';btn.disabled=false;
     showToast(`완료: ${r.trading_date} 시그널=${r.market_signal} 종목=${r.stock_signal_count}`);
-    loadPullback();
+    loadCandidates();
   }catch(e){
     btn.textContent='▶ 파이프라인 실행';btn.disabled=false;
     showToast('파이프라인 실행 실패');
@@ -1162,7 +1378,7 @@ function showToast(msg,err=false){
   t.style.display='block';setTimeout(()=>t.style.display='none',5000);
 }
 
-loadPullback();
+loadCandidates();
 if (location.hash) switchTab(location.hash.slice(1));
 </script>
 </body>
@@ -1176,6 +1392,7 @@ def startup_event() -> None:
     from sqlalchemy import text  # noqa: PLC0415
     with engine.begin() as conn:
         conn.execute(text("ALTER TABLE stocks ADD COLUMN IF NOT EXISTS shares_outstanding FLOAT DEFAULT 0.0"))
+        conn.execute(text("ALTER TABLE radar_picks ADD COLUMN IF NOT EXISTS market_cap FLOAT DEFAULT 0.0"))
     db = SessionLocal()
     try:
         seed_reference_data(db)

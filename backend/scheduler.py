@@ -70,12 +70,12 @@ def start_scheduler() -> BackgroundScheduler:
             db.close()
 
     def _sector_mapping_refresh_job() -> None:
-        """매주 일요일 새벽 2시: 네이버 테마 + KRX 업종 매핑 갱신."""
+        """매주 일요일 새벽 2시: 커스텀 섹터 + 네이버 테마 매핑 갱신."""
         from backend.collector.sector import refresh_sector_mapping  # noqa: PLC0415
         db = SessionLocal()
         try:
             logger.info("Scheduler: sector mapping weekly refresh")
-            result = refresh_sector_mapping(db, include_naver=True, include_krx=True)
+            result = refresh_sector_mapping(db)
             logger.info("Scheduler: sector mapping done — %s", result)
         except Exception as exc:  # noqa: BLE001
             logger.error("Scheduler sector mapping refresh error: %s", exc)
@@ -126,6 +126,33 @@ def start_scheduler() -> BackgroundScheduler:
 
         logger.info("Scheduler: nightly backfill done — %d days filled, %d errors", filled, errors)
 
+    def _record_picks_job() -> None:
+        """레이더 신호 종목 실전 기록. 파이프라인 완료 후 하루 한 번만 저장되고, 나머지 호출은 그냥 넘어감."""
+        from backend.screener.radar import record_picks  # noqa: PLC0415
+        db = SessionLocal()
+        try:
+            logger.info("Scheduler: record radar picks — %s", record_picks(db))
+        except Exception as exc:  # noqa: BLE001
+            logger.error("Scheduler record picks error: %s", exc)
+        finally:
+            db.close()
+
+    def _warm_cache_job() -> None:
+        from backend.api.routes import warm_caches  # noqa: PLC0415
+        db = SessionLocal()
+        try:
+            warm_caches(db)
+        except Exception as exc:  # noqa: BLE001
+            logger.error("Scheduler cache warm error: %s", exc)
+        finally:
+            db.close()
+
+    # 5분마다 화면용 스캔 결과를 미리 계산 (데이터가 안 바뀌었으면 버전 확인만 하고 바로 끝남). 서버 시작 5초 뒤 한 번
+    from datetime import datetime, timedelta, timezone  # noqa: PLC0415
+    scheduler.add_job(_warm_cache_job, "interval", minutes=5, id="warm_cache", replace_existing=True,
+                      next_run_time=datetime.now(timezone.utc) + timedelta(seconds=5), max_instances=1)
+    # 평일 17:30~21:30 매시 정각 30분: 파이프라인 재시도가 늦어져도 그날 기록이 빠지지 않게
+    scheduler.add_job(_record_picks_job, "cron", day_of_week="mon-fri", hour="17-21", minute=30, id="record_picks", replace_existing=True)
     # 매일 16:30에 파이프라인 실행, 데이터 없으면 5분마다 재시도
     scheduler.add_job(_daily_pipeline_job, "cron", hour=16, minute=30, id="daily_pipeline", replace_existing=True)
     # 매일 새벽 3시에 최근 30일 백필

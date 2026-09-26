@@ -224,7 +224,7 @@ class Sector(Base, TimestampMixin):
     id: Mapped[int] = mapped_column(Integer, primary_key=True)
     sector_code: Mapped[str] = mapped_column(String(50), unique=True, index=True)
     sector_name: Mapped[str] = mapped_column(String(100))
-    source: Mapped[str] = mapped_column(String(30))  # 'naver_theme' / 'krx_industry' / 'custom'
+    source: Mapped[str] = mapped_column(String(30))  # 'custom' / 'naver_theme'
     is_active: Mapped[bool] = mapped_column(Boolean, default=True)
 
 
@@ -278,6 +278,41 @@ class BacktestResult(Base, TimestampMixin):
     metric: Mapped[str] = mapped_column(String(100))
     value: Mapped[float] = mapped_column(Float)
     note: Mapped[str | None] = mapped_column(Text, nullable=True)
+
+
+class RadarPick(Base, TimestampMixin):
+    """눌림목 레이더가 그날 장 마감 후 보여준 신호 종목 기록 (실전 성과 추적용)."""
+
+    __tablename__ = "radar_picks"
+    __table_args__ = (UniqueConstraint("pick_date", "stock_code", name="uq_radar_picks"),)
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    pick_date: Mapped[date] = mapped_column(Date, index=True)
+    stock_code: Mapped[str] = mapped_column(String(20), index=True)
+    name: Mapped[str] = mapped_column(String(100))
+    total_score: Mapped[int] = mapped_column(Integer)
+    signal_score: Mapped[int] = mapped_column(Integer)
+    quality_score: Mapped[float] = mapped_column(Float)
+    market_state: Mapped[str | None] = mapped_column(String(10), nullable=True)
+    market_cap: Mapped[float] = mapped_column(Float, default=0.0)
+    close_price: Mapped[float] = mapped_column(Float)
+    stop_price: Mapped[float] = mapped_column(Float)
+    vwap: Mapped[float] = mapped_column(Float)
+    days_since_event: Mapped[int] = mapped_column(Integer)
+    reasons: Mapped[str] = mapped_column(Text, default="")
+
+
+class BullFlagLabel(Base, TimestampMixin):
+    """불플래그 탐지 결과에 대한 사용자 판정 (탐지 조건 다듬기용)."""
+
+    __tablename__ = "bull_flag_labels"
+    __table_args__ = (UniqueConstraint("detect_date", "stock_code", name="uq_bull_flag_labels"),)
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    detect_date: Mapped[date] = mapped_column(Date, index=True)
+    stock_code: Mapped[str] = mapped_column(String(20), index=True)
+    is_flag: Mapped[bool] = mapped_column(Boolean)
+    features: Mapped[str] = mapped_column(Text, default="")
 
 
 class JobLog(Base, TimestampMixin):

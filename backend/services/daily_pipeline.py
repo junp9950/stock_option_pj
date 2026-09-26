@@ -34,7 +34,7 @@ def run_daily_pipeline(db: Session, trading_date: date | None = None, skip_colle
         from backend.collector.sector import needs_refresh, refresh_sector_mapping  # noqa: PLC0415
         if needs_refresh(db):
             logger.info("Pipeline: sector mapping refresh triggered")
-            refresh_sector_mapping(db, include_naver=True, include_krx=True)
+            refresh_sector_mapping(db)
     except Exception as exc:  # noqa: BLE001
         logger.error("Pipeline: sector mapping refresh failed (continuing): %s", exc)
 

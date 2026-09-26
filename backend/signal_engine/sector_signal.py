@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import math
 from collections import defaultdict
 from datetime import date, timedelta
 
@@ -122,7 +123,7 @@ def calculate_sector_signals(db: Session, target_date: date) -> list[SectorFlowD
             foreign_total += f_net
             inst_total += i_net
 
-            if price:
+            if price and math.isfinite(float(price.change_pct or 0)):  # NaN 한 종목이 섹터 평균 전체를 NaN으로 만듦
                 chg = float(price.change_pct or 0)
                 change_pcts.append(chg)
                 if chg > 0:

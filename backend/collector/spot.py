@@ -394,7 +394,10 @@ def collect_spot_data(db: Session, trading_date: date) -> None:
             # sanity check: FDR 병렬 수집 중 간헐적으로 완전히 다른 종목의 OHLCV가 섞여 반환되는
             # 사례가 있었음 (2026-09-08, 003490/028050/036930에서 확인) — 하루 등락률이
             # KRX 상한(±30%)을 크게 벗어나면 오염된 데이터로 간주하고 skip.
-            change_check = round(float(row["Change"]) * 100, 4)
+            import math as _math
+            change_raw = float(row["Change"])
+            # 신규상장 첫날처럼 전일 종가가 없으면 FDR이 NaN을 준다 — NaN은 abs() 비교를 통과해버리므로 0으로 저장
+            change_check = round(change_raw * 100, 4) if _math.isfinite(change_raw) else 0.0
             if abs(change_check) > 50:
                 logger.warning(
                     "FDR %s close_price sanity fail (change=%.1f%%), skip: %s",
@@ -406,7 +409,6 @@ def collect_spot_data(db: Session, trading_date: date) -> None:
                 stock.name = str(listing_row.get("Name", stock.name))
                 stock.market = str(listing_row.get("Market", stock.market))
                 _marcap = listing_row.get("Marcap")
-                import math as _math
                 if _marcap is not None and not (isinstance(_marcap, float) and _math.isnan(_marcap)):
                     stock.market_cap = float(_marcap)
                 elif stock.market_cap is None:
@@ -423,7 +425,7 @@ def collect_spot_data(db: Session, trading_date: date) -> None:
                 close_price=float(row["Close"]),
                 volume=float(row["Volume"]),
                 trading_value=float(row["Volume"]) * float(row["Close"]),
-                change_pct=round(float(row["Change"]) * 100, 4),
+                change_pct=change_check,
             )
             db.execute(
                 pg_insert(SpotDailyPrice).values(**price_vals)
@@ -590,7 +592,9 @@ def collect_sector_supplement(db: Session, trading_date: date) -> int:
                 if not price_row.empty:
                     pr = price_row.iloc[-1]
                     close_val = float(pr.get("Close", 0))
-                    change_val = round(float(pr.get("Change", 0)) * 100, 4)
+                    import math as _math
+                    change_raw = float(pr.get("Change", 0))
+                    change_val = round(change_raw * 100, 4) if _math.isfinite(change_raw) else 0.0  # 신규상장 첫날 NaN
                     # sanity check: change_pct 이 ±50% 초과하면 FDR 오류로 간주하고 skip
                     if abs(change_val) > 50:
                         logger.warning("Sector supplement: %s close_price sanity fail (change=%.1f%%), skip", code, change_val)

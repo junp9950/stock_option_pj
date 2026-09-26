@@ -8,6 +8,7 @@
 """
 from __future__ import annotations
 
+import math
 from collections import defaultdict
 from datetime import date, timedelta
 
@@ -146,6 +147,16 @@ def scan(db: Session, top_n_by_value: int | None = None) -> list[dict]:
             if p.trading_date >= cutoff
             and float(p.change_pct or 0) - market_chg.get(p.trading_date, 0.0) <= -_DUMP_PCT
         )
+        # 손절선 이격도: 눌림 저점이 손절선에서 얼마나 떨어져 버텼는지 (백테스트 승/패 비교로 발견한 유의 지표)
+        post_event = price_list[event_idx + 1:]
+        post_low = min((p.low_price for p in post_event), default=current)
+        low_touch_dist = (post_low - stop_price) / stop_price * 100 if stop_price > 0 else 10.0
+        last2 = price_list[-2:]
+        mixed_color = (
+            len(last2) == 2
+            and (last2[0].close_price > last2[0].open_price) != (last2[1].close_price > last2[1].open_price)
+        )
+
         score, reasons = _calc_score(
             round_trips=round_trips,
             dump_days=dump_days,
@@ -154,6 +165,9 @@ def scan(db: Session, top_n_by_value: int | None = None) -> list[dict]:
             vol_ratio=vol_ratio,
             retrace_pct=retrace_pct,
             vol_multiplier=latest_event["vol_multiplier"],
+            low_touch_dist=low_touch_dist,
+            mixed_color=mixed_color,
+            pre_event_vol_trend=_pre_event_vol_trend(price_list, event_idx),
         )
 
         if _is_squeezing(price_list[event_idx + 1:]):
@@ -224,6 +238,15 @@ def _find_events(price_list: list, cutoff: date, shares: float, market_mult: dic
     return events
 
 
+def _pre_event_vol_trend(price_list: list, idx: int) -> float:
+    """이벤트 직전 5일 평균 거래량 / 그 이전 15일 평균 거래량."""
+    far = [price_list[j].volume for j in range(max(0, idx - 20), max(0, idx - 5)) if price_list[j].volume]
+    near = [price_list[j].volume for j in range(max(0, idx - 5), idx) if price_list[j].volume]
+    if not far or not near:
+        return 1.0
+    return (sum(near) / len(near)) / (sum(far) / len(far))
+
+
 def _is_squeezing(post: list) -> bool:
     """이벤트 이후 구간의 후반부 등락 폭이 전반부의 75% 이하로 줄었는지."""
     if len(post) < 4:
@@ -243,8 +266,10 @@ def _market_stats(by_code: dict) -> tuple[dict, dict]:
     for price_list in by_code.values():
         for p in price_list:
             vol_by_date[p.trading_date] += p.volume or 0
-            chg_sum[p.trading_date] += float(p.change_pct or 0)
-            chg_cnt[p.trading_date] += 1
+            chg = float(p.change_pct or 0)
+            if math.isfinite(chg):  # DB에 NaN 등락률 행이 있어 평균 전체가 NaN이 되는 것 방지
+                chg_sum[p.trading_date] += chg
+                chg_cnt[p.trading_date] += 1
     dates = sorted(vol_by_date)
     mult: dict = {}
     for i, d in enumerate(dates):
@@ -263,55 +288,60 @@ def _calc_score(
     vol_ratio: float,
     retrace_pct: float,
     vol_multiplier: float,
+    low_touch_dist: float = 10.0,
+    mixed_color: bool = False,
+    pre_event_vol_trend: float = 1.0,
 ) -> tuple[int, list[str]]:
-    """0~100점. VWAP 근접 35 + 거래량 수렴 25 + 눌림 깊이 20 + 이벤트 강도 10 + 조정 유지 10, 왕복/급락 감점."""
+    """0~100점. VWAP 30 + 거래량 수렴 22 + 눌림 깊이 17 + 손절선 이격 10 + 이벤트 강도 9 + 조정 2~4일 9 + 캔들 섞임 3.
+    감점: 조정 10일+, 사전 예열, 손절선 근접, 왕복, 급락."""
     reasons: list[str] = []
     score = 0
 
     if -5 <= vwap_gap <= 3:
-        score += 35
+        score += 30
         reasons.append("VWAP 부근")
     elif 3 < vwap_gap <= 6:
-        score += 25
+        score += 21
     elif vwap_gap < -5:
-        score += 20
+        score += 17
         reasons.append("VWAP 하회")
     else:
-        score += 10
+        score += 8
 
     if vol_ratio <= 0.2:
-        score += 25
+        score += 22
         reasons.append("거래량 급감")
     elif vol_ratio <= 0.35:
-        score += 18
+        score += 16
         reasons.append("거래량 수렴")
     elif vol_ratio <= 0.5:
-        score += 8
+        score += 7
 
     if 3 <= retrace_pct <= 15:
-        score += 20
+        score += 17
         reasons.append(f"구라하락 -{retrace_pct:.0f}%")
     elif retrace_pct > 15:
-        score += 10
+        score += 9
     else:
-        score += 8
+        score += 7
 
     if vol_multiplier >= 5:
-        score += 10
+        score += 9
         reasons.append(f"거래량 {vol_multiplier:.0f}배")
     elif vol_multiplier >= 3:
-        score += 6
+        score += 5
 
-    # 조정이 유지된 기간: 며칠 버틸수록 가산, 너무 오래되면 감소
-    if bars_since <= 5:
-        score += 2 * bars_since
-    elif bars_since <= 15:
-        score += 10
-    elif bars_since <= 25:
-        score += 7
-    else:
-        score += 4
+    # 조정 기간: 백테스트상 2~4일째 진입만 플러스, 5일째부터 성과가 급격히 나빠짐
+    if bars_since <= 4:
+        score += 9
+    elif bars_since >= 10:
+        score -= 8
     reasons.append(f"조정 {bars_since}일째")
+
+    # 터지기 전 5일 거래량이 이미 크게 붙어 있었으면 소문난 재료/추격 매수 가능성
+    if pre_event_vol_trend >= 2.0:
+        score -= 8
+        reasons.append("사전 예열")
 
     if round_trips >= 2:
         score -= 25
@@ -322,5 +352,18 @@ def _calc_score(
     if dump_days >= 2:
         score -= 10
         reasons.append(f"급락 {dump_days}일")
+
+    # 손절선 이격도: 여유 있게 버틸수록 가점, 바짝 붙으면 감점 (백테스트 승/패 비교로 발견)
+    if low_touch_dist >= 8:
+        score += 10
+        reasons.append("손절선 여유")
+    elif low_touch_dist >= 5:
+        score += 5
+    elif low_touch_dist < 2:
+        score -= 8
+        reasons.append("손절선 근접 위험")
+
+    if mixed_color:
+        score += 3
 
     return max(score, 0), reasons

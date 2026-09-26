@@ -11,110 +11,57 @@ from sqlalchemy.orm import Session
 
 from backend.db.models import Sector, SectorStock
 from backend.utils.logger import get_logger
-from backend.utils.retry import retry
 
 
 logger = get_logger(__name__)
 
 _CUSTOM_SECTORS_PATH = Path(__file__).resolve().parent.parent / "data" / "custom_sectors.json"
 
-_NAVER_THEME_LIST_URL = "https://finance.naver.com/sise/theme.naver"
-_NAVER_THEME_DETAIL_URL = "https://finance.naver.com/sise/sise_group_detail.naver?type=theme&no={no}"
-
-_HEADERS = {
-    "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 Chrome/124.0 Safari/537.36",
-    "Accept-Language": "ko-KR,ko;q=0.9",
-    "Referer": "https://finance.naver.com/",
-}
+# 네이버 증권 모바일 API (옛 finance.naver.com 테마 페이지는 stock.naver.com으로 옮겨가 HTML 파싱이 막힘)
+_NAVER_THEME_LIST_URL = "https://m.stock.naver.com/api/stocks/theme"
+_NAVER_THEME_DETAIL_URL = "https://m.stock.naver.com/api/stocks/theme/{no}"
+_NAVER_HEADERS = {"User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0 Safari/537.36"}
+_NAVER_PAGE_SIZE = 100
 
 
-def _get(url: str, timeout: int = 10) -> requests.Response:
-    return retry(lambda: requests.get(url, headers=_HEADERS, timeout=timeout), attempts=3, delay_seconds=1.5)
+def _naver_json(url: str, params: dict) -> dict | None:
+    for attempt in range(3):
+        try:
+            resp = requests.get(url, params=params, headers=_NAVER_HEADERS, timeout=10)
+            if resp.status_code == 200:
+                return resp.json()
+            logger.warning("네이버 테마 API %s → HTTP %s", url, resp.status_code)
+        except Exception as exc:  # noqa: BLE001
+            logger.warning("네이버 테마 API %s 실패: %s", url, exc)
+        time.sleep(2 * (attempt + 1))
+    return None
 
 
-def _parse_naver_theme_list() -> list[dict]:
-    """네이버 금융 테마 목록 파싱 → [{"no": "...", "name": "..."}]"""
-    try:
-        from bs4 import BeautifulSoup  # noqa: PLC0415
-    except ImportError:
-        logger.warning("beautifulsoup4 미설치 — 네이버 테마 크롤링 스킵")
-        return []
-
-    try:
-        resp = _get(_NAVER_THEME_LIST_URL)
-        soup = BeautifulSoup(resp.text, "html.parser")
-        themes = []
-        for a in soup.select("td.col_type1 a"):
-            href = a.get("href", "")
-            if "no=" not in href:
-                continue
-            no = href.split("no=")[-1].split("&")[0]
-            name = a.get_text(strip=True)
-            if no and name:
-                themes.append({"no": no, "name": name})
-        logger.info("네이버 테마 목록 %d개 수집", len(themes))
-        return themes
-    except Exception as exc:  # noqa: BLE001
-        logger.warning("네이버 테마 목록 수집 실패: %s", exc)
-        return []
-
-
-def _parse_naver_theme_stocks(no: str) -> list[str]:
-    """특정 테마 소속 종목코드 리스트 반환"""
-    import re  # noqa: PLC0415
-    try:
-        url = _NAVER_THEME_DETAIL_URL.format(no=no)
-        resp = _get(url)
-        # /item/main.naver?code=XXXXXX 패턴으로 6자리 코드 추출
-        codes = list(dict.fromkeys(re.findall(r"/item/main\.naver\?code=([0-9]{6})", resp.text)))
-        return codes
-    except Exception as exc:  # noqa: BLE001
-        logger.warning("네이버 테마 %s 종목 수집 실패: %s", no, exc)
-        return []
+def _paged(url: str, key: str) -> list[dict]:
+    items: list[dict] = []
+    page = 1
+    while True:
+        data = _naver_json(url, {"page": page, "pageSize": _NAVER_PAGE_SIZE})
+        batch = (data or {}).get(key) or []
+        items.extend(batch)
+        if not batch or len(items) >= (data.get("totalCount") or 0):
+            return items
+        page += 1
+        time.sleep(0.3)
 
 
 def _collect_naver_themes() -> dict[str, dict]:
-    """네이버 테마 전체 수집 → {"sector_code": {"name": ..., "codes": [...]}}"""
-    themes = _parse_naver_theme_list()
+    """네이버 테마 전체 → {"naver_{번호}": {"name": 테마명, "codes": [...]}}. 테마 목록과 테마별 소속 종목만 읽는다."""
+    themes = _paged(_NAVER_THEME_LIST_URL, "groups")
     result: dict[str, dict] = {}
-    for i, theme in enumerate(themes):
-        no = theme["no"]
-        codes = _parse_naver_theme_stocks(no)
+    for theme in themes:
+        stocks = _paged(_NAVER_THEME_DETAIL_URL.format(no=theme["no"]), "stocks")
+        codes = [s["itemCode"] for s in stocks if s.get("stockType") == "domestic" and s.get("itemCode")]
         if codes:
-            result[f"naver_{no}"] = {"name": theme["name"], "codes": codes}
-        if i > 0 and i % 10 == 0:
-            logger.info("네이버 테마 수집 중: %d / %d", i, len(themes))
-        time.sleep(1.0)  # 요청 간격 준수
-    logger.info("네이버 테마 수집 완료: %d개", len(result))
+            result[f"naver_{theme['no']}"] = {"name": theme["name"], "codes": codes}
+        time.sleep(0.3)
+    logger.info("네이버 테마 수집 완료: %d / %d개", len(result), len(themes))
     return result
-
-
-def _collect_krx_industries() -> dict[str, dict]:
-    """FDR에서 KRX 업종 분류 수집 → {"krx_{업종명}": {"name": ..., "codes": [...]}}"""
-    try:
-        import FinanceDataReader as fdr  # noqa: PLC0415
-        result: dict[str, dict] = {}
-        for market in ("KOSPI", "KOSDAQ"):
-            listing = fdr.StockListing(market)
-            # Sector / Industry 컬럼 탐색
-            sector_col = next((c for c in listing.columns if c.lower() in ("sector", "industry", "업종")), None)
-            if sector_col is None:
-                logger.warning("FDR %s 업종 컬럼 없음, KRX 업종 수집 스킵", market)
-                continue
-            listing["Code"] = listing["Code"].astype(str).str.zfill(6)
-            for sector_name, group in listing.groupby(sector_col):
-                if not sector_name or str(sector_name).strip() == "":
-                    continue
-                key = f"krx_{sector_name}"
-                codes = group["Code"].tolist()
-                if key not in result:
-                    result[key] = {"name": str(sector_name), "codes": []}
-                result[key]["codes"].extend(codes)
-        logger.info("KRX 업종 수집 완료: %d개", len(result))
-        return result
-    except Exception as exc:  # noqa: BLE001
-        logger.warning("KRX 업종 수집 실패: %s", exc)
-        return {}
 
 
 def _load_custom_sectors() -> dict[str, dict]:
@@ -134,38 +81,11 @@ def _load_custom_sectors() -> dict[str, dict]:
         return {}
 
 
-def _source_of(sector_code: str) -> str:
-    if sector_code.startswith("naver_"):
-        return "naver_theme"
-    if sector_code.startswith("krx_"):
-        return "krx_industry"
-    return "custom"
-
-
-def refresh_sector_mapping(db: Session, include_naver: bool = True, include_krx: bool = True) -> dict:
-    """섹터 매핑 전체 갱신.
-
-    크롤링 실패해도 커스텀 섹터는 항상 반영.
-    기존 데이터 삭제 없이 upsert 방식으로 추가/업데이트.
-    """
-    all_sectors: dict[str, dict] = {}
-
-    # 1. 커스텀 섹터 (항상)
-    all_sectors.update(_load_custom_sectors())
-
-    # 2. 네이버 테마
+def refresh_sector_mapping(db: Session, include_naver: bool = True) -> dict:
+    """커스텀 섹터 + 네이버 테마 매핑 갱신. 기존 데이터 삭제 없이 upsert (네이버 수집 실패 시 기존 테마 유지)."""
+    all_sectors = _load_custom_sectors()
     if include_naver:
-        try:
-            all_sectors.update(_collect_naver_themes())
-        except Exception as exc:  # noqa: BLE001
-            logger.error("네이버 테마 수집 오류 (기존 매핑 유지): %s", exc)
-
-    # 3. KRX 업종
-    if include_krx:
-        try:
-            all_sectors.update(_collect_krx_industries())
-        except Exception as exc:  # noqa: BLE001
-            logger.error("KRX 업종 수집 오류 (기존 매핑 유지): %s", exc)
+        all_sectors.update(_collect_naver_themes())
 
     if not all_sectors:
         logger.warning("수집된 섹터 없음 — 기존 매핑 유지")
@@ -177,7 +97,7 @@ def refresh_sector_mapping(db: Session, include_naver: bool = True, include_krx:
     for sector_code, info in all_sectors.items():
         name = info["name"]
         codes: list[str] = list(dict.fromkeys(info["codes"]))  # 중복 제거
-        source = _source_of(sector_code)
+        source = "naver_theme" if sector_code.startswith("naver_") else "custom"
 
         sector = db.scalar(select(Sector).where(Sector.sector_code == sector_code))
         if sector is None:
