@@ -11,3 +11,6 @@ __pycache__/
 deploy_key
 deploy_key.pub
 .kis_token
+data/research_cache/
+data/quant_strategy/
+data/server_check.py

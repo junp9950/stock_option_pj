@@ -15,4 +15,6 @@ finance-datareader==0.9.110
 psycopg2-binary>=2.9
 beautifulsoup4>=4.12
 setuptools<81
+pyarrow>=19,<24
+scikit-learn>=1.7,<1.8
 git+https://github.com/junp9950/dart-analyzer.git@main

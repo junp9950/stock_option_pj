@@ -15,6 +15,7 @@ from backend.db.models import JobLog, MarketSignal, MarketSignalDetail, Recommen
 from backend.db.seed import refresh_universe
 from backend.services.daily_pipeline import run_backfill_pipeline, run_daily_pipeline
 from backend.services.toss_client import fetch_candles
+from backend.services.quant_strategy import read_snapshot
 from backend.utils.dates import latest_trading_day
 
 
@@ -88,6 +89,11 @@ def _build_tags(
 
 
 router = APIRouter()
+
+
+@router.get('/screener/quant10')
+def get_quant10():
+    return read_snapshot()
 
 
 @router.get("/health", response_model=HealthResponse)
@@ -1379,4 +1385,3 @@ def screener_volume_anomaly(top_n: int | None = None, db: Session = Depends(get_
     """
     from backend.screener.volume_anomaly import scan  # noqa: PLC0415
     return scan(db, top_n_by_value=top_n)
-
