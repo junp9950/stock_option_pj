@@ -1391,6 +1391,8 @@ function showToast(msg,err=false){
 
 loadCandidates();
 if (location.hash) switchTab(location.hash.slice(1));
+const chartQuery=new URLSearchParams(location.search);
+if (/^[0-9A-Z]{6}$/.test(chartQuery.get('chart')||'')) openChartModal(chartQuery.get('chart'),chartQuery.get('name')||chartQuery.get('chart'),'');
 </script>
 </body>
 </html>"""
