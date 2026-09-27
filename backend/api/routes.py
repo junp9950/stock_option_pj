@@ -16,6 +16,7 @@ from backend.db.seed import refresh_universe
 from backend.services.daily_pipeline import run_backfill_pipeline, run_daily_pipeline
 from backend.services.toss_client import fetch_candles
 from backend.services.quant_strategy import read_snapshot
+from backend.services.earnings_screen import read_snapshot as read_earnings_snapshot
 from backend.utils.dates import latest_trading_day
 
 
@@ -94,6 +95,11 @@ router = APIRouter()
 @router.get('/screener/quant10')
 def get_quant10():
     return read_snapshot()
+
+
+@router.get('/screener/earnings')
+def get_earnings_screen():
+    return read_earnings_snapshot()
 
 
 @router.get("/health", response_model=HealthResponse)

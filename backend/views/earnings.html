@@ -1,0 +1,54 @@
+<!doctype html>
+<html lang="ko"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>실적 개선</title>
+<style>
+*{box-sizing:border-box}body{margin:0;background:#0d1117;color:#d6dee8;font:14px/1.6 system-ui,sans-serif}main{max-width:1400px;margin:auto;padding:24px}h1{font-size:24px;margin:0}h2{font-size:16px;margin:0 0 12px}.sub,.muted{color:#94a3b8}.tag{font-size:12px;color:#93c5fd;background:#172c45;padding:4px 9px;border-radius:15px}.head{display:flex;justify-content:space-between;align-items:center;gap:16px}.box{background:#161b22;border:1px solid #30363d;border-radius:12px;padding:18px;margin-top:18px}.alert{border-left:4px solid #d29922;background:#302819;padding:12px 16px;margin-top:16px;border-radius:6px}.down{border-left-color:#f85149;background:#3a1d1d}.scroll{overflow-x:auto}table{border-collapse:collapse;width:100%;white-space:nowrap}th,td{padding:9px 10px;text-align:right;border-bottom:1px solid #2b3340}th{color:#94a3b8;font-size:12px;cursor:default}th:nth-child(2),td:nth-child(2),th:last-child,td:last-child{text-align:left}td small{display:block;color:#94a3b8;font-size:11px}.pos{color:#f87171}.neg{color:#60a5fa}.warn{color:#d29922;font-size:11px}.bar{display:flex;flex-wrap:wrap;gap:8px;align-items:center;margin-bottom:12px}.seg{display:inline-flex;border:1px solid #30363d;border-radius:8px;overflow:hidden}.seg button{background:transparent;color:#cbd5e1;border:0;padding:7px 12px;cursor:pointer;font:inherit}.seg button.on{background:#1f6feb;color:#fff}button.reload{background:#1f6feb;color:#fff;border:0;border-radius:7px;padding:9px 14px;cursor:pointer}ol{padding-left:22px}li{margin:6px 0}.split{display:grid;grid-template-columns:1fr 1fr;gap:16px}.empty{text-align:center;padding:30px;color:#94a3b8}.themes{color:#94a3b8;font-size:12px;max-width:260px;overflow:hidden;text-overflow:ellipsis}@media(max-width:800px){main{padding:14px}.split{grid-template-columns:1fr}h1{font-size:20px}}
+</style></head><body><main>
+<div class="head"><div><span class="tag">실적 공시 기반 · 자동 주문 없음</span><h1>실적 개선</h1><div class="sub">최근 분기 영업이익 +30%·매출 +10% 이상 (전년 동기 대비, 흑자 유지) · 20일 평균 거래대금 50억 이상</div></div><button class="reload" id="reload">새로고침</button></div>
+<div id="status" class="muted" role="status" style="margin-top:10px">불러오는 중…</div>
+<div id="regime" class="alert" hidden></div>
+<section class="box">
+<div class="bar">
+  <span class="seg" id="f-grp"><button data-v="all" class="on">전체</button><button data-v="semi_sobu">반도체 소부장</button><button data-v="semi_ai">반도체·AI</button></span>
+  <span class="seg" id="f-sort"><button data-v="trend" class="on">추세형 (60일 상승 순)</button><button data-v="value">실적 대비 덜 오른 순</button></span>
+  <span class="muted" id="count"></span>
+</div>
+<div class="scroll"><table><thead><tr><th>순위</th><th>종목</th><th id="score-h">60일</th><th>5일</th><th>20일</th><th>6개월</th><th>저점 대비</th><th>고점 대비</th><th>영업이익</th><th>영업이익 증가</th><th>매출 증가</th><th>이익률</th><th>공시</th><th>테마</th></tr></thead><tbody id="rows"></tbody></table></div>
+<div id="empty" class="empty" hidden>조건을 통과한 종목이 없습니다.</div>
+<p class="muted">영업이익은 해당 분기 3개월 값(억 원). <span class="warn">기저</span> = 이익률이 5% 미만이거나 전년 이익률이 1% 미만이라 증가율이 부풀려졌을 수 있는 종목. "실적 대비 덜 오른 순" 점수 = 지금 보이는 목록 안에서 영업이익 증가율·매출 증가율·6개월 주가(낮을수록)의 순위 평균 (0~100).</p>
+</section>
+<div class="split">
+<section class="box"><h2>과거 검증에서 확인한 것 (2023-10 ~ 2026-09)</h2><ol>
+<li>실적이 크게 좋아진 공시 <b>다음 날 사서 40거래일</b> 보유하면 같은 시점 아무 종목보다 평균 <b>+5~6%p</b> 더 올랐다. 크게 나빠진 공시는 덜 올랐다.</li>
+<li>그중 <b>공시 전 두 달간 이미 오르던 종목</b>, <b>강한 테마 종목</b>이 더 좋았다 (결과를 본 뒤 나눈 분석이라 약한 근거).</li>
+<li>공시 후 늦게 살수록 효과가 줄었다: 다음 날 +5.4%p → 한 달 뒤 +2.5%p.</li>
+<li>거래 하나하나는 절반 이상이 손실이었다. 소수의 큰 상승이 평균을 만든다.</li>
+</ol><p class="muted">"실적 대비 덜 오른 순"은 검증하지 않은 방식이다. 과거 자료에서는 오히려 이미 오르던 쪽이 평균적으로 나았다.</p></section>
+<section class="box"><h2>갱신과 한계</h2><p>평일 17:40에 DART에서 새 분기 공시를 받아 다시 계산한다. 공시 시즌은 3월(연간)·5월 중순(1분기)·8월 중순(반기)·11월 중순(3분기)이다. 최근 120일 안의 공시만 보여 준다.</p><p class="muted">시장 예상치(컨센서스) 대비가 아니라 전년 동기 대비다. DART 최종(정정 반영) 숫자다. 테마는 네이버 현재 분류다. 매수 추천이 아니며 과거 결과는 미래 수익을 보장하지 않는다.</p></section>
+</div>
+</main><script>
+const fmt=(n,d=0)=>n==null?'—':Number(n).toLocaleString('ko-KR',{maximumFractionDigits:d});
+const pct=n=>n==null?'—':(n>0?'+':'')+n.toFixed(1)+'%';
+let data=null,grp='all',sort='trend';
+function seg(id,set){document.querySelectorAll('#'+id+' button').forEach(b=>b.onclick=()=>{document.querySelectorAll('#'+id+' button').forEach(x=>x.classList.toggle('on',x===b));set(b.dataset.v);render();});}
+seg('f-grp',v=>grp=v);seg('f-sort',v=>sort=v);
+function rank(arr,key,desc){const s=[...arr].sort((a,b)=>(a[key]??-1e18)-(b[key]??-1e18));const n=s.length;const m=new Map();s.forEach((r,i)=>m.set(r.code,(i+1)/n*100));return r=>desc?m.get(r.code):100-m.get(r.code)+100/n;}
+function td(tr,html,cls){const c=document.createElement('td');if(cls)c.className=cls;c.innerHTML=html;tr.append(c);}
+function colored(v){return `<span class="${v>0?'pos':v<0?'neg':''}">${pct(v)}</span>`}
+function stock(tr,r){const c=document.createElement('td');const b=document.createElement('button');b.type='button';b.textContent=r.name;b.style.cssText='background:transparent;color:#93c5fd;border:0;padding:0;font:inherit;text-decoration:underline;cursor:pointer';b.onclick=()=>{if(window.parent!==window&&typeof window.parent.openChartModal==='function')window.parent.openChartModal(r.code,r.name,'');else location.href='/?chart='+encodeURIComponent(r.code)+'&name='+encodeURIComponent(r.name);};c.append(b);const s=document.createElement('small');s.textContent=r.code+(r.thin?' · ':'');if(r.thin){const w=document.createElement('span');w.className='warn';w.textContent='기저';s.append(w);}c.append(s);tr.append(c);}
+function render(){if(!data)return;let rows=data.rows.filter(r=>grp==='all'||r[grp]);
+if(sort==='value'){const a=rank(rows,'op_yoy',true),b=rank(rows,'rev_yoy',true),c=rank(rows,'ret120',false);rows.forEach(r=>r._score=Math.round((a(r)+b(r)+c(r))/3));rows.sort((x,y)=>y._score-x._score);}
+else rows.sort((x,y)=>(y.ret60??-1e9)-(x.ret60??-1e9));
+document.getElementById('score-h').textContent=sort==='value'?'점수':'60일';
+document.getElementById('count').textContent=rows.length+'종목';
+const body=document.getElementById('rows');body.replaceChildren();
+rows.forEach((r,i)=>{const tr=document.createElement('tr');td(tr,i+1);stock(tr,r);td(tr,sort==='value'?String(r._score):colored(r.ret60));td(tr,colored(r.ret5));td(tr,colored(r.ret20));td(tr,colored(r.ret120));td(tr,pct(r.from_low60));td(tr,pct(r.from_high));
+td(tr,fmt(r.op/1e8)+'억<small>전년 '+fmt(r.op_base/1e8)+'억</small>');td(tr,pct(r.op_yoy));td(tr,pct(r.rev_yoy));td(tr,r.margin==null?'—':r.margin.toFixed(1)+'%');
+td(tr,r.filed.slice(5)+'<small>'+r.period+' · '+r.days_since+'거래일 전</small>');const t=document.createElement('td');t.className='themes';t.title=r.themes.join(', ');t.textContent=r.themes.slice(0,3).join(', ');tr.append(t);body.append(tr);});
+document.getElementById('empty').hidden=rows.length>0;}
+async function load(){const st=document.getElementById('status');try{const res=await fetch('__API_PREFIX__/screener/earnings',{cache:'no-store'});if(!res.ok)throw Error();data=await res.json();
+if(data.status!=='ready'){st.textContent='첫 데이터를 준비 중입니다 (DART 수집에 몇 분 걸립니다).';return;}
+st.textContent='가격 기준일 '+data.as_of+' · 계산 시각 '+new Date(data.generated_at).toLocaleString('ko-KR',{timeZone:'Asia/Seoul'});
+const rg=data.regime,box=document.getElementById('regime');if(rg){box.hidden=false;box.classList.toggle('down',rg.state==='하락');box.textContent='시장 국면: '+rg.state+' (등가중 지수 20일선 대비 '+(rg.vs_ma20_pct>0?'+':'')+rg.vs_ma20_pct+'%)'+(rg.state==='하락'?' · 하락 국면에서는 신규 매수를 쉬는 것이 과거 자료에서 낙폭을 줄였습니다.':'');}
+render();}catch(e){st.textContent='결과를 불러오지 못했습니다. 잠시 후 다시 확인해 주세요.'}}
+document.getElementById('reload').onclick=load;load();
+</script></body></html>

@@ -14,3 +14,4 @@ deploy_key.pub
 data/research_cache/
 data/quant_strategy/
 data/server_check.py
+data/earnings_screen/

@@ -167,6 +167,11 @@ def start_scheduler() -> BackgroundScheduler:
                       id='quant10_daily', replace_existing=True, max_instances=1, coalesce=True)
     scheduler.add_job(refresh_quant, 'date', run_date=datetime.now(timezone.utc)+timedelta(seconds=20),
                       id='quant10_startup', replace_existing=True)
+    from backend.services.earnings_screen import refresh as refresh_earnings
+    scheduler.add_job(refresh_earnings, 'cron', day_of_week='mon-fri', hour=17, minute=40,
+                      id='earnings_screen_daily', replace_existing=True, max_instances=1, coalesce=True)
+    scheduler.add_job(refresh_earnings, 'date', run_date=datetime.now(timezone.utc)+timedelta(seconds=90),
+                      id='earnings_screen_startup', replace_existing=True)
     scheduler.start()
     logger.info("Scheduler started: daily_pipeline=16:30 KST, nightly_backfill=03:00 KST, universe_refresh=Mon 08:00 KST")
     return scheduler
