@@ -746,8 +746,7 @@ function renderCandidates(){
     const scHtml = sc==null ? '<span class="ts">테마 없음</span>'
       : `<b style="font-size:16px;color:${sc>=80?'#3fb950':sc>=50?'#c9d1d9':'#8b949e'}">${sc}</b><br><span class="ts">${it.sector_name} · 20일 ${it.sector_ret20>=0?'+':''}${it.sector_ret20}%</span>`;
     const pats = it.patterns.map(p=>`<span style="display:inline-block;margin:0 4px 3px 0;padding:1px 7px;border-radius:10px;border:1px solid ${tagColor[p.type]};color:${tagColor[p.type]};font-size:11.5px">${p.type}${p.grade?'·'+p.grade:''}</span><br><span class="ts">${p.detail}</span>`).join('<br>');
-    const dim = it.stop_zone==='얕음'||it.stop_zone==='깊음'||!it.stop_price;
-    return `<tr style="cursor:pointer;${dim?'opacity:.5':''}" onclick="openChartModal('${it.code}','${it.name}','')">
+    return `<tr style="cursor:pointer" onclick="openChartModal('${it.code}','${it.name}','')">
       <td>${it.best_combo?'<b style="color:#e3b341">★</b> ':''}<b>${it.name}</b> <span style="color:#8b949e;font-size:11px">${it.code}</span></td>
       <td data-label="섹터 점수">${scHtml}</td>
       <td data-label="모양" style="font-size:12px">${pats}</td>
