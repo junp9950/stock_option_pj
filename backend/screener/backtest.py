@@ -57,7 +57,11 @@ class TradeResult:
     features: dict
 
 
-def run_backtest(db: Session, lookback_months: int = 6, min_score: int = 60, min_market_cap: float = 100_000_000_000) -> dict:
+def run_backtest(
+    db: Session, lookback_months: int = 6, min_score: int = 60, min_market_cap: float = 100_000_000_000,
+    allowed_codes: set[str] | None = None,
+) -> dict:
+    """allowed_codes: 지정하면 그 종목코드들만 대상으로 백테스트 (예: 특정 테마만 걸러서 검증)."""
     from_date = date.today() - timedelta(days=lookback_months * 30 + 90)
 
     rows = db.execute(
@@ -89,13 +93,16 @@ def run_backtest(db: Session, lookback_months: int = 6, min_score: int = 60, min
     market_mult, market_chg = _market_stats(by_code)
     regime = regime_series(market_chg)
 
+    # 시장 국면(위 두 줄)은 항상 전체 유니버스 기준으로 계산 - allowed_codes 필터는 그 다음에 적용
+    scan_universe = {c: v for c, v in by_code.items() if c in allowed_codes} if allowed_codes is not None else by_code
+
     signal_start = date.today() - timedelta(days=lookback_months * 30)
     total_events = 0
     best_scores: list[int] = []
     candidates: list[dict] = []
     skipped = defaultdict(int)
 
-    for code, price_list in by_code.items():
+    for code, price_list in scan_universe.items():
         if len(price_list) < 30:
             continue
         m = meta[code]
