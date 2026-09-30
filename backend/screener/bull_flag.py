@@ -4,10 +4,12 @@
 """
 from __future__ import annotations
 
+import statistics
+
 
 POLE_MIN_GAIN = 0.20        # 깃대 상승률 (깃대 시작 저가 → 깃대 끝 고가)
 POLE_MAX_DAYS = 10          # 깃대 길이 상한 (1일짜리 장대양봉도 허용)
-POLE_VOL_MULT = 1.5         # 깃대 구간 평균 거래량 / 깃대 이전 20일 평균
+POLE_VOL_MULT = 1.5         # 깃대 구간 평균 거래량 / 깃대 이전 20일 중간값 (평균은 직전 장대양봉 하루에 끌려 올라감)
 FLAG_DAYS = (3, 15)         # 깃발 길이 (깃대 끝 다음날 ~ 오늘)
 FLAG_MAX_RETRACE = 0.50     # 깃발 최저가가 깃대 길이의 몇 %까지 되돌려도 되는지
 # 이 이하면 "선명", 초과는 "애매". 첫 판정(2026-09-23)에서 확실하다고 한 3개는 23~32%, 애매 4개는 44~48%였음
@@ -55,7 +57,7 @@ def detect_bull_flag(pl: list) -> dict | None:
     if not pole_vols or not pre_vols:
         return None
     pole_vol = sum(pole_vols) / len(pole_vols)
-    if pole_vol < POLE_VOL_MULT * sum(pre_vols) / len(pre_vols):
+    if pole_vol < POLE_VOL_MULT * statistics.median(pre_vols):
         return None
 
     flag = pl[top + 1: t + 1]
@@ -102,7 +104,7 @@ def detect_bull_flag(pl: list) -> dict | None:
         "pole_top_date": pl[top].trading_date.isoformat(),
         "pole_days": top - start,
         "pole_gain_pct": round(pole_gain * 100, 1),
-        "pole_vol_mult": round(pole_vol / (sum(pre_vols) / len(pre_vols)), 1),
+        "pole_vol_mult": round(pole_vol / statistics.median(pre_vols), 1),
         "flag_days": len(flag),
         "retrace_pct": round(retrace * 100, 1),
         "width_pct": round(width * 100, 1),

@@ -370,9 +370,6 @@ select{background:#21262d;border:1px solid #30363d;color:#c9d1d9;padding:6px 10p
     <label style="display:flex;align-items:center;gap:6px;font-size:13px;color:#c9d1d9;cursor:pointer">
       <input type="checkbox" id="cd-strong" onchange="renderCandidates()"> 강한 섹터만 (80+)
     </label>
-    <label style="display:flex;align-items:center;gap:6px;font-size:13px;color:#c9d1d9;cursor:pointer">
-      <input type="checkbox" id="cd-stop" onchange="renderCandidates()"> 손절 3~6%만
-    </label>
     <select id="cd-pattern" onchange="renderCandidates()">
       <option value="">모든 모양</option>
       <option value="불플래그">불플래그</option>
@@ -729,10 +726,9 @@ function renderCandidates(){
   const d = _cdData;
   if(!d){ return; }
   const strong = document.getElementById('cd-strong').checked;
-  const goodStop = document.getElementById('cd-stop').checked;
   const pat = document.getElementById('cd-pattern').value;
   const items = d.items
-    .filter(it=>(!strong||it.strong_sector) && (!goodStop||it.stop_zone==='적정') && (!pat||it.patterns.some(p=>p.type===pat)));
+    .filter(it=>(!strong||it.strong_sector) && (!pat||it.patterns.some(p=>p.type===pat)));
   const nStrong = d.items.filter(x=>x.strong_sector).length;
   const nBest = d.items.filter(x=>x.best_combo).length;
   document.getElementById('cd-info').textContent = d.trading_date ? `기준일: ${d.trading_date} · ${d.items.length}개 (강한 섹터 ${nStrong}개 · ★ ${nBest}개)` : '';

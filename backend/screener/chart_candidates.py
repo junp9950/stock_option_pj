@@ -17,7 +17,8 @@ from backend.db.models import SpotDailyPrice, Stock
 from backend.screener.bull_flag import detect_bull_flag
 from backend.screener.market_regime import current_regime
 
-MIN_AVG_TRADING_VALUE = 5_000_000_000
+MIN_AVG_TRADING_VALUE = 500_000_000   # 5일 평균 거래대금 5억: 거래가 사실상 없는 종목만 뺀다
+BREAKOUT_KEEP = 2                     # 돌파 후 며칠까지 목록에 남길지
 RET_WIN = 20
 STRONG_SECTOR = 80
 CORR_WIN = 60        # 대표 테마를 고를 때 보는 기간 (거래일)
@@ -194,15 +195,28 @@ def scan(db: Session) -> dict:
         tv = [p.trading_value for p in pl[-5:] if p.trading_value]
         if not tv or sum(tv) / len(tv) < MIN_AVG_TRADING_VALUE:
             continue
-        flag = detect_bull_flag(pl)
+        flag, after = detect_bull_flag(pl), 0
+        if not flag:   # 돌파 후 BREAKOUT_KEEP일까지: 며칠 전에는 깃발이었고 오늘 종가가 깃대 고점 위
+            for k in range(1, BREAKOUT_KEEP + 1):
+                f = detect_bull_flag(pl[:-k])
+                if f and pl[-1].close_price > f["pole_top"]:
+                    flag, after = f, k
+                    break
         if flag:
+            state = f" · 돌파 후 {after}일" if after else (" · 돌파" if flag["status"] == "돌파" else "")
             found[code].append({"type": "불플래그", "grade": flag["grade"], "stop": flag["flag_low"],
-                                "detail": f"깃대 +{flag['pole_gain_pct']:.0f}% · 깃발 {flag['flag_days']}일 · 되돌림 {flag['retrace_pct']:.0f}%"
-                                          + (" · 돌파" if flag["status"] == "돌파" else "")})
-        tri = detect_triangle(pl)
+                                "detail": f"깃대 +{flag['pole_gain_pct']:.0f}% · 깃발 {flag['flag_days']}일 · 되돌림 {flag['retrace_pct']:.0f}%" + state})
+        tri, after = detect_triangle(pl), 0
+        if not tri:
+            for k in range(1, BREAKOUT_KEEP + 1):
+                tr = detect_triangle(pl[:-k])
+                if tr and pl[-1].close_price > tr["resistance"]:
+                    tri, after = tr, k
+                    break
         if tri:
             found[code].append({"type": "상승삼각형", "grade": None, "stop": tri["support"],
-                                "detail": f"상승 +{tri['rise_pct']}% · 저항 {tri['resistance']:,}원 {tri['touches']}회 터치"})
+                                "detail": f"상승 +{tri['rise_pct']}% · 저항 {tri['resistance']:,}원 {tri['touches']}회 터치"
+                                          + (f" · 돌파 후 {after}일" if after else "")})
 
     # 기준봉 눌림은 기존 세력 신호 스캐너 결과를 그대로 쓴다
     from backend.screener.volume_anomaly import scan as scan_signal  # noqa: PLC0415
@@ -210,6 +224,8 @@ def scan(db: Session) -> dict:
         found[sig["code"]].append({"type": "기준봉 눌림", "grade": None, "stop": sig["stop_price"],
                                    "detail": f"{sig['event_date'][5:]} +{sig['event_change_pct']:.0f}% · 거래량 {sig['vol_multiplier']:.0f}배 · {sig['days_since_event']}일째"})
 
+    from backend.services.marcap_caps import caps as marcap_caps  # noqa: PLC0415
+    marcap = marcap_caps()   # stocks에 시총·주식 수가 없는 종목(유니버스 밖)을 채운다
     items = []
     for code, patterns in found.items():
         pl = by_code.get(code)
@@ -222,7 +238,7 @@ def scan(db: Session) -> dict:
         sec = sectors.get(code)
         items.append({
             "code": code, "name": s.name, "market": s.market,
-            "market_cap": s.market_cap or (s.shares_outstanding or 0) * close,
+            "market_cap": s.market_cap or (s.shares_outstanding or 0) * close or marcap.get(code) or 0,
             "close_price": round(close), "change_pct": round(float(pl[-1].change_pct or 0), 2),
             "patterns": patterns,
             "sector_score": sec[0] if sec else None,
