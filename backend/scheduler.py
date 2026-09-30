@@ -96,7 +96,7 @@ def start_scheduler() -> BackgroundScheduler:
         from backend.utils.dates import is_trading_day  # noqa: PLC0415
 
         logger.info("Scheduler: nightly backfill started (last 30 days)")
-        end_date = date.today() - timedelta(days=1)  # 어제까지 (오늘은 16:30에 따로 수집)
+        end_date = date.today() - timedelta(days=1)  # 어제까지 (오늘은 15:41에 따로 수집)
         start_date = end_date - timedelta(days=30)
 
         filled = 0
@@ -153,8 +153,8 @@ def start_scheduler() -> BackgroundScheduler:
                       next_run_time=datetime.now(timezone.utc) + timedelta(seconds=5), max_instances=1)
     # 평일 17:30~21:30 매시 정각 30분: 파이프라인 재시도가 늦어져도 그날 기록이 빠지지 않게
     scheduler.add_job(_record_picks_job, "cron", day_of_week="mon-fri", hour="17-21", minute=30, id="record_picks", replace_existing=True)
-    # 매일 16:30에 파이프라인 실행, 데이터 없으면 5분마다 재시도
-    scheduler.add_job(_daily_pipeline_job, "cron", hour=16, minute=30, id="daily_pipeline", replace_existing=True)
+    # 매일 15:41에 파이프라인 실행, 데이터 없으면 5분마다 재시도
+    scheduler.add_job(_daily_pipeline_job, "cron", hour=15, minute=41, id="daily_pipeline", replace_existing=True)
     # 매일 새벽 3시에 최근 30일 백필
     scheduler.add_job(_nightly_backfill_job, "cron", hour=3, minute=0, id="nightly_backfill", replace_existing=True)
     # 매주 월요일 오전 8시에 유니버스 갱신
@@ -173,5 +173,5 @@ def start_scheduler() -> BackgroundScheduler:
     scheduler.add_job(refresh_earnings, 'date', run_date=datetime.now(timezone.utc)+timedelta(seconds=90),
                       id='earnings_screen_startup', replace_existing=True)
     scheduler.start()
-    logger.info("Scheduler started: daily_pipeline=16:30 KST, nightly_backfill=03:00 KST, universe_refresh=Mon 08:00 KST")
+    logger.info("Scheduler started: daily_pipeline=15:41 KST, nightly_backfill=03:00 KST, universe_refresh=Mon 08:00 KST")
     return scheduler
