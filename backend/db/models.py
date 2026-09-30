@@ -315,6 +315,18 @@ class BullFlagLabel(Base, TimestampMixin):
     features: Mapped[str] = mapped_column(Text, default="")
 
 
+class Suggestion(Base, TimestampMixin):
+    """건의사항 탭: 사용자가 남긴 기능 요청·불편 사항과 처리 상태."""
+
+    __tablename__ = "suggestions"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    author: Mapped[str] = mapped_column(String(40), default="")
+    content: Mapped[str] = mapped_column(Text)
+    status: Mapped[str] = mapped_column(String(10), default="접수", index=True)
+    reply: Mapped[str] = mapped_column(Text, default="")
+
+
 class JobLog(Base, TimestampMixin):
     __tablename__ = "job_logs"
 

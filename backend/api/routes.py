@@ -5,13 +5,14 @@ from datetime import date, timedelta
 import json
 
 from fastapi import APIRouter, Depends, HTTPException
+from pydantic import BaseModel, Field
 from sqlalchemy import desc, func, select
 from sqlalchemy.orm import Session
 
 from backend.api.schemas import HealthResponse, JobResponse, MarketSignalResponse, RecommendationItem, RecommendationResponse, SectorFlowItem, SectorItem, SectorStockItem
 from backend.collector.backfill import run_backfill as run_data_backfill
 from backend.db.database import get_db
-from backend.db.models import JobLog, MarketSignal, MarketSignalDetail, Recommendation, Sector, SectorFlowDaily, SectorStock, Setting, ShortSellingDaily, SpotDailyPrice, SpotInvestorFlow, Stock, StockSignal, StockSignalDetail
+from backend.db.models import Suggestion, JobLog, MarketSignal, MarketSignalDetail, Recommendation, Sector, SectorFlowDaily, SectorStock, Setting, ShortSellingDaily, SpotDailyPrice, SpotInvestorFlow, Stock, StockSignal, StockSignalDetail
 from backend.db.seed import refresh_universe
 from backend.services.daily_pipeline import run_backfill_pipeline, run_daily_pipeline
 from backend.services.toss_client import fetch_candles
@@ -100,6 +101,65 @@ def get_quant10():
 @router.get('/screener/earnings')
 def get_earnings_screen():
     return read_earnings_snapshot()
+
+
+# ── 건의사항 ──────────────────────────────────────────────
+SUGGESTION_STATUS = ("접수", "진행 중", "완료", "보류")
+
+
+class SuggestionIn(BaseModel):
+    author: str = Field("", max_length=40)
+    content: str = Field(..., min_length=1, max_length=2000)
+
+
+class SuggestionPatch(BaseModel):
+    status: str | None = None
+    reply: str | None = Field(None, max_length=2000)
+
+
+def _suggestion_dict(x: Suggestion) -> dict:
+    return {"id": x.id, "author": x.author, "content": x.content, "status": x.status, "reply": x.reply,
+            "created_at": x.created_at.isoformat() + "Z", "updated_at": x.updated_at.isoformat() + "Z"}
+
+
+@router.get('/suggestions')
+def list_suggestions(db: Session = Depends(get_db)):
+    return [_suggestion_dict(x) for x in db.scalars(select(Suggestion).order_by(Suggestion.id.desc()))]
+
+
+@router.post('/suggestions')
+def create_suggestion(body: SuggestionIn, db: Session = Depends(get_db)):
+    if not body.content.strip():
+        raise HTTPException(status_code=400, detail="내용을 입력해 주세요.")
+    x = Suggestion(author=body.author.strip(), content=body.content.strip(), status="접수", reply="")
+    db.add(x)
+    db.commit()
+    return _suggestion_dict(x)
+
+
+@router.patch('/suggestions/{sid}')
+def update_suggestion(sid: int, body: SuggestionPatch, db: Session = Depends(get_db)):
+    x = db.get(Suggestion, sid)
+    if x is None:
+        raise HTTPException(status_code=404, detail="건의를 찾을 수 없습니다.")
+    if body.status is not None:
+        if body.status not in SUGGESTION_STATUS:
+            raise HTTPException(status_code=400, detail="상태 값이 올바르지 않습니다.")
+        x.status = body.status
+    if body.reply is not None:
+        x.reply = body.reply.strip()
+    db.commit()
+    return _suggestion_dict(x)
+
+
+@router.delete('/suggestions/{sid}')
+def delete_suggestion(sid: int, db: Session = Depends(get_db)):
+    x = db.get(Suggestion, sid)
+    if x is None:
+        raise HTTPException(status_code=404, detail="건의를 찾을 수 없습니다.")
+    db.delete(x)
+    db.commit()
+    return {"ok": True}
 
 
 @router.get("/health", response_model=HealthResponse)

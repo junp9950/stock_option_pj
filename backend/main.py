@@ -39,6 +39,12 @@ def earnings_dashboard() -> str:
     return (Path(__file__).parent/'views'/'earnings.html').read_text(encoding='utf-8').replace('__API_PREFIX__', config.api_prefix)
 
 
+@app.get('/suggestions', response_class=HTMLResponse, include_in_schema=False)
+def suggestions_page() -> str:
+    from pathlib import Path
+    return (Path(__file__).parent/'views'/'suggestions.html').read_text(encoding='utf-8').replace('__API_PREFIX__', config.api_prefix)
+
+
 @app.get("/", response_class=HTMLResponse, include_in_schema=False)
 def status_dashboard() -> str:
     return """<!DOCTYPE html>
@@ -140,10 +146,12 @@ select{background:#21262d;border:1px solid #30363d;color:#c9d1d9;padding:6px 10p
   <div class="tab" onclick="switchTab('backtest')">백테스트</div>
   <div class="tab" onclick="switchTab('quant')">AI 10일 전략</div>
   <div class="tab" onclick="switchTab('earnings')">실적 개선</div>
+  <div class="tab" onclick="switchTab('suggest')">건의사항</div>
 </div>
 
 <div id="panel-quant" class="panel"><iframe title="AI 10일 전략" id="quant-frame" style="width:100%;height:1400px;border:0" loading="lazy"></iframe></div>
 <div id="panel-earnings" class="panel"><iframe title="실적 개선" id="earnings-frame" style="width:100%;height:2200px;border:0" loading="lazy"></iframe></div>
+<div id="panel-suggest" class="panel"><iframe title="건의사항" id="suggest-frame" style="width:100%;height:1600px;border:0" loading="lazy"></iframe></div>
 
 <!-- 전종목 스크리너 탭 -->
 <div id="panel-screener" class="panel">
@@ -478,8 +486,8 @@ const tagHtml = tags => (tags||[]).map(t=>{
 }).join('');
 
 function switchTab(id) {
-  if(!['candidates','screener','sector','heatmap','backtest','quant','earnings'].includes(id))return;
-  document.querySelectorAll('.tab').forEach((t,i)=>t.classList.toggle('active',['candidates','screener','sector','heatmap','backtest','quant','earnings'][i]===id));
+  if(!['candidates','screener','sector','heatmap','backtest','quant','earnings','suggest'].includes(id))return;
+  document.querySelectorAll('.tab').forEach((t,i)=>t.classList.toggle('active',['candidates','screener','sector','heatmap','backtest','quant','earnings','suggest'][i]===id));
   document.querySelectorAll('.panel').forEach(p=>p.classList.remove('active'));
   document.getElementById('panel-'+id).classList.add('active');
   if(id==='screener')loadScreener();
@@ -489,6 +497,7 @@ function switchTab(id) {
   if(id==='candidates')loadCandidates();
   if(id==='quant'&&!document.getElementById('quant-frame').src)document.getElementById('quant-frame').src='/quant';
   if(id==='earnings'&&!document.getElementById('earnings-frame').src)document.getElementById('earnings-frame').src='/earnings';
+  if(id==='suggest')document.getElementById('suggest-frame').src='/suggestions';
 }
 
 // ── 섹터 수급 ──────────────────────────────────────────────────
