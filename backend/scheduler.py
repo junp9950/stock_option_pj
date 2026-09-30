@@ -33,6 +33,17 @@ def start_scheduler() -> BackgroundScheduler:
         finally:
             db.close()
 
+    def _final_refresh_job() -> None:
+        # 18:00 재수집: 15:41에는 외국인·기관 수급이 잠정치일 수 있어 최종치로 덮어쓴다 (upsert라 중복 없음, 알림은 보내지 않음)
+        db = SessionLocal()
+        try:
+            logger.info("Scheduler: running 18:00 final refresh")
+            run_daily_pipeline(db, notify=False)
+        except Exception as exc:  # noqa: BLE001
+            logger.error("Scheduler final refresh error: %s", exc)
+        finally:
+            db.close()
+
     def _daily_pipeline_job() -> None:
         if _has_today_data():
             # 이미 오늘 데이터 있으면 스킵 (재시도 중 이미 성공한 경우)
@@ -155,6 +166,8 @@ def start_scheduler() -> BackgroundScheduler:
     scheduler.add_job(_record_picks_job, "cron", day_of_week="mon-fri", hour="17-21", minute=30, id="record_picks", replace_existing=True)
     # 매일 15:41에 파이프라인 실행, 데이터 없으면 5분마다 재시도
     scheduler.add_job(_daily_pipeline_job, "cron", hour=15, minute=41, id="daily_pipeline", replace_existing=True)
+    # 매일 18:00에 한 번 더 강제 실행 (수급 최종치 반영)
+    scheduler.add_job(_final_refresh_job, "cron", day_of_week="mon-fri", hour=18, minute=0, id="daily_pipeline_final", replace_existing=True, max_instances=1)
     # 매일 새벽 3시에 최근 30일 백필
     scheduler.add_job(_nightly_backfill_job, "cron", hour=3, minute=0, id="nightly_backfill", replace_existing=True)
     # 매주 월요일 오전 8시에 유니버스 갱신
@@ -173,5 +186,5 @@ def start_scheduler() -> BackgroundScheduler:
     scheduler.add_job(refresh_earnings, 'date', run_date=datetime.now(timezone.utc)+timedelta(seconds=90),
                       id='earnings_screen_startup', replace_existing=True)
     scheduler.start()
-    logger.info("Scheduler started: daily_pipeline=15:41 KST, nightly_backfill=03:00 KST, universe_refresh=Mon 08:00 KST")
+    logger.info("Scheduler started: daily_pipeline=15:41 + 18:00 KST, nightly_backfill=03:00 KST, universe_refresh=Mon 08:00 KST")
     return scheduler

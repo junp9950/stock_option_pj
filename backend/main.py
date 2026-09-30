@@ -123,7 +123,7 @@ select{background:#21262d;border:1px solid #30363d;color:#c9d1d9;padding:6px 10p
 <header>
   <div>
     <h1>눌림목 레이더</h1>
-    <div class="sub">불플래그 · 상승삼각형 · 기준봉 눌림 후보를 섹터 강도 순으로 · 매일 15:41 갱신</div>
+    <div class="sub">불플래그 · 상승삼각형 · 기준봉 눌림 후보를 섹터 강도 순으로 · 매일 15:41·18:00 갱신</div>
   </div>
   <div style="display:flex;gap:8px">
     <button class="btn" id="btn-run-pipeline" onclick="runPipeline()">▶ 파이프라인 실행</button>

@@ -24,7 +24,8 @@ from backend.utils.logger import get_logger
 logger = get_logger(__name__)
 
 
-def run_daily_pipeline(db: Session, trading_date: date | None = None, skip_collection: bool = False) -> dict[str, object]:
+def run_daily_pipeline(db: Session, trading_date: date | None = None, skip_collection: bool = False,
+                       notify: bool = True) -> dict[str, object]:
     target_date = trading_date or latest_trading_day()
     db.add(JobLog(trading_date=target_date, stage="pipeline", status="started", message="daily pipeline started"))
     db.commit()
@@ -77,7 +78,7 @@ def run_daily_pipeline(db: Session, trading_date: date | None = None, skip_colle
     # 텔레그램 전송 (토큰 미설정 시 자동 스킵, 별도 스레드로 비차단)
     from backend.config import get_config  # noqa: PLC0415
     _cfg = get_config()
-    if _cfg.telegram_bot_token and _cfg.telegram_chat_id:
+    if notify and _cfg.telegram_bot_token and _cfg.telegram_chat_id:
         _text = build_daily_message(db, target_date)
         threading.Thread(
             target=send_message_sync,
