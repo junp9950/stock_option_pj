@@ -12,7 +12,7 @@ from sqlalchemy.orm import Session
 from backend.api.schemas import HealthResponse, JobResponse, MarketSignalResponse, RecommendationItem, RecommendationResponse, SectorFlowItem, SectorItem, SectorStockItem
 from backend.collector.backfill import run_backfill as run_data_backfill
 from backend.db.database import get_db
-from backend.db.models import DiscussionPost, Suggestion, JobLog, MarketSignal, MarketSignalDetail, Recommendation, Sector, SectorFlowDaily, SectorStock, Setting, ShortSellingDaily, SpotDailyPrice, SpotInvestorFlow, Stock, StockSignal, StockSignalDetail
+from backend.db.models import DiscussionComment, DiscussionPost, Suggestion, JobLog, MarketSignal, MarketSignalDetail, Recommendation, Sector, SectorFlowDaily, SectorStock, Setting, ShortSellingDaily, SpotDailyPrice, SpotInvestorFlow, Stock, StockSignal, StockSignalDetail
 from backend.db.seed import refresh_universe
 from backend.services.daily_pipeline import run_backfill_pipeline, run_daily_pipeline
 from backend.services.toss_client import fetch_candles
@@ -115,11 +115,22 @@ class DiscussionIn(BaseModel):
     image_data: str | None = None
 
 
-def _discussion_dict(x: DiscussionPost) -> dict:
+class CommentIn(BaseModel):
+    author: str = Field("", max_length=40)
+    content: str = Field(..., min_length=1, max_length=1000)
+
+
+def _comment_dict(c: DiscussionComment) -> dict:
+    return {"id": c.id, "post_id": c.post_id, "author": c.author, "content": c.content,
+            "created_at": c.created_at.isoformat() + "Z"}
+
+
+def _discussion_dict(x: DiscussionPost, comments: list[DiscussionComment] | None = None) -> dict:
     return {
         "id": x.id, "author": x.author, "content": x.content,
         "stock_code": x.stock_code, "stock_name": x.stock_name, "image_data": x.image_data,
         "created_at": x.created_at.isoformat() + "Z",
+        "comments": [_comment_dict(c) for c in (comments or [])],
     }
 
 
@@ -128,7 +139,13 @@ def list_discussion(stock_code: str | None = None, db: Session = Depends(get_db)
     q = select(DiscussionPost).order_by(DiscussionPost.id.desc())
     if stock_code:
         q = q.where(DiscussionPost.stock_code == stock_code)
-    return [_discussion_dict(x) for x in db.scalars(q.limit(300))]
+    posts = list(db.scalars(q.limit(300)))
+    ids = [p.id for p in posts]
+    comments_by_post: dict[int, list[DiscussionComment]] = defaultdict(list)
+    if ids:
+        for c in db.scalars(select(DiscussionComment).where(DiscussionComment.post_id.in_(ids)).order_by(DiscussionComment.id)):
+            comments_by_post[c.post_id].append(c)
+    return [_discussion_dict(p, comments_by_post.get(p.id, [])) for p in posts]
 
 
 @router.post('/discussion')
@@ -156,7 +173,28 @@ def delete_discussion(pid: int, db: Session = Depends(get_db)):
     x = db.get(DiscussionPost, pid)
     if x is None:
         raise HTTPException(status_code=404, detail="게시글을 찾을 수 없습니다.")
+    db.query(DiscussionComment).filter(DiscussionComment.post_id == pid).delete()
     db.delete(x)
+    db.commit()
+    return {"ok": True}
+
+
+@router.post('/discussion/{pid}/comments')
+def create_comment(pid: int, body: CommentIn, db: Session = Depends(get_db)):
+    if db.get(DiscussionPost, pid) is None:
+        raise HTTPException(status_code=404, detail="게시글을 찾을 수 없습니다.")
+    c = DiscussionComment(post_id=pid, author=body.author.strip(), content=body.content.strip())
+    db.add(c)
+    db.commit()
+    return _comment_dict(c)
+
+
+@router.delete('/discussion/comments/{cid}')
+def delete_comment(cid: int, db: Session = Depends(get_db)):
+    c = db.get(DiscussionComment, cid)
+    if c is None:
+        raise HTTPException(status_code=404, detail="댓글을 찾을 수 없습니다.")
+    db.delete(c)
     db.commit()
     return {"ok": True}
 

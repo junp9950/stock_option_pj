@@ -328,6 +328,17 @@ class DiscussionPost(Base, TimestampMixin):
     image_data: Mapped[str | None] = mapped_column(Text, nullable=True)
 
 
+class DiscussionComment(Base, TimestampMixin):
+    """종목토론 게시글 댓글."""
+
+    __tablename__ = "discussion_comments"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    post_id: Mapped[int] = mapped_column(Integer, ForeignKey("discussion_posts.id"), index=True)
+    author: Mapped[str] = mapped_column(String(40), default="")
+    content: Mapped[str] = mapped_column(Text)
+
+
 class Suggestion(Base, TimestampMixin):
     """건의사항 탭: 사용자가 남긴 기능 요청·불편 사항과 처리 상태."""
 

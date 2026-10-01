@@ -12,6 +12,9 @@ button{background:#1f6feb;color:#fff;border:0;border-radius:7px;padding:9px 16px
 .preview{position:relative;display:inline-block;margin-top:10px}.preview img{max-width:260px;max-height:200px;border-radius:8px;border:1px solid #30363d;display:block}
 .preview .rm{position:absolute;top:-8px;right:-8px;background:#f85149;color:#fff;border:0;border-radius:50%;width:22px;height:22px;line-height:22px;padding:0;font-size:13px;cursor:pointer}
 .empty{text-align:center;color:#94a3b8;padding:24px}.err{color:#f87171;font-size:13px}
+.comments{margin-top:10px;padding-left:14px;border-left:2px solid #21262d}
+.comment{padding:6px 0;font-size:13px}.comment .meta{font-size:11px;margin-bottom:2px}.comment .content{margin:0;font-size:13px}
+.comment-form{display:flex;gap:6px;margin-top:8px}.comment-form input{flex:1}.comment-form input.name{flex:0 0 90px}.comment-form button{padding:7px 12px;font-size:13px}
 .lightbox{display:none;position:fixed;inset:0;background:rgba(0,0,0,.85);z-index:50;align-items:center;justify-content:center;cursor:zoom-out}
 .lightbox.show{display:flex}.lightbox img{max-width:92vw;max-height:92vh;border-radius:6px}
 </style></head><body><main>
@@ -77,6 +80,17 @@ box.innerHTML=all.map(x=>`<div class="item" data-id="${x.id}">
   ${x.content?`<p class="content">${esc(x.content)}</p>`:''}
   ${x.image_data?`<img class="shot" src="${x.image_data}" onclick="openLightbox('${x.image_data}')">`:''}
   <div class="row"><button class="ghost danger" data-act="del">삭제</button></div>
+  <div class="comments">
+    ${(x.comments||[]).map(c=>`<div class="comment" data-cid="${c.id}">
+      <div class="meta">${c.author?esc(c.author)+' · ':''}${when(c.created_at)} <button class="ghost danger" data-act="del-comment" style="padding:1px 6px;font-size:11px;margin-left:4px">✕</button></div>
+      <p class="content">${esc(c.content)}</p>
+    </div>`).join('')}
+    <div class="comment-form">
+      <input class="name" maxlength="40" placeholder="이름" data-f="c-author">
+      <input maxlength="1000" placeholder="댓글을 입력하세요" data-f="c-content">
+      <button data-act="add-comment">등록</button>
+    </div>
+  </div>
 </div>`).join('')}
 function openLightbox(src){document.getElementById('lightbox-img').src=src;document.getElementById('lightbox').classList.add('show')}
 document.getElementById('lightbox').onclick=()=>document.getElementById('lightbox').classList.remove('show');
@@ -100,11 +114,33 @@ document.getElementById('submit').onclick=async()=>{
     msg.textContent='';await load();
   }catch(e){msg.textContent=e.message}
 };
+async function addComment(itemEl){
+  const postId=itemEl.dataset.id;
+  const authorEl=itemEl.querySelector('[data-f="c-author"]');
+  const contentEl=itemEl.querySelector('[data-f="c-content"]');
+  const content=contentEl.value.trim();
+  if(!content)return;
+  try{
+    await call('POST',`${API}/${postId}/comments`,{content,author:authorEl.value.trim()});
+    await load();
+  }catch(err){alert(err.message)}
+}
 document.getElementById('list').addEventListener('click',async e=>{
-  const b=e.target.closest('button');if(!b||b.dataset.act!=='del')return;
-  const id=b.closest('.item').dataset.id;
-  if(!confirm('이 글을 삭제할까요?'))return;
-  try{await call('DELETE',`${API}/${id}`);await load()}catch(err){alert(err.message)}
+  const b=e.target.closest('button');if(!b)return;
+  const item=b.closest('.item');
+  if(b.dataset.act==='del'){
+    if(!confirm('이 글을 삭제할까요?'))return;
+    try{await call('DELETE',`${API}/${item.dataset.id}`);await load()}catch(err){alert(err.message)}
+  }
+  if(b.dataset.act==='add-comment')addComment(item);
+  if(b.dataset.act==='del-comment'){
+    const cid=b.closest('.comment').dataset.cid;
+    if(!confirm('이 댓글을 삭제할까요?'))return;
+    try{await call('DELETE',`${API}/comments/${cid}`);await load()}catch(err){alert(err.message)}
+  }
+});
+document.getElementById('list').addEventListener('keydown',e=>{
+  if(e.key==='Enter'&&e.target.matches('[data-f="c-content"]')){e.preventDefault();addComment(e.target.closest('.item'))}
 });
 load();
 </script></body></html>
