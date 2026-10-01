@@ -103,7 +103,23 @@ box.innerHTML=all.map(x=>`<div class="item" data-id="${x.id}">
     </div>
   </div>
 </div>`).join('')}
-function openLightbox(src){document.getElementById('lightbox-img').src=src;document.getElementById('lightbox').classList.add('show')}
+// 이 페이지는 메인 화면의 긴 iframe 안에 있어서, iframe 안에 띄우면 iframe 가운데(화면 아래쪽)에 뜬다.
+// 메인 화면(같은 출처)에 직접 띄워서 항상 보고 있는 화면 한가운데에 보이게 한다.
+function openLightbox(src){
+  let top=null;
+  try{if(window.parent!==window&&window.parent.document)top=window.parent.document}catch(e){}
+  if(!top){document.getElementById('lightbox-img').src=src;document.getElementById('lightbox').classList.add('show');return}
+  let box=top.getElementById('disc-lightbox');
+  if(!box){
+    box=top.createElement('div');box.id='disc-lightbox';
+    box.style.cssText='position:fixed;inset:0;background:rgba(0,0,0,.85);z-index:9999;display:none;align-items:center;justify-content:center;cursor:zoom-out';
+    const img=top.createElement('img');img.style.cssText='max-width:92vw;max-height:92vh;border-radius:6px';
+    box.appendChild(img);box.onclick=()=>{box.style.display='none'};
+    top.addEventListener('keydown',e=>{if(e.key==='Escape')box.style.display='none'});
+    top.body.appendChild(box);
+  }
+  box.firstChild.src=src;box.style.display='flex';
+}
 document.getElementById('lightbox').onclick=()=>document.getElementById('lightbox').classList.remove('show');
 
 async function load(){try{all=await call('GET',API);render()}catch(e){document.getElementById('list').innerHTML='<div class="empty">목록을 불러오지 못했습니다.</div>'}}
