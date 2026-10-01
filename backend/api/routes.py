@@ -106,6 +106,7 @@ def get_earnings_screen():
 # ── 종목토론 ──────────────────────────────────────────────
 MAX_IMAGE_CHARS = 3_000_000  # base64 문자열 기준 대략 2.2MB 원본 이미지까지 허용 (한 장당)
 MAX_IMAGES = 10              # 글 하나당 사진 수
+MAX_COMMENT_IMAGES = 5       # 댓글 하나당 사진 수
 
 
 class DiscussionIn(BaseModel):
@@ -117,19 +118,26 @@ class DiscussionIn(BaseModel):
     images: list[str] | None = None         # 여러 장
 
 
+class DiscussionEdit(BaseModel):
+    content: str | None = Field(None, max_length=2000)
+    stock_code: str | None = Field(None, max_length=20)
+    stock_name: str | None = Field(None, max_length=100)
+    images: list[str] | None = None         # 주면 통째로 교체
+
+
 class CommentIn(BaseModel):
     author: str = Field("", max_length=40)
-    content: str = Field(..., min_length=1, max_length=1000)
+    content: str = Field("", max_length=1000)
+    images: list[str] | None = None
 
 
-def _comment_dict(c: DiscussionComment) -> dict:
-    return {"id": c.id, "post_id": c.post_id, "author": c.author, "content": c.content,
-            "created_at": c.created_at.isoformat() + "Z"}
+class CommentEdit(BaseModel):
+    content: str | None = Field(None, max_length=1000)
+    images: list[str] | None = None
 
 
-def _post_images(x: DiscussionPost) -> list[str]:
-    """image_data 칸에 사진 한 장(data URI) 또는 여러 장(JSON 배열 문자열)이 들어 있다."""
-    raw = x.image_data
+def _decode_images(raw: str | None) -> list[str]:
+    """image_data 칸: 사진 한 장(data URI) 또는 여러 장(JSON 배열 문자열)."""
     if not raw:
         return []
     if raw.startswith("["):
@@ -140,12 +148,40 @@ def _post_images(x: DiscussionPost) -> list[str]:
     return [raw]
 
 
+def _encode_images(images: list[str]) -> str | None:
+    if not images:
+        return None
+    return images[0] if len(images) == 1 else json.dumps(images)
+
+
+def _check_images(images: list[str], limit: int) -> list[str]:
+    images = [v for v in images if v]
+    if len(images) > limit:
+        raise HTTPException(status_code=400, detail=f"사진은 최대 {limit}장까지 올릴 수 있습니다.")
+    for img in images:
+        if not img.startswith("data:image/"):
+            raise HTTPException(status_code=400, detail="이미지 형식이 올바르지 않습니다.")
+        if len(img) > MAX_IMAGE_CHARS:
+            raise HTTPException(status_code=400, detail="이미지가 너무 큽니다 (한 장당 최대 약 2MB).")
+    return images
+
+
+def _edited(x) -> bool:
+    return bool(x.updated_at and x.created_at and (x.updated_at - x.created_at).total_seconds() > 2)
+
+
+def _comment_dict(c: DiscussionComment) -> dict:
+    return {"id": c.id, "post_id": c.post_id, "author": c.author, "content": c.content,
+            "images": _decode_images(c.image_data), "edited": _edited(c),
+            "created_at": c.created_at.isoformat() + "Z"}
+
+
 def _discussion_dict(x: DiscussionPost, comments: list[DiscussionComment] | None = None) -> dict:
-    images = _post_images(x)
+    images = _decode_images(x.image_data)
     return {
         "id": x.id, "author": x.author, "content": x.content,
         "stock_code": x.stock_code, "stock_name": x.stock_name,
-        "images": images, "image_data": images[0] if images else None,
+        "images": images, "image_data": images[0] if images else None, "edited": _edited(x),
         "created_at": x.created_at.isoformat() + "Z",
         "comments": [_comment_dict(c) for c in (comments or [])],
     }
@@ -167,23 +203,34 @@ def list_discussion(stock_code: str | None = None, db: Session = Depends(get_db)
 
 @router.post('/discussion')
 def create_discussion(body: DiscussionIn, db: Session = Depends(get_db)):
-    images = [v for v in (body.images or []) if v] or ([body.image_data] if body.image_data else [])
+    images = _check_images(body.images or ([body.image_data] if body.image_data else []), MAX_IMAGES)
     if not body.content.strip() and not images:
         raise HTTPException(status_code=400, detail="내용이나 이미지를 입력해 주세요.")
-    if len(images) > MAX_IMAGES:
-        raise HTTPException(status_code=400, detail=f"사진은 최대 {MAX_IMAGES}장까지 올릴 수 있습니다.")
-    for img in images:
-        if not img.startswith("data:image/"):
-            raise HTTPException(status_code=400, detail="이미지 형식이 올바르지 않습니다.")
-        if len(img) > MAX_IMAGE_CHARS:
-            raise HTTPException(status_code=400, detail="이미지가 너무 큽니다 (한 장당 최대 약 2MB).")
     x = DiscussionPost(
         author=body.author.strip(), content=body.content.strip(),
         stock_code=(body.stock_code or "").strip().upper() or None,
         stock_name=(body.stock_name or "").strip() or None,
-        image_data=(images[0] if len(images) == 1 else json.dumps(images)) if images else None,
+        image_data=_encode_images(images),
     )
     db.add(x)
+    db.commit()
+    return _discussion_dict(x)
+
+
+@router.patch('/discussion/{pid}')
+def update_discussion(pid: int, body: DiscussionEdit, db: Session = Depends(get_db)):
+    x = db.get(DiscussionPost, pid)
+    if x is None:
+        raise HTTPException(status_code=404, detail="게시글을 찾을 수 없습니다.")
+    content = x.content if body.content is None else body.content.strip()
+    images = _decode_images(x.image_data) if body.images is None else _check_images(body.images, MAX_IMAGES)
+    if not content and not images:
+        raise HTTPException(status_code=400, detail="내용이나 이미지를 입력해 주세요.")
+    x.content, x.image_data = content, _encode_images(images)
+    if body.stock_code is not None:
+        x.stock_code = body.stock_code.strip().upper() or None
+    if body.stock_name is not None:
+        x.stock_name = body.stock_name.strip() or None
     db.commit()
     return _discussion_dict(x)
 
@@ -203,8 +250,26 @@ def delete_discussion(pid: int, db: Session = Depends(get_db)):
 def create_comment(pid: int, body: CommentIn, db: Session = Depends(get_db)):
     if db.get(DiscussionPost, pid) is None:
         raise HTTPException(status_code=404, detail="게시글을 찾을 수 없습니다.")
-    c = DiscussionComment(post_id=pid, author=body.author.strip(), content=body.content.strip())
+    images = _check_images(body.images or [], MAX_COMMENT_IMAGES)
+    if not body.content.strip() and not images:
+        raise HTTPException(status_code=400, detail="댓글 내용이나 사진을 입력해 주세요.")
+    c = DiscussionComment(post_id=pid, author=body.author.strip(), content=body.content.strip(),
+                          image_data=_encode_images(images))
     db.add(c)
+    db.commit()
+    return _comment_dict(c)
+
+
+@router.patch('/discussion/comments/{cid}')
+def update_comment(cid: int, body: CommentEdit, db: Session = Depends(get_db)):
+    c = db.get(DiscussionComment, cid)
+    if c is None:
+        raise HTTPException(status_code=404, detail="댓글을 찾을 수 없습니다.")
+    content = c.content if body.content is None else body.content.strip()
+    images = _decode_images(c.image_data) if body.images is None else _check_images(body.images, MAX_COMMENT_IMAGES)
+    if not content and not images:
+        raise HTTPException(status_code=400, detail="댓글 내용이나 사진을 입력해 주세요.")
+    c.content, c.image_data = content, _encode_images(images)
     db.commit()
     return _comment_dict(c)
 

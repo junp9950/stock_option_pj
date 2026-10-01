@@ -337,6 +337,7 @@ class DiscussionComment(Base, TimestampMixin):
     post_id: Mapped[int] = mapped_column(Integer, ForeignKey("discussion_posts.id"), index=True)
     author: Mapped[str] = mapped_column(String(40), default="")
     content: Mapped[str] = mapped_column(Text)
+    image_data: Mapped[str | None] = mapped_column(Text, nullable=True)   # 사진 한 장 또는 JSON 배열
 
 
 class Suggestion(Base, TimestampMixin):
