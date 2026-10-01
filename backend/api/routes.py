@@ -1250,6 +1250,33 @@ def get_pullback_candidates(top_n: int = 30, min_market_cap: float = 0, db: Sess
     return {**base, "items": [it for it in base["items"] if (it["market_cap"] or 0) >= min_market_cap]}
 
 
+@router.get("/screener/top-value")
+def get_top_value(market: str = "KOSPI", limit: int = 100, db: Session = Depends(get_db)):
+    """거래대금 순위 탭: 최근 거래일 코스피/코스닥 거래대금 상위 종목. KOSDAQ에는 KOSDAQ GLOBAL을 포함한다."""
+    from backend.services.marcap_caps import caps as marcap_caps  # noqa: PLC0415
+    market = "KOSDAQ" if market.upper().startswith("KOSDAQ") else "KOSPI"
+    limit = max(1, min(limit, 300))
+    latest = db.scalar(select(func.max(SpotDailyPrice.trading_date)))
+    if latest is None:
+        return {"trading_date": None, "market": market, "items": []}
+    rows = db.execute(
+        select(SpotDailyPrice.stock_code, SpotDailyPrice.close_price, SpotDailyPrice.change_pct, SpotDailyPrice.volume,
+               SpotDailyPrice.trading_value, Stock.name, Stock.market, Stock.market_cap, Stock.shares_outstanding)
+        .join(Stock, Stock.code == SpotDailyPrice.stock_code)
+        .where(SpotDailyPrice.trading_date == latest, Stock.market.like(f"{market}%"), SpotDailyPrice.trading_value > 0)
+        .order_by(SpotDailyPrice.trading_value.desc())
+        .limit(limit)
+    ).all()
+    caps = marcap_caps()
+    items = []
+    for i, r in enumerate(rows, 1):
+        chg = r.change_pct if r.change_pct is not None and r.change_pct == r.change_pct else 0.0  # NaN 방어
+        items.append({"rank": i, "code": r.stock_code, "name": r.name, "close_price": r.close_price, "change_pct": round(float(chg), 2),
+                      "volume": r.volume or 0, "trading_value": r.trading_value or 0,
+                      "market_cap": r.market_cap or (r.shares_outstanding or 0) * r.close_price or caps.get(r.stock_code) or None})
+    return {"trading_date": latest.isoformat(), "market": market, "items": items}
+
+
 @router.get("/screener/chart-candidates")
 def get_chart_candidates(min_cap: float = 0, db: Session = Depends(get_db)):
     """차트 후보 (불플래그·상승삼각형·기준봉 눌림) + 섹터 점수. min_cap은 억원 단위."""

@@ -146,7 +146,7 @@ select{background:#21262d;border:1px solid #30363d;color:#c9d1d9;padding:6px 10p
 
 <div class="tabs">
   <div class="tab active" onclick="switchTab('candidates')">차트 후보</div>
-  <div class="tab" onclick="switchTab('screener')">수급 스크리너</div>
+  <div class="tab" onclick="switchTab('screener')">거래대금 순위</div>
   <div class="tab" onclick="switchTab('sector')">섹터 수급</div>
   <div class="tab" onclick="switchTab('heatmap')">시장 히트맵</div>
   <div class="tab" onclick="switchTab('earnings')">실적 개선</div>
@@ -158,134 +158,28 @@ select{background:#21262d;border:1px solid #30363d;color:#c9d1d9;padding:6px 10p
 <div id="panel-suggest" class="panel"><iframe title="건의사항" id="suggest-frame" style="width:100%;height:1600px;border:0" loading="lazy"></iframe></div>
 <div id="panel-discussion" class="panel"><iframe title="종목토론" id="discussion-frame" style="width:100%;height:2000px;border:0" loading="lazy"></iframe></div>
 
-<!-- 전종목 스크리너 탭 -->
-<div id="panel-screener" class="panel">
+<!-- 거래대금 순위 탭 -->
+<div id="panel-screener" class="panel content">
   <div class="toolbar">
-    <input type="date" id="scr-date" onchange="loadScreener()" style="background:#161b22;border:1px solid #30363d;color:#c9d1d9;padding:4px 8px;border-radius:4px;font-size:13px">
-    <input type="text" id="scr-search" placeholder="종목명 또는 코드 검색…" oninput="renderScreener()">
-    <select id="scr-market" onchange="renderScreener()">
-      <option value="">전체 시장</option>
-      <option value="KOSPI">KOSPI</option>
-      <option value="KOSDAQ">KOSDAQ</option>
+    <span id="tv-mkt" style="display:inline-flex;border:1px solid #30363d;border-radius:6px;overflow:hidden">
+      <button class="btn btn-sm" data-m="KOSPI" onclick="setTvMarket('KOSPI')">코스피</button>
+      <button class="btn btn-gray btn-sm" data-m="KOSDAQ" onclick="setTvMarket('KOSDAQ')">코스닥</button>
+    </span>
+    <select id="tv-limit" onchange="loadTopValue()">
+      <option value="50">50위까지</option>
+      <option value="100" selected>100위까지</option>
+      <option value="200">200위까지</option>
     </select>
-    <select id="scr-sort" onchange="setScrSort(this.value)">
-      <option value="total_score">총점 순</option>
-      <option value="stock_score">종목점수 순</option>
-      <option value="change_pct">등락률 순</option>
-      <option value="close_price">종가 순</option>
-      <option value="market_cap">시총 순</option>
-      <option value="short_ratio">공매도% 순</option>
-      <option value="rsi_14">RSI 순</option>
-      <option value="volume_surge">거래량배수 순</option>
-      <option value="ma_score">MA위치 순</option>
-      <option value="signal_confluence">신호합류 순</option>
-    </select>
-    <label style="display:flex;align-items:center;gap:4px;cursor:pointer;font-size:13px">
-      <input type="checkbox" id="scr-showall" onchange="loadScreener()"> 필터 무시 (전종목)
-    </label>
-    <button class="btn btn-gray btn-sm" onclick="toggleFilterPanel()">▼ 상세필터</button>
-    <button class="btn btn-gray btn-sm" onclick="resetFilters()">✕ 필터초기화</button>
-    <button class="btn btn-gray btn-sm" onclick="loadScreener()">⟳ 새로고침</button>
-    <button class="btn btn-gray btn-sm" onclick="exportCsv()">↓ CSV</button>
-    <span class="ts" id="scr-info"></span>
+    <input type="text" id="tv-search" placeholder="종목명 또는 코드 검색…" oninput="renderTopValue()">
+    <button class="btn btn-gray btn-sm" onclick="loadTopValue()">⟳ 새로고침</button>
+    <span class="ts" id="tv-info"></span>
   </div>
-  <!-- 상세 필터 패널 -->
-  <div id="filter-panel" style="display:none;background:#161b22;border:1px solid #30363d;border-radius:8px;padding:14px 18px;margin:0 16px 12px;display:none">
-    <div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(200px,1fr));gap:12px 20px;font-size:13px">
-      <div>
-        <div style="color:#8b949e;margin-bottom:4px">RSI 범위</div>
-        <div style="display:flex;gap:6px;align-items:center">
-          <input type="number" id="f-rsi-min" placeholder="최소" min="0" max="100" style="width:70px;background:#0d1117;border:1px solid #30363d;color:#c9d1d9;padding:4px 6px;border-radius:4px" oninput="renderScreener()">
-          <span style="color:#8b949e">~</span>
-          <input type="number" id="f-rsi-max" placeholder="최대" min="0" max="100" style="width:70px;background:#0d1117;border:1px solid #30363d;color:#c9d1d9;padding:4px 6px;border-radius:4px" oninput="renderScreener()">
-        </div>
-      </div>
-      <div>
-        <div style="color:#8b949e;margin-bottom:4px">공매도% 범위</div>
-        <div style="display:flex;gap:6px;align-items:center">
-          <input type="number" id="f-short-min" placeholder="최소" min="0" step="0.1" style="width:70px;background:#0d1117;border:1px solid #30363d;color:#c9d1d9;padding:4px 6px;border-radius:4px" oninput="renderScreener()">
-          <span style="color:#8b949e">~</span>
-          <input type="number" id="f-short-max" placeholder="최대" min="0" step="0.1" style="width:70px;background:#0d1117;border:1px solid #30363d;color:#c9d1d9;padding:4px 6px;border-radius:4px" oninput="renderScreener()">
-        </div>
-      </div>
-      <div>
-        <div style="color:#8b949e;margin-bottom:4px">거래량배수 최소</div>
-        <input type="number" id="f-vol-min" placeholder="예: 1.5" min="0" step="0.1" style="width:100px;background:#0d1117;border:1px solid #30363d;color:#c9d1d9;padding:4px 6px;border-radius:4px" oninput="renderScreener()">
-      </div>
-      <div>
-        <div style="color:#8b949e;margin-bottom:4px">등락률 범위 (%)</div>
-        <div style="display:flex;gap:6px;align-items:center">
-          <input type="number" id="f-chg-min" placeholder="최소" step="0.1" style="width:70px;background:#0d1117;border:1px solid #30363d;color:#c9d1d9;padding:4px 6px;border-radius:4px" oninput="renderScreener()">
-          <span style="color:#8b949e">~</span>
-          <input type="number" id="f-chg-max" placeholder="최대" step="0.1" style="width:70px;background:#0d1117;border:1px solid #30363d;color:#c9d1d9;padding:4px 6px;border-radius:4px" oninput="renderScreener()">
-        </div>
-      </div>
-      <div>
-        <div style="color:#8b949e;margin-bottom:4px">기관 순매수 방향</div>
-        <select id="f-inst" style="background:#0d1117;border:1px solid #30363d;color:#c9d1d9;padding:4px 8px;border-radius:4px" onchange="renderScreener()">
-          <option value="">전체</option>
-          <option value="buy">매수(+)</option>
-          <option value="sell">매도(-)</option>
-        </select>
-      </div>
-      <div>
-        <div style="color:#8b949e;margin-bottom:4px">외국인 순매수 방향</div>
-        <select id="f-foreign" style="background:#0d1117;border:1px solid #30363d;color:#c9d1d9;padding:4px 8px;border-radius:4px" onchange="renderScreener()">
-          <option value="">전체</option>
-          <option value="buy">매수(+)</option>
-          <option value="sell">매도(-)</option>
-        </select>
-      </div>
-      <div>
-        <div style="color:#8b949e;margin-bottom:4px">신호 합류 수 최소</div>
-        <input type="number" id="f-conf-min" placeholder="예: 5" min="0" max="13" style="width:100px;background:#0d1117;border:1px solid #30363d;color:#c9d1d9;padding:4px 6px;border-radius:4px" oninput="renderScreener()">
-      </div>
-      <div>
-        <div style="color:#8b949e;margin-bottom:4px">연속매수일 최소</div>
-        <input type="number" id="f-consec-min" placeholder="예: 3" min="0" style="width:100px;background:#0d1117;border:1px solid #30363d;color:#c9d1d9;padding:4px 6px;border-radius:4px" oninput="renderScreener()">
-      </div>
-      <div>
-        <div style="color:#8b949e;margin-bottom:4px">총점 최소</div>
-        <input type="number" id="f-score-min" placeholder="예: 0.5" min="0" max="1" step="0.01" style="width:100px;background:#0d1117;border:1px solid #30363d;color:#c9d1d9;padding:4px 6px;border-radius:4px" oninput="renderScreener()">
-      </div>
-      <div>
-        <div style="color:#8b949e;margin-bottom:4px">기관+외국인 동시매수</div>
-        <label style="display:flex;align-items:center;gap:6px;cursor:pointer">
-          <input type="checkbox" id="f-cobuy" onchange="renderScreener()">
-          <span>동시매수만 보기</span>
-        </label>
-      </div>
-    </div>
-    <div style="margin-top:12px;padding-top:12px;border-top:1px solid #30363d">
-      <div style="color:#8b949e;margin-bottom:6px;font-size:12px">태그 필터 (AND 조건, 복수 선택 가능)</div>
-      <div id="tag-filter-area" style="display:flex;flex-wrap:wrap;gap:6px"></div>
-    </div>
-  </div>
-  <div class="content">
-    <table>
-      <thead><tr>
-        <th onclick="setScrSort('rank')">#<span class="sort-icon">↕</span></th>
-        <th onclick="setScrSort('name')">종목<span class="sort-icon">↕</span></th>
-        <th onclick="setScrSort('total_score')">신뢰도<span class="sort-icon">↕</span></th>
-        <th onclick="setScrSort('close_price')">종가<span class="sort-icon">↕</span></th>
-        <th onclick="setScrSort('change_pct')">등락<span class="sort-icon">↕</span></th>
-        <th onclick="setScrSort('institution_net_buy')">기관</th>
-        <th onclick="setScrSort('foreign_net_buy')">외인</th>
-        <th onclick="setScrSort('institution_consecutive_days')">기관연속<span class="sort-icon">↕</span></th>
-        <th onclick="setScrSort('foreign_consecutive_days')">외인연속<span class="sort-icon">↕</span></th>
-        <th>수급비율</th>
-        <th onclick="setScrSort('rsi_14')">RSI<span class="sort-icon">↕</span></th>
-        <th onclick="setScrSort('volume_surge')">거래량<span class="sort-icon">↕</span></th>
-        <th onclick="setScrSort('short_ratio')">공매도<span class="sort-icon">↕</span></th>
-        <th onclick="setScrSort('market_cap')">시총<span class="sort-icon">↕</span></th>
-        <th>태그</th>
-        <th>상세</th>
-      </tr></thead>
-      <tbody id="scr-body"><tr><td colspan="16" style="color:#8b949e;text-align:center;padding:20px">로딩 중…</td></tr></tbody>
-    </table>
-  </div>
+  <table class="pb-table">
+    <thead><tr><th>순위</th><th>종목</th><th>종가</th><th>등락률</th><th>거래대금</th><th>거래량</th><th>시총</th></tr></thead>
+    <tbody id="tv-body"><tr><td colspan="7" style="color:#8b949e;text-align:center;padding:20px">로딩 중…</td></tr></tbody>
+  </table>
+  <div class="ts" style="padding:8px 16px">거래대금 = 거래량 × 종가 근사치 (정규장 기준, 시간외 제외). 종목을 누르면 차트가 열립니다.</div>
 </div>
-
 
 <!-- 섹터 수급 탭 -->
 <div id="panel-sector" class="panel content">
@@ -447,7 +341,6 @@ select{background:#21262d;border:1px solid #30363d;color:#c9d1d9;padding:6px 10p
 
 <script>
 const API = window.location.origin + '/api';
-let scrData = [], scrSortKey = 'total_score', scrSortAsc = false, scrTagFilter = [];
 
 const fmt = n => { if(n==null)return '—'; const a=Math.abs(n); const s=n<0?'-':'+'; if(a>=1e12)return s+(a/1e12).toFixed(1)+'조'; if(a>=1e8)return s+(a/1e8).toFixed(0)+'억'; if(a>=1e4)return s+(a/1e4).toFixed(0)+'만'; return n===0?'—':s+a.toFixed(0); };
 const fmtP = n => n==null?'—':(n>=0?'+':'')+n.toFixed(2)+'%';
@@ -470,7 +363,7 @@ function switchTab(id) {
   document.querySelectorAll('.tab').forEach((t,i)=>t.classList.toggle('active',tabs[i]===id));
   document.querySelectorAll('.panel').forEach(p=>p.classList.remove('active'));
   document.getElementById('panel-'+id).classList.add('active');
-  if(id==='screener')loadScreener();
+  if(id==='screener')loadTopValue();
   if(id==='sector')loadSector();
   if(id==='heatmap')loadHeatmap();
   if(id==='candidates')loadCandidates();
@@ -852,162 +745,44 @@ async function runPipeline(){
   }
 }
 
-async function loadScreener() {
-  const showAll = document.getElementById('scr-showall')?.checked ? '&show_all=true' : '';
-  const dateVal = document.getElementById('scr-date')?.value;
-  const dateParam = dateVal ? '&trading_date='+dateVal : '';
-  const r = await fetch(API+'/screener?'+showAll+dateParam).catch(()=>null);
-  if(!r||!r.ok){document.getElementById('scr-body').innerHTML='<tr><td colspan="12" style="color:#f85149;text-align:center;padding:20px">로드 실패</td></tr>';return;}
-  scrData = await r.json();
-  renderScreener();
+// ── 거래대금 순위 ──────────────────────────────────────────
+let tvMarket = 'KOSPI', tvData = null;
+function setTvMarket(m){
+  tvMarket = m;
+  document.querySelectorAll('#tv-mkt button').forEach(b=>b.className='btn btn-sm'+(b.dataset.m===m?'':' btn-gray'));
+  loadTopValue();
 }
-
-function setScrSort(key){
-  if(scrSortKey===key)scrSortAsc=!scrSortAsc;
-  else{scrSortKey=key;scrSortAsc=false;}
-  const sel=document.getElementById('scr-sort');
-  if(sel&&sel.value!==key){
-    const opt=[...sel.options].find(o=>o.value===key);
-    if(opt) sel.value=key;
+async function loadTopValue(){
+  const body = document.getElementById('tv-body');
+  body.innerHTML = '<tr><td colspan="7" style="color:#8b949e;text-align:center;padding:20px">로딩 중…</td></tr>';
+  try{
+    const limit = document.getElementById('tv-limit').value;
+    tvData = await fetch(`${API}/screener/top-value?market=${tvMarket}&limit=${limit}`).then(r=>r.ok?r.json():null);
+    renderTopValue();
+  }catch(e){
+    body.innerHTML = '<tr><td colspan="7" style="color:#f85149;text-align:center;padding:20px">로딩 실패</td></tr>';
   }
-  renderScreener();
 }
-
-function toggleFilterPanel(){
-  const p=document.getElementById('filter-panel');
-  p.style.display=p.style.display==='none'?'block':'none';
-}
-function resetFilters(){
-  ['f-rsi-min','f-rsi-max','f-short-min','f-short-max','f-vol-min',
-   'f-chg-min','f-chg-max','f-conf-min','f-consec-min','f-score-min'].forEach(id=>{
-    const el=document.getElementById(id); if(el) el.value='';
-  });
-  ['f-inst','f-foreign'].forEach(id=>{const el=document.getElementById(id);if(el)el.value='';});
-  const cb=document.getElementById('f-cobuy'); if(cb) cb.checked=false;
-  scrTagFilter=[];
-  renderScreener();
-}
-function renderTagFilter(){
-  const area=document.getElementById('tag-filter-area');
-  if(!area)return;
-  const allTags=[...new Set(scrData.flatMap(i=>i.tags||[]))].sort();
-  if(!allTags.length){area.innerHTML='<span style="color:#484f58;font-size:12px">태그 없음</span>';return;}
-  area.innerHTML=allTags.map(t=>{
-    const active=scrTagFilter.includes(t);
-    const bg=active?'#4a0080':'transparent';
-    const color=active?'#e879f9':'#6b7280';
-    const border=active?'#7c3aed':'#30363d';
-    return `<button onclick="toggleTagFilter('${t.replace(/'/g,"\\'")}')" style="background:${bg};color:${color};border:1px solid ${border};border-radius:4px;padding:2px 10px;font-size:11px;font-weight:600;cursor:pointer">${t}</button>`;
-  }).join('');
-}
-function toggleTagFilter(tag){
-  scrTagFilter=scrTagFilter.includes(tag)?scrTagFilter.filter(t=>t!==tag):[...scrTagFilter,tag];
-  renderTagFilter();
-  renderScreener();
-}
-function _fv(id){const v=document.getElementById(id)?.value;return v===''||v==null?null:parseFloat(v);}
-function _fs(id){return document.getElementById(id)?.value||'';}
-
-function renderScreener(){
-  renderTagFilter();
-  const sortSel=document.getElementById('scr-sort');
-  if(sortSel&&sortSel.value)scrSortKey=sortSel.value;
-  const q=document.getElementById('scr-search').value.toLowerCase();
-  const mkt=document.getElementById('scr-market').value;
-  const showAll=document.getElementById('scr-showall')?.checked;
-  const rsiMin=_fv('f-rsi-min'), rsiMax=_fv('f-rsi-max');
-  const shortMin=_fv('f-short-min'), shortMax=_fv('f-short-max');
-  const volMin=_fv('f-vol-min');
-  const chgMin=_fv('f-chg-min'), chgMax=_fv('f-chg-max');
-  const confMin=_fv('f-conf-min');
-  const consecMin=_fv('f-consec-min');
-  const scoreMin=_fv('f-score-min');
-  const instDir=_fs('f-inst'), foreignDir=_fs('f-foreign');
-  const cobuy=document.getElementById('f-cobuy')?.checked;
-  let data=[...scrData].filter(i=>{
-    if(q&&!i.name.toLowerCase().includes(q)&&!i.code.includes(q))return false;
-    if(mkt&&i.market!==mkt)return false;
-    if(showAll)return true;
-    const rsi=i.rsi_14;
-    if(rsiMin!=null&&(rsi==null||rsi<rsiMin))return false;
-    if(rsiMax!=null&&(rsi==null||rsi>rsiMax))return false;
-    const sr=i.short_ratio||0;
-    if(shortMin!=null&&sr<shortMin)return false;
-    if(shortMax!=null&&sr>shortMax)return false;
-    if(volMin!=null&&(i.volume_surge||1)<volMin)return false;
-    const chg=i.change_pct||0;
-    if(chgMin!=null&&chg<chgMin)return false;
-    if(chgMax!=null&&chg>chgMax)return false;
-    if(confMin!=null&&(i.signal_confluence||0)<confMin)return false;
-    if(consecMin!=null&&(i.consecutive_days||0)<consecMin)return false;
-    if(scoreMin!=null&&(i.total_score||0)<scoreMin)return false;
-    if(instDir==='buy'&&(i.institution_net_buy||0)<=0)return false;
-    if(instDir==='sell'&&(i.institution_net_buy||0)>=0)return false;
-    if(foreignDir==='buy'&&(i.foreign_net_buy||0)<=0)return false;
-    if(foreignDir==='sell'&&(i.foreign_net_buy||0)>=0)return false;
-    if(cobuy&&!((i.institution_net_buy||0)>0&&(i.foreign_net_buy||0)>0))return false;
-    if(scrTagFilter.length>0&&!scrTagFilter.every(t=>(i.tags||[]).includes(t)))return false;
-    return true;
-  });
-  data.sort((a,b)=>{
-    const av=a[scrSortKey]??0, bv=b[scrSortKey]??0;
-    return scrSortAsc?(av>bv?1:-1):(av<bv?1:-1);
-  });
-  document.getElementById('scr-info').textContent=`${data.length}/${scrData.length}종목`;
-  if(!data.length){document.getElementById('scr-body').innerHTML='<tr><td colspan="8" style="color:#8b949e;text-align:center;padding:16px">검색 결과 없음</td></tr>';return;}
-  document.getElementById('scr-body').innerHTML=data.map((i,idx)=>{
-    const instCol = i.institution_net_buy>0?'#3fb950':i.institution_net_buy<0?'#f85149':'#8b949e';
-    const fgnCol = i.foreign_net_buy>0?'#3fb950':i.foreign_net_buy<0?'#f85149':'#8b949e';
-    const instDays = i.institution_consecutive_days||0;
-    const fgnDays = i.foreign_consecutive_days||0;
-    const instDayHtml = instDays>0?`<b style="color:#58a6ff">${instDays}일</b>`:'<span style="color:#444">—</span>';
-    const fgnDayHtml = fgnDays>0?`<b style="color:#39d0d0">${fgnDays}일</b>`:'<span style="color:#444">—</span>';
-    const pct = Math.min(100, Math.round((i.total_score/3)*100));
-    const pctColor = pct>=70?'#3fb950':pct>=40?'#58a6ff':'#d29922';
-    return `<tr>
-    <td style="color:#8b949e">${idx+1}</td>
-    <td><b style="cursor:pointer;color:#e6edf3" onclick="showStockDetail('${i.code}','${i.name}')">${i.name}</b><br><span class="ts">${i.code} · <span style="color:${i.market==='KOSPI'?'#58a6ff':'#39d0d0'}">${i.market||'KOSPI'}</span></span></td>
-    <td><span style="color:${pctColor};font-weight:700;font-size:15px">${pct}%</span><br><span class="ts" style="color:#444">${i.total_score.toFixed(2)}</span></td>
-    <td style="font-weight:600">${fmtKrw(i.close_price)}</td>
-    <td style="color:${i.change_pct>=0?'#3fb950':'#f85149'};font-weight:600">${fmtP(i.change_pct)}</td>
-    <td style="color:${instCol};font-weight:600">${fmt(i.institution_net_buy)}</td>
-    <td style="color:${fgnCol};font-weight:600">${fmt(i.foreign_net_buy)}</td>
-    <td style="text-align:center">${instDayHtml}</td>
-    <td style="text-align:center">${fgnDayHtml}</td>
-    <td style="color:#8b949e;font-size:12px">${i.flow_ratio||'—'}</td>
-    <td style="color:${i.rsi_14!=null?(i.rsi_14<30?'#58a6ff':i.rsi_14>70?'#f85149':'#c9d1d9'):'#444'}">${i.rsi_14!=null?Math.round(i.rsi_14):'—'}</td>
-    <td style="color:${(i.volume_surge||1)>=2?'#3fb950':(i.volume_surge||1)<0.8?'#f85149':'#c9d1d9'}">${(i.volume_surge||1).toFixed(1)}x</td>
-    <td style="color:${(i.short_ratio||0)<=4?'#3fb950':(i.short_ratio||0)<=10?'#d29922':'#f85149'}">${(i.short_ratio||0).toFixed(1)}%</td>
-    <td class="ts">${i.market_cap>=1e12?((i.market_cap/1e12).toFixed(1)+'조'):i.market_cap>=1e8?((i.market_cap/1e8).toFixed(0)+'억'):'—'}</td>
-    <td>${tagHtml(i.tags)}</td>
-    <td><button class="btn btn-gray btn-sm" onclick="showStockDetail('${i.code}','${i.name}')">상세</button></td>
-  </tr>`;}).join('');
-}
-
-
-function exportCsv(){
-  if(!scrData.length){showToast('내보낼 데이터가 없습니다.',true);return;}
-  const q=document.getElementById('scr-search').value.toLowerCase();
-  const mkt=document.getElementById('scr-market').value;
-  const data=[...scrData].filter(i=>{
-    if(q&&!i.name.toLowerCase().includes(q)&&!i.code.includes(q))return false;
-    if(mkt&&i.market!==mkt)return false;
-    return true;
-  });
-  const headers=['순위','코드','종목명','시장','시총(억)','총점','종목점수','시장점수','종가','등락%','기관순매수','외국인순매수','공매도%','RSI','거래량배수','MA점수','연속매수일'];
-  const rows=data.map((i,idx)=>[
-    idx+1,i.code,i.name,i.market,i.market_cap?(i.market_cap/1e8).toFixed(0):'',
-    i.total_score,i.stock_score,i.market_score,i.close_price,i.change_pct,
-    (i.institution_net_buy/1e8).toFixed(2),(i.foreign_net_buy/1e8).toFixed(2),
-    (i.short_ratio||0).toFixed(1),i.rsi_14!=null?Math.round(i.rsi_14):'',
-    (i.volume_surge||1).toFixed(2),i.ma_score||0,i.consecutive_days||0,
-  ]);
-  const csv=[headers,...rows].map(r=>r.join(',')).join(String.fromCharCode(10));
-  const blob=new Blob(['\uFEFF'+csv],{type:'text/csv;charset=utf-8'});
-  const url=URL.createObjectURL(blob);
-  const a=document.createElement('a');a.href=url;a.download='screener_'+new Date().toISOString().slice(0,10)+'.csv';
-  a.click();URL.revokeObjectURL(url);
-  showToast(`CSV 내보내기 완료 (${data.length}종목)`);
+function renderTopValue(){
+  const body = document.getElementById('tv-body');
+  if(!tvData){ body.innerHTML = '<tr><td colspan="7" style="color:#f85149;text-align:center;padding:20px">데이터 없음</td></tr>'; return; }
+  const q = (document.getElementById('tv-search').value||'').trim().toLowerCase();
+  const rows = tvData.items.filter(it=>!q || it.name.toLowerCase().includes(q) || it.code.includes(q));
+  document.getElementById('tv-info').textContent = `기준일: ${tvData.trading_date} · ${tvMarket==='KOSPI'?'코스피':'코스닥'} 거래대금 상위 ${tvData.items.length}종목`;
+  if(!rows.length){ body.innerHTML = '<tr><td colspan="7" style="color:#8b949e;text-align:center;padding:20px">검색 결과 없음</td></tr>'; return; }
+  const won = v=>v>=1e12?(v/1e12).toFixed(2)+'조':Math.round(v/1e8).toLocaleString()+'억';
+  body.innerHTML = rows.map(it=>{
+    const c = it.change_pct>0?'#f85149':it.change_pct<0?'#58a6ff':'#c9d1d9';
+    const nm = it.name.replace(/&/g,'&amp;').replace(/"/g,'&quot;').replace(/</g,'&lt;');
+    return `<tr style="cursor:pointer" data-code="${it.code}" data-name="${nm}" onclick="openChartModal(this.dataset.code,this.dataset.name,'')">
+      <td>${it.rank}</td>
+      <td><b>${nm}</b> <span style="color:#8b949e;font-size:11px">${it.code}</span></td>
+      <td>${Math.round(it.close_price).toLocaleString()}</td>
+      <td style="color:${c}">${it.change_pct>0?'+':''}${it.change_pct.toFixed(2)}%</td>
+      <td><b>${won(it.trading_value)}</b></td>
+      <td>${Math.round(it.volume).toLocaleString()}</td>
+      <td>${it.market_cap?won(it.market_cap):'—'}</td>
+    </tr>`;}).join('');
 }
 
 // 모달 차트 인스턴스
