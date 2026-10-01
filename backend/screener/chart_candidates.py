@@ -18,7 +18,8 @@ from backend.screener.bull_flag import detect_bull_flag
 from backend.screener.market_regime import current_regime
 
 MIN_AVG_TRADING_VALUE = 500_000_000   # 5일 평균 거래대금 5억: 거래가 사실상 없는 종목만 뺀다
-BREAKOUT_KEEP = 2                     # 돌파 후 며칠까지 목록에 남길지
+BREAKOUT_KEEP = 0                     # 돌파 후 며칠까지 목록에 남길지 (0 = 이미 돌파해 출발한 종목은 제외)
+MAX_TODAY_CHANGE = 7.0                # 오늘 이만큼 이상 오른 종목은 이미 쏜 것으로 보고 제외
 RET_WIN = 20
 STRONG_SECTOR = 80
 CORR_WIN = 60        # 대표 테마를 고를 때 보는 기간 (거래일)
@@ -217,6 +218,8 @@ def scan(db: Session) -> dict:
     for code, pl in by_code.items():
         if pl[-1].trading_date != latest or code not in stocks:
             continue
+        if float(pl[-1].change_pct or 0) >= MAX_TODAY_CHANGE:
+            continue  # 이미 쏜 종목 (추격 매수 구간)
         tv = [p.trading_value for p in pl[-5:] if p.trading_value]
         if not tv or sum(tv) / len(tv) < MIN_AVG_TRADING_VALUE:
             continue
@@ -261,6 +264,8 @@ def scan(db: Session) -> dict:
         s = stocks.get(code)
         if not pl or s is None or pl[-1].trading_date != latest:
             continue
+        if float(pl[-1].change_pct or 0) >= MAX_TODAY_CHANGE:
+            continue  # 기준봉 눌림 경로로 들어온 종목도 오늘 이미 쏜 건 제외
         close = pl[-1].close_price
         stops = [p["stop"] for p in patterns if p["stop"] and p["stop"] < close]
         stop = max(stops) if stops else None  # 여러 모양이면 가장 가까운 손절선
