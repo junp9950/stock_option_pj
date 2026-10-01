@@ -648,7 +648,7 @@ function renderCandidates(){
       : `<b style="font-size:16px;color:${sc>=80?'#3fb950':sc>=50?'#c9d1d9':'#8b949e'}">${sc}</b><br><span class="ts">${it.sector_name} · 20일 ${it.sector_ret20>=0?'+':''}${it.sector_ret20}%</span>`;
     const pats = it.patterns.map(p=>`<span style="display:inline-block;margin:0 4px 3px 0;padding:1px 7px;border-radius:10px;border:1px solid ${tagColor[p.type]};color:${tagColor[p.type]};font-size:11.5px">${p.type}${p.grade?'·'+p.grade:''}</span><br><span class="ts">${p.detail}</span>`).join('<br>');
     return `<tr style="cursor:pointer" onclick="openChartModal('${it.code}','${it.name}','')">
-      <td>${it.best_combo?'<b style="color:#e3b341">★</b> ':''}<b>${it.name}</b> <span style="color:#8b949e;font-size:11px">${it.code}</span></td>
+      <td>${it.best_combo?'<b style="color:#e3b341">★</b> ':''}<b>${it.name}</b> <span style="color:#8b949e;font-size:11px">${it.code}</span>${it.market_cap?`<br><span class="ts">시총 ${it.market_cap>=1e12?(it.market_cap/1e12).toFixed(1)+'조':Math.round(it.market_cap/1e8).toLocaleString()+'억'}</span>`:''}</td>
       <td data-label="섹터 점수">${scHtml}</td>
       <td data-label="모양" style="font-size:12px">${pats}</td>
       <td data-label="현재가" style="text-align:right">${it.close_price.toLocaleString()}원<br><span style="color:${it.change_pct>=0?'#f85149':'#3b82f6'};font-size:11px">${it.change_pct>=0?'+':''}${it.change_pct.toFixed(2)}%</span></td>
