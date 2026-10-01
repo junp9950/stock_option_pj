@@ -12,7 +12,7 @@ from sqlalchemy.orm import Session
 from backend.api.schemas import HealthResponse, JobResponse, MarketSignalResponse, RecommendationItem, RecommendationResponse, SectorFlowItem, SectorItem, SectorStockItem
 from backend.collector.backfill import run_backfill as run_data_backfill
 from backend.db.database import get_db
-from backend.db.models import Suggestion, JobLog, MarketSignal, MarketSignalDetail, Recommendation, Sector, SectorFlowDaily, SectorStock, Setting, ShortSellingDaily, SpotDailyPrice, SpotInvestorFlow, Stock, StockSignal, StockSignalDetail
+from backend.db.models import DiscussionPost, Suggestion, JobLog, MarketSignal, MarketSignalDetail, Recommendation, Sector, SectorFlowDaily, SectorStock, Setting, ShortSellingDaily, SpotDailyPrice, SpotInvestorFlow, Stock, StockSignal, StockSignalDetail
 from backend.db.seed import refresh_universe
 from backend.services.daily_pipeline import run_backfill_pipeline, run_daily_pipeline
 from backend.services.toss_client import fetch_candles
@@ -101,6 +101,64 @@ def get_quant10():
 @router.get('/screener/earnings')
 def get_earnings_screen():
     return read_earnings_snapshot()
+
+
+# ── 종목토론 ──────────────────────────────────────────────
+MAX_IMAGE_CHARS = 3_000_000  # base64 문자열 기준 대략 2.2MB 원본 이미지까지 허용
+
+
+class DiscussionIn(BaseModel):
+    author: str = Field("", max_length=40)
+    content: str = Field("", max_length=2000)
+    stock_code: str | None = Field(None, max_length=20)
+    stock_name: str | None = Field(None, max_length=100)
+    image_data: str | None = None
+
+
+def _discussion_dict(x: DiscussionPost) -> dict:
+    return {
+        "id": x.id, "author": x.author, "content": x.content,
+        "stock_code": x.stock_code, "stock_name": x.stock_name, "image_data": x.image_data,
+        "created_at": x.created_at.isoformat() + "Z",
+    }
+
+
+@router.get('/discussion')
+def list_discussion(stock_code: str | None = None, db: Session = Depends(get_db)):
+    q = select(DiscussionPost).order_by(DiscussionPost.id.desc())
+    if stock_code:
+        q = q.where(DiscussionPost.stock_code == stock_code)
+    return [_discussion_dict(x) for x in db.scalars(q.limit(300))]
+
+
+@router.post('/discussion')
+def create_discussion(body: DiscussionIn, db: Session = Depends(get_db)):
+    if not body.content.strip() and not body.image_data:
+        raise HTTPException(status_code=400, detail="내용이나 이미지를 입력해 주세요.")
+    if body.image_data:
+        if not body.image_data.startswith("data:image/"):
+            raise HTTPException(status_code=400, detail="이미지 형식이 올바르지 않습니다.")
+        if len(body.image_data) > MAX_IMAGE_CHARS:
+            raise HTTPException(status_code=400, detail="이미지가 너무 큽니다 (최대 약 2MB).")
+    x = DiscussionPost(
+        author=body.author.strip(), content=body.content.strip(),
+        stock_code=(body.stock_code or "").strip().upper() or None,
+        stock_name=(body.stock_name or "").strip() or None,
+        image_data=body.image_data,
+    )
+    db.add(x)
+    db.commit()
+    return _discussion_dict(x)
+
+
+@router.delete('/discussion/{pid}')
+def delete_discussion(pid: int, db: Session = Depends(get_db)):
+    x = db.get(DiscussionPost, pid)
+    if x is None:
+        raise HTTPException(status_code=404, detail="게시글을 찾을 수 없습니다.")
+    db.delete(x)
+    db.commit()
+    return {"ok": True}
 
 
 # ── 건의사항 ──────────────────────────────────────────────

@@ -315,6 +315,19 @@ class BullFlagLabel(Base, TimestampMixin):
     features: Mapped[str] = mapped_column(Text, default="")
 
 
+class DiscussionPost(Base, TimestampMixin):
+    """종목토론 게시판: 종목 태그(선택) + 글 + 스크린샷(선택, base64 data URI로 저장)."""
+
+    __tablename__ = "discussion_posts"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    stock_code: Mapped[str | None] = mapped_column(String(20), nullable=True, index=True)
+    stock_name: Mapped[str | None] = mapped_column(String(100), nullable=True)
+    author: Mapped[str] = mapped_column(String(40), default="")
+    content: Mapped[str] = mapped_column(Text, default="")
+    image_data: Mapped[str | None] = mapped_column(Text, nullable=True)
+
+
 class Suggestion(Base, TimestampMixin):
     """건의사항 탭: 사용자가 남긴 기능 요청·불편 사항과 처리 상태."""
 
