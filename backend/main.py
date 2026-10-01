@@ -149,14 +149,11 @@ select{background:#21262d;border:1px solid #30363d;color:#c9d1d9;padding:6px 10p
   <div class="tab" onclick="switchTab('screener')">수급 스크리너</div>
   <div class="tab" onclick="switchTab('sector')">섹터 수급</div>
   <div class="tab" onclick="switchTab('heatmap')">시장 히트맵</div>
-  <div class="tab" onclick="switchTab('backtest')">백테스트</div>
-  <div class="tab" onclick="switchTab('quant')">AI 10일 전략</div>
   <div class="tab" onclick="switchTab('earnings')">실적 개선</div>
   <div class="tab" onclick="switchTab('suggest')">건의사항</div>
   <div class="tab" onclick="switchTab('discussion')">종목토론</div>
 </div>
 
-<div id="panel-quant" class="panel"><iframe title="AI 10일 전략" id="quant-frame" style="width:100%;height:1400px;border:0" loading="lazy"></iframe></div>
 <div id="panel-earnings" class="panel"><iframe title="실적 개선" id="earnings-frame" style="width:100%;height:2200px;border:0" loading="lazy"></iframe></div>
 <div id="panel-suggest" class="panel"><iframe title="건의사항" id="suggest-frame" style="width:100%;height:1600px;border:0" loading="lazy"></iframe></div>
 <div id="panel-discussion" class="panel"><iframe title="종목토론" id="discussion-frame" style="width:100%;height:2000px;border:0" loading="lazy"></iframe></div>
@@ -404,33 +401,6 @@ select{background:#21262d;border:1px solid #30363d;color:#c9d1d9;padding:6px 10p
   </table>
 </div>
 
-<div id="panel-backtest" class="panel content">
-  <div id="pick-record" style="background:#161b22;border:1px solid #30363d;border-radius:10px;padding:16px;margin-bottom:20px">
-    <div style="color:#8b949e">실전 기록 불러오는 중…</div>
-  </div>
-  <p class="note" style="color:#8b949e;font-size:12.5px;margin:0 0 12px">
-    과거 세력 신호를 기반으로 <b style="color:#c9d1d9">승률 검증</b>(N일 후 수익률)과
-    <b style="color:#c9d1d9">모의 매매</b>(200만원 진입, 손절선 이탈 시 손절, 5일 보유 후 고점 대비 -7% 하락 시 매도, 20일 타임아웃, 시장 하락 시 진입 보류)를 시뮬레이션합니다.
-  </p>
-  <div class="toolbar" style="margin-bottom:12px">
-    <label style="display:flex;align-items:center;gap:6px;font-size:13px;color:#8b949e">
-      기간
-      <select id="bt-months" onchange="_btLoaded=false" style="background:#0d1117;border:1px solid #30363d;color:#c9d1d9;padding:4px 8px;border-radius:4px">
-        <option value="3">3개월</option><option value="6" selected>6개월</option><option value="12">12개월</option>
-      </select>
-    </label>
-    <label style="display:flex;align-items:center;gap:6px;font-size:13px;color:#8b949e">
-      최소 점수
-      <select id="bt-score" onchange="_btLoaded=false" style="background:#0d1117;border:1px solid #30363d;color:#c9d1d9;padding:4px 8px;border-radius:4px">
-        <option value="50">50+</option><option value="60" selected>60+ 관심</option><option value="75">75+ 강력</option><option value="80">80+</option>
-      </select>
-    </label>
-    <button class="btn btn-blue btn-sm" onclick="loadBacktest()">▶ 백테스트 실행</button>
-    <span class="ts" id="bt-info"></span>
-  </div>
-  <div id="bt-result" style="color:#8b949e;text-align:center;padding:40px">백테스트 버튼을 눌러 실행하세요</div>
-</div>
-
 <!-- 캔들차트 모달 (토스증권 실시간) -->
 <div class="modal-bg" id="chart-modal-bg" onclick="if(event.target===this)closeChartModal()">
   <div class="modal">
@@ -495,7 +465,7 @@ const tagHtml = tags => (tags||[]).map(t=>{
 }).join('');
 
 function switchTab(id) {
-  const tabs = ['candidates','screener','sector','heatmap','backtest','quant','earnings','suggest','discussion'];
+  const tabs = ['candidates','screener','sector','heatmap','earnings','suggest','discussion'];
   if(!tabs.includes(id))return;
   document.querySelectorAll('.tab').forEach((t,i)=>t.classList.toggle('active',tabs[i]===id));
   document.querySelectorAll('.panel').forEach(p=>p.classList.remove('active'));
@@ -503,9 +473,7 @@ function switchTab(id) {
   if(id==='screener')loadScreener();
   if(id==='sector')loadSector();
   if(id==='heatmap')loadHeatmap();
-  if(id==='backtest'){loadPickRecord();loadBacktest();}
   if(id==='candidates')loadCandidates();
-  if(id==='quant'&&!document.getElementById('quant-frame').src)document.getElementById('quant-frame').src='/quant';
   if(id==='earnings'&&!document.getElementById('earnings-frame').src)document.getElementById('earnings-frame').src='/earnings';
   if(id==='suggest')document.getElementById('suggest-frame').src='/suggestions';
   if(id==='discussion'&&!document.getElementById('discussion-frame').src)document.getElementById('discussion-frame').src='/discussion';
@@ -770,166 +738,6 @@ function renderCandidates(){
       <td data-label="손절선" style="color:#f85149">${it.stop_price?it.stop_price.toLocaleString()+'원<br><span style="font-size:11px;color:'+({적정:'#3fb950',보통:'#c9d1d9',얕음:'#8b949e',깊음:'#8b949e'}[it.stop_zone])+'">-'+it.stop_dist_pct+'% · '+it.stop_zone+'</span>':'—'}</td>
     </tr>`;
   }).join('');
-}
-
-// ── 실전 기록 ─────────────────────────────────────────────────
-async function loadPickRecord(){
-  const el = document.getElementById('pick-record');
-  try{
-    const d = await fetch(`${API}/screener/picks/performance`).then(r=>r.ok?r.json():null);
-    if(!d){ el.innerHTML = '<div style="color:#f85149">실전 기록 로딩 실패</div>'; return; }
-    const head = `<h3 style="font-size:14px;color:#58a6ff;margin-bottom:6px">📌 실전 기록</h3>`;
-    if(!d.since){
-      el.innerHTML = head + '<div class="ts">아직 기록이 없습니다. 거래일 장 마감 후(17:30~) 레이더 신호 종목이 자동으로 쌓입니다.</div>';
-      return;
-    }
-    const won = n => (n>=0?'+':'')+Math.round(n).toLocaleString()+'원';
-    const pc = n => n==null?'—':`<span style="color:${n>=0?'#3fb950':'#f85149'}">${n>=0?'+':''}${n}%</span>`;
-    const col = n => `color:${n>=0?'#3fb950':'#f85149'}`;
-    const statusKo = {stop_loss:'<span style="color:#f85149">손절</span>', trailing:'<span style="color:#3fb950">트레일링</span>', timeout:'만기', '보유중':'<span style="color:#d29922">보유중</span>'};
-    el.innerHTML = head + `
-      <div class="ts" style="margin-bottom:10px">${d.since}부터 ${d.record_days}거래일 기록 (마지막 ${d.last_pick_date}) · 튜닝에 안 쓴 실제 데이터 · 백테스트와 같은 조건: 시총 ${Math.round(d.min_market_cap/1e8).toLocaleString()}억+, 차트 후보 페이지의 섹터 점수 기준, 포착일 종가(시간외 단일가 근사)에 200만원 매수, 같은 매도 규칙, 시장 하락일 제외</div>
-      <div style="overflow-x:auto"><table style="width:100%;font-size:13px;white-space:nowrap">
-        <tr style="color:#8b949e"><td>섹터 점수</td><td>청산</td><td>보유중</td><td>승률</td><td>평균</td><td>실현손익</td><td>평가손익</td></tr>
-        ${d.thresholds.map(t=>`<tr>
-          <td style="color:#c9d1d9;font-weight:700">${t.min_score}+</td><td>${t.closed}</td><td>${t.open}</td>
-          <td>${t.win_rate==null?'—':t.win_rate+'%'}</td><td>${pc(t.avg_pnl_pct)}</td>
-          <td style="${col(t.realized_krw)}">${won(t.realized_krw)}</td><td style="${col(t.unrealized_krw)}">${won(t.unrealized_krw)}</td>
-        </tr>`).join('')}
-      </table></div>
-      ${d.trades.length?`<div style="overflow-x:auto;margin-top:12px"><table style="width:100%;font-size:12px;white-space:nowrap">
-        <tr style="color:#8b949e"><td>종목</td><td>점수</td><td>포착일</td><td>매수가(종가)</td><td>현재/청산가</td><td>상태</td><td>수익률</td><td>손익</td><td>보유</td></tr>
-        ${d.trades.map(t=>`<tr>
-          <td style="color:#c9d1d9"><b>${t.name}</b></td><td>${t.score}</td><td>${t.pick_date}</td>
-          <td>${t.entry_price.toLocaleString()}</td><td>${t.last_price.toLocaleString()}</td><td>${statusKo[t.status]||t.status}</td>
-          <td>${pc(t.pnl_pct)}</td><td style="${col(t.pnl_krw)}">${won(t.pnl_krw)}</td><td>${t.hold_days}일</td>
-        </tr>`).join('')}
-      </table></div>`:'<div class="ts" style="margin-top:8px">아직 기록된 종목이 없습니다.</div>'}`;
-  }catch(e){
-    console.error(e);
-    el.innerHTML = '<div style="color:#f85149">실전 기록 로딩 실패</div>';
-  }
-}
-
-// ── 백테스트 ──────────────────────────────────────────────────
-let _btLoaded = false;
-async function loadBacktest(){
-  if(_btLoaded) return;
-  const el = document.getElementById('bt-result');
-  const months = document.getElementById('bt-months').value;
-  const minScore = document.getElementById('bt-score').value;
-  el.innerHTML = '<div style="color:#8b949e;text-align:center;padding:40px">⏳ 백테스트 실행 중… (30초~1분 소요)</div>';
-  try{
-    const data = await fetch(`${API}/screener/backtest?months=${months}&min_score=${minScore}`).then(r=>r.ok?r.json():null);
-    if(!data){el.innerHTML='<div style="color:#f85149;padding:20px">실행 실패</div>';return;}
-    _btLoaded = true;
-    document.getElementById('bt-info').textContent = `${data.period} · 거래량 이벤트 ${data.total_signals}건 → ${data.min_score}점 통과 ${data.filtered_signals}건 → 실제 매매 ${data.trades.count}건 (보유 중 중복 제외)`;
-    const wr = data.win_rate;
-    const tr = data.trades;
-    const pnlColor = n => n>=0?'#3fb950':'#f85149';
-    const fmtW = n => n>=0?`+${n.toLocaleString()}`:`${n.toLocaleString()}`;
-    let html = `
-    <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(280px,1fr));gap:16px;margin-bottom:20px">
-      <div style="background:#161b22;border:1px solid #30363d;border-radius:10px;padding:16px">
-        <h3 style="font-size:14px;color:#58a6ff;margin-bottom:12px">📊 N일 후 승률</h3>
-        <table style="width:100%;font-size:13px">
-          <tr style="color:#8b949e"><td></td><td>건수</td><td>승률</td><td>평균</td><td>중앙값</td><td>최대↑</td><td>최대↓</td></tr>
-          ${['5d','10d','20d'].map(k=>{const w=wr[k];return `<tr>
-            <td style="color:#c9d1d9;font-weight:700">${k.replace('d','일')}</td>
-            <td>${w.count}</td>
-            <td style="color:${w.win_rate>=50?'#3fb950':'#f85149'};font-weight:700">${w.win_rate}%</td>
-            <td style="color:${pnlColor(w.avg_return)}">${w.avg_return>=0?'+':''}${w.avg_return}%</td>
-            <td style="color:${pnlColor(w.median_return)}">${w.median_return>=0?'+':''}${w.median_return}%</td>
-            <td style="color:#3fb950">+${w.max_gain}%</td>
-            <td style="color:#f85149">${w.max_loss}%</td>
-          </tr>`;}).join('')}
-        </table>
-      </div>
-      <div style="background:#161b22;border:1px solid #30363d;border-radius:10px;padding:16px">
-        <h3 style="font-size:14px;color:#58a6ff;margin-bottom:12px">💰 모의 매매 (200만원/건)</h3>
-        <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;font-size:13px">
-          <div>총 거래: <b>${tr.count}건</b></div>
-          <div>승률: <b style="color:${tr.win_rate>=50?'#3fb950':'#f85149'}">${tr.win_rate}%</b> (${tr.win_count}승 ${tr.loss_count}패)</div>
-          <div>총 손익: <b style="color:${pnlColor(tr.total_pnl_krw)}">${fmtW(tr.total_pnl_krw)}원</b></div>
-          <div>평균 수익률: <b style="color:${pnlColor(tr.avg_pnl_pct)}">${tr.avg_pnl_pct>=0?'+':''}${tr.avg_pnl_pct}%</b></div>
-          <div>평균 수익: <b style="color:#3fb950">+${tr.avg_win_pct}%</b></div>
-          <div>평균 손실: <b style="color:#f85149">${tr.avg_loss_pct}%</b></div>
-          <div>손익비: <b style="color:#c9d1d9">${tr.profit_factor}</b></div>
-          <div>평균 보유: <b>${tr.avg_hold_days}일</b></div>
-          <div>트레일링 익절: <b style="color:#3fb950">${tr.target_count}건</b></div>
-          <div>손절: <b style="color:#f85149">${tr.stop_loss_count}건</b></div>
-          <div>타임아웃: <b>${tr.timeout_count}건</b></div>
-          <div>최대 연속 손실: <b style="color:#f85149">${tr.max_consecutive_loss}연패</b></div>
-          <div>MDD: <b style="color:#f85149">${fmtW(-tr.mdd_krw)}원</b></div>
-          <div>최고/최악: <b style="color:#3fb950">+${tr.best_trade}%</b> / <b style="color:#f85149">${tr.worst_trade}%</b></div>
-        </div>
-      </div>
-    </div>`;
-
-    // 월별 breakdown
-    if(data.monthly && data.monthly.length){
-      html += `<div style="background:#161b22;border:1px solid #30363d;border-radius:10px;padding:16px;margin-bottom:20px">
-        <h3 style="font-size:14px;color:#58a6ff;margin-bottom:12px">📅 월별 성과</h3>
-        <table style="width:100%;font-size:13px">
-          <tr style="color:#8b949e"><td>월</td><td>거래</td><td>승률</td><td>평균 수익률</td><td>총 손익</td></tr>
-          ${data.monthly.map(m=>`<tr>
-            <td style="color:#c9d1d9">${m.month}</td>
-            <td>${m.trades}건 (${m.wins}승)</td>
-            <td style="color:${m.win_rate>=50?'#3fb950':'#f85149'};font-weight:700">${m.win_rate}%</td>
-            <td style="color:${pnlColor(m.avg_pnl_pct)}">${m.avg_pnl_pct>=0?'+':''}${m.avg_pnl_pct}%</td>
-            <td style="color:${pnlColor(m.total_pnl)}">${fmtW(m.total_pnl)}원</td>
-          </tr>`).join('')}
-        </table>
-      </div>`;
-    }
-
-    // 점수 분포
-    if(data.score_distribution){
-      html += `<div style="background:#161b22;border:1px solid #30363d;border-radius:10px;padding:16px;margin-bottom:20px">
-        <h3 style="font-size:14px;color:#58a6ff;margin-bottom:12px">📊 점수 분포 (전체 신호)</h3>
-        <div style="display:flex;gap:12px;flex-wrap:wrap">
-          ${data.score_distribution.map(d=>{
-            const maxC = Math.max(...data.score_distribution.map(x=>x.count));
-            const w = Math.max(d.count/maxC*120,4);
-            const c = d.range.startsWith('90')?'#3fb950':d.range.startsWith('75')?'#58a6ff':d.range.startsWith('60')?'#d29922':'#8b949e';
-            return `<div style="text-align:center"><div style="font-size:12px;color:#8b949e">${d.range}점</div>
-              <div style="width:${w}px;height:20px;background:${c};border-radius:4px;margin:4px auto"></div>
-              <div style="font-size:13px;color:#c9d1d9;font-weight:700">${d.count}건</div></div>`;
-          }).join('')}
-        </div>
-      </div>`;
-    }
-
-    // 최근 거래 리스트
-    html += `<div style="background:#161b22;border:1px solid #30363d;border-radius:10px;padding:16px">
-      <h3 style="font-size:14px;color:#58a6ff;margin-bottom:12px">📋 거래 내역 (최근 50건)</h3>
-      <div style="overflow-x:auto">
-      <table style="width:100%;font-size:12px;white-space:nowrap">
-        <tr style="color:#8b949e"><td>종목</td><td>점수</td><td>진입일</td><td>진입가</td><td>청산일</td><td>청산가</td><td>사유</td><td>수익률</td><td>손익</td><td>보유</td></tr>
-        ${data.trade_list.slice(-50).reverse().map(t=>{
-          const reason = t.exit_reason==='stop_loss'?'<span style="color:#f85149">손절</span>':t.exit_reason==='trailing'?'<span style="color:#3fb950">트레일링</span>':'만기';
-          return `<tr>
-            <td style="color:#c9d1d9"><b>${t.name}</b></td>
-            <td style="color:${t.score>=75?'#3fb950':t.score>=60?'#d29922':'#8b949e'}">${t.score}</td>
-            <td>${t.entry_date}</td><td>${t.entry_price.toLocaleString()}</td>
-            <td>${t.exit_date}</td><td>${t.exit_price.toLocaleString()}</td>
-            <td>${reason}</td>
-            <td style="color:${pnlColor(t.pnl_pct)};font-weight:700">${t.pnl_pct>=0?'+':''}${t.pnl_pct}%</td>
-            <td style="color:${pnlColor(t.pnl_krw)}">${fmtW(t.pnl_krw)}원</td>
-            <td>${t.hold_days}일</td>
-          </tr>`;}).join('')}
-      </table></div>
-    </div>`;
-    if(data.notes && data.notes.length){
-      html += `<div style="margin-top:16px;padding:12px;background:#1c1c1c;border-radius:8px;font-size:12px;color:#8b949e">
-        <b style="color:#d29922">⚠ 주의사항</b><br>${data.notes.map(n=>`· ${n}`).join('<br>')}
-      </div>`;
-    }
-    el.innerHTML = html;
-  }catch(e){
-    console.error(e);
-    el.innerHTML='<div style="color:#f85149;padding:20px">백테스트 실행 실패</div>';
-  }
 }
 
 function renderMarket(m){
