@@ -108,7 +108,18 @@ select{background:#21262d;border:1px solid #30363d;color:#c9d1d9;padding:6px 10p
 .modal-tab.active{color:#58a6ff;border-bottom-color:#58a6ff}
 .ts{color:#8b949e;font-size:11px}
 .log-ok{color:#3fb950}.log-err{color:#f85149}.log-run{color:#d29922}
+.m-only{display:none}
 @media (max-width:720px){
+  .m-only{display:inline}
+  .pb-table.tv-table tr{display:grid;grid-template-columns:28px 1fr auto;column-gap:10px;row-gap:2px;align-items:center;padding:9px 12px;margin-bottom:6px;border-radius:8px}
+  .pb-table.tv-table td{display:block;padding:0;border:none;margin:0;text-align:left;font-size:14px}
+  .pb-table.tv-table td.c-rank{grid-column:1;grid-row:1/3;text-align:center;color:#8b949e;font-size:13px}
+  .pb-table.tv-table td.c-name{grid-column:2;grid-row:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+  .pb-table.tv-table td.c-price{grid-column:3;grid-row:1;text-align:right}
+  .pb-table.tv-table td.c-tv{grid-column:2;grid-row:2;font-size:12px;color:#8b949e}
+  .pb-table.tv-table td.c-tv::before{content:"거래대금 "}
+  .pb-table.tv-table td.c-chg{grid-column:3;grid-row:2;text-align:right;font-size:13px}
+  .pb-table.tv-table td.c-vol,.pb-table.tv-table td.c-cap{display:none}
   header{padding:12px 14px;flex-wrap:wrap;gap:8px}
   header h1{font-size:16px}
   .tabs{padding:0 6px;overflow-x:auto;-webkit-overflow-scrolling:touch}
@@ -174,7 +185,7 @@ select{background:#21262d;border:1px solid #30363d;color:#c9d1d9;padding:6px 10p
     <button class="btn btn-gray btn-sm" onclick="loadTopValue()">⟳ 새로고침</button>
     <span class="ts" id="tv-info"></span>
   </div>
-  <table class="pb-table">
+  <table class="pb-table tv-table">
     <thead><tr><th>순위</th><th>종목</th><th>종가</th><th>등락률</th><th>거래대금</th><th>거래량</th><th>시총</th></tr></thead>
     <tbody id="tv-body"><tr><td colspan="7" style="color:#8b949e;text-align:center;padding:20px">로딩 중…</td></tr></tbody>
   </table>
@@ -775,13 +786,13 @@ function renderTopValue(){
     const c = it.change_pct>0?'#f85149':it.change_pct<0?'#58a6ff':'#c9d1d9';
     const nm = it.name.replace(/&/g,'&amp;').replace(/"/g,'&quot;').replace(/</g,'&lt;');
     return `<tr style="cursor:pointer" data-code="${it.code}" data-name="${nm}" onclick="openChartModal(this.dataset.code,this.dataset.name,'')">
-      <td>${it.rank}</td>
-      <td><b>${nm}</b> <span style="color:#8b949e;font-size:11px">${it.code}</span></td>
-      <td>${Math.round(it.close_price).toLocaleString()}</td>
-      <td style="color:${c}">${it.change_pct>0?'+':''}${it.change_pct.toFixed(2)}%</td>
-      <td><b>${won(it.trading_value)}</b></td>
-      <td>${Math.round(it.volume).toLocaleString()}</td>
-      <td>${it.market_cap?won(it.market_cap):'—'}</td>
+      <td class="c-rank">${it.rank}</td>
+      <td class="c-name"><b>${nm}</b> <span style="color:#8b949e;font-size:11px">${it.code}</span></td>
+      <td class="c-price">${Math.round(it.close_price).toLocaleString()}</td>
+      <td class="c-chg" style="color:${c}">${it.change_pct>0?'+':''}${it.change_pct.toFixed(2)}%</td>
+      <td class="c-tv"><b>${won(it.trading_value)}</b><span class="m-only">${it.market_cap?' · 시총 '+won(it.market_cap):''}</span></td>
+      <td class="c-vol">${Math.round(it.volume).toLocaleString()}</td>
+      <td class="c-cap">${it.market_cap?won(it.market_cap):'—'}</td>
     </tr>`;}).join('');
 }
 
