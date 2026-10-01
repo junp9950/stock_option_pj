@@ -104,7 +104,8 @@ def get_earnings_screen():
 
 
 # ── 종목토론 ──────────────────────────────────────────────
-MAX_IMAGE_CHARS = 3_000_000  # base64 문자열 기준 대략 2.2MB 원본 이미지까지 허용
+MAX_IMAGE_CHARS = 3_000_000  # base64 문자열 기준 대략 2.2MB 원본 이미지까지 허용 (한 장당)
+MAX_IMAGES = 10              # 글 하나당 사진 수
 
 
 class DiscussionIn(BaseModel):
@@ -112,7 +113,8 @@ class DiscussionIn(BaseModel):
     content: str = Field("", max_length=2000)
     stock_code: str | None = Field(None, max_length=20)
     stock_name: str | None = Field(None, max_length=100)
-    image_data: str | None = None
+    image_data: str | None = None          # 예전 화면 호환용 (한 장)
+    images: list[str] | None = None         # 여러 장
 
 
 class CommentIn(BaseModel):
@@ -125,10 +127,25 @@ def _comment_dict(c: DiscussionComment) -> dict:
             "created_at": c.created_at.isoformat() + "Z"}
 
 
+def _post_images(x: DiscussionPost) -> list[str]:
+    """image_data 칸에 사진 한 장(data URI) 또는 여러 장(JSON 배열 문자열)이 들어 있다."""
+    raw = x.image_data
+    if not raw:
+        return []
+    if raw.startswith("["):
+        try:
+            return [v for v in json.loads(raw) if isinstance(v, str)]
+        except ValueError:
+            return []
+    return [raw]
+
+
 def _discussion_dict(x: DiscussionPost, comments: list[DiscussionComment] | None = None) -> dict:
+    images = _post_images(x)
     return {
         "id": x.id, "author": x.author, "content": x.content,
-        "stock_code": x.stock_code, "stock_name": x.stock_name, "image_data": x.image_data,
+        "stock_code": x.stock_code, "stock_name": x.stock_name,
+        "images": images, "image_data": images[0] if images else None,
         "created_at": x.created_at.isoformat() + "Z",
         "comments": [_comment_dict(c) for c in (comments or [])],
     }
@@ -150,18 +167,21 @@ def list_discussion(stock_code: str | None = None, db: Session = Depends(get_db)
 
 @router.post('/discussion')
 def create_discussion(body: DiscussionIn, db: Session = Depends(get_db)):
-    if not body.content.strip() and not body.image_data:
+    images = [v for v in (body.images or []) if v] or ([body.image_data] if body.image_data else [])
+    if not body.content.strip() and not images:
         raise HTTPException(status_code=400, detail="내용이나 이미지를 입력해 주세요.")
-    if body.image_data:
-        if not body.image_data.startswith("data:image/"):
+    if len(images) > MAX_IMAGES:
+        raise HTTPException(status_code=400, detail=f"사진은 최대 {MAX_IMAGES}장까지 올릴 수 있습니다.")
+    for img in images:
+        if not img.startswith("data:image/"):
             raise HTTPException(status_code=400, detail="이미지 형식이 올바르지 않습니다.")
-        if len(body.image_data) > MAX_IMAGE_CHARS:
-            raise HTTPException(status_code=400, detail="이미지가 너무 큽니다 (최대 약 2MB).")
+        if len(img) > MAX_IMAGE_CHARS:
+            raise HTTPException(status_code=400, detail="이미지가 너무 큽니다 (한 장당 최대 약 2MB).")
     x = DiscussionPost(
         author=body.author.strip(), content=body.content.strip(),
         stock_code=(body.stock_code or "").strip().upper() or None,
         stock_name=(body.stock_name or "").strip() or None,
-        image_data=body.image_data,
+        image_data=(images[0] if len(images) == 1 else json.dumps(images)) if images else None,
     )
     db.add(x)
     db.commit()
