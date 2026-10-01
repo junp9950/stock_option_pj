@@ -1251,30 +1251,46 @@ def get_pullback_candidates(top_n: int = 30, min_market_cap: float = 0, db: Sess
 
 
 @router.get("/screener/top-value")
-def get_top_value(market: str = "KOSPI", limit: int = 100, db: Session = Depends(get_db)):
-    """거래대금 순위 탭: 최근 거래일 코스피/코스닥 거래대금 상위 종목. KOSDAQ에는 KOSDAQ GLOBAL을 포함한다."""
+def get_top_value(market: str = "KOSPI", limit: int = 100, sort: str = "value", min_value: float = 0,
+                  db: Session = Depends(get_db)):
+    """거래대금 순위 탭: 최근 거래일 코스피/코스닥 종목 정렬.
+
+    sort: value(거래대금) · cap(시총) · up(상승률) · down(하락률) · turnover(회전율 = 거래대금 / 시총).
+    min_value: 최소 거래대금(억 원). KOSDAQ에는 KOSDAQ GLOBAL을 포함한다.
+    """
     from backend.services.marcap_caps import caps as marcap_caps  # noqa: PLC0415
     market = "KOSDAQ" if market.upper().startswith("KOSDAQ") else "KOSPI"
     limit = max(1, min(limit, 300))
     latest = db.scalar(select(func.max(SpotDailyPrice.trading_date)))
     if latest is None:
-        return {"trading_date": None, "market": market, "items": []}
+        return {"trading_date": None, "market": market, "sort": sort, "items": []}
     rows = db.execute(
         select(SpotDailyPrice.stock_code, SpotDailyPrice.close_price, SpotDailyPrice.change_pct, SpotDailyPrice.volume,
-               SpotDailyPrice.trading_value, Stock.name, Stock.market, Stock.market_cap, Stock.shares_outstanding)
+               SpotDailyPrice.trading_value, Stock.name, Stock.market_cap, Stock.shares_outstanding)
         .join(Stock, Stock.code == SpotDailyPrice.stock_code)
-        .where(SpotDailyPrice.trading_date == latest, Stock.market.like(f"{market}%"), SpotDailyPrice.trading_value > 0)
-        .order_by(SpotDailyPrice.trading_value.desc())
-        .limit(limit)
+        .where(SpotDailyPrice.trading_date == latest, Stock.market.like(f"{market}%"),
+               SpotDailyPrice.trading_value > max(min_value, 0) * 1e8)
     ).all()
     caps = marcap_caps()
     items = []
-    for i, r in enumerate(rows, 1):
+    for r in rows:
         chg = r.change_pct if r.change_pct is not None and r.change_pct == r.change_pct else 0.0  # NaN 방어
-        items.append({"rank": i, "code": r.stock_code, "name": r.name, "close_price": r.close_price, "change_pct": round(float(chg), 2),
-                      "volume": r.volume or 0, "trading_value": r.trading_value or 0,
-                      "market_cap": r.market_cap or (r.shares_outstanding or 0) * r.close_price or caps.get(r.stock_code) or None})
-    return {"trading_date": latest.isoformat(), "market": market, "items": items}
+        cap = r.market_cap or (r.shares_outstanding or 0) * r.close_price or caps.get(r.stock_code) or None
+        tv = r.trading_value or 0
+        items.append({"code": r.stock_code, "name": r.name, "close_price": r.close_price, "change_pct": round(float(chg), 2),
+                      "volume": r.volume or 0, "trading_value": tv, "market_cap": cap,
+                      "turnover_pct": round(tv / cap * 100, 2) if cap else None})
+    keys = {"value": lambda x: -x["trading_value"], "cap": lambda x: -(x["market_cap"] or 0),
+            "up": lambda x: -x["change_pct"], "down": lambda x: x["change_pct"],
+            "turnover": lambda x: -(x["turnover_pct"] or 0)}
+    sort = sort if sort in keys else "value"
+    if sort in ("cap", "turnover"):
+        items = [x for x in items if x["market_cap"]]
+    items.sort(key=keys[sort])
+    items = items[:limit]
+    for i, x in enumerate(items, 1):
+        x["rank"] = i
+    return {"trading_date": latest.isoformat(), "market": market, "sort": sort, "items": items}
 
 
 @router.get("/screener/chart-candidates")

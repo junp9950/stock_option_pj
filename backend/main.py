@@ -119,7 +119,7 @@ select{background:#21262d;border:1px solid #30363d;color:#c9d1d9;padding:6px 10p
   .pb-table.tv-table td.c-tv{grid-column:2;grid-row:2;font-size:12px;color:#8b949e}
   .pb-table.tv-table td.c-tv::before{content:"거래대금 "}
   .pb-table.tv-table td.c-chg{grid-column:3;grid-row:2;text-align:right;font-size:13px}
-  .pb-table.tv-table td.c-vol,.pb-table.tv-table td.c-cap{display:none}
+  .pb-table.tv-table td.c-vol,.pb-table.tv-table td.c-cap,.pb-table.tv-table td.c-turn{display:none}
   header{padding:12px 14px;flex-wrap:wrap;gap:8px}
   header h1{font-size:16px}
   .tabs{padding:0 6px;overflow-x:auto;-webkit-overflow-scrolling:touch}
@@ -176,6 +176,19 @@ select{background:#21262d;border:1px solid #30363d;color:#c9d1d9;padding:6px 10p
       <button class="btn btn-sm" data-m="KOSPI" onclick="setTvMarket('KOSPI')">코스피</button>
       <button class="btn btn-gray btn-sm" data-m="KOSDAQ" onclick="setTvMarket('KOSDAQ')">코스닥</button>
     </span>
+    <select id="tv-sort" onchange="loadTopValue()">
+      <option value="value">거래대금 순</option>
+      <option value="cap">시총 순</option>
+      <option value="up">상승률 순</option>
+      <option value="down">하락률 순</option>
+      <option value="turnover">회전율 순</option>
+    </select>
+    <select id="tv-min" onchange="loadTopValue()">
+      <option value="0">거래대금 전체</option>
+      <option value="10">10억 이상</option>
+      <option value="50">50억 이상</option>
+      <option value="100">100억 이상</option>
+    </select>
     <select id="tv-limit" onchange="loadTopValue()">
       <option value="50">50위까지</option>
       <option value="100" selected>100위까지</option>
@@ -186,8 +199,8 @@ select{background:#21262d;border:1px solid #30363d;color:#c9d1d9;padding:6px 10p
     <span class="ts" id="tv-info"></span>
   </div>
   <table class="pb-table tv-table">
-    <thead><tr><th>순위</th><th>종목</th><th>종가</th><th>등락률</th><th>거래대금</th><th>거래량</th><th>시총</th></tr></thead>
-    <tbody id="tv-body"><tr><td colspan="7" style="color:#8b949e;text-align:center;padding:20px">로딩 중…</td></tr></tbody>
+    <thead><tr><th>순위</th><th>종목</th><th>종가</th><th>등락률</th><th>거래대금</th><th>거래량</th><th>시총</th><th>회전율</th></tr></thead>
+    <tbody id="tv-body"><tr><td colspan="8" style="color:#8b949e;text-align:center;padding:20px">로딩 중…</td></tr></tbody>
   </table>
   <div class="ts" style="padding:8px 16px">거래대금 = 거래량 × 종가 근사치 (정규장 기준, 시간외 제외). 종목을 누르면 차트가 열립니다.</div>
 </div>
@@ -765,10 +778,11 @@ function setTvMarket(m){
 }
 async function loadTopValue(){
   const body = document.getElementById('tv-body');
-  body.innerHTML = '<tr><td colspan="7" style="color:#8b949e;text-align:center;padding:20px">로딩 중…</td></tr>';
+  body.innerHTML = '<tr><td colspan="8" style="color:#8b949e;text-align:center;padding:20px">로딩 중…</td></tr>';
   try{
     const limit = document.getElementById('tv-limit').value;
-    tvData = await fetch(`${API}/screener/top-value?market=${tvMarket}&limit=${limit}`).then(r=>r.ok?r.json():null);
+    const sort = document.getElementById('tv-sort').value, minv = document.getElementById('tv-min').value;
+    tvData = await fetch(`${API}/screener/top-value?market=${tvMarket}&limit=${limit}&sort=${sort}&min_value=${minv}`).then(r=>r.ok?r.json():null);
     renderTopValue();
   }catch(e){
     body.innerHTML = '<tr><td colspan="7" style="color:#f85149;text-align:center;padding:20px">로딩 실패</td></tr>';
@@ -779,7 +793,8 @@ function renderTopValue(){
   if(!tvData){ body.innerHTML = '<tr><td colspan="7" style="color:#f85149;text-align:center;padding:20px">데이터 없음</td></tr>'; return; }
   const q = (document.getElementById('tv-search').value||'').trim().toLowerCase();
   const rows = tvData.items.filter(it=>!q || it.name.toLowerCase().includes(q) || it.code.includes(q));
-  document.getElementById('tv-info').textContent = `기준일: ${tvData.trading_date} · ${tvMarket==='KOSPI'?'코스피':'코스닥'} 거래대금 상위 ${tvData.items.length}종목`;
+  const sortName = {value:'거래대금',cap:'시총',up:'상승률',down:'하락률',turnover:'회전율'}[tvData.sort]||'거래대금';
+  document.getElementById('tv-info').textContent = `기준일: ${tvData.trading_date} · ${tvMarket==='KOSPI'?'코스피':'코스닥'} ${sortName} 순 ${tvData.items.length}종목`;
   if(!rows.length){ body.innerHTML = '<tr><td colspan="7" style="color:#8b949e;text-align:center;padding:20px">검색 결과 없음</td></tr>'; return; }
   const won = v=>v>=1e12?(v/1e12).toFixed(2)+'조':Math.round(v/1e8).toLocaleString()+'억';
   body.innerHTML = rows.map(it=>{
@@ -790,9 +805,10 @@ function renderTopValue(){
       <td class="c-name"><b>${nm}</b> <span style="color:#8b949e;font-size:11px">${it.code}</span></td>
       <td class="c-price">${Math.round(it.close_price).toLocaleString()}</td>
       <td class="c-chg" style="color:${c}">${it.change_pct>0?'+':''}${it.change_pct.toFixed(2)}%</td>
-      <td class="c-tv"><b>${won(it.trading_value)}</b><span class="m-only">${it.market_cap?' · 시총 '+won(it.market_cap):''}</span></td>
+      <td class="c-tv"><b>${won(it.trading_value)}</b><span class="m-only">${it.market_cap?' · 시총 '+won(it.market_cap):''}${it.turnover_pct!=null?' · 회전 '+it.turnover_pct.toFixed(1)+'%':''}</span></td>
       <td class="c-vol">${Math.round(it.volume).toLocaleString()}</td>
       <td class="c-cap">${it.market_cap?won(it.market_cap):'—'}</td>
+      <td class="c-turn">${it.turnover_pct!=null?it.turnover_pct.toFixed(2)+'%':'—'}</td>
     </tr>`;}).join('');
 }
 
