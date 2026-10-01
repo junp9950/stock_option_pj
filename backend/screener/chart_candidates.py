@@ -76,6 +76,31 @@ def detect_triangle(pl: list) -> dict | None:
             "rise_pct": round((peak / base_low - 1) * 100), "shrink": round(r2 / r1, 2)}
 
 
+def detect_big_doji(pl: list) -> dict | None:
+    """전날 장대양봉(몸통 +7%↑, 거래량 20일 평균 2배↑) 다음 오늘 도지(몸통 ≤ 변동폭 15%)가 양봉 종가 근처(-5%~+5%)에서 뜬 경우.
+    백테스트로 검증하지 않은 패턴."""
+    if len(pl) < 22:
+        return None
+    big, dj = pl[-2], pl[-1]
+    if not big.open_price or not big.close_price or not dj.close_price:
+        return None
+    body = (big.close_price - big.open_price) / big.open_price * 100
+    vols = [x.volume for x in pl[-22:-2] if x.volume]
+    if body < 7 or not vols or not big.volume:
+        return None
+    vol_x = big.volume / (sum(vols) / len(vols))
+    if vol_x < 2:
+        return None
+    rng = dj.high_price - dj.low_price
+    if rng <= 0 or abs(dj.close_price - dj.open_price) > 0.15 * rng:
+        return None
+    vs_big = (dj.close_price / big.close_price - 1) * 100
+    if not -5 <= vs_big <= 5:   # 크게 갭상승한 도지는 쉬는 도지가 아니라 제외
+        return None
+    return {"body_pct": round(body, 1), "vol_x": round(vol_x, 1), "vs_big": round(vs_big, 1),
+            "stop": big.open_price}
+
+
 def _corr(xs: list[float], ys: list[float]) -> float | None:
     n = len(xs)
     if n < CORR_MIN_DAYS:
@@ -217,6 +242,10 @@ def scan(db: Session) -> dict:
             found[code].append({"type": "상승삼각형", "grade": None, "stop": tri["support"],
                                 "detail": f"상승 +{tri['rise_pct']}% · 저항 {tri['resistance']:,}원 {tri['touches']}회 터치"
                                           + (f" · 돌파 후 {after}일" if after else "")})
+        dj = detect_big_doji(pl)
+        if dj:
+            found[code].append({"type": "장대양봉 도지", "grade": None, "stop": dj["stop"],
+                                "detail": f"전날 +{dj['body_pct']:.0f}% · 거래량 {dj['vol_x']:.0f}배 · 양봉 종가 대비 {dj['vs_big']:+.1f}%"})
 
     # 기준봉 눌림은 기존 세력 신호 스캐너 결과를 그대로 쓴다
     from backend.screener.volume_anomaly import scan as scan_signal  # noqa: PLC0415

@@ -135,7 +135,7 @@ select{background:#21262d;border:1px solid #30363d;color:#c9d1d9;padding:6px 10p
 <header>
   <div>
     <h1>눌림목 레이더</h1>
-    <div class="sub">불플래그 · 상승삼각형 · 기준봉 눌림 후보를 섹터 강도 순으로 · 매일 15:41·18:00 갱신</div>
+    <div class="sub">불플래그 · 상승삼각형 · 기준봉 눌림 · 장대양봉 도지 후보를 섹터 강도 순으로 · 매일 15:41·18:00 갱신</div>
   </div>
   <div style="display:flex;gap:8px">
     <button class="btn" id="btn-run-pipeline" onclick="runPipeline()">▶ 파이프라인 실행</button>
@@ -371,7 +371,7 @@ select{background:#21262d;border:1px solid #30363d;color:#c9d1d9;padding:6px 10p
 <div id="panel-candidates" class="panel active content">
   <div id="pb-market" hidden style="border-radius:10px;padding:12px 16px;margin-bottom:14px;border:1px solid #30363d"></div>
   <p class="note" style="color:#8b949e;font-size:12.5px;margin:0 0 12px">
-    원하는 모양(<b style="color:#c9d1d9">불플래그</b> · <b style="color:#c9d1d9">상승삼각형</b> · <b style="color:#c9d1d9">기준봉 눌림</b>) 중 하나라도 해당하는 종목을 <b style="color:#c9d1d9">섹터 점수</b> 순으로 보여줍니다.
+    원하는 모양(<b style="color:#c9d1d9">불플래그</b> · <b style="color:#c9d1d9">상승삼각형</b> · <b style="color:#c9d1d9">기준봉 눌림</b> · <b style="color:#c9d1d9">장대양봉 도지</b>) 중 하나라도 해당하는 종목을 <b style="color:#c9d1d9">섹터 점수</b> 순으로 보여줍니다.
     섹터 점수(0~100)는 종목의 <b style="color:#c9d1d9">대표 테마</b>(네이버 테마 중 최근 60일 주가가 가장 비슷하게 움직인 테마)의 최근 20일 수익률 순위이고, <b style="color:#3fb950">80점 이상이 강한 섹터</b>입니다.
     3년 백테스트에서 <b>강한 대표 테마 + 차트 후보</b>는 탐색·검증 두 기간 모두 같은 날 아무 종목보다 20일 평균 +1.4~1.6%p 높았습니다(상승삼각형이 가장 일관, 중간값은 마이너스).
     손절선까지 거리는 <b style="color:#3fb950">3~6%가 적정</b>입니다(같은 백테스트에서 종가 매수 기준 두 기간 모두 최고, 3% 미만은 흔들림에 거의 다 털려 마이너스, 10% 이상도 부진).
@@ -391,6 +391,7 @@ select{background:#21262d;border:1px solid #30363d;color:#c9d1d9;padding:6px 10p
       <option value="불플래그">불플래그</option>
       <option value="상승삼각형">상승삼각형</option>
       <option value="기준봉 눌림">기준봉 눌림</option>
+      <option value="장대양봉 도지">장대양봉 도지</option>
     </select>
     <button class="btn btn-gray btn-sm" onclick="loadCandidates()">⟳ 새로고침</button>
     <span class="ts" id="cd-info"></span>
@@ -755,7 +756,7 @@ function renderCandidates(){
     body.innerHTML = '<tr><td colspan="5" style="color:#8b949e;text-align:center;padding:20px">조건에 맞는 종목이 없습니다</td></tr>';
     return;
   }
-  const tagColor = {'불플래그':'#58a6ff','상승삼각형':'#bc8cff','기준봉 눌림':'#d29922'};
+  const tagColor = {'불플래그':'#58a6ff','상승삼각형':'#bc8cff','기준봉 눌림':'#d29922','장대양봉 도지':'#3fb950'};
   body.innerHTML = items.map(it=>{
     const sc = it.sector_score;
     const scHtml = sc==null ? '<span class="ts">테마 없음</span>'
