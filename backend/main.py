@@ -224,6 +224,15 @@ select{background:#21262d;border:1px solid #30363d;color:#c9d1d9;padding:6px 10p
     <span class="ts" id="sec-info"></span>
   </div>
 
+  <!-- 오늘 강한 테마 (실시간) -->
+  <div style="margin-bottom:20px">
+    <div style="font-size:12px;color:#8b949e;margin-bottom:8px;letter-spacing:.06em">🔥 오늘 강한 테마 (실시간 · 1분마다 갱신) <span class="ts" id="live-theme-info"></span></div>
+    <table>
+      <thead><tr><th>테마</th><th>오늘 등락</th><th>상승 비율</th><th>주도주</th></tr></thead>
+      <tbody id="live-theme-body"><tr><td colspan="4" style="color:#8b949e;text-align:center;padding:16px">로딩 중…</td></tr></tbody>
+    </table>
+  </div>
+
   <!-- 매집 감지 섹터 -->
   <div style="margin-bottom:20px">
     <div style="font-size:12px;text-transform:uppercase;color:#8b949e;margin-bottom:8px;letter-spacing:.06em">🕵️ 매집 감지 섹터 (수급↑ 주가↔)</div>
@@ -388,13 +397,32 @@ function switchTab(id) {
   document.querySelectorAll('.panel').forEach(p=>p.classList.remove('active'));
   document.getElementById('panel-'+id).classList.add('active');
   if(id==='screener')loadTopValue();
-  if(id==='sector')loadSector();
+  if(id==='sector'){loadSector();loadLiveThemes();}
   if(id==='heatmap')loadHeatmap();
   if(id==='candidates')loadCandidates();
   if(id==='earnings'&&!document.getElementById('earnings-frame').src)document.getElementById('earnings-frame').src='/earnings';
   if(id==='suggest')document.getElementById('suggest-frame').src='/suggestions';
   if(id==='discussion'&&!document.getElementById('discussion-frame').src)document.getElementById('discussion-frame').src='/discussion';
 }
+
+// ── 오늘 강한 테마 (실시간) ──────────────────────────────────
+async function loadLiveThemes(){
+  const body=document.getElementById('live-theme-body');
+  try{
+    const d=await fetch(`${API}/sectors/live?limit=20`).then(r=>r.ok?r.json():null);
+    if(!d||!d.items.length){body.innerHTML='<tr><td colspan="4" style="color:#8b949e;text-align:center;padding:16px">시세를 받지 못했습니다</td></tr>';return;}
+    document.getElementById('live-theme-info').textContent=d.as_of?`· ${d.as_of.slice(5,10)} ${d.as_of.slice(11,16)} 기준`:'';
+    const c=n=>n>0?'#f85149':n<0?'#58a6ff':'#8b949e';
+    const pct=n=>`<span style="color:${c(n)}">${n>0?'+':''}${n.toFixed(2)}%</span>`;
+    body.innerHTML=d.items.map(t=>`<tr style="cursor:pointer" onclick="openSectorModal(${t.sector_id},'${t.sector_name}')">
+      <td><b>${t.sector_name}</b> <span class="ts">${t.count}종목</span></td>
+      <td><b>${pct(t.avg_change_pct)}</b></td>
+      <td><span style="display:inline-flex;align-items:center;gap:6px">${t.up_ratio}%<span style="display:inline-block;width:${Math.round(t.up_ratio*0.6)}px;height:5px;border-radius:3px;background:${t.up_ratio>=70?'#f85149':t.up_ratio>=50?'#d29922':'#8b949e'}"></span></span></td>
+      <td style="font-size:12px">${t.leaders.map(l=>`${l.name} ${pct(l.change_pct)}`).join(' · ')}</td>
+    </tr>`).join('');
+  }catch(e){console.error(e);}
+}
+setInterval(()=>{if(document.visibilityState==='visible'&&document.getElementById('panel-sector').classList.contains('active'))loadLiveThemes();},60000);
 
 // ── 섹터 수급 ──────────────────────────────────────────────────
 let _sectorData = [];

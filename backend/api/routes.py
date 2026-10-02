@@ -1455,6 +1455,14 @@ def get_sectors(source: str | None = None, db: Session = Depends(get_db)):
     ]
 
 
+@router.get("/sectors/live")
+def get_sectors_live(limit: int = 30, db: Session = Depends(get_db)):
+    """오늘 강한 테마 (토스 현재가 기준 실시간, 1분 캐시)."""
+    from backend.services.live_themes import live_themes  # noqa: PLC0415
+    data = live_themes(db)
+    return {**data, "items": data["items"][:limit]}
+
+
 @router.get("/sectors/flow", response_model=list[SectorFlowItem])
 def get_sector_flow(
     sort: str = "stealth",
