@@ -675,6 +675,10 @@ def refresh_spot_prices(db: Session, start: date, end: date) -> dict:
                      "v": float(row["Volume"]), "tv": float(row["Volume"]) * close, "chg": change, "code": code, "d": d},
                 )
                 fixed += 1
+    if fixed:   # 작업 로그를 남기면 result_cache의 데이터 버전이 바뀌어 화면 결과도 다시 계산된다
+        from backend.db.models import JobLog  # noqa: PLC0415
+        db.add(JobLog(trading_date=end, stage="spot_price_fix", status="completed",
+                      message=f"시세 확정치 재수집 {start}~{end}: {fixed}건 수정"))
     db.commit()
     logger.info("시세 확정치 재수집 %s~%s: 확인 %d건, 수정 %d건, 실패 종목 %d", start, end, checked, fixed, failed)
     return {"checked": checked, "fixed": fixed, "failed": failed}
