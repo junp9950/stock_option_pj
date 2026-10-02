@@ -252,7 +252,7 @@ select{background:#21262d;border:1px solid #30363d;color:#c9d1d9;padding:6px 10p
 
   <!-- 전체 섹터 수급 랭킹 -->
   <div>
-    <div style="font-size:12px;text-transform:uppercase;color:#8b949e;margin-bottom:8px;letter-spacing:.06em">📊 전체 섹터 수급 랭킹 (flow_score 순)</div>
+    <div style="font-size:12px;text-transform:uppercase;color:#8b949e;margin-bottom:8px;letter-spacing:.06em">📊 전체 섹터 수급 랭킹 (<span id="sec-rank-label">스텔스 매집순</span>)</div>
     <table id="sec-surged-table">
       <thead><tr>
         <th>섹터</th><th>분류</th><th>외국인</th><th>기관</th><th>합산</th><th>평균등락</th><th>수급점수</th><th>상태</th>
@@ -440,8 +440,13 @@ async function loadSector(){
 }
 
 function renderSector(data){
-  const stealth=data.filter(d=>d.combined_net_buy>0&&!d.is_surged).sort((a,b)=>b.stealth_score-a.stealth_score);
-  const surged=[...data].sort((a,b)=>b.flow_score-a.flow_score);
+  // 고른 정렬 기준으로 두 표 모두 정렬 (매집 감지 표는 순매수·미급등 섹터만)
+  const sel=document.getElementById('sec-sort');
+  const key={stealth:'stealth_score',flow:'flow_score',foreign:'foreign_net_buy',inst:'inst_net_buy'}[sel.value]||'stealth_score';
+  const byKey=(a,b)=>(b[key]||0)-(a[key]||0);
+  document.getElementById('sec-rank-label').textContent=sel.options[sel.selectedIndex].text;
+  const stealth=data.filter(d=>d.combined_net_buy>0&&!d.is_surged).sort(byKey);
+  const surged=[...data].sort(byKey);
 
   const srcBadge=s=>({custom:'<span class="badge real">커스텀</span>',naver_theme:'<span class="badge rfb">네이버</span>'}[s]||s);
   const fmtBil=n=>n==null?'—':(n>=0?'<span style="color:#3fb950">':' <span style="color:#58a6ff">')+((n>=0?'+':'')+Math.round(n/1e8))+'억</span>';
