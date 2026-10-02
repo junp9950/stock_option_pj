@@ -146,7 +146,7 @@ select{background:#21262d;border:1px solid #30363d;color:#c9d1d9;padding:6px 10p
 <header>
   <div>
     <h1>눌림목 레이더</h1>
-    <div class="sub">불플래그 · 상승삼각형 · 기준봉 눌림 · 장대양봉 도지 후보를 섹터 강도 순으로 · 매일 15:41·18:00 갱신</div>
+    <div class="sub">불플래그 · 상승삼각형 · 기준봉 눌림 · 장대음봉도지 후보 · 매일 15:41·18:00 갱신</div>
   </div>
   <div style="display:flex;gap:8px">
     <button class="btn" id="btn-run-pipeline" onclick="runPipeline()">▶ 파이프라인 실행</button>
@@ -295,7 +295,7 @@ select{background:#21262d;border:1px solid #30363d;color:#c9d1d9;padding:6px 10p
 <div id="panel-candidates" class="panel active content">
   <div id="pb-market" hidden style="border-radius:10px;padding:12px 16px;margin-bottom:14px;border:1px solid #30363d"></div>
   <p class="note" style="color:#8b949e;font-size:12.5px;margin:0 0 12px">
-    원하는 모양(<b style="color:#c9d1d9">불플래그</b> · <b style="color:#c9d1d9">상승삼각형</b> · <b style="color:#c9d1d9">기준봉 눌림</b> · <b style="color:#c9d1d9">장대양봉 도지</b>) 중 하나라도 해당하는 종목입니다.
+    원하는 모양(<b style="color:#c9d1d9">불플래그</b> · <b style="color:#c9d1d9">상승삼각형</b> · <b style="color:#c9d1d9">기준봉 눌림</b> · <b style="color:#c9d1d9">장대음봉도지</b>(장대양봉 뒤 도지 2개)) 중 하나라도 해당하는 종목입니다.
     <b style="color:#c9d1d9">업종</b> 칸에 <b>전기전자</b>, <b>반도체</b>, <b>제약바이오</b>처럼 넣으면 그 업종·테마 종목만 보입니다(쉼표로 여러 개). 손절선까지 거리는 <b style="color:#3fb950">3~6%가 적정</b>입니다. 종목을 누르면 차트가 열립니다.
   </p>
   <div class="toolbar" style="margin-bottom:12px">
@@ -318,7 +318,7 @@ select{background:#21262d;border:1px solid #30363d;color:#c9d1d9;padding:6px 10p
       <option value="불플래그">불플래그</option>
       <option value="상승삼각형">상승삼각형</option>
       <option value="기준봉 눌림">기준봉 눌림</option>
-      <option value="장대양봉 도지">장대양봉 도지</option>
+      <option value="장대음봉도지">장대음봉도지</option>
     </select>
     <button class="btn btn-gray btn-sm" onclick="loadCandidates()">⟳ 새로고침</button>
     <span class="ts" id="cd-info"></span>
@@ -701,7 +701,7 @@ function renderCandidates(){
     body.innerHTML = '<tr><td colspan="5" style="color:#8b949e;text-align:center;padding:20px">조건에 맞는 종목이 없습니다</td></tr>';
     return;
   }
-  const tagColor = {'불플래그':'#58a6ff','상승삼각형':'#bc8cff','기준봉 눌림':'#d29922','장대양봉 도지':'#3fb950'};
+  const tagColor = {'불플래그':'#58a6ff','상승삼각형':'#bc8cff','기준봉 눌림':'#d29922','장대음봉도지':'#3fb950'};
   body.innerHTML = items.map(it=>{
     const indHtml = `<span style="font-size:12.5px">${it.industry||'업종 정보 없음'}</span>`
       + (it.sector_name?`<br><span class="ts">${it.sector_name} · 20일 ${it.sector_ret20>=0?'+':''}${it.sector_ret20}%</span>`:'');

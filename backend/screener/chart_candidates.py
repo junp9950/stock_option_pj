@@ -78,28 +78,34 @@ def detect_triangle(pl: list) -> dict | None:
 
 
 def detect_big_doji(pl: list) -> dict | None:
-    """전날 장대양봉(몸통 +7%↑, 거래량 20일 평균 2배↑) 다음 오늘 도지(몸통 ≤ 변동폭 15%)가 양봉 종가 근처(-5%~+5%)에서 뜬 경우.
-    백테스트로 검증하지 않은 패턴."""
-    if len(pl) < 22:
+    """장대음봉도지: 그저께 장대양봉(몸통 +7%↑, 몸통이 변동폭 60%↑, 거래량 20일 평균 2~15배, 종가가 60일 고점 98%↑)
+    다음 어제·오늘 연속 도지(몸통 ±3% 이내, 종가가 양봉 몸통 절반 위).
+    최근 9개월 확인(185건, 두 번째 도지 종가 매수): 5일 평균 +4.5% · 중간값 +2.2% · 플러스 55%,
+    도지 1개(5일 중간값 -0.1%)나 3개(+0.5%)보다 나았다. 20일 중간값은 마이너스라 짧게 보고 양봉 시가 이탈 시 손절."""
+    if len(pl) < 63:
         return None
-    big, dj = pl[-2], pl[-1]
-    if not big.open_price or not big.close_price or not dj.close_price:
+    big = pl[-3]
+    if not big.open_price or not big.close_price or not big.volume:
         return None
     body = (big.close_price - big.open_price) / big.open_price * 100
-    vols = [x.volume for x in pl[-22:-2] if x.volume]
-    if body < 7 or not vols or not big.volume:
+    rng = big.high_price - big.low_price
+    if body < 7 or rng <= 0 or (big.close_price - big.open_price) / rng < 0.6:
+        return None
+    vols = [x.volume for x in pl[-23:-3] if x.volume]
+    if not vols:
         return None
     vol_x = big.volume / (sum(vols) / len(vols))
-    if vol_x < 2:
+    if not 2 <= vol_x <= 15:   # 30배 넘게 터진 날은 재료 한 번에 튄 경우가 많아 제외
         return None
-    rng = dj.high_price - dj.low_price
-    if rng <= 0 or abs(dj.close_price - dj.open_price) > 0.15 * rng:
-        return None
-    vs_big = (dj.close_price / big.close_price - 1) * 100
-    if not -5 <= vs_big <= 5:   # 크게 갭상승한 도지는 쉬는 도지가 아니라 제외
-        return None
-    return {"body_pct": round(body, 1), "vol_x": round(vol_x, 1), "vs_big": round(vs_big, 1),
-            "stop": big.open_price}
+    if big.close_price < max(x.high_price for x in pl[-63:-3]) * 0.98:
+        return None            # 앞 매물대(60일 고점)를 넘은 장대양봉만
+    mid = (big.open_price + big.close_price) / 2
+    for dj in pl[-2:]:
+        if not dj.open_price or abs(dj.close_price - dj.open_price) / dj.open_price * 100 > 3 or dj.close_price < mid:
+            return None
+    return {"body_pct": round(body, 1), "vol_x": round(vol_x, 1),
+            "vs_big": round((pl[-1].close_price / big.close_price - 1) * 100, 1),
+            "big_date": big.trading_date.isoformat(), "stop": big.open_price}
 
 
 def _corr(xs: list[float], ys: list[float]) -> float | None:
@@ -247,8 +253,8 @@ def scan(db: Session) -> dict:
                                           + (f" · 돌파 후 {after}일" if after else "")})
         dj = detect_big_doji(pl)
         if dj:
-            found[code].append({"type": "장대양봉 도지", "grade": None, "stop": dj["stop"],
-                                "detail": f"전날 +{dj['body_pct']:.0f}% · 거래량 {dj['vol_x']:.0f}배 · 양봉 종가 대비 {dj['vs_big']:+.1f}%"})
+            found[code].append({"type": "장대음봉도지", "grade": None, "stop": dj["stop"],
+                                "detail": f"{dj['big_date'][5:]} 장대양봉 +{dj['body_pct']:.0f}% · 거래량 {dj['vol_x']:.0f}배 · 도지 2개 · 양봉 종가 대비 {dj['vs_big']:+.1f}%"})
 
     # 기준봉 눌림은 기존 세력 신호 스캐너 결과를 그대로 쓴다
     from backend.screener.volume_anomaly import scan as scan_signal  # noqa: PLC0415
