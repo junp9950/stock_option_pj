@@ -13,7 +13,7 @@ from datetime import timedelta
 from sqlalchemy import select, text
 from sqlalchemy.orm import Session
 
-from backend.db.models import SpotDailyPrice, Stock
+from backend.db.models import Sector, SectorStock, SpotDailyPrice, Stock
 from backend.screener.bull_flag import detect_bull_flag
 from backend.screener.market_regime import current_regime
 
@@ -258,6 +258,12 @@ def scan(db: Session) -> dict:
 
     from backend.services.marcap_caps import caps as marcap_caps  # noqa: PLC0415
     marcap = marcap_caps()   # stocks에 시총·주식 수가 없는 종목(유니버스 밖)을 채운다
+    from backend.services.industry_map import industries  # noqa: PLC0415
+    industry = industries()
+    themes: dict[str, list[str]] = defaultdict(list)   # 업종 필터에서 테마 이름으로도 찾을 수 있게
+    for code, name in db.execute(select(SectorStock.stock_code, Sector.sector_name)
+                                 .join(Sector, Sector.id == SectorStock.sector_id).where(Sector.is_active)):
+        themes[code].append(name)
     items = []
     for code, patterns in found.items():
         pl = by_code.get(code)
@@ -270,9 +276,15 @@ def scan(db: Session) -> dict:
         stops = [p["stop"] for p in patterns if p["stop"] and p["stop"] < close]
         stop = max(stops) if stops else None  # 여러 모양이면 가장 가까운 손절선
         sec = sectors.get(code)
+        cap = s.market_cap or (s.shares_outstanding or 0) * close or marcap.get(code) or 0
+        tv_today = float(pl[-1].trading_value or 0)
         items.append({
             "code": code, "name": s.name, "market": s.market,
-            "market_cap": s.market_cap or (s.shares_outstanding or 0) * close or marcap.get(code) or 0,
+            "market_cap": cap,
+            "trading_value": round(tv_today),
+            "turnover_pct": round(tv_today / cap * 100, 2) if cap else None,
+            "industry": industry.get(code),
+            "themes": themes.get(code, []),
             "close_price": round(close), "change_pct": round(float(pl[-1].change_pct or 0), 2),
             "patterns": patterns,
             "sector_score": sec[0] if sec else None,

@@ -184,6 +184,10 @@ def start_scheduler() -> BackgroundScheduler:
     scheduler.add_job(refresh_marcap, 'cron', hour=7, minute=0, id='marcap_caps_daily', replace_existing=True, max_instances=1)
     scheduler.add_job(refresh_marcap, 'date', run_date=datetime.now(timezone.utc)+timedelta(seconds=30),
                       id='marcap_caps_startup', replace_existing=True)
+    from backend.services.industry_map import refresh as refresh_industry
+    scheduler.add_job(refresh_industry, 'cron', hour=7, minute=5, id='industry_map_daily', replace_existing=True, max_instances=1)
+    scheduler.add_job(refresh_industry, 'date', run_date=datetime.now(timezone.utc)+timedelta(seconds=40),
+                      id='industry_map_startup', replace_existing=True)
     from backend.services.earnings_screen import refresh as refresh_earnings
     scheduler.add_job(refresh_earnings, 'cron', day_of_week='mon-fri', hour=17, minute=40,
                       id='earnings_screen_daily', replace_existing=True, max_instances=1, coalesce=True)

@@ -295,11 +295,8 @@ select{background:#21262d;border:1px solid #30363d;color:#c9d1d9;padding:6px 10p
 <div id="panel-candidates" class="panel active content">
   <div id="pb-market" hidden style="border-radius:10px;padding:12px 16px;margin-bottom:14px;border:1px solid #30363d"></div>
   <p class="note" style="color:#8b949e;font-size:12.5px;margin:0 0 12px">
-    원하는 모양(<b style="color:#c9d1d9">불플래그</b> · <b style="color:#c9d1d9">상승삼각형</b> · <b style="color:#c9d1d9">기준봉 눌림</b> · <b style="color:#c9d1d9">장대양봉 도지</b>) 중 하나라도 해당하는 종목을 <b style="color:#c9d1d9">섹터 점수</b> 순으로 보여줍니다.
-    섹터 점수(0~100)는 종목의 <b style="color:#c9d1d9">대표 테마</b>(네이버 테마 중 최근 60일 주가가 가장 비슷하게 움직인 테마)의 최근 20일 수익률 순위이고, <b style="color:#3fb950">80점 이상이 강한 섹터</b>입니다.
-    3년 백테스트에서 <b>강한 대표 테마 + 차트 후보</b>는 탐색·검증 두 기간 모두 같은 날 아무 종목보다 20일 평균 +1.4~1.6%p 높았습니다(상승삼각형이 가장 일관, 중간값은 마이너스).
-    손절선까지 거리는 <b style="color:#3fb950">3~6%가 적정</b>입니다(같은 백테스트에서 종가 매수 기준 두 기간 모두 최고, 3% 미만은 흔들림에 거의 다 털려 마이너스, 10% 이상도 부진).
-    <b style="color:#e3b341">★</b>는 강한 섹터 + 손절 3~6%로 두 기간 모두 가장 좋았던 조합입니다. 점수는 <b>먼저 볼 순서</b>이지 오를 확률이 아닙니다. 종목을 누르면 차트가 열립니다.
+    원하는 모양(<b style="color:#c9d1d9">불플래그</b> · <b style="color:#c9d1d9">상승삼각형</b> · <b style="color:#c9d1d9">기준봉 눌림</b> · <b style="color:#c9d1d9">장대양봉 도지</b>) 중 하나라도 해당하는 종목입니다.
+    <b style="color:#c9d1d9">업종</b> 칸에 <b>전기전자</b>, <b>반도체</b>, <b>제약바이오</b>처럼 넣으면 그 업종·테마 종목만 보입니다(쉼표로 여러 개). 손절선까지 거리는 <b style="color:#3fb950">3~6%가 적정</b>입니다. 종목을 누르면 차트가 열립니다.
   </p>
   <div class="toolbar" style="margin-bottom:12px">
     <label style="display:flex;align-items:center;gap:6px;font-size:13px;color:#8b949e">
@@ -307,9 +304,15 @@ select{background:#21262d;border:1px solid #30363d;color:#c9d1d9;padding:6px 10p
       <input type="number" id="cd-min-cap" value="0" min="0" step="100" onchange="loadCandidates()"
              style="width:90px;background:#0d1117;border:1px solid #30363d;color:#c9d1d9;padding:4px 8px;border-radius:4px">
     </label>
-    <label style="display:flex;align-items:center;gap:6px;font-size:13px;color:#c9d1d9;cursor:pointer">
-      <input type="checkbox" id="cd-strong" onchange="renderCandidates()"> 강한 섹터만 (80+)
-    </label>
+    <select id="cd-sort" onchange="renderCandidates()">
+      <option value="value">거래대금순</option>
+      <option value="cap">시총순</option>
+      <option value="turnover">회전율순</option>
+      <option value="up">등락률순</option>
+    </select>
+    <input id="cd-industry" list="cd-industry-list" placeholder="업종 (예: 전기전자, 반도체)" oninput="renderCandidates()"
+           style="width:190px;background:#0d1117;border:1px solid #30363d;color:#c9d1d9;padding:4px 8px;border-radius:4px">
+    <datalist id="cd-industry-list"></datalist>
     <select id="cd-pattern" onchange="renderCandidates()">
       <option value="">모든 모양</option>
       <option value="불플래그">불플래그</option>
@@ -322,7 +325,7 @@ select{background:#21262d;border:1px solid #30363d;color:#c9d1d9;padding:6px 10p
   </div>
   <table class="pb-table">
     <thead><tr>
-      <th>종목</th><th>섹터 점수</th><th>모양</th><th>현재가</th><th>손절선</th>
+      <th>종목</th><th>업종 · 테마</th><th>모양</th><th>현재가 · 거래대금</th><th>손절선</th>
     </tr></thead>
     <tbody id="cd-body"><tr><td colspan="5" style="color:#8b949e;text-align:center;padding:20px">로딩 중…</td></tr></tbody>
   </table>
@@ -659,32 +662,55 @@ async function loadCandidates(){
   }
 }
 
+// 넓은 업종 이름 → 표준산업분류 업종명에 들어가는 단어 (backend/services/industry_map.py GROUPS와 같게)
+const CD_GROUPS = {
+  '전기전자':['반도체','전자부품','통신 및 방송 장비','컴퓨터 및 주변장치','영상 및 음향','전동기','전지','절연선','조명장치','전기장비','가정용 기기','측정, 시험'],
+  '제약바이오':['의약품','의료용 물질','자연과학 및 공학 연구개발'],'의료기기':['의료용 기기'],'2차전지':['전지'],
+  '화학':['화학','플라스틱','고무'],'기계':['기계 제조업'],'철강금속':['철강','금속'],'자동차':['자동차'],'조선':['선박'],
+  '건설':['건설','건물'],'IT서비스':['소프트웨어','컴퓨터 프로그래밍','정보서비스','자료처리'],'금융':['금융','보험','은행','신탁'],
+};
+function cdMatch(it, terms){
+  if(!terms.length) return true;
+  const ind = it.industry||'';
+  return terms.some(t=>{
+    const g = CD_GROUPS[t];
+    if(g && g.some(w=>ind.includes(w))) return true;
+    return ind.includes(t) || (it.themes||[]).some(x=>x.includes(t)) || (it.sector_name||'').includes(t);
+  });
+}
+function cdWon(v){ return v>=1e12?(v/1e12).toFixed(1)+'조':Math.round(v/1e8).toLocaleString()+'억'; }
 function renderCandidates(){
   const body = document.getElementById('cd-body');
   const d = _cdData;
   if(!d){ return; }
-  const strong = document.getElementById('cd-strong').checked;
+  const dl = document.getElementById('cd-industry-list');
+  if(!dl.dataset.filled){
+    const inds = [...new Set(d.items.map(x=>x.industry).filter(Boolean))].sort();
+    dl.innerHTML = [...Object.keys(CD_GROUPS), ...inds].map(v=>`<option value="${v}">`).join('');
+    dl.dataset.filled = '1';
+  }
   const pat = document.getElementById('cd-pattern').value;
+  const terms = document.getElementById('cd-industry').value.split(',').map(t=>t.trim()).filter(Boolean);
+  const sortKey = document.getElementById('cd-sort').value;
+  const val = {value:x=>x.trading_value||0, cap:x=>x.market_cap||0, turnover:x=>x.turnover_pct||0, up:x=>x.change_pct||0}[sortKey];
   const items = d.items
-    .filter(it=>(!strong||it.strong_sector) && (!pat||it.patterns.some(p=>p.type===pat)));
-  const nStrong = d.items.filter(x=>x.strong_sector).length;
-  const nBest = d.items.filter(x=>x.best_combo).length;
-  document.getElementById('cd-info').textContent = d.trading_date ? `기준일: ${d.trading_date} · ${d.items.length}개 (강한 섹터 ${nStrong}개 · ★ ${nBest}개)` : '';
+    .filter(it=>(!pat||it.patterns.some(p=>p.type===pat)) && cdMatch(it, terms))
+    .sort((a,b)=>val(b)-val(a));
+  document.getElementById('cd-info').textContent = d.trading_date ? `기준일: ${d.trading_date} · ${items.length}개${items.length!==d.items.length?' / 전체 '+d.items.length+'개':''}` : '';
   if(!items.length){
     body.innerHTML = '<tr><td colspan="5" style="color:#8b949e;text-align:center;padding:20px">조건에 맞는 종목이 없습니다</td></tr>';
     return;
   }
   const tagColor = {'불플래그':'#58a6ff','상승삼각형':'#bc8cff','기준봉 눌림':'#d29922','장대양봉 도지':'#3fb950'};
   body.innerHTML = items.map(it=>{
-    const sc = it.sector_score;
-    const scHtml = sc==null ? '<span class="ts">테마 없음</span>'
-      : `<b style="font-size:16px;color:${sc>=80?'#3fb950':sc>=50?'#c9d1d9':'#8b949e'}">${sc}</b><br><span class="ts">${it.sector_name} · 20일 ${it.sector_ret20>=0?'+':''}${it.sector_ret20}%</span>`;
+    const indHtml = `<span style="font-size:12.5px">${it.industry||'업종 정보 없음'}</span>`
+      + (it.sector_name?`<br><span class="ts">${it.sector_name} · 20일 ${it.sector_ret20>=0?'+':''}${it.sector_ret20}%</span>`:'');
     const pats = it.patterns.map(p=>`<span style="display:inline-block;margin:0 4px 3px 0;padding:1px 7px;border-radius:10px;border:1px solid ${tagColor[p.type]};color:${tagColor[p.type]};font-size:11.5px">${p.type}${p.grade?'·'+p.grade:''}</span><br><span class="ts">${p.detail}</span>`).join('<br>');
     return `<tr style="cursor:pointer" onclick="openChartModal('${it.code}','${it.name}','')">
-      <td>${it.best_combo?'<b style="color:#e3b341">★</b> ':''}<b>${it.name}</b> <span style="color:#8b949e;font-size:11px">${it.code}</span>${it.market_cap?`<br><span class="ts">시총 ${it.market_cap>=1e12?(it.market_cap/1e12).toFixed(1)+'조':Math.round(it.market_cap/1e8).toLocaleString()+'억'}</span>`:''}</td>
-      <td data-label="섹터 점수">${scHtml}</td>
+      <td><b>${it.name}</b> <span style="color:#8b949e;font-size:11px">${it.code}</span>${it.market_cap?`<br><span class="ts">시총 ${cdWon(it.market_cap)}</span>`:''}</td>
+      <td data-label="업종 · 테마">${indHtml}</td>
       <td data-label="모양" style="font-size:12px">${pats}</td>
-      <td data-label="현재가" style="text-align:right">${it.close_price.toLocaleString()}원<br><span style="color:${it.change_pct>=0?'#f85149':'#3b82f6'};font-size:11px">${it.change_pct>=0?'+':''}${it.change_pct.toFixed(2)}%</span></td>
+      <td data-label="현재가" style="text-align:right">${it.close_price.toLocaleString()}원<br><span style="color:${it.change_pct>=0?'#f85149':'#3b82f6'};font-size:11px">${it.change_pct>=0?'+':''}${it.change_pct.toFixed(2)}%</span><br><span class="ts">거래대금 ${cdWon(it.trading_value||0)}${it.turnover_pct!=null?' · 회전율 '+it.turnover_pct.toFixed(1)+'%':''}</span></td>
       <td data-label="손절선" style="color:#f85149">${it.stop_price?it.stop_price.toLocaleString()+'원<br><span style="font-size:11px;color:'+({적정:'#3fb950',보통:'#c9d1d9',얕음:'#8b949e',깊음:'#8b949e'}[it.stop_zone])+'">-'+it.stop_dist_pct+'% · '+it.stop_zone+'</span>':'—'}</td>
     </tr>`;
   }).join('');
