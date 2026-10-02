@@ -180,6 +180,19 @@ def start_scheduler() -> BackgroundScheduler:
                       id='quant10_daily', replace_existing=True, max_instances=1, coalesce=True)
     scheduler.add_job(refresh_quant, 'date', run_date=datetime.now(timezone.utc)+timedelta(seconds=20),
                       id='quant10_startup', replace_existing=True)
+    def _price_fix_job() -> None:
+        # 07:30: 전날 15:41·18:00 수집 시세는 NXT 시간외 진행 중 값이라 확정 종가로 다시 덮어쓴다 (최근 5거래일)
+        from datetime import date as _date  # noqa: PLC0415
+        from backend.collector.spot import refresh_spot_prices  # noqa: PLC0415
+        db = SessionLocal()
+        try:
+            refresh_spot_prices(db, _date.today() - timedelta(days=9), _date.today())
+        except Exception as exc:  # noqa: BLE001
+            logger.error("Scheduler price fix error: %s", exc)
+        finally:
+            db.close()
+    scheduler.add_job(_price_fix_job, 'cron', day_of_week='tue-sat', hour=7, minute=30,
+                      id='spot_price_fix', replace_existing=True, max_instances=1, coalesce=True)
     from backend.services.marcap_caps import refresh as refresh_marcap
     scheduler.add_job(refresh_marcap, 'cron', hour=7, minute=0, id='marcap_caps_daily', replace_existing=True, max_instances=1)
     scheduler.add_job(refresh_marcap, 'date', run_date=datetime.now(timezone.utc)+timedelta(seconds=30),

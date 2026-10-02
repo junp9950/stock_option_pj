@@ -628,3 +628,53 @@ def collect_sector_supplement(db: Session, trading_date: date) -> int:
     db.commit()
     logger.info("Sector supplement done: %d/%d stocks collected", collected, len(missing))
     return collected
+
+
+def refresh_spot_prices(db: Session, start: date, end: date) -> dict:
+    """이미 저장된 start~end 시세(OHLCV)를 FDR 확정치로 다시 덮어쓴다. 수급은 건드리지 않는다.
+
+    2026-09-14부터 15:41·18:00 수집분이 NXT 시간외(~20:00) 진행 중 값이라 종목의 약 40%가 공식 종가와
+    어긋났다(대부분 0.2~2%, 큰 것은 6%). 다음 날 아침에 받으면 확정치가 나오므로 매일 아침 최근 며칠을 바로잡는다.
+    """
+    from sqlalchemy import text  # noqa: PLC0415
+    import math as _math  # noqa: PLC0415
+
+    existing: dict[str, dict[date, float]] = {}
+    for code, d, close in db.execute(
+        text("select stock_code, trading_date, close_price from spot_daily_prices where trading_date between :s and :e"),
+        {"s": start, "e": end},
+    ):
+        existing.setdefault(code, {})[d] = float(close or 0)
+
+    def _fetch(code: str):
+        try:
+            return code, fdr.DataReader(code, start.isoformat(), end.isoformat())
+        except Exception:  # noqa: BLE001
+            return code, None
+
+    fixed = checked = failed = 0
+    with ThreadPoolExecutor(max_workers=16) as pool:
+        for code, df in pool.map(_fetch, list(existing)):
+            if df is None or df.empty:
+                failed += 1
+                continue
+            for ts, row in df.iterrows():
+                d = ts.date()
+                if d not in existing[code]:
+                    continue
+                checked += 1
+                close = float(row["Close"])
+                change_raw = float(row["Change"])
+                change = round(change_raw * 100, 4) if _math.isfinite(change_raw) else 0.0
+                if close <= 0 or abs(change) > 50 or abs(existing[code][d] / close - 1) < 1e-6:
+                    continue
+                db.execute(
+                    text("update spot_daily_prices set open_price=:o, high_price=:h, low_price=:l, close_price=:c, "
+                         "volume=:v, trading_value=:tv, change_pct=:chg where stock_code=:code and trading_date=:d"),
+                    {"o": float(row["Open"]), "h": float(row["High"]), "l": float(row["Low"]), "c": close,
+                     "v": float(row["Volume"]), "tv": float(row["Volume"]) * close, "chg": change, "code": code, "d": d},
+                )
+                fixed += 1
+    db.commit()
+    logger.info("시세 확정치 재수집 %s~%s: 확인 %d건, 수정 %d건, 실패 종목 %d", start, end, checked, fixed, failed)
+    return {"checked": checked, "fixed": fixed, "failed": failed}
