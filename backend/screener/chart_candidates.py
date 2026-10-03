@@ -69,9 +69,15 @@ def detect_triangle(pl: list) -> dict | None:
     close = pl[t].close_price
     if not (res * (1 - TRI_NEAR_RES) <= close <= res * 1.02):
         return None
-    base_low = min(p.low_price for p in pl[t - 60: t - TRI_WIN + 1])
-    peak = max(p.high_price for p in pl[t - 60: t + 1])
+    # 깃대: 60일 안 저점 '뒤에' 나온 고점까지의 상승이어야 한다 (예전엔 순서를 안 봐서 넥스트칩처럼
+    # 고점→저점으로 빠진 종목도 '상승 +76%'로 잡혔다). 삼각형은 깃대 위쪽 절반에 있어야 한다.
+    w0 = t - TRI_WIN + 1
+    i_low = min(range(t - 60, w0), key=lambda i: pl[i].low_price)
+    base_low = pl[i_low].low_price
+    peak = max(p.high_price for p in pl[i_low + 1: t + 1])
     if base_low <= 0 or peak / base_low - 1 < TRI_RISE_MIN:
+        return None
+    if lo1 < base_low + 0.5 * (peak - base_low):
         return None
     return {"resistance": round(res), "support": round(lo2), "touches": touches,
             "rise_pct": round((peak / base_low - 1) * 100), "shrink": round(r2 / r1, 2)}
