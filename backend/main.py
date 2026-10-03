@@ -224,6 +224,21 @@ select{background:#21262d;border:1px solid #30363d;color:#c9d1d9;padding:6px 10p
     <span class="ts" id="sec-info"></span>
   </div>
 
+  <!-- 순환매 모니터 -->
+  <div style="margin-bottom:20px">
+    <div style="font-size:12px;color:#8b949e;margin-bottom:6px;letter-spacing:.06em">🔄 순환매 모니터 (이야기 줄기 16개) <span class="ts" id="rot-info"></span></div>
+    <p class="note" style="color:#8b949e;font-size:12px;margin:0 0 8px">
+      272개 테마를 큰 줄기로 묶었습니다. <b style="color:#f85149">과열</b> = 1~2위 + 20일선 위 종목 90% 이상 + 거래대금이 최근 5일 정점보다 10% 넘게 줄어듦.
+      <b style="color:#3fb950">유입</b> = 10거래일 전보다 순위 3계단 이상 상승 + 최근 5일 거래대금 1.05배 이상.
+      3년 확인: 상위 3 줄기에 그날 거래대금 1.2배 이상 몰린 날의 거래 실린 양봉 종베는 다음 날 평균 +0.94%(수익 71%), 줄기 밖은 +0.28%.
+      다만 <b>다음 10~20일에 어느 줄기가 앞설지</b>는 이 지표들로 거의 맞히지 못했습니다(유입 줄기도 같은 날 평균 대비 -0.2%p). <b>"지금 어디에 돈이 붙었나"를 확인하는 용도</b>로 보세요.
+    </p>
+    <table>
+      <thead><tr><th>줄기</th><th>20일 상승 (순위)</th><th>확산 (20일선 위)</th><th>거래대금 (평소 대비)</th><th>오늘</th><th>오늘 돈 붙은 종목 (거래 2배↑)</th></tr></thead>
+      <tbody id="rot-body"><tr><td colspan="6" style="color:#8b949e;text-align:center;padding:16px">로딩 중…</td></tr></tbody>
+    </table>
+  </div>
+
   <!-- 오늘 강한 테마 (실시간) -->
   <div style="margin-bottom:20px">
     <div style="font-size:12px;color:#8b949e;margin-bottom:8px;letter-spacing:.06em">🔥 오늘 강한 테마 (실시간 · 1분마다 갱신) <span class="ts" id="live-theme-info"></span></div>
@@ -438,7 +453,7 @@ function switchTab(id) {
   document.querySelectorAll('.panel').forEach(p=>p.classList.remove('active'));
   document.getElementById('panel-'+id).classList.add('active');
   if(id==='screener')loadTopValue();
-  if(id==='sector'){loadSector();loadLiveThemes();}
+  if(id==='sector'){loadSector();loadLiveThemes();loadRotation();}
   if(id==='heatmap')loadHeatmap();
   if(id==='candidates')loadCandidates();
   if(id==='earnings'&&!document.getElementById('earnings-frame').src)document.getElementById('earnings-frame').src='/earnings';
@@ -447,6 +462,27 @@ function switchTab(id) {
 }
 
 // ── 오늘 강한 테마 (실시간) ──────────────────────────────────
+async function loadRotation(){
+  const body=document.getElementById('rot-body');
+  try{
+    const d=await fetch(`${API}/sectors/rotation`).then(r=>r.ok?r.json():null);
+    if(!d||!d.items.length){body.innerHTML='<tr><td colspan="6" style="color:#8b949e;text-align:center;padding:16px">데이터 없음</td></tr>';return;}
+    document.getElementById('rot-info').textContent=`· ${d.trading_date} 장 마감 기준`;
+    const c=n=>n>0?'#f85149':n<0?'#58a6ff':'#8b949e';
+    const sg=n=>(n>0?'+':'')+n;
+    const badge={'과열':'<b style="color:#f85149;border:1px solid #f85149;border-radius:8px;padding:0 6px;font-size:11px">과열</b>','유입':'<b style="color:#3fb950;border:1px solid #3fb950;border-radius:8px;padding:0 6px;font-size:11px">유입</b>'};
+    body.innerHTML=d.items.map(t=>{
+      const mv=t.rank_10ago-t.rank;
+      return `<tr>
+      <td><b>${t.family}</b> ${badge[t.status]||''}<br><span class="ts">${t.count}종목</span></td>
+      <td><b style="color:${c(t.ret20_pct)}">${sg(t.ret20_pct)}%</b> <span class="ts">${t.rank}위</span>${mv?` <span style="font-size:11px;color:${mv>0?'#3fb950':'#8b949e'}">${mv>0?'▲':'▼'}${Math.abs(mv)}</span>`:''}<br><span class="ts">5일 ${sg(t.ret5_pct)}%</span></td>
+      <td>${t.breadth_pct}% <span class="ts">(10일 전 ${t.breadth_10ago}%)</span></td>
+      <td><b style="color:${t.tv5_x>=1.1?'#f85149':t.tv5_x<0.9?'#58a6ff':'#c9d1d9'}">${t.tv5_x.toFixed(2)}배</b> <span class="ts">최근 5일 · 5일 정점 ${t.tv5_peak5.toFixed(2)}</span><br><span class="ts">오늘 ${t.tv1_x.toFixed(2)}배</span></td>
+      <td style="color:${c(t.chg_pct)}">${sg(t.chg_pct.toFixed(1))}%</td>
+      <td style="font-size:12px">${t.leaders.map(l=>`<span style="cursor:pointer" onclick="openChartModal('${l.code}','${l.name}','')">${l.name} <span style="color:${c(l.change_pct)}">${sg(l.change_pct)}%</span></span>`).join(' · ')||'<span class="ts">없음</span>'}</td>
+    </tr>`}).join('');
+  }catch(e){console.error(e);body.innerHTML='<tr><td colspan="6" style="color:#f85149;text-align:center;padding:16px">로딩 실패</td></tr>';}
+}
 async function loadLiveThemes(){
   const body=document.getElementById('live-theme-body');
   try{

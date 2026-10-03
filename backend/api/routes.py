@@ -1455,6 +1455,7 @@ def warm_caches(db: Session) -> None:
     """화면 기본값으로 미리 계산해 둔다. 데이터가 그대로면 즉시 끝난다."""
     get_chart_candidates(min_cap=0, db=db)
     get_volume_records(db=db)
+    get_sector_rotation(db=db)
 
 
 @router.get("/screener/picks/performance")
@@ -1516,6 +1517,14 @@ def get_sectors(source: str | None = None, db: Session = Depends(get_db)):
         )
         for r in rows
     ]
+
+
+@router.get("/sectors/rotation")
+def get_sector_rotation(db: Session = Depends(get_db)):
+    """순환매 모니터: 이야기 줄기 16개의 순위·확산·자금 흐름과 과열/유입 표시."""
+    from backend.screener.rotation import scan  # noqa: PLC0415
+    from backend.services.result_cache import cached  # noqa: PLC0415
+    return cached("sector_rotation", (), db, lambda: scan(db))
 
 
 @router.get("/sectors/live")
