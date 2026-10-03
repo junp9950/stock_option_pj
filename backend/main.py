@@ -349,6 +349,8 @@ select{background:#21262d;border:1px solid #30363d;color:#c9d1d9;padding:6px 10p
       기준선(=손절선)은 신기록 전날 종가입니다.
       <b style="color:#e3b341">🎯 진입 신호</b> = 숨고르기 중 오늘 <b>돌려세우는 봉</b>(+3% 이상 양봉, 거래대금 20일 평균 2배 이상) + 시장 상승·횡보.
       3년 확인: 하락장의 돌려세우는 봉은 40일 뒤 시장 대비 -5.8%p, 상승·횡보장은 +1.9%p, 여기에 <b style="color:#3fb950">📈 실적</b>(영업이익 +30%·매출 +10%, 120일 안 공시)까지 겹치면 +7.8%p(31건, 사례 적음).
+      <b style="color:#e3b341">매도</b>는 같은 250건에서 그냥 40일 보유(중간값 -2.0%, 수익 45%)보다 <b>+10%에 절반 + 나머지 고점 대비 -8% 이탈</b>(중간값 +3.8%, 수익 69%, 최악 -30%)이 안정적이었고,
+      <b>시초가 +5% 이상 갭에 덜어내기</b>가 평균 수익이 가장 컸습니다(+7.3%). 실적까지 겹친 31건은 앞의 방법으로 수익 87%, 최악 -10%였습니다.
     </p>
     <table class="pb-table">
       <thead><tr><th>종목</th><th>단계</th><th>신기록일</th><th>그 뒤 최고</th><th>지금</th></tr></thead>
@@ -767,7 +769,7 @@ function renderVolumeRecords(){
     <td data-label="단계"><b style="color:${color[x.stage]}">${x.stage}</b><br><span class="ts">마지막 대량거래 뒤 ${x.rest_days}일</span></td>
     <td data-label="신기록일">${x.event_date.slice(5)} <span style="color:#f85149">${sg(x.event_change_pct)}%</span><br><span class="ts">${cdWon(x.event_value)} · 평소 ${x.event_x}배</span></td>
     <td data-label="그 뒤 최고" style="color:#f85149">${sg(x.rise_pct)}%<br><span class="ts">${x.peak_date.slice(5)}</span></td>
-    <td data-label="지금" style="text-align:right">${x.close_price.toLocaleString()}원 <span style="color:${x.change_pct>=0?'#f85149':'#3b82f6'};font-size:11px">${sg(x.change_pct.toFixed(2))}%</span><br><span class="ts">고점 ${x.off_peak_pct}% · 상승분 ${x.kept_pct}% 유지 · 거래 ${x.dry_pct}%로 마름</span><br><span class="ts" style="color:#f85149">기준선(손절) ${x.stop_price.toLocaleString()}원 · ${x.stop_gap_pct}%</span></td>
+    <td data-label="지금" style="text-align:right">${x.close_price.toLocaleString()}원 <span style="color:${x.change_pct>=0?'#f85149':'#3b82f6'};font-size:11px">${sg(x.change_pct.toFixed(2))}%</span><br><span class="ts">고점 ${x.off_peak_pct}% · 상승분 ${x.kept_pct}% 유지 · 거래 ${x.dry_pct}%로 마름</span><br><span class="ts" style="color:#f85149">기준선(손절) ${x.stop_price.toLocaleString()}원 · ${x.stop_gap_pct}%</span>${x.entry_signal?`<br><span class="ts" style="color:#e3b341">매도: 시초가 +5% 이상 갭이면 덜어내기 · ${Math.round(x.close_price*1.1).toLocaleString()}원(+10%)에 절반 · 나머지는 보유 중 최고 종가 -8% 이탈 시</span>`:''}</td>
   </tr>`).join('');
 }
 
