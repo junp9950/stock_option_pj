@@ -23,7 +23,11 @@ MIN_EVENT_CHG = 5.0  # 신기록일 전날 종가 대비 +5% 이상 (우리금�
                      # 주가는 안 움직인 대량 체결(블록딜·지수 편입 등)은 시세가 아니라 뺀다)
 NEW_DAYS = 10        # 마지막 대량거래일 뒤 10거래일까지는 '신규'
 DRY_MAX = 0.25       # 최근 5일 거래대금이 대량거래 최대일의 25% 이하면 말랐다고 본다
-KEEP_MIN = 0.5       # 상승분의 절반 이상을 지켜야 숨고르기, 아니면 무너짐
+# 무너짐 = 지금 종가가 기준선(신기록 전날 종가) 아래이거나, 신기록 뒤 한 번이라도 기준선의 -15% 아래로 마감한 경우.
+# 7/30 같은 폭락에서 버틴 종목(금호타이어)은 남고 크게 깬 종목(제주반도체 -56%)은 빠진다. 날짜로 자르지 않는 이유.
+# 거래 없이 잠깐 기준선 밑으로 흔든 것(티에스이 9/15 -10% 뒤 회복)은 털기로 보고 봐준다.
+BREAK_DEPTH = 0.85
+# (예전엔 '상승분 절반 유지'를 조건으로 써서, 깃대가 짧은 티에스이가 거래 없이 8%만 밀려도 무너짐이 됐다)
 
 
 def scan(db: Session) -> dict:
@@ -74,7 +78,8 @@ def scan(db: Session) -> dict:
         kept = (close - base) / (peak - base) if peak > base else 0.0
         dry = (sum(tv[-5:]) / 5) / big_max if big_max else 1.0
         rest = len(pl) - 1 - last_big
-        if close < base or kept < KEEP_MIN:
+        broke = close < base or any(float(p[5]) < base * BREAK_DEPTH for p in pl[i + 1:])
+        if broke:
             stage = "무너짐"
         elif rest < NEW_DAYS:
             stage = "신규"

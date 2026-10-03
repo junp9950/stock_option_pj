@@ -343,8 +343,8 @@ select{background:#21262d;border:1px solid #30363d;color:#c9d1d9;padding:6px 10p
     <p class="note" style="color:#8b949e;font-size:12.5px;margin:0 0 10px">
       최근 약 4개월 안에 <b style="color:#c9d1d9">몇 년 만의 최대 거래대금</b>(평소의 10배 이상, 전날 대비 +5% 이상 양봉)이 터진 종목입니다.
       최근 3년 전종목 확인 결과 <b style="color:#f85149">터진 날 바로 사면 20일 뒤 중간값 -7%</b>였고, 대신 20일 안에 95%가 그날보다 높은 가격을 찍었습니다(중간값 +15%).
-      그래서 <b style="color:#c9d1d9">관심 등록용</b>이고, 진입은 <b style="color:#3fb950">숨고르기</b>(거래가 마르면서 상승분 절반 이상 유지) 뒤 돌려세울 때 보세요.
-      손절선은 신기록 전날 종가입니다.
+      그래서 <b style="color:#c9d1d9">관심 등록용</b>이고, 진입은 <b style="color:#3fb950">숨고르기</b>(거래가 마르면서 기준선을 지킴) 뒤 돌려세울 때 보세요. 지금 기준선 아래이거나 신기록 뒤 한 번이라도 기준선 -15% 아래로 마감했으면 <b>무너짐</b>입니다(그보다 얕게 잠깐 흔든 건 털기로 봅니다).
+      기준선(=손절선)은 신기록 전날 종가입니다.
     </p>
     <table class="pb-table">
       <thead><tr><th>종목</th><th>단계</th><th>신기록일</th><th>그 뒤 최고</th><th>지금</th></tr></thead>
