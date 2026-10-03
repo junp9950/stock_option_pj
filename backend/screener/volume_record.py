@@ -116,9 +116,9 @@ def scan(db: Session) -> dict:
             "market_cap": caps.get(code, (0, 0))[0] or caps.get(code, (0, 0))[1] * close or marcap.get(code) or 0, "change_pct": round((close / float(pl[-2][5]) - 1) * 100, 2),
             "off_peak_pct": round((close / peak - 1) * 100, 1), "kept_pct": round(kept * 100),
             "dry_pct": round(dry * 100), "rest_days": rest, "days_since": len(pl) - 1 - i,
-            "stage": stage, "stop_price": round(base),
+            "stage": stage, "stop_price": round(base), "stop_gap_pct": round((base / close - 1) * 100, 1),
         })
     order = {"숨고르기": 0, "신규": 1, "진행 중": 2, "설거지": 3, "무너짐": 4}
-    items.sort(key=lambda x: x["event_date"], reverse=True)   # 단계 안에서는 최근 신기록부터
+    items.sort(key=lambda x: x["market_cap"] or 0, reverse=True)   # 단계 안에서는 시총 큰 종목부터
     items.sort(key=lambda x: order[x["stage"]])
     return {"trading_date": latest.isoformat(), "window_start": win_start.isoformat(), "items": items}
