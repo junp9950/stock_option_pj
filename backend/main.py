@@ -220,6 +220,8 @@ select{background:#21262d;border:1px solid #30363d;color:#c9d1d9;padding:6px 10p
         <option value="0">전체</option><option value="500">500억 이상</option><option value="1000" selected>1,000억 이상</option>
         <option value="3000">3,000억 이상</option><option value="10000">1조 이상</option>
       </select></label>
+    <label style="font-size:12.5px;color:#c9d1d9;cursor:pointer" title="3년 확인: 이격 +20% 이상·그날 +12% 이상은 평균은 비슷한데 -5% 넘는 손실이 2~4배"><input type="checkbox" id="jb-safe" checked onchange="try{localStorage.setItem('jb-safe',this.checked?'1':'0')}catch(e){};renderJongbe()"> 안정형만 (이격 +20% 미만 · 그날 +12% 미만)</label>
+    <label style="font-size:12.5px;color:#c9d1d9;cursor:pointer"><input type="checkbox" id="jb-showb" onchange="renderJongbe()"> B등급도 보기</label>
     <span class="ts" id="jb-count"></span>
   </div>
   <div id="jb-fams" style="display:flex;flex-wrap:wrap;gap:8px;margin-bottom:16px"></div>
@@ -490,7 +492,8 @@ async function loadJongbe(){
   let d=null;
   try{ d=await fetch(`${API}/screener/jongbe`).then(r=>r.ok?r.json():null); }catch(e){}
   _jbData=d;
-  try{ const mc=localStorage.getItem('jb-mincap'); if(mc!==null) document.getElementById('jb-mincap').value=mc; }catch(e){}
+  try{ const mc=localStorage.getItem('jb-mincap'); if(mc!==null) document.getElementById('jb-mincap').value=mc;
+       const sf=localStorage.getItem('jb-safe'); if(sf!==null) document.getElementById('jb-safe').checked=sf==='1'; }catch(e){}
   const mk=document.getElementById('jb-market');
   if(!d){ mk.textContent='불러오지 못했습니다'; return; }
   const st=(d.market&&d.market.state)||'-';
@@ -515,10 +518,14 @@ function renderJongbe(){
   const d=_jbData; if(!d) return;
   const min=parseFloat(document.getElementById('jb-mincap').value)*1e8||0;
   const okCap=x=>!min||!x.market_cap||x.market_cap>=min;
-  const items=d.items.filter(okCap), lim=d.limit_up.filter(okCap);
-  document.getElementById('jb-count').textContent=`${items.length}개${items.length!==d.items.length?` (전체 ${d.items.length}개)`:''} · A ${items.filter(x=>x.grade==='A').length}개`;
+  const safe=document.getElementById('jb-safe').checked, showB=document.getElementById('jb-showb').checked;
+  const okSafe=x=>!safe||((x.gap20_pct==null||x.gap20_pct<20)&&x.change_pct<12);
+  const pool=d.items.filter(x=>okCap(x)&&okSafe(x)), lim=d.limit_up.filter(okCap);
+  const nA=pool.filter(x=>x.grade==='A').length, nB=pool.length-nA;
+  const items=pool.filter(x=>showB||x.grade==='A');
+  document.getElementById('jb-count').textContent=`A ${nA}개 · B ${nB}개 (전체 후보 ${d.items.length}개)`;
   const body=document.getElementById('jb-body');
-  if(!items.length){ body.innerHTML='<tr><td colspan="5" style="color:#8b949e;text-align:center;padding:20px">오늘은 조건에 맞는 종목이 없습니다</td></tr>'; }
+  if(!items.length){ body.innerHTML=`<tr><td colspan="5" style="color:#8b949e;text-align:center;padding:20px">${nB&&!showB?`오늘은 A등급이 없습니다. <a href="#" onclick="document.getElementById('jb-showb').checked=true;renderJongbe();return false" style="color:#58a6ff">B등급 ${nB}개 보기</a> (3년 다음 날 평균 +0.48%, A는 +0.94%)`:'오늘은 조건에 맞는 종목이 없습니다'}</td></tr>`; }
   else body.innerHTML=items.map(x=>`<tr style="cursor:pointer" onclick="openChartModal('${x.code}','${x.name}','')">
     <td><b>${x.name}</b> <span style="color:#8b949e;font-size:11px">${x.code}</span>${x.earn_up?' <span style="color:#3fb950;font-size:11px;border:1px solid #238636;border-radius:8px;padding:0 5px">📈 실적</span>':''}${x.leader?' <span style="color:#e3b341;font-size:11px">👑 대장</span>':''}${x.record_today?' <span style="color:#f85149;font-size:11px" title="오늘 몇 년 만의 최대 거래대금">🔔 거래대금 신기록</span>':''}${x.vr_stage&&!x.record_today?` <span style="font-size:11px;color:${x.vr_signal?'#e3b341':'#8b949e'}" title="대량거래 관심종목 단계 (스윙 관점)">🔥 ${x.vr_signal?'진입 신호':x.vr_stage}</span>`:''}${x.market_cap?`<br><span class="ts">시총 ${cdWon(x.market_cap)}</span>`:''}</td>
     <td data-label="등급"><b style="color:${x.grade==='A'?'#3fb950':'#c9d1d9'}">${x.grade}</b><br><span class="ts">${x.grade==='A'?'섹터 돈 몰림':'섹터 돈 몰림 아님'}</span></td>
