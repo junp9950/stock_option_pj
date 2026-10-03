@@ -330,6 +330,15 @@ select{background:#21262d;border:1px solid #30363d;color:#c9d1d9;padding:6px 10p
     <tbody id="cd-body"><tr><td colspan="5" style="color:#8b949e;text-align:center;padding:20px">로딩 중…</td></tr></tbody>
   </table>
   <div style="margin-top:26px">
+    <b style="font-size:15px;color:#e6edf3">🔔 오늘 거래대금 신기록 + 상한가 (종베 후보)</b> <span class="ts" id="lu-info"></span>
+    <p class="note" style="color:#8b949e;font-size:12.5px;margin:6px 0 8px">
+      오늘 거래대금이 몇 년 만의 최대(평소 10배 이상)이면서 상한가로 끝난 종목입니다. 3년 확인: 247건을 종가에 샀다면 다음 날 시가 평균 +5.6%(중간값 +4.3%, 수익 74%),
+      "갭상승이면 시가, 아니면 종가"로 팔면 수익 79%였습니다. <b style="color:#f85149">단 상한가에 묶이면 종가·시간외에 실제로 못 사는 경우가 많아 실제 결과는 이보다 나쁠 수 있습니다.</b>
+      <b>점상</b>은 하루 종일 상한가에 묶였던 종목입니다.
+    </p>
+    <div id="lu-body" class="ts" style="margin-bottom:6px">로딩 중…</div>
+  </div>
+  <div style="margin-top:26px">
     <div style="display:flex;flex-wrap:wrap;align-items:center;gap:10px;margin-bottom:8px">
       <b style="font-size:15px;color:#e6edf3">🔥 대량거래 관심종목</b>
       <select id="vr-stage" onchange="renderVolumeRecords()">
@@ -752,7 +761,18 @@ async function loadVolumeRecords(){
   try{ _vrData = await fetch(`${API}/screener/volume-records`).then(r=>r.ok?r.json():null); }catch(e){ _vrData = null; }
   renderVolumeRecords();
 }
+function renderLimitUp(){
+  const el = document.getElementById('lu-body');
+  const lu = (_vrData && _vrData.limit_up) || [];
+  document.getElementById('lu-info').textContent = _vrData ? `기준일 ${_vrData.trading_date} · ${lu.length}개` : '';
+  if(!_vrData){ el.textContent = '로딩 실패'; return; }
+  if(!lu.length){ el.textContent = '오늘은 해당 종목이 없습니다'; return; }
+  el.innerHTML = lu.map(x=>`<span style="display:inline-block;margin:0 8px 6px 0;padding:6px 10px;border:1px solid #30363d;border-radius:8px;cursor:pointer" onclick="openChartModal('${x.code}','${x.name}','')">
+    <b style="color:#e6edf3">${x.name}</b> <span style="color:#f85149">+${x.change_pct}%</span>${x.locked?' <b style="color:#d29922">점상</b>':''}
+    <span class="ts">· ${x.close_price.toLocaleString()}원 · ${cdWon(x.value)}(평소 ${x.x}배)${x.market_cap?' · 시총 '+cdWon(x.market_cap):''}</span></span>`).join('');
+}
 function renderVolumeRecords(){
+  renderLimitUp();
   const body = document.getElementById('vr-body');
   if(!_vrData){ body.innerHTML = '<tr><td colspan="5" style="color:#f85149;text-align:center;padding:20px">로딩 실패</td></tr>'; return; }
   const sel = document.getElementById('vr-stage').value;

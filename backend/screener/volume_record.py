@@ -71,12 +71,25 @@ def scan(db: Session) -> dict:
     from backend.services.marcap_caps import caps as marcap_caps  # noqa: PLC0415
     marcap = marcap_caps()   # stocks에 시총이 없는 종목(유니버스 밖)을 채운다
 
-    items = []
+    items, limit_up = [], []
     for code, pl in by.items():
         if pl[-1][1] != latest or any(k in names.get(code, "") for k in NAME_SKIP):
             continue
         run_max, n_prior = prior.get(code, (0.0, 0))
         tv = [float(p[6] or 0) for p in pl]
+        # 오늘 거래대금 신기록 + 상한가 (종베 후보): 3년 치 신기록일 상한가 247건, 종가 매수 → 다음 날 시가 평균 +5.6%·수익 74%.
+        # 단 상한가에 묶이면 종가·시간외에 실제로 못 사는 경우가 많아 숫자보다 나쁠 수 있다.
+        if n_prior + len(pl) > MIN_HISTORY and len(pl) > PRE_MED_DAYS:
+            o_, h_, l_, c_ = (float(x) for x in pl[-1][2:6])
+            prev_c = float(pl[-2][5])
+            med_ = statistics.median(tv[-PRE_MED_DAYS - 1:-1]) or 1
+            if (prev_c > 0 and c_ >= prev_c * 1.295 and tv[-1] > max(run_max, max(tv[:-1])) and tv[-1] >= X_MIN * med_
+                    and tv[-1] >= MIN_VALUE):
+                cap0, sh0 = caps.get(code, (0.0, 0.0))
+                limit_up.append({"code": code, "name": names.get(code, code), "close_price": round(c_),
+                                 "change_pct": round((c_ / prev_c - 1) * 100, 1), "value": round(tv[-1]), "x": round(tv[-1] / med_),
+                                 "locked": h_ == l_,   # 점상한가: 하루 종일 상한가에 묶임 → 사기 매우 어려움
+                                 "market_cap": cap0 or sh0 * c_ or marcap.get(code) or 0})
         vol = [float(p[7] or 0) for p in pl]
         first = last_big = None
         big_max = 0.0
@@ -137,5 +150,6 @@ def scan(db: Session) -> dict:
     order = {"숨고르기": 0, "신규": 1, "진행 중": 2, "설거지": 3, "무너짐": 4}
     items.sort(key=lambda x: x["market_cap"] or 0, reverse=True)   # 단계 안에서는 시총 큰 종목부터
     items.sort(key=lambda x: (order[x["stage"]], not x["entry_signal"]))
+    limit_up.sort(key=lambda x: -(x["market_cap"] or 0))
     return {"trading_date": latest.isoformat(), "window_start": win_start.isoformat(), "market_state": regime.get("state"),
-            "items": items}
+            "limit_up": limit_up, "items": items}
