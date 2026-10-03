@@ -154,7 +154,7 @@ def snapshot(pit: pd.DataFrame, today: date | None = None) -> dict:
     up = latest[(op > 0) & (base > 0) & (rbase > 0) & (latest.op_yoy >= 30) & (latest.rev_yoy >= 10)]
     codes = up.stock_code.tolist()
     if not codes:
-        return {"status": "ready", "rows": [], "generated_at": datetime.now(timezone.utc).isoformat()}
+        return {"status": "ready", "rows": [], "up_codes": [], "generated_at": datetime.now(timezone.utc).isoformat()}
     with engine.connect() as con:
         px = pd.read_sql(text("select stock_code, trading_date, close_price, trading_value from spot_daily_prices "
                               "where trading_date >= :d and stock_code = any(:c)"), con,
@@ -201,6 +201,7 @@ def snapshot(pit: pd.DataFrame, today: date | None = None) -> dict:
     clean = lambda v: None if isinstance(v, float) and not np.isfinite(v) else (round(v, 2) if isinstance(v, float) else v)  # noqa: E731
     return {"status": "ready", "generated_at": datetime.now(timezone.utc).isoformat(),
             "as_of": dates[-1].date().isoformat(), "regime": regime, "recent_days": RECENT_DAYS,
+            "up_codes": sorted(set(codes)),   # 거래대금·주가 필터 전 실적 개선 전체 (대량거래 관심종목의 실적 표시용)
             "rows": [{k: clean(v) for k, v in row.items()} for row in rows]}
 
 

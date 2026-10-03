@@ -4,6 +4,10 @@
 2023-09~2026-09 전종목 확인(1,113건): 신기록일 종가에 바로 사면 20일 뒤 중간값 -7.1%(플러스 34%)라 추격 매수 신호가 아니다.
 대신 20일 안에 95%가 신기록일 종가보다 높은 가격을 찍어(중간값 +15%) 크게 움직이는 종목을 고르는 '관심 등록' 용도다.
 진입은 그 뒤 숨고르기(거래가 마르면서 상승분을 지킴) 후 돌려세울 때 본다. 한양디지텍 9/17, 금호타이어 6~8월이 예.
+
+진입 신호 = 숨고르기 + 오늘 돌려세우는 봉(+3% 양봉, 거래대금 20일 평균 2배) + 시장 상승·횡보. 3년 확인(종목마다 처음 맞은 날 종가):
+  숨고르기 첫날 644건 40일 시장 대비 -5.1%p / 돌려세우는 봉 하락장 116건 -5.8%p / 돌려세우는 봉 + 상승·횡보장 250건 +1.9%p
+  / 여기에 실적 개선(영업이익 +30%, 매출 +10%, 120일 안 공시) 31건 +7.8%p (사례 적음, 실적 데이터 2024-04부터).
 """
 from __future__ import annotations
 
@@ -53,6 +57,13 @@ def scan(db: Session) -> dict:
         "select stock_code, trading_date, open_price, high_price, low_price, close_price, trading_value, volume "
         "from spot_daily_prices where trading_date >= :s order by stock_code, trading_date"), {"s": load_start}):
         by[r[0]].append(r)
+    # 진입 신호용: 오늘 시장 국면, 실적 개선 종목 (실적 개선 탭 스냅샷)
+    from backend.screener.market_regime import current_regime  # noqa: PLC0415
+    from backend.services.earnings_screen import read_snapshot  # noqa: PLC0415
+    regime = current_regime(db) or {}
+    market_ok = regime.get("state") in ("상승", "횡보")
+    snap = read_snapshot()
+    earn_up = set(snap.get("up_codes") or [r["code"] for r in snap.get("rows", [])])
     names, caps = {}, {}
     for code, name, cap, shares in db.execute(text("select code, name, market_cap, shares_outstanding from stocks")):
         names[code] = name
@@ -97,6 +108,9 @@ def scan(db: Session) -> dict:
                 rng = h_ - l_
                 if (vol[k] > vol[i] and c_ < o_ and rng > 0 and (h_ - max(o_, c_)) / rng >= DIST_UPPER):
                     dist = True
+        # 오늘 돌려세우는 봉: +3% 이상 양봉 + 거래대금이 직전 20일 평균의 2배 이상
+        avg20 = sum(tv[-21:-1]) / 20 if len(tv) > 21 else 0
+        turn = (float(pl[-1][5]) > float(pl[-1][2]) and close >= float(pl[-2][5]) * 1.03 and avg20 > 0 and tv[-1] >= 2 * avg20)
         if dist:
             stage = "설거지"
         elif broke:
@@ -117,8 +131,11 @@ def scan(db: Session) -> dict:
             "off_peak_pct": round((close / peak - 1) * 100, 1), "kept_pct": round(kept * 100),
             "dry_pct": round(dry * 100), "rest_days": rest, "days_since": len(pl) - 1 - i,
             "stage": stage, "stop_price": round(base), "stop_gap_pct": round((base / close - 1) * 100, 1),
+            "turn_today": turn, "earn_up": code in earn_up,
+            "entry_signal": stage == "숨고르기" and turn and market_ok,
         })
     order = {"숨고르기": 0, "신규": 1, "진행 중": 2, "설거지": 3, "무너짐": 4}
     items.sort(key=lambda x: x["market_cap"] or 0, reverse=True)   # 단계 안에서는 시총 큰 종목부터
-    items.sort(key=lambda x: order[x["stage"]])
-    return {"trading_date": latest.isoformat(), "window_start": win_start.isoformat(), "items": items}
+    items.sort(key=lambda x: (order[x["stage"]], not x["entry_signal"]))
+    return {"trading_date": latest.isoformat(), "window_start": win_start.isoformat(), "market_state": regime.get("state"),
+            "items": items}
