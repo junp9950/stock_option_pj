@@ -1448,6 +1448,24 @@ def get_jongbe_check(q: str = "", db: Session = Depends(get_db)):
     return check(db, queries)
 
 
+class SectorOverrideIn(BaseModel):
+    stock: str = Field(..., max_length=100)     # 종목명 또는 코드
+    sector: str = Field("", max_length=50)      # 빈 값이면 지정 해제
+
+
+@router.post("/sectors/override")
+def post_sector_override(body: SectorOverrideIn, db: Session = Depends(get_db)):
+    """종목을 섹터에 직접 지정 (네이버 테마 분류에 더해진다)."""
+    from backend.screener.rotation import FAMILIES, set_override  # noqa: PLC0415
+    q = body.stock.strip()
+    code = db.scalar(select(Stock.code).where((Stock.code == q) | (Stock.name == q)))
+    if not code:
+        raise HTTPException(status_code=404, detail="종목을 찾을 수 없습니다.")
+    if body.sector and body.sector not in FAMILIES:
+        raise HTTPException(status_code=400, detail="없는 섹터입니다.")
+    return {"code": code, "overrides": set_override(db, code, body.sector or None)}
+
+
 @router.get("/screener/jongbe/performance")
 def get_jongbe_performance(db: Session = Depends(get_db)):
     """저장된 종베 후보의 다음 거래일 실제 결과."""

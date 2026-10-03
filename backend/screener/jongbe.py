@@ -15,7 +15,7 @@ from sqlalchemy import text
 from sqlalchemy.orm import Session
 
 from backend.screener.market_regime import current_regime
-from backend.screener.rotation import family_members
+from backend.screener.rotation import FAMILIES, family_members, get_overrides
 
 HOT_TOP = 3          # 20일 상승 순위 상위 몇 섹터를 뜨겁다고 볼지
 MONEY_X = 1.2        # 그날 섹터 거래대금 / 직전 20일 평균
@@ -128,6 +128,11 @@ def check(db: Session, queries: list[str]) -> dict:
     hot = set(order[:HOT_TOP])
     regime = current_regime(db) or {}
     by_name = {n: c for c, n in db.execute(text("select code, name from stocks"))}
+    overrides = get_overrides(db)
+    # 같이 움직인 섹터: 최근 60거래일, 시장 전체(전 종목 중간값) 움직임을 뺀 일별 등락의 상관
+    CH = P["ch"].iloc[-60:].where(P["ch"].iloc[-60:].abs() < 30)
+    mkt = CH.median(axis=1)
+    fam_ret = {f: CH[[x for x in m if x in CH.columns]].median(axis=1) - mkt for f, m in members.items() if len(m) >= 5}
     fam_of: dict[str, list[str]] = {}
     for f, m in members.items():
         for c in m:
@@ -148,7 +153,9 @@ def check(db: Session, queries: list[str]) -> dict:
         out.append({
             "query": q, "found": True, "code": code, "name": next((n for n, c in by_name.items() if c == code), code),
             "close": round(v["close"]), "change_pct": v["change_pct"], "tv_x": v["tv_x"], "upper_pct": v["upper_pct"], "gap20_pct": v["gap20_pct"],
-            "families": fs[:4], "best_rank": best,
+            "families": fs[:4], "best_rank": best, "override": overrides.get(code, ""),
+            "comove": [{"family": f, "corr": round(float(v), 2)} for f, v in sorted(
+                ((f, (CH[code] - mkt).corr(r)) for f, r in fam_ret.items()), key=lambda x: -(x[1] if x[1] == x[1] else -9))[:2]],
             "checks": {
                 "시장 상승·횡보": regime.get("state") in ("상승", "횡보"),
                 "뜨거운 섹터": bool(hot_fs),
@@ -159,7 +166,7 @@ def check(db: Session, queries: list[str]) -> dict:
                 "이격 +30% 미만": v["gap20_pct"] is None or v["gap20_pct"] < 30,
             },
         })
-    return {"trading_date": P["c"].index[-1].isoformat(), "items": out}
+    return {"trading_date": P["c"].index[-1].isoformat(), "families": list(FAMILIES), "items": out}
 
 
 # ── 실전 기록: 매일 후보를 저장하고 다음 날 결과를 붙인다 ──────────────────────

@@ -13,6 +13,7 @@
 """
 from __future__ import annotations
 
+import json
 import re
 from datetime import timedelta
 
@@ -40,6 +41,35 @@ FAMILIES: dict[str, str] = {
 }
 
 
+OVERRIDE_KEY = "sector_overrides"   # settings 표: {"종목코드": "섹터"} — 네이버 테마가 시장이 보는 재료를 못 따라갈 때 직접 지정
+
+
+def get_overrides(db: Session) -> dict[str, str]:
+    raw = db.execute(text("select value from settings where key = :k"), {"k": OVERRIDE_KEY}).scalar()
+    try:
+        return {k: v for k, v in json.loads(raw or "{}").items() if v in FAMILIES}
+    except ValueError:
+        return {}
+
+
+def set_override(db: Session, code: str, family: str | None) -> dict[str, str]:
+    """family가 비면 지정을 지운다. 지정은 원래 테마 분류에 '더하는' 것 (원래 섹터에서 빼지 않음)."""
+    from backend.db.models import JobLog, Setting  # noqa: PLC0415
+    ov = get_overrides(db)
+    if family:
+        ov[code] = family
+    else:
+        ov.pop(code, None)
+    row = db.query(Setting).filter(Setting.key == OVERRIDE_KEY).one_or_none()
+    if row is None:
+        db.add(Setting(key=OVERRIDE_KEY, value=json.dumps(ov, ensure_ascii=False)))
+    else:
+        row.value = json.dumps(ov, ensure_ascii=False)
+    db.add(JobLog(stage="sector_override", status="completed", message=f"{code} → {family or '지정 해제'}"))  # 화면 캐시 갱신용
+    db.commit()
+    return ov
+
+
 def family_members(db: Session) -> dict[str, list[str]]:
     out: dict[str, set[str]] = {f: set() for f in FAMILIES}
     for code, theme in db.execute(text(
@@ -48,6 +78,8 @@ def family_members(db: Session) -> dict[str, list[str]]:
         for f, pat in FAMILIES.items():
             if re.search(pat, theme or ""):
                 out[f].add(code)
+    for code, f in get_overrides(db).items():
+        out[f].add(code)
     return {f: sorted(m) for f, m in out.items()}
 
 

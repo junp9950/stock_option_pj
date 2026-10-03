@@ -540,7 +540,16 @@ async function jbCheck(){
     return `<div style="padding:6px 0;border-top:1px solid #21262d"><b style="color:#e6edf3">${x.name}</b> <span class="ts">${x.change_pct>=0?'+':''}${x.change_pct}% · 거래 ${x.tv_x}배 · 윗꼬리 ${x.upper_pct}%</span>${gapTag(x.gap20_pct)}
       <b style="margin-left:6px;color:${ok===tot?'#3fb950':ok>=tot-2?'#d29922':'#f85149'}">${ok}/${tot}</b><br>
       <span style="font-size:12px">${Object.entries(x.checks).map(([k,v])=>`${v?'✅':'❌'} ${k}`).join(' &nbsp; ')}</span>
-      <span class="ts"> · 섹터 ${x.families.join(', ')||'없음'}${x.best_rank?` (최고 ${x.best_rank}위)`:''}</span></div>`;}).join('');
+      <span class="ts"> · 섹터 ${x.families.join(', ')||'없음'}${x.best_rank?` (최고 ${x.best_rank}위)`:''}</span>
+      <br><span class="ts">같이 움직인 섹터(최근 60일): ${(x.comove||[]).map(c=>`${c.family} ${c.corr}`).join(' · ')}</span>
+      <select class="jb-ov" data-code="${x.code}" style="margin-left:6px;font-size:11.5px;padding:1px 4px" title="네이버 테마 분류에 더해 이 섹터에도 넣습니다">
+        <option value="">섹터 직접 지정 안 함</option>${(d.families||[]).map(f=>`<option value="${f}"${x.override===f?' selected':''}>${f}에도 넣기</option>`).join('')}
+      </select></div>`;}).join('');
+  el.querySelectorAll('.jb-ov').forEach(sel=>sel.onchange=async()=>{
+    const r=await fetch(`${API}/sectors/override`,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({stock:sel.dataset.code,sector:sel.value})});
+    if(!r.ok){alert('저장 실패');return;}
+    await loadJongbe(); jbCheck();
+  });
 }
 async function loadJongbePerf(){
   const el=document.getElementById('jb-perf');
