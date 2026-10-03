@@ -341,6 +341,22 @@ class DiscussionComment(Base, TimestampMixin):
     image_data: Mapped[str | None] = mapped_column(Text, nullable=True)   # 사진 한 장 또는 JSON 배열
 
 
+class JongbePick(Base, TimestampMixin):
+    """종베 후보 실전 기록: 장 마감 후 후보를 저장하고 다음 거래일 결과를 붙여 본다."""
+
+    __tablename__ = "jongbe_picks"
+    __table_args__ = (UniqueConstraint("trading_date", "code", name="uq_jongbe_picks"),)
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    trading_date: Mapped[date] = mapped_column(Date, index=True)
+    code: Mapped[str] = mapped_column(String(20))
+    name: Mapped[str] = mapped_column(String(100), default="")
+    grade: Mapped[str] = mapped_column(String(10), default="")     # A / B / 상한가
+    close_price: Mapped[float] = mapped_column(Float, default=0.0)
+    change_pct: Mapped[float] = mapped_column(Float, default=0.0)
+    market_ok: Mapped[bool] = mapped_column(Boolean, default=True)
+
+
 class Suggestion(Base, TimestampMixin):
     """건의사항 탭: 사용자가 남긴 기능 요청·불편 사항과 처리 상태."""
 

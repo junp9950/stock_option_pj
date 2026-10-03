@@ -157,6 +157,7 @@ select{background:#21262d;border:1px solid #30363d;color:#c9d1d9;padding:6px 10p
 
 <div class="tabs">
   <div class="tab active" onclick="switchTab('candidates')">차트 후보</div>
+  <div class="tab" onclick="switchTab('jongbe')">종베 후보</div>
   <div class="tab" onclick="switchTab('screener')">거래대금 순위</div>
   <div class="tab" onclick="switchTab('sector')">섹터 수급</div>
   <div class="tab" onclick="switchTab('heatmap')">시장 히트맵</div>
@@ -201,6 +202,35 @@ select{background:#21262d;border:1px solid #30363d;color:#c9d1d9;padding:6px 10p
     <tbody id="tv-body"><tr><td colspan="8" style="color:#8b949e;text-align:center;padding:20px">로딩 중…</td></tr></tbody>
   </table>
   <div class="ts" style="padding:8px 16px">거래대금 = 거래량 × 종가 근사치 (정규장 기준, 시간외 제외). 종목을 누르면 차트가 열립니다.</div>
+</div>
+
+<!-- 종베 후보 탭 -->
+<div id="panel-jongbe" class="panel content">
+  <div id="jb-market" style="border-radius:10px;padding:12px 16px;margin-bottom:12px;border:1px solid #30363d">로딩 중…</div>
+  <p class="note" style="color:#8b949e;font-size:12.5px;margin:0 0 12px">
+    순서: <b style="color:#c9d1d9">① 시장 상승·횡보 → ② 뜨거운 이야기 줄기(20일 상승 상위 3) → ③ 그날 줄기에 돈 몰림(거래대금 1.2배) → ④ +3% 양봉·거래 2배·윗꼬리 짧음</b>.
+    3년 확인(상승·횡보장, 다음 날 "갭상승이면 시가·아니면 종가" 매도): 기본 +0.42%, 뜨거운 줄기 +0.74%, <b style="color:#3fb950">A등급(줄기 돈 몰림까지) +0.94%·수익 71%</b>, 줄기 밖 +0.28%, 하락장 +0.12%.
+    <b>파는 법:</b> 다음 날 오전 정리가 기본(시가 매도는 -5% 넘는 손실 2%, 종가까지 들고 가면 18%), 갭이 크면 덜어내기. 숫자는 수수료·세금 빼기 전입니다.
+  </p>
+  <div style="font-size:12px;color:#8b949e;margin-bottom:6px">🔥 뜨거운 줄기 <span class="ts" id="jb-date"></span></div>
+  <div id="jb-fams" style="display:flex;flex-wrap:wrap;gap:8px;margin-bottom:16px"></div>
+  <table class="pb-table">
+    <thead><tr><th>종목</th><th>등급</th><th>그날 봉</th><th>줄기</th><th>종가</th></tr></thead>
+    <tbody id="jb-body"><tr><td colspan="5" style="color:#8b949e;text-align:center;padding:20px">로딩 중…</td></tr></tbody>
+  </table>
+  <div id="jb-limit" class="ts" style="margin:10px 0 20px"></div>
+
+  <div style="border:1px solid #30363d;border-radius:10px;padding:12px 16px;margin-bottom:20px">
+    <b style="color:#e6edf3">✅ 보유·관심 종목 체크</b> <span class="ts">종목명이나 코드를 쉼표로 (브라우저에 기억됩니다)</span>
+    <div style="display:flex;gap:8px;margin-top:8px;flex-wrap:wrap">
+      <input id="jb-q" placeholder="예: 디케이티, 원익, 에스피지" style="flex:1;min-width:220px;background:#0d1117;border:1px solid #30363d;color:#c9d1d9;padding:6px 10px;border-radius:6px">
+      <button class="btn btn-sm" onclick="jbCheck()">확인</button>
+    </div>
+    <div id="jb-check" style="margin-top:10px"></div>
+  </div>
+
+  <div style="font-size:12px;color:#8b949e;margin-bottom:6px">📒 실전 기록 (매일 18:20 후보 저장 → 다음 거래일 결과)</div>
+  <div id="jb-perf" class="ts">로딩 중…</div>
 </div>
 
 <!-- 섹터 수급 탭 -->
@@ -429,13 +459,14 @@ const tagHtml = tags => (tags||[]).map(t=>{
 
 function switchTab(id) {
   // 실적 개선 탭은 2026-10-04 숨김 (데이터는 📈 실적 표시로 계속 쓴다, /earnings 주소는 그대로)
-  const tabs = ['candidates','screener','sector','heatmap','suggest','discussion'];
+  const tabs = ['candidates','jongbe','screener','sector','heatmap','suggest','discussion'];
   if(!tabs.includes(id))return;
   try{ history.replaceState(null,'',id==='candidates'?location.pathname:'#'+id); }catch(e){}   // 새로고침해도 이 탭에 남게
   document.querySelectorAll('.tab').forEach((t,i)=>t.classList.toggle('active',tabs[i]===id));
   document.querySelectorAll('.panel').forEach(p=>p.classList.remove('active'));
   document.getElementById('panel-'+id).classList.add('active');
   if(id==='screener')loadTopValue();
+  if(id==='jongbe')loadJongbe();
   if(id==='sector'){loadSector();loadLiveThemes();loadRotation();}
   if(id==='heatmap')loadHeatmap();
   if(id==='candidates')loadCandidates();
@@ -444,6 +475,63 @@ function switchTab(id) {
 }
 
 // ── 오늘 강한 테마 (실시간) ──────────────────────────────────
+// ── 종베 후보 ─────────────────────────────────────────────────
+async function loadJongbe(){
+  let d=null;
+  try{ d=await fetch(`${API}/screener/jongbe`).then(r=>r.ok?r.json():null); }catch(e){}
+  const mk=document.getElementById('jb-market');
+  if(!d){ mk.textContent='불러오지 못했습니다'; return; }
+  const st=(d.market&&d.market.state)||'-';
+  mk.style.background=d.market_ok?'rgba(63,185,80,.10)':'rgba(248,81,73,.12)';
+  mk.style.borderColor=d.market_ok?'#3fb950':'#f85149';
+  mk.innerHTML=d.market_ok?`<b style="color:#3fb950">시장 ${st}</b> <span style="color:#e6edf3;margin-left:6px">종베 가능</span>`
+    :`<b style="color:#f85149">시장 ${st} · 종베 쉬기</b> <span class="ts">3년 확인: 하락장 종베는 거의 0(+0.12%)</span>`;
+  document.getElementById('jb-date').textContent=`· ${d.trading_date} 장 마감 기준`;
+  const stc={'과열':'#f85149','주의':'#d29922'};
+  document.getElementById('jb-fams').innerHTML=d.families.map(f=>{
+    const isHot=d.hot.includes(f.family);
+    return `<span style="padding:6px 10px;border:1px solid ${isHot?'#e3b341':'#30363d'};border-radius:8px;font-size:12.5px">
+      <b style="color:${isHot?'#e6edf3':'#8b949e'}">${f.rank}. ${f.family}</b> <span class="ts">20일 ${f.ret20_pct>=0?'+':''}${f.ret20_pct}%</span>
+      · <span style="color:${f.money?'#3fb950':'#8b949e'}">거래 ${f.tv_x.toFixed(2)}배${f.money?' 돈 몰림':''}</span>
+      ${f.status?` · <b style="color:${stc[f.status]}">${f.status}</b>`:''}</span>`;}).join('');
+  const body=document.getElementById('jb-body');
+  if(!d.items.length){ body.innerHTML='<tr><td colspan="5" style="color:#8b949e;text-align:center;padding:20px">오늘은 조건에 맞는 종목이 없습니다</td></tr>'; }
+  else body.innerHTML=d.items.map(x=>`<tr style="cursor:pointer" onclick="openChartModal('${x.code}','${x.name}','')">
+    <td><b>${x.name}</b> <span style="color:#8b949e;font-size:11px">${x.code}</span>${x.earn_up?' <span style="color:#3fb950;font-size:11px;border:1px solid #238636;border-radius:8px;padding:0 5px">📈 실적</span>':''}${x.leader?' <span style="color:#e3b341;font-size:11px">👑 대장</span>':''}${x.market_cap?`<br><span class="ts">시총 ${cdWon(x.market_cap)}</span>`:''}</td>
+    <td data-label="등급"><b style="color:${x.grade==='A'?'#3fb950':'#c9d1d9'}">${x.grade}</b><br><span class="ts">${x.grade==='A'?'줄기 돈 몰림':'줄기 돈 몰림 아님'}</span></td>
+    <td data-label="그날 봉"><span style="color:#f85149">+${x.change_pct}%</span> · 거래 ${x.tv_x}배<br><span class="ts" style="color:${x.upper_pct<=30?'#3fb950':'#8b949e'}">윗꼬리 ${x.upper_pct}%</span> · <span class="ts">${cdWon(x.value)}</span></td>
+    <td data-label="줄기" style="font-size:12px">${x.families.join(', ')}</td>
+    <td data-label="종가" style="text-align:right">${x.close.toLocaleString()}원${gapTag(x.gap20_pct)}</td>
+  </tr>`).join('');
+  document.getElementById('jb-limit').innerHTML=d.limit_up.length?`상한가 (체결 어려움 주의): ${d.limit_up.map(x=>`<b style="color:#e6edf3;cursor:pointer" onclick="openChartModal('${x.code}','${x.name}','')">${x.name}</b>`).join(' · ')}`:'';
+  try{ const saved=localStorage.getItem('jb-q'); if(saved&&!document.getElementById('jb-q').value){document.getElementById('jb-q').value=saved; jbCheck();} }catch(e){}
+  loadJongbePerf();
+}
+async function jbCheck(){
+  const q=document.getElementById('jb-q').value.trim();
+  try{ localStorage.setItem('jb-q',q); }catch(e){}
+  const el=document.getElementById('jb-check');
+  if(!q){ el.innerHTML=''; return; }
+  const d=await fetch(`${API}/screener/jongbe/check?q=${encodeURIComponent(q)}`).then(r=>r.ok?r.json():null).catch(()=>null);
+  if(!d){ el.textContent='확인 실패'; return; }
+  el.innerHTML=d.items.map(x=>{
+    if(!x.found) return `<div class="ts">${x.query}: 못 찾음</div>`;
+    const ok=Object.values(x.checks).filter(Boolean).length, tot=Object.keys(x.checks).length;
+    return `<div style="padding:6px 0;border-top:1px solid #21262d"><b style="color:#e6edf3">${x.name}</b> <span class="ts">${x.change_pct>=0?'+':''}${x.change_pct}% · 거래 ${x.tv_x}배 · 윗꼬리 ${x.upper_pct}%</span>${gapTag(x.gap20_pct)}
+      <b style="margin-left:6px;color:${ok===tot?'#3fb950':ok>=tot-2?'#d29922':'#f85149'}">${ok}/${tot}</b><br>
+      <span style="font-size:12px">${Object.entries(x.checks).map(([k,v])=>`${v?'✅':'❌'} ${k}`).join(' &nbsp; ')}</span>
+      <span class="ts"> · 줄기 ${x.families.join(', ')||'없음'}${x.best_rank?` (최고 ${x.best_rank}위)`:''}</span></div>`;}).join('');
+}
+async function loadJongbePerf(){
+  const el=document.getElementById('jb-perf');
+  const d=await fetch(`${API}/screener/jongbe/performance`).then(r=>r.ok?r.json():null).catch(()=>null);
+  if(!d){ el.textContent='불러오지 못했습니다'; return; }
+  const gs=Object.entries(d.summary);
+  if(!gs.length){ el.textContent='아직 기록이 없습니다. 장 마감 후 18:20부터 매일 쌓이고, 다음 거래일 시세가 들어오면 결과가 보입니다.'; return; }
+  el.innerHTML=gs.map(([g,s])=>`<b style="color:#e6edf3">${g}</b> ${s.count}건 · 수익 ${s.win_pct}% · 평균 ${s.avg_rule_pct>=0?'+':''}${s.avg_rule_pct}% (갭상승이면 시가·아니면 종가) · 다음 날 고가 평균 +${s.avg_high_pct}%`).join('<br>')
+    +'<div style="margin-top:6px">'+d.items.slice(0,40).map(x=>`<span style="display:inline-block;margin:0 10px 4px 0">${x.date.slice(5)} ${x.name}(${x.grade}) <span style="color:${x.rule_pct>=0?'#f85149':'#58a6ff'}">${x.rule_pct>=0?'+':''}${x.rule_pct}%</span> <span class="ts">고가 +${x.high_pct}%</span></span>`).join('')+'</div>';
+}
+
 async function loadRotation(){
   const body=document.getElementById('rot-body');
   try{

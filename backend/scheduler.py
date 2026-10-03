@@ -190,6 +190,19 @@ def start_scheduler() -> BackgroundScheduler:
 
     # AI 10일 전략(quant_strategy) 갱신은 껐다: 화면 탭은 5b0e9aa에서 제거됐고, 입력인 investor_flow_toss 표는
     # 2026-10-03 DB 용량 정리로 삭제(백업: 서버 /home/junp/backups/investor_flow_toss_2023-09_2026-09.parquet).
+    def _jongbe_record_job() -> None:
+        # 18:20: 18:00 최종 재수집 뒤 그날 종베 후보를 저장 (다음 날 결과를 붙여 실전 성적을 쌓는다)
+        from backend.screener.jongbe import record  # noqa: PLC0415
+        db = SessionLocal()
+        try:
+            logger.info("종베 후보 기록: %d종목", record(db))
+        except Exception as exc:  # noqa: BLE001
+            logger.error("종베 후보 기록 실패: %s", exc)
+        finally:
+            db.close()
+    scheduler.add_job(_jongbe_record_job, 'cron', day_of_week='mon-fri', hour=18, minute=20,
+                      id='jongbe_record', replace_existing=True, max_instances=1, coalesce=True)
+
     def _price_fix_job() -> None:
         # 07:30: 전날 15:41·18:00 수집 시세는 NXT 시간외 진행 중 값이라 확정 종가로 다시 덮어쓴다 (최근 5거래일)
         from datetime import date as _date  # noqa: PLC0415

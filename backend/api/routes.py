@@ -1432,6 +1432,29 @@ def get_top_value(market: str = "KOSPI", limit: int = 100, sort: str = "value", 
     return {"trading_date": latest.isoformat(), "market": market, "sort": sort, "items": items}
 
 
+@router.get("/screener/jongbe")
+def get_jongbe(db: Session = Depends(get_db)):
+    """오늘의 종베 후보: 뜨거운 줄기 + 줄기 돈 몰림 + 거래 실린 양봉 (A/B 등급, 상한가 따로)."""
+    from backend.screener.jongbe import scan  # noqa: PLC0415
+    from backend.services.result_cache import cached  # noqa: PLC0415
+    return cached("jongbe", (), db, lambda: scan(db))
+
+
+@router.get("/screener/jongbe/check")
+def get_jongbe_check(q: str = "", db: Session = Depends(get_db)):
+    """보유·관심 종목(이름 또는 코드, 쉼표 구분)이 종베 단계를 통과하는지."""
+    from backend.screener.jongbe import check  # noqa: PLC0415
+    queries = [x for x in q.replace(chr(10), ",").split(",") if x.strip()][:30]
+    return check(db, queries)
+
+
+@router.get("/screener/jongbe/performance")
+def get_jongbe_performance(db: Session = Depends(get_db)):
+    """저장된 종베 후보의 다음 거래일 실제 결과."""
+    from backend.screener.jongbe import performance  # noqa: PLC0415
+    return performance(db)
+
+
 @router.get("/screener/volume-records")
 def get_volume_records(db: Session = Depends(get_db)):
     """대량거래 관심종목: 최근 약 4개월 안 몇 년 만의 최대 거래대금이 터진 종목과 지금 단계 (신규·숨고르기·진행 중·무너짐)."""
@@ -1456,6 +1479,7 @@ def warm_caches(db: Session) -> None:
     get_chart_candidates(min_cap=0, db=db)
     get_volume_records(db=db)
     get_sector_rotation(db=db)
+    get_jongbe(db=db)
 
 
 @router.get("/screener/picks/performance")
