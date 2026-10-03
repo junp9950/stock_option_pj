@@ -160,12 +160,10 @@ select{background:#21262d;border:1px solid #30363d;color:#c9d1d9;padding:6px 10p
   <div class="tab" onclick="switchTab('screener')">거래대금 순위</div>
   <div class="tab" onclick="switchTab('sector')">섹터 수급</div>
   <div class="tab" onclick="switchTab('heatmap')">시장 히트맵</div>
-  <div class="tab" onclick="switchTab('earnings')">실적 개선</div>
   <div class="tab" onclick="switchTab('suggest')">건의사항</div>
   <div class="tab" onclick="switchTab('discussion')">종목토론</div>
 </div>
 
-<div id="panel-earnings" class="panel"><iframe title="실적 개선" id="earnings-frame" style="width:100%;height:2200px;border:0" loading="lazy"></iframe></div>
 <div id="panel-suggest" class="panel"><iframe title="건의사항" id="suggest-frame" style="width:100%;height:1600px;border:0" loading="lazy"></iframe></div>
 <div id="panel-discussion" class="panel"><iframe title="종목토론" id="discussion-frame" style="width:100%;height:2000px;border:0" loading="lazy"></iframe></div>
 
@@ -446,7 +444,8 @@ const tagHtml = tags => (tags||[]).map(t=>{
 }).join('');
 
 function switchTab(id) {
-  const tabs = ['candidates','screener','sector','heatmap','earnings','suggest','discussion'];
+  // 실적 개선 탭은 2026-10-04 숨김 (데이터는 📈 실적 표시로 계속 쓴다, /earnings 주소는 그대로)
+  const tabs = ['candidates','screener','sector','heatmap','suggest','discussion'];
   if(!tabs.includes(id))return;
   try{ history.replaceState(null,'',id==='candidates'?location.pathname:'#'+id); }catch(e){}   // 새로고침해도 이 탭에 남게
   document.querySelectorAll('.tab').forEach((t,i)=>t.classList.toggle('active',tabs[i]===id));
@@ -456,7 +455,6 @@ function switchTab(id) {
   if(id==='sector'){loadSector();loadLiveThemes();loadRotation();}
   if(id==='heatmap')loadHeatmap();
   if(id==='candidates')loadCandidates();
-  if(id==='earnings'&&!document.getElementById('earnings-frame').src)document.getElementById('earnings-frame').src='/earnings';
   if(id==='suggest')document.getElementById('suggest-frame').src='/suggestions';
   if(id==='discussion'&&!document.getElementById('discussion-frame').src)document.getElementById('discussion-frame').src='/discussion';
 }
@@ -784,7 +782,7 @@ function renderCandidates(){
       + (it.sector_name?`<br><span class="ts">${it.sector_name} · 20일 ${it.sector_ret20>=0?'+':''}${it.sector_ret20}%</span>`:'');
     const pats = it.patterns.map(p=>`<span style="display:inline-block;margin:0 4px 3px 0;padding:1px 7px;border-radius:10px;border:1px solid ${tagColor[p.type]};color:${tagColor[p.type]};font-size:11.5px">${p.type}${p.grade?'·'+p.grade:''}</span><br><span class="ts">${p.detail}</span>`).join('<br>');
     return `<tr style="cursor:pointer" onclick="openChartModal('${it.code}','${it.name}','')">
-      <td><b>${it.name}</b> <span style="color:#8b949e;font-size:11px">${it.code}</span>${it.market_cap?`<br><span class="ts">시총 ${cdWon(it.market_cap)}</span>`:''}</td>
+      <td><b>${it.name}</b> <span style="color:#8b949e;font-size:11px">${it.code}</span>${it.earn_up?' <span style="color:#3fb950;font-size:11px;border:1px solid #238636;border-radius:8px;padding:0 5px" title="영업이익 +30%·매출 +10%, 120일 안 공시">📈 실적</span>':''}${it.market_cap?`<br><span class="ts">시총 ${cdWon(it.market_cap)}</span>`:''}</td>
       <td data-label="업종 · 테마">${indHtml}</td>
       <td data-label="모양" style="font-size:12px">${pats}</td>
       <td data-label="현재가" style="text-align:right">${it.close_price.toLocaleString()}원<br><span style="color:${it.change_pct>=0?'#f85149':'#3b82f6'};font-size:11px">${it.change_pct>=0?'+':''}${it.change_pct.toFixed(2)}%</span><br><span class="ts">거래대금 ${cdWon(it.trading_value||0)}${it.turnover_pct!=null?' · 회전율 '+it.turnover_pct.toFixed(1)+'%':''}</span></td>

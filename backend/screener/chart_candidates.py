@@ -298,7 +298,10 @@ def scan(db: Session) -> dict:
     from backend.services.marcap_caps import caps as marcap_caps  # noqa: PLC0415
     marcap = marcap_caps()   # stocks에 시총·주식 수가 없는 종목(유니버스 밖)을 채운다
     from backend.services.industry_map import industries  # noqa: PLC0415
+    from backend.services.earnings_screen import read_snapshot  # noqa: PLC0415
     industry = industries()
+    snap = read_snapshot()
+    earn_up = set(snap.get("up_codes") or [r["code"] for r in snap.get("rows", [])])   # 실적 개선(영업이익 +30%·매출 +10%)
     themes: dict[str, list[str]] = defaultdict(list)   # 업종 필터에서 테마 이름으로도 찾을 수 있게
     for code, name in db.execute(select(SectorStock.stock_code, Sector.sector_name)
                                  .join(Sector, Sector.id == SectorStock.sector_id).where(Sector.is_active)):
@@ -323,6 +326,7 @@ def scan(db: Session) -> dict:
             "trading_value": round(tv_today),
             "turnover_pct": round(tv_today / cap * 100, 2) if cap else None,
             "industry": industry.get(code),
+            "earn_up": code in earn_up,
             "themes": themes.get(code, []),
             "close_price": round(close), "change_pct": round(float(pl[-1].change_pct or 0), 2),
             "patterns": patterns,
