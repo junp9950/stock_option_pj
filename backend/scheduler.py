@@ -110,11 +110,24 @@ def start_scheduler() -> BackgroundScheduler:
         end_date = date.today() - timedelta(days=1)  # 어제까지 (오늘은 15:41에 따로 수집)
         start_date = end_date - timedelta(days=30)
 
+        # 이미 가격·수급이 들어 있는 날은 건너뛴다. 예전엔 30일 전부를 매일 밤 다시 수집해 1시간씩, KIS 호출 수천 번을 썼다
+        # (확정 가격 보정은 07:30 _price_fix_job이 한다).
+        from sqlalchemy import text as _text  # noqa: PLC0415
+        chk = SessionLocal()
+        try:
+            have = {d for (d,) in chk.execute(_text(
+                "select p.trading_date from spot_daily_prices p where p.trading_date between :s and :e "
+                "group by p.trading_date having count(*) >= 200 and exists (select 1 from spot_investor_flows f "
+                "where f.trading_date = p.trading_date and (f.foreign_net_buy <> 0 or f.institution_net_buy <> 0))"),
+                {"s": start_date, "e": end_date})}
+        finally:
+            chk.close()
+
         filled = 0
         errors = 0
         cur = start_date
         while cur <= end_date:
-            if not is_trading_day(cur):
+            if not is_trading_day(cur) or cur in have:
                 cur += timedelta(days=1)
                 continue
             fresh_db = SessionLocal()
