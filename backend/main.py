@@ -329,6 +329,28 @@ select{background:#21262d;border:1px solid #30363d;color:#c9d1d9;padding:6px 10p
     </tr></thead>
     <tbody id="cd-body"><tr><td colspan="5" style="color:#8b949e;text-align:center;padding:20px">로딩 중…</td></tr></tbody>
   </table>
+  <div style="margin-top:26px">
+    <div style="display:flex;flex-wrap:wrap;align-items:center;gap:10px;margin-bottom:8px">
+      <b style="font-size:15px;color:#e6edf3">🔥 대량거래 관심종목</b>
+      <select id="vr-stage" onchange="renderVolumeRecords()">
+        <option value="live">숨고르기 · 신규 · 진행 중</option>
+        <option value="숨고르기">숨고르기만</option>
+        <option value="신규">신규만</option>
+        <option value="">무너짐 포함 전체</option>
+      </select>
+      <span class="ts" id="vr-info"></span>
+    </div>
+    <p class="note" style="color:#8b949e;font-size:12.5px;margin:0 0 10px">
+      최근 약 4개월 안에 <b style="color:#c9d1d9">몇 년 만의 최대 거래대금</b>(평소의 10배 이상, 전날 대비 +5% 이상 양봉)이 터진 종목입니다.
+      최근 3년 전종목 확인 결과 <b style="color:#f85149">터진 날 바로 사면 20일 뒤 중간값 -7%</b>였고, 대신 20일 안에 95%가 그날보다 높은 가격을 찍었습니다(중간값 +15%).
+      그래서 <b style="color:#c9d1d9">관심 등록용</b>이고, 진입은 <b style="color:#3fb950">숨고르기</b>(거래가 마르면서 상승분 절반 이상 유지) 뒤 돌려세울 때 보세요.
+      손절선은 신기록 전날 종가입니다.
+    </p>
+    <table class="pb-table">
+      <thead><tr><th>종목</th><th>단계</th><th>신기록일</th><th>그 뒤 최고</th><th>지금</th></tr></thead>
+      <tbody id="vr-body"><tr><td colspan="5" style="color:#8b949e;text-align:center;padding:20px">로딩 중…</td></tr></tbody>
+    </table>
+  </div>
 </div>
 
 <!-- 캔들차트 모달 (토스증권 실시간) -->
@@ -656,6 +678,7 @@ async function loadCandidates(){
     _cdData = await fetch(`${API}/screener/chart-candidates?min_cap=${cap}`).then(r=>r.ok?r.json():null);
     renderMarket(_cdData && _cdData.market);
     renderCandidates();
+    loadVolumeRecords();
   }catch(e){
     console.error(e);
     body.innerHTML = '<tr><td colspan="5" style="color:#f85149;text-align:center;padding:20px">로딩 실패</td></tr>';
@@ -714,6 +737,31 @@ function renderCandidates(){
       <td data-label="손절선" style="color:#f85149">${it.stop_price?it.stop_price.toLocaleString()+'원<br><span style="font-size:11px;color:'+({적정:'#3fb950',보통:'#c9d1d9',얕음:'#8b949e',깊음:'#8b949e'}[it.stop_zone])+'">-'+it.stop_dist_pct+'% · '+it.stop_zone+'</span>':'—'}</td>
     </tr>`;
   }).join('');
+}
+
+// ── 대량거래 관심종목 ──────────────────────────────────────────
+let _vrData = null;
+async function loadVolumeRecords(){
+  try{ _vrData = await fetch(`${API}/screener/volume-records`).then(r=>r.ok?r.json():null); }catch(e){ _vrData = null; }
+  renderVolumeRecords();
+}
+function renderVolumeRecords(){
+  const body = document.getElementById('vr-body');
+  if(!_vrData){ body.innerHTML = '<tr><td colspan="5" style="color:#f85149;text-align:center;padding:20px">로딩 실패</td></tr>'; return; }
+  const sel = document.getElementById('vr-stage').value;
+  const items = _vrData.items.filter(x=> sel==='live' ? x.stage!=='무너짐' : (!sel || x.stage===sel));
+  const cnt = s=>_vrData.items.filter(x=>x.stage===s).length;
+  document.getElementById('vr-info').textContent = `기준일 ${_vrData.trading_date} · 숨고르기 ${cnt('숨고르기')} · 신규 ${cnt('신규')} · 진행 중 ${cnt('진행 중')} · 무너짐 ${cnt('무너짐')}`;
+  if(!items.length){ body.innerHTML = '<tr><td colspan="5" style="color:#8b949e;text-align:center;padding:20px">해당 종목이 없습니다</td></tr>'; return; }
+  const color = {'숨고르기':'#3fb950','신규':'#58a6ff','진행 중':'#d29922','무너짐':'#8b949e'};
+  const sg = n=>(n>=0?'+':'')+n;
+  body.innerHTML = items.map(x=>`<tr style="cursor:pointer" onclick="openChartModal('${x.code}','${x.name}','${x.event_date}')">
+    <td><b>${x.name}</b> <span style="color:#8b949e;font-size:11px">${x.code}</span></td>
+    <td data-label="단계"><b style="color:${color[x.stage]}">${x.stage}</b><br><span class="ts">마지막 대량거래 뒤 ${x.rest_days}일</span></td>
+    <td data-label="신기록일">${x.event_date.slice(5)} <span style="color:#f85149">${sg(x.event_change_pct)}%</span><br><span class="ts">${cdWon(x.event_value)} · 평소 ${x.event_x}배</span></td>
+    <td data-label="그 뒤 최고" style="color:#f85149">${sg(x.rise_pct)}%<br><span class="ts">${x.peak_date.slice(5)}</span></td>
+    <td data-label="지금" style="text-align:right">${x.close_price.toLocaleString()}원 <span style="color:${x.change_pct>=0?'#f85149':'#3b82f6'};font-size:11px">${sg(x.change_pct.toFixed(2))}%</span><br><span class="ts">고점 ${x.off_peak_pct}% · 상승분 ${x.kept_pct}% 유지 · 거래 ${x.dry_pct}%로 마름</span><br><span class="ts" style="color:#f85149">손절 ${x.stop_price.toLocaleString()}원</span></td>
+  </tr>`).join('');
 }
 
 function renderMarket(m){

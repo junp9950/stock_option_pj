@@ -1432,6 +1432,14 @@ def get_top_value(market: str = "KOSPI", limit: int = 100, sort: str = "value", 
     return {"trading_date": latest.isoformat(), "market": market, "sort": sort, "items": items}
 
 
+@router.get("/screener/volume-records")
+def get_volume_records(db: Session = Depends(get_db)):
+    """대량거래 관심종목: 최근 약 4개월 안 몇 년 만의 최대 거래대금이 터진 종목과 지금 단계 (신규·숨고르기·진행 중·무너짐)."""
+    from backend.screener.volume_record import scan  # noqa: PLC0415
+    from backend.services.result_cache import cached  # noqa: PLC0415
+    return cached("volume_records", (), db, lambda: scan(db))
+
+
 @router.get("/screener/chart-candidates")
 def get_chart_candidates(min_cap: float = 0, db: Session = Depends(get_db)):
     """차트 후보 (불플래그·상승삼각형·기준봉 눌림) + 섹터 점수. min_cap은 억원 단위."""
