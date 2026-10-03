@@ -90,7 +90,9 @@ def collect(today: date | None = None) -> int:
                 if j.get("status") == "020":
                     raise RuntimeError("DART 일일 한도 초과")
                 if j.get("status") in ("000", "013"):
-                    out.write_text(json.dumps(j.get("list", []), ensure_ascii=False), encoding="utf-8")
+                    # build_pit이 쓰는 매출·영업이익·순이익 줄만 저장한다 (전부 저장하면 375MB였다)
+                    keep = [x for x in j.get("list", []) if x.get("account_nm") in ACC]
+                    out.write_text(json.dumps(keep, ensure_ascii=False), encoding="utf-8")
                 time.sleep(0.12)
     return calls
 
