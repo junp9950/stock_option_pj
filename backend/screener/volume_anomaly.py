@@ -29,6 +29,10 @@ _MAX_NEXT_DAY_DROP = -4.0  # 폭발 다음날 등락률이 이 이하면 분배�
 _DUMP_PCT = 8.0  # 시장 대비 이 % 이상 급락한 날을 급락일로 집계
 _ROUND_TRIP = 0.90  # 이벤트 사이 종가가 이전 이벤트 종가의 90% 아래로 내려가면 되돌림(왕복)
 _MAX_REBOUND = 6.0  # 이벤트 이후 종가 저점 대비 회복률 상한(%)
+# 블록딜(시간외 대량매매) 제외: 거래량은 평소의 10배 넘게 터졌는데 주가는 +5%도 안 움직인 날.
+# 포스코인터내셔널 2026-09-03(포스코홀딩스 지분 2조 원 블록딜, +4.3%, 거래량 40배)이 기준봉으로 잡혔었다.
+_BLOCK_VOL_MULT = 10.0
+_BLOCK_MAX_CHANGE = 5.0
 
 
 def scan(db: Session, top_n_by_value: int | None = None) -> list[dict]:
@@ -226,6 +230,8 @@ def _find_events(price_list: list, cutoff: date, shares: float, market_mult: dic
         # 시장 전체 거래량 급증일(폭락/반등장)은 배수에서 제외해 종목 고유 급증만 본다
         vol_mult = p.volume / avg_vol / max(market_mult.get(p.trading_date, 1.0), 1.0)
         float_ok = (p.volume / shares >= _MIN_FLOAT_RATIO) if shares > 0 else False
+        if vol_mult >= _BLOCK_VOL_MULT and change < _BLOCK_MAX_CHANGE:
+            continue   # 블록딜로 본다
         if vol_mult >= _MIN_VOL_MULTIPLIER and p.trading_value >= _MIN_TRADING_VALUE:
             if shares == 0 or float_ok or vol_mult >= 5.0:
                 events.append({
