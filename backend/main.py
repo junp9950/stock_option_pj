@@ -231,6 +231,19 @@ select{background:#21262d;border:1px solid #30363d;color:#c9d1d9;padding:6px 10p
   </table>
   <div id="jb-limit" class="ts" style="margin:10px 0 20px"></div>
 
+  <div style="margin:4px 0 20px">
+    <b style="font-size:15px;color:#e6edf3">📈 스윙 후보 (10~20일)</b> <span class="ts" id="jb-swing-info"></span>
+    <p class="note" style="color:#8b949e;font-size:12.5px;margin:6px 0 8px">
+      뜨거운 섹터 안에서 <b style="color:#c9d1d9">60일 고점(박스 상단)에 -2% 이내로 붙었거나 0~+3% 막 넘은</b> 종목입니다.
+      3년 확인(같은 날 전 종목 평균 대비 20일 뒤): 붙음 +2.4%p, 막 넘음 +2.9%p. <b>거래가 2배 넘게 터지며 넘은 경우(📢)는 +0.8%p로 약했고</b>, 이미 +3% 넘게 더 간 종목은 효과가 줄었습니다.
+      종베와 달리 며칠 들고 가는 매매라 박스 상단 아래로 다시 들어오면 손절을 생각하세요.
+    </p>
+    <table class="pb-table">
+      <thead><tr><th>종목</th><th>박스 상단 대비</th><th>오늘</th><th>섹터</th><th>종가</th></tr></thead>
+      <tbody id="jb-swing"><tr><td colspan="5" style="color:#8b949e;text-align:center;padding:16px">로딩 중…</td></tr></tbody>
+    </table>
+  </div>
+
   <div style="border:1px solid #30363d;border-radius:10px;padding:12px 16px;margin-bottom:20px">
     <b style="color:#e6edf3">✅ 보유·관심 종목 체크</b> <span class="ts">종목명이나 코드를 쉼표로 (브라우저에 기억됩니다)</span>
     <div style="display:flex;gap:8px;margin-top:8px;flex-wrap:wrap">
@@ -533,6 +546,15 @@ function renderJongbe(){
     <td data-label="섹터" style="font-size:12px">${x.families.join(', ')}</td>
     <td data-label="종가" style="text-align:right">${x.close.toLocaleString()}원${gapTag(x.gap20_pct)}</td>
   </tr>`).join('');
+  const sw=(d.swing||[]).filter(okCap);
+  document.getElementById('jb-swing-info').textContent=`${sw.length}개 · 붙음 ${sw.filter(x=>x.state==='붙음').length} · 막 넘음 ${sw.filter(x=>x.state==='막 넘음').length}`;
+  document.getElementById('jb-swing').innerHTML=sw.length?sw.map(x=>`<tr style="cursor:pointer" onclick="openChartModal('${x.code}','${x.name}','')">
+    <td><b>${x.name}</b> <span style="color:#8b949e;font-size:11px">${x.code}</span>${x.earn_up?' <span style="color:#3fb950;font-size:11px;border:1px solid #238636;border-radius:8px;padding:0 5px">📈 실적</span>':''}${x.vr_stage?` <span class="ts">🔥 ${x.vr_stage}</span>`:''}${x.market_cap?`<br><span class="ts">시총 ${cdWon(x.market_cap)}</span>`:''}</td>
+    <td data-label="박스 상단 대비"><b style="color:${x.state==='막 넘음'?'#f85149':'#d29922'}">${x.state}</b> ${x.pos_pct>=0?'+':''}${x.pos_pct}%${x.loud?' <span title="거래 2배 넘게 터지며 넘음 — 3년 확인상 약했음">📢</span>':''}<br><span class="ts">60일 고점 ${x.box_top.toLocaleString()}원</span></td>
+    <td data-label="오늘"><span style="color:${x.change_pct>=0?'#f85149':'#58a6ff'}">${x.change_pct>=0?'+':''}${x.change_pct}%</span> · 거래 ${x.tv_x}배</td>
+    <td data-label="섹터" style="font-size:12px">${x.families.join(', ')}</td>
+    <td data-label="종가" style="text-align:right">${x.close.toLocaleString()}원${gapTag(x.gap20_pct)}</td>
+  </tr>`).join(''):'<tr><td colspan="5" style="color:#8b949e;text-align:center;padding:16px">오늘은 해당 종목이 없습니다</td></tr>';
   document.getElementById('jb-limit').innerHTML=lim.length?`상한가 (체결 어려움 주의): ${lim.map(x=>`<b style="color:#e6edf3;cursor:pointer" onclick="openChartModal('${x.code}','${x.name}','')">${x.name}</b>${x.record_today?' <span style="color:#f85149;font-size:11px">🔔 신기록 · 3년 다음 날 시가 평균 +5.6%</span>':''}`).join(' · ')}`:'';
 }
 async function jbCheck(){

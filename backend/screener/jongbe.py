@@ -116,6 +116,33 @@ def scan(db: Session) -> dict:
         r["close"] = round(r["close"])
         (limit if r["change_pct"] >= LIMIT_UP else rows).append(r)
     rows.sort(key=lambda r: (r["grade"], r["upper_pct"]))
+
+    # 스윙 후보: 뜨거운 섹터 안에서 60일 고점(박스 상단)에 -2% 이내로 붙었거나 0~+3% 막 넘은 종목 (10~20일 보유 기준)
+    # 3년 확인(같은 날 전 종목 평균 대비 20일 뒤): 붙음+뜨거운 섹터 +2.39%p, 막 넘음+뜨거운 섹터 +2.87%p,
+    # 거래 2배로 터지며 넘은 경우는 +0.78%p로 약했고, 이미 +3% 넘게 더 간 종목은 +0.72%p.
+    C, H = P["c"], P["h"]
+    hi60 = H.iloc[-61:-1].max()
+    hot_members = {c for f in hot for c in fam[f]["members"]}
+    swing = []
+    for code in hot_members:
+        v = _stock_view(P, code)
+        nm = names.get(code, code)
+        if not v or any(k in nm for k in skip) or v["close"] < 1000 or TV[code].iloc[-5:].mean() < 1e9:
+            continue
+        top = float(hi60.get(code, float("nan")))
+        if not top or top != top:
+            continue
+        pos = v["close"] / top - 1
+        if not -0.02 <= pos < 0.03:
+            continue
+        vr_v = vr_stage.get(code)
+        swing.append({"code": code, "name": nm, "close": round(v["close"]), "change_pct": v["change_pct"], "box_top": round(top),
+                      "pos_pct": round(pos * 100, 1), "state": "막 넘음" if pos >= 0 else "붙음", "tv_x": v["tv_x"],
+                      "loud": bool(v["tv_x"] and v["tv_x"] >= VOL_X and pos >= 0), "gap20_pct": v["gap20_pct"],
+                      "families": [f for f in hot if code in fam[f]["members"]], "earn_up": code in earn_up,
+                      "vr_stage": vr_v["stage"] if vr_v else "",
+                      "market_cap": caps.get(code, (0, 0))[0] or caps.get(code, (0, 0))[1] * v["close"] or mc.get(code) or 0})
+    swing.sort(key=lambda x: (x["loud"], -(x["market_cap"] or 0)))
     limit.sort(key=lambda r: -(r["market_cap"] or 0))
     return {
         "trading_date": d.isoformat(), "market": regime,
@@ -125,7 +152,7 @@ def scan(db: Session) -> dict:
                       "stretch_pct": round(fam[f]["stretch"] * 100),
                       "status": "과열" if fam[f]["stretch"] >= 0.2 else ("주의" if fam[f]["stretch"] >= 0.1 else "")}
                      for f in order[:6]],
-        "hot": hot, "items": rows, "limit_up": limit,
+        "hot": hot, "items": rows, "limit_up": limit, "swing": swing,
     }
 
 
