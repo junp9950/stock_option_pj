@@ -13,127 +13,6 @@ from backend.utils.logger import get_logger
 
 logger = get_logger(__name__)
 
-# KRX 데이터포털 엔드포인트
-_KRX_API_URL = "http://data.krx.co.kr/comm/bldAttendant/getJsonData.cmd"
-_KRX_HEADERS = {
-    "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
-    "Referer": "http://data.krx.co.kr/contents/MDC/STAT/srt/MDCSTAT30101.jsp",
-    "Content-Type": "application/x-www-form-urlencoded; charset=UTF-8",
-    "Accept": "application/json, text/javascript, */*; q=0.01",
-    "X-Requested-With": "XMLHttpRequest",
-    "Origin": "http://data.krx.co.kr",
-}
-
-
-def _krx_direct_short_batch(yyyymmdd: str) -> dict[str, tuple[float, float, float]]:
-    """KRX 데이터포털 직접 HTTP 요청으로 공매도 데이터 일괄 조회.
-    pykrx 없이도 동작하는 직접 KRX API 호출.
-    반환: {종목코드: (short_volume, short_ratio, short_balance)}
-    실패 시 빈 dict 반환.
-    """
-    try:
-        import requests  # noqa: PLC0415
-
-        # KRX 세션 초기화 (JSESSIONID 쿠키 획득)
-        session = requests.Session()
-        session.headers.update(_KRX_HEADERS)
-        try:
-            session.get("http://data.krx.co.kr/", timeout=5)
-        except Exception:  # noqa: BLE001
-            pass  # 실패해도 계속 시도
-
-        vol_map: dict[str, tuple[float, float]] = {}
-        bal_map: dict[str, float] = {}
-
-        for mkt_id in ("STK", "KSQ"):  # KOSPI, KOSDAQ
-            # ── 공매도 거래량/비중 (pykrx bld: dbms/MDC/STAT/srt/MDCSTAT30101)
-            try:
-                r = session.post(
-                    _KRX_API_URL,
-                    data={
-                        "bld": "dbms/MDC/STAT/srt/MDCSTAT30101",
-                        "mktId": mkt_id,
-                        "trdDd": yyyymmdd,
-                        "inqCond": "STMFRTSCIFDRFS",
-                    },
-                    headers=_KRX_HEADERS,
-                    timeout=15,
-                )
-                if r.status_code == 200:
-                    for item in r.json().get("OutBlock_1", []):
-                        code = str(item.get("ISU_SRT_CD", "")).zfill(6)
-                        if not code or code == "000000":
-                            continue
-                        # 공매도 거래량
-                        vol = 0.0
-                        for k in ("CVSRTSELL_TRDVOL", "SHRTS_TRDVOL", "공매도거래량", "공매도"):
-                            if k in item and item[k] is not None:
-                                try:
-                                    vol = float(str(item[k]).replace(",", ""))
-                                    break
-                                except (ValueError, TypeError):
-                                    pass
-                        # 공매도 비중 (거래량 대비 %)
-                        ratio = 0.0
-                        for k in ("TRDVOL_WT", "SHRTS_TRDVOL_WT", "공매도비중", "비중"):
-                            if k in item and item[k] is not None:
-                                try:
-                                    ratio = float(str(item[k]).replace(",", ""))
-                                    break
-                                except (ValueError, TypeError):
-                                    pass
-                        vol_map[code] = (vol, ratio)
-            except Exception as exc:  # noqa: BLE001
-                logger.debug("KRX direct short vol %s failed: %s", mkt_id, exc)
-
-            # ── 공매도 잔고 (pykrx bld: dbms/MDC/STAT/srt/MDCSTAT30501)
-            try:
-                mkt_tp = "1" if mkt_id == "STK" else "2"
-                r = session.post(
-                    _KRX_API_URL,
-                    data={
-                        "bld": "dbms/MDC/STAT/srt/MDCSTAT30501",
-                        "mktTpCd": mkt_tp,
-                        "trdDd": yyyymmdd,
-                    },
-                    headers=_KRX_HEADERS,
-                    timeout=15,
-                )
-                if r.status_code == 200:
-                    for item in r.json().get("OutBlock_1", []):
-                        code = str(item.get("ISU_SRT_CD", "")).zfill(6)
-                        if not code or code == "000000":
-                            continue
-                        bal = 0.0
-                        for k in ("BAL_AMT", "BALANCE_AMT", "잔고금액", "공매도잔고금액", "SHRTS_BAL_AMT"):
-                            if k in item and item[k] is not None:
-                                try:
-                                    bal = float(str(item[k]).replace(",", ""))
-                                    break
-                                except (ValueError, TypeError):
-                                    pass
-                        bal_map[code] = bal
-            except Exception as exc:  # noqa: BLE001
-                logger.debug("KRX direct short bal %s failed: %s", mkt_id, exc)
-
-        all_codes = set(vol_map) | set(bal_map)
-        if not all_codes:
-            return {}
-
-        result: dict[str, tuple[float, float, float]] = {}
-        for code in all_codes:
-            vol, ratio = vol_map.get(code, (0.0, 0.0))
-            bal = bal_map.get(code, 0.0)
-            if vol > 0 or ratio > 0 or bal > 0:
-                result[code] = (vol, ratio, bal)
-
-        logger.info("KRX direct short selling: %d stocks fetched for %s", len(result), yyyymmdd)
-        return result
-    except Exception as exc:  # noqa: BLE001
-        logger.debug("KRX direct short selling failed: %s", exc)
-        return {}
-
-
 def _kis_short_batch(yyyymmdd: str) -> dict[str, tuple[float, float, float]]:
     """KIS Open API로 종목별 공매도 데이터 조회.
     TR_ID: FHPST04830000, endpoint: /uapi/domestic-stock/v1/quotations/daily-short-sale
@@ -204,10 +83,8 @@ def _kis_short_batch(yyyymmdd: str) -> dict[str, tuple[float, float, float]]:
 def collect_short_selling_data(db: Session, trading_date: date) -> None:
     """Collect short selling data.
 
-    Source priority (pykrx는 KRX 로그인 필수화 이후 계속 실패해 2026-10-03 제거):
-      1. KRX 데이터포털 직접 HTTP 요청
-      2. KIS API
-      3. 데이터 없음 → 레코드 미삽입 (signal engine이 None으로 처리 → 중립 점수)
+    Source: KIS API (pykrx·KRX 데이터포털 직접 조회는 KRX 로그인 필수화 이후 계속 실패해 2026-10-03 제거).
+    데이터 없음 → 레코드 미삽입 (signal engine이 None으로 처리 → 중립 점수)
 
     KRX 완전 차단 시 가짜 값 대신 레코드를 삽입하지 않는다.
     signal engine은 short=None일 때 공매도 점수 0.0(중립)으로 처리한다.
@@ -218,15 +95,8 @@ def collect_short_selling_data(db: Session, trading_date: date) -> None:
     yyyymmdd = fetch_date.strftime("%Y%m%d")
     db.execute(delete(ShortSellingDaily).where(ShortSellingDaily.trading_date == trading_date))
 
-    # 1차: KRX 직접 API
-    batch_data = _krx_direct_short_batch(yyyymmdd)
-    source = "krx_direct"
-
-    # 3차: KIS API (KRX 완전 차단 시)
-    if not batch_data:
-        logger.info("KRX 직접 API 실패 → KIS API 공매도 시도")
-        batch_data = _kis_short_batch(yyyymmdd)
-        source = "kis"
+    batch_data = _kis_short_batch(yyyymmdd)
+    source = "kis"
 
     batch_ok = len(batch_data) > 0
 

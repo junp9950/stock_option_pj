@@ -830,10 +830,10 @@ def get_data_sources(db: Session = Depends(get_db)):
     return {
         "spot_price": {"source": "FinanceDataReader", "status": _status(spot_count > 0), "note": f"오늘 {spot_count}종목 수집"},
         "investor_flow": {"source": "KIS API", "status": _status(flow_count > 0, "real_with_fallback"), "note": f"외국인/기관 비제로 {flow_count}종목 (0이면 KIS 실패)"},
-        "short_selling": {"source": "KRX 직접 → KIS API", "status": "real_with_fallback", "note": f"공매도 데이터 {'수집됨' if short_row else '없음'}"},
-        "kospi200_index": {"source": "FinanceDataReader/KS200", "status": _status(idx_row is not None), "note": f"종가: {idx_row.close_price:.2f}" if idx_row else "없음"},
-        "futures_investor_flow": {"source": "KRX JSON API", "status": _status(futures_row is not None and futures_row.foreign_net_contracts != 0, "real_with_fallback"), "note": f"외국인 선물: {futures_row.foreign_net_contracts:.0f}계약" if futures_row else "없음"},
-        "program_trading": {"source": "KRX JSON API", "status": _status(program_row is not None and (program_row.non_arbitrage_net_buy != 0 or program_row.arbitrage_net_buy != 0), "real_with_fallback"), "note": f"비차익 {program_row.non_arbitrage_net_buy/1e8:.0f}억" if program_row else "없음"},
+        "short_selling": {"source": "KIS API", "status": "real_with_fallback", "note": f"공매도 데이터 {'수집됨' if short_row else '없음'}"},
+        "kospi200_index": {"source": "FinanceDataReader/^KS200", "status": _status(idx_row is not None), "note": f"종가: {idx_row.close_price:.2f}" if idx_row else "없음"},
+        "futures_investor_flow": {"source": "없음 (0)", "status": _status(futures_row is not None and futures_row.foreign_net_contracts != 0, "real_with_fallback"), "note": f"외국인 선물: {futures_row.foreign_net_contracts:.0f}계약" if futures_row else "없음"},
+        "program_trading": {"source": "KIS API", "status": _status(program_row is not None and (program_row.non_arbitrage_net_buy != 0 or program_row.arbitrage_net_buy != 0), "real_with_fallback"), "note": f"비차익 {program_row.non_arbitrage_net_buy/1e8:.0f}억" if program_row else "없음"},
         "open_interest": {"source": "없음 (0)", "status": _status(oi_row is not None and (oi_row.call_oi > 0 or oi_row.put_oi > 0), "real_with_fallback"), "note": f"콜OI={oi_row.call_oi:.0f} 풋OI={oi_row.put_oi:.0f}" if oi_row else "없음"},
         "kospi200_futures_price": {"source": "KS200 지수로 대신", "status": _status(fp_row is not None, "real_with_fallback"), "note": f"종가: {fp_row.close_price:.2f}" if fp_row else "없음"},
     }
