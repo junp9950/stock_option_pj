@@ -336,14 +336,15 @@ select{background:#21262d;border:1px solid #30363d;color:#c9d1d9;padding:6px 10p
         <option value="live">숨고르기 · 신규 · 진행 중</option>
         <option value="숨고르기">숨고르기만</option>
         <option value="신규">신규만</option>
-        <option value="">무너짐 포함 전체</option>
+        <option value="설거지">설거지만</option>
+        <option value="">설거지·무너짐 포함 전체</option>
       </select>
       <span class="ts" id="vr-info"></span>
     </div>
     <p class="note" style="color:#8b949e;font-size:12.5px;margin:0 0 10px">
       최근 약 4개월 안에 <b style="color:#c9d1d9">몇 년 만의 최대 거래대금</b>(평소의 10배 이상, 전날 대비 +5% 이상 양봉)이 터진 종목입니다.
       최근 3년 전종목 확인 결과 <b style="color:#f85149">터진 날 바로 사면 20일 뒤 중간값 -7%</b>였고, 대신 20일 안에 95%가 그날보다 높은 가격을 찍었습니다(중간값 +15%).
-      그래서 <b style="color:#c9d1d9">관심 등록용</b>이고, 진입은 <b style="color:#3fb950">숨고르기</b>(거래가 마르면서 기준선을 지킴) 뒤 돌려세울 때 보세요. 지금 기준선 아래이거나 신기록 뒤 한 번이라도 기준선 -15% 아래로 마감했으면 <b>무너짐</b>입니다(그보다 얕게 잠깐 흔든 건 털기로 봅니다).
+      그래서 <b style="color:#c9d1d9">관심 등록용</b>이고, 진입은 <b style="color:#3fb950">숨고르기</b>(거래가 마르면서 기준선을 지킴) 뒤 돌려세울 때 보세요. 지금 기준선 아래이거나 신기록 뒤 한 번이라도 기준선 -15% 아래로 마감했으면 <b>무너짐</b>입니다(그보다 얕게 잠깐 흔든 건 털기로 봅니다). 신기록 다음 1~2일에 더 큰 거래량의 윗꼬리 긴 음봉이 나오면 <b style="color:#f85149">설거지</b>로 보고 숨깁니다(3년 확인: 20일 뒤 중간값 -12%). 리츠·스팩·ETF는 뺍니다.
       기준선(=손절선)은 신기록 전날 종가입니다.
     </p>
     <table class="pb-table">
@@ -749,11 +750,11 @@ function renderVolumeRecords(){
   const body = document.getElementById('vr-body');
   if(!_vrData){ body.innerHTML = '<tr><td colspan="5" style="color:#f85149;text-align:center;padding:20px">로딩 실패</td></tr>'; return; }
   const sel = document.getElementById('vr-stage').value;
-  const items = _vrData.items.filter(x=> sel==='live' ? x.stage!=='무너짐' : (!sel || x.stage===sel));
+  const items = _vrData.items.filter(x=> sel==='live' ? !['무너짐','설거지'].includes(x.stage) : (!sel || x.stage===sel));
   const cnt = s=>_vrData.items.filter(x=>x.stage===s).length;
-  document.getElementById('vr-info').textContent = `기준일 ${_vrData.trading_date} · 숨고르기 ${cnt('숨고르기')} · 신규 ${cnt('신규')} · 진행 중 ${cnt('진행 중')} · 무너짐 ${cnt('무너짐')}`;
+  document.getElementById('vr-info').textContent = `기준일 ${_vrData.trading_date} · 숨고르기 ${cnt('숨고르기')} · 신규 ${cnt('신규')} · 진행 중 ${cnt('진행 중')} · 설거지 ${cnt('설거지')} · 무너짐 ${cnt('무너짐')}`;
   if(!items.length){ body.innerHTML = '<tr><td colspan="5" style="color:#8b949e;text-align:center;padding:20px">해당 종목이 없습니다</td></tr>'; return; }
-  const color = {'숨고르기':'#3fb950','신규':'#58a6ff','진행 중':'#d29922','무너짐':'#8b949e'};
+  const color = {'숨고르기':'#3fb950','신규':'#58a6ff','진행 중':'#d29922','설거지':'#f85149','무너짐':'#8b949e'};
   const sg = n=>(n>=0?'+':'')+n;
   body.innerHTML = items.map(x=>`<tr style="cursor:pointer" onclick="openChartModal('${x.code}','${x.name}','${x.event_date}')">
     <td><b>${x.name}</b> <span style="color:#8b949e;font-size:11px">${x.code}</span></td>

@@ -27,6 +27,11 @@ DRY_MAX = 0.25       # 최근 5일 거래대금이 대량거래 최대일의 25%
 # 7/30 같은 폭락에서 버틴 종목(금호타이어)은 남고 크게 깬 종목(제주반도체 -56%)은 빠진다. 날짜로 자르지 않는 이유.
 # 거래 없이 잠깐 기준선 밑으로 흔든 것(티에스이 9/15 -10% 뒤 회복)은 털기로 보고 봐준다.
 BREAK_DEPTH = 0.85
+# 설거지 = 신기록 다음 1~2일 안에 거래량이 신기록일보다 많은 음봉 + 윗꼬리가 하루 폭의 절반 이상.
+# 3년 확인(5일간 기준선 지킨 종목끼리): 설거지 봉 7건은 20일 뒤 중간값 -12.4%(플러스 14%), 보통 356건은 -2.9%(42%).
+# 기준선을 지킨 비율은 둘 다 86~87%라, 설거지 뒤 저점을 지키는 건 강함이 아니라 방치였다.
+DIST_UPPER = 0.5
+NAME_SKIP = ("리츠", "스팩", "ETF", "ETN")   # 배당·구조상 가격이 받쳐지는 상품 (신한서부티엔디리츠 6/10)
 # (예전엔 '상승분 절반 유지'를 조건으로 써서, 깃대가 짧은 티에스이가 거래 없이 8%만 밀려도 무너짐이 됐다)
 
 
@@ -45,17 +50,18 @@ def scan(db: Session) -> dict:
         {"w": load_start})}
     by: dict[str, list] = defaultdict(list)
     for r in db.execute(text(
-        "select stock_code, trading_date, open_price, high_price, low_price, close_price, trading_value "
+        "select stock_code, trading_date, open_price, high_price, low_price, close_price, trading_value, volume "
         "from spot_daily_prices where trading_date >= :s order by stock_code, trading_date"), {"s": load_start}):
         by[r[0]].append(r)
     names = dict(db.execute(text("select code, name from stocks")).all())
 
     items = []
     for code, pl in by.items():
-        if pl[-1][1] != latest:
+        if pl[-1][1] != latest or any(k in names.get(code, "") for k in NAME_SKIP):
             continue
         run_max, n_prior = prior.get(code, (0.0, 0))
         tv = [float(p[6] or 0) for p in pl]
+        vol = [float(p[7] or 0) for p in pl]
         first = last_big = None
         big_max = 0.0
         for i, p in enumerate(pl):
@@ -79,7 +85,16 @@ def scan(db: Session) -> dict:
         dry = (sum(tv[-5:]) / 5) / big_max if big_max else 1.0
         rest = len(pl) - 1 - last_big
         broke = close < base or any(float(p[5]) < base * BREAK_DEPTH for p in pl[i + 1:])
-        if broke:
+        dist = False
+        for k in (i + 1, i + 2):
+            if k < len(pl):
+                o_, h_, l_, c_ = (float(x) for x in pl[k][2:6])
+                rng = h_ - l_
+                if (vol[k] > vol[i] and c_ < o_ and rng > 0 and (h_ - max(o_, c_)) / rng >= DIST_UPPER):
+                    dist = True
+        if dist:
+            stage = "설거지"
+        elif broke:
             stage = "무너짐"
         elif rest < NEW_DAYS:
             stage = "신규"
@@ -97,7 +112,7 @@ def scan(db: Session) -> dict:
             "dry_pct": round(dry * 100), "rest_days": rest, "days_since": len(pl) - 1 - i,
             "stage": stage, "stop_price": round(base),
         })
-    order = {"숨고르기": 0, "신규": 1, "진행 중": 2, "무너짐": 3}
+    order = {"숨고르기": 0, "신규": 1, "진행 중": 2, "설거지": 3, "무너짐": 4}
     items.sort(key=lambda x: x["event_date"], reverse=True)   # 단계 안에서는 최근 신기록부터
     items.sort(key=lambda x: order[x["stage"]])
     return {"trading_date": latest.isoformat(), "window_start": win_start.isoformat(), "items": items}
