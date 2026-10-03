@@ -10,7 +10,7 @@
 
 - **백엔드** — FastAPI + APScheduler
 - **DB** — Supabase PostgreSQL (클라우드, 집·회사 어디서든 같은 데이터)
-- **데이터** — FinanceDataReader(주가) + KIS Open API(수급·공매도) + pykrx fallback
+- **데이터** — FinanceDataReader(주가) + KIS Open API(수급·공매도)
 
 ---
 
@@ -101,9 +101,9 @@ cd stock_option_pj && git pull && sudo systemctl restart stock-analyzer
 | 항목 | 1순위 | 2순위 | 실패 시 |
 |------|-------|-------|---------|
 | 주가 OHLCV | FinanceDataReader | — | 건너뜀 |
-| 외국인·기관 수급 | pykrx | KIS Open API | 0 (중립) |
-| 공매도 | pykrx | KRX 직접 API → KIS Open API | 0 (중립) |
-| 선물·파생 | pykrx | fallback | 0 (중립) |
+| 외국인·기관 수급 | KIS Open API | — | 0 (중립) |
+| 공매도 | KRX 직접 API | KIS Open API | 0 (중립) |
+| 선물·파생 | KS200 지수 (선물 종가 대신) | — | 0 (중립) |
 
 > KRX 차단 환경(회사망, 클라우드 VM)에서는 KIS Open API로 자동 전환됩니다.
 

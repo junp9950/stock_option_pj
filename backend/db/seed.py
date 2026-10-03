@@ -25,29 +25,11 @@ MANUAL_STOCKS: list[dict] = [
 ]
 
 
-def _fetch_shares_from_pykrx() -> dict[str, float]:
-    """pykrx로 전종목 상장주식수 조회. 실패 시 빈 dict."""
-    try:
-        from pykrx import stock as pykrx_stock  # noqa: PLC0415
-        from datetime import date as _date  # noqa: PLC0415
-        today = _date.today().strftime("%Y%m%d")
-        df = pykrx_stock.get_market_cap_by_ticker(today, market="ALL")
-        if df is None or df.empty:
-            return {}
-        col = next((c for c in df.columns if "상장" in c or "Shares" in c.lower()), None)
-        if col is None:
-            return {}
-        return {str(code).zfill(6): float(val) for code, val in df[col].items() if val and float(val) > 0}
-    except Exception as exc:  # noqa: BLE001
-        logger.warning("pykrx shares fetch failed: %s", exc)
-        return {}
-
-
 def _fetch_top_stocks(n: int = _TOP_N) -> list[dict]:
     """FinanceDataReader로 KOSPI + KOSDAQ 시총 상위 n종목씩 조회. 실패 시 빈 리스트."""
     try:
         import FinanceDataReader as fdr  # noqa: PLC0415
-        shares_map = _fetch_shares_from_pykrx()
+        shares_map: dict[str, float] = {}   # 상장주식수는 FDR 목록의 Stocks 칸에서 받는다
         result = []
         for market in ("KOSPI", "KOSDAQ"):
             listing = fdr.StockListing(market)

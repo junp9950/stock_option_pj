@@ -143,115 +143,6 @@ def _kis_investor_flow_batch(yyyymmdd: str, codes: list[str]) -> dict[str, tuple
     return result
 
 
-def _pykrx_investor_flow_batch(yyyymmdd: str) -> dict[str, tuple[float, float, float]]:
-    """pykrx로 당일 전종목 외국인/기관 순매수(원) 일괄 조회.
-    반환: {종목코드: (foreign_net, institution_net, 0.0)}
-    실패 시 빈 dict 반환.
-    """
-    try:
-        from pykrx import stock as pykrx_stock  # noqa: PLC0415
-
-        def _fetch(market: str, investor: str) -> pd.DataFrame:
-            try:
-                df = pykrx_stock.get_market_net_purchases_of_equities_by_ticker(
-                    yyyymmdd, yyyymmdd, market, investor
-                )
-                return df if df is not None else pd.DataFrame()
-            except Exception:  # noqa: BLE001
-                return pd.DataFrame()
-
-        df_f_k = _fetch("KOSPI", "외국인")
-        df_f_q = _fetch("KOSDAQ", "외국인")
-        df_i_k = _fetch("KOSPI", "기관합계")
-        df_i_q = _fetch("KOSDAQ", "기관합계")
-
-        df_foreign = pd.concat([df_f_k, df_f_q]) if not df_f_k.empty or not df_f_q.empty else pd.DataFrame()
-        df_inst = pd.concat([df_i_k, df_i_q]) if not df_i_k.empty or not df_i_q.empty else pd.DataFrame()
-
-        if df_foreign.empty and df_inst.empty:
-            return {}
-
-        result: dict[str, tuple[float, float, float]] = {}
-
-        def _net(df: pd.DataFrame, code: str) -> float:
-            if df is None or df.empty or code not in df.index:
-                return 0.0
-            row = df.loc[code]
-            # 순매수금액(천원) 우선 → 원 단위로 변환, 없으면 순매수(주) 사용
-            if "순매수금액" in row.index:
-                return float(row["순매수금액"]) * 1000.0
-            for col in ["순매수", "매수"]:
-                if col in row.index:
-                    return float(row[col])
-            for val in row:
-                try:
-                    return float(val)
-                except (TypeError, ValueError):
-                    continue
-            return 0.0
-
-        all_codes = set()
-        if df_foreign is not None and not df_foreign.empty:
-            all_codes |= set(str(c).zfill(6) for c in df_foreign.index)
-        if df_inst is not None and not df_inst.empty:
-            all_codes |= set(str(c).zfill(6) for c in df_inst.index)
-
-        for code in all_codes:
-            result[code] = (
-                _net(df_foreign, code),
-                _net(df_inst, code),
-                0.0,
-            )
-
-        logger.info("pykrx batch investor flow: %d stocks fetched for %s", len(result), yyyymmdd)
-        return result
-    except Exception as exc:  # noqa: BLE001
-        logger.debug("pykrx batch investor flow failed: %s", exc)
-        return {}
-
-
-def _pykrx_investor_flow_single(code: str, yyyymmdd: str) -> tuple[float, float, float]:
-    """pykrx로 단일 종목 외국인/기관 순매수(원) 조회. 실패 시 (0, 0, 0) 반환."""
-    try:
-        from pykrx import stock as pykrx_stock  # noqa: PLC0415
-
-        def _net_from_df(df: pd.DataFrame) -> float:
-            if df is None or df.empty:
-                return 0.0
-            row = df.iloc[0]
-            for col in ["순매수", "매수", "순매수금액"]:
-                if col in row.index:
-                    return float(row[col])
-            for val in row:
-                try:
-                    return float(val)
-                except (TypeError, ValueError):
-                    continue
-            return 0.0
-
-        def _fetch_single(market: str, investor: str) -> pd.DataFrame:
-            try:
-                df = pykrx_stock.get_market_net_purchases_of_equities_by_ticker(
-                    yyyymmdd, yyyymmdd, market, investor
-                )
-                return df if df is not None else pd.DataFrame()
-            except Exception:  # noqa: BLE001
-                return pd.DataFrame()
-
-        df_f = pd.concat([_fetch_single("KOSPI", "외국인"), _fetch_single("KOSDAQ", "외국인")])
-        df_i = pd.concat([_fetch_single("KOSPI", "기관합계"), _fetch_single("KOSDAQ", "기관합계")])
-
-        def _get(df: pd.DataFrame) -> float:
-            if df is None or df.empty or code not in df.index:
-                return 0.0
-            return _net_from_df(df.loc[[code]])
-
-        return _get(df_f), _get(df_i), 0.0
-    except Exception as exc:  # noqa: BLE001
-        logger.debug("pykrx investor flow skipped for %s: %s", code, exc)
-        return 0.0, 0.0, 0.0
-
-
 def _load_listing_snapshot() -> pd.DataFrame:
     listing = fdr.StockListing("KRX")
     listing["Code"] = listing["Code"].astype(str).str.zfill(6)
@@ -301,11 +192,11 @@ def _fallback_spot_row(db: Session, trading_date: date) -> None:
 def collect_spot_data(db: Session, trading_date: date) -> None:
     """Collect spot market data.
 
-    Source: FinanceDataReader for prices, pykrx (batch) for investor flow.
+    Source: FinanceDataReader for prices, KIS API for investor flow.
     Fallback: demo data generation for local/offline runs.
     """
 
-    # pykrx/FDR 조회는 마지막 실제 거래일 기준으로 (주말·공휴일 진입 방지)
+    # FDR 조회는 마지막 실제 거래일 기준으로 (주말·공휴일 진입 방지)
     fetch_date = latest_trading_day(trading_date)
     if fetch_date != trading_date:
         logger.info("trading_date=%s is non-trading day → fetching data for %s", trading_date, fetch_date)
@@ -331,12 +222,6 @@ def collect_spot_data(db: Session, trading_date: date) -> None:
             return
 
         # FDR 정상 확인 (기존 데이터는 upsert로 덮어씀, DELETE 불필요)
-
-        # pykrx 전종목 수급 일괄 조회 (한 번만 호출)
-        batch_flows = _pykrx_investor_flow_batch(yyyymmdd)
-        batch_ok = len(batch_flows) > 0
-        if not batch_ok:
-            logger.warning("pykrx batch investor flow failed — KIS API 시도")
 
         stocks = list(get_universe(db))
 
@@ -373,16 +258,13 @@ def collect_spot_data(db: Session, trading_date: date) -> None:
             _requests.Session.request = _orig_request  # type: ignore[method-assign]
         logger.info("FDR 가격 수집 완료: %d / %d 종목", len(price_map), len(stocks))
 
-        # KIS API fallback (pykrx 실패 시)
-        if not batch_ok:
-            codes = [s.code for s in stocks]
-            kis_flows = _kis_investor_flow_batch(yyyymmdd, codes)
-            if kis_flows:
-                batch_flows = kis_flows
-                batch_ok = True
-                logger.info("KIS API 수급 수집 완료: %d 종목", len(kis_flows))
-            else:
-                logger.warning("KIS API 실패 — 수급 데이터 없음")
+        # 수급: KIS API (pykrx는 KRX 로그인 필수화 이후 계속 실패해 2026-10-03 제거)
+        batch_flows = _kis_investor_flow_batch(yyyymmdd, [s.code for s in stocks])
+        batch_ok = len(batch_flows) > 0
+        if batch_ok:
+            logger.info("KIS API 수급 수집 완료: %d 종목", len(batch_flows))
+        else:
+            logger.warning("KIS API 실패 — 수급 데이터 없음")
 
         for stock in stocks:
             df = price_map.get(stock.code)
@@ -435,7 +317,7 @@ def collect_spot_data(db: Session, trading_date: date) -> None:
                 )
             )
 
-            # 수급: pykrx 배치 → KIS API fallback → 0
+            # 수급: KIS API → 실패 시 0
             if batch_ok and stock.code in batch_flows:
                 foreign_net, institution_net, individual_net = batch_flows[stock.code]
             else:

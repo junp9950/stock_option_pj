@@ -38,76 +38,6 @@ def _krx_post(params: dict) -> dict | None:
     return None
 
 
-def _fetch_futures_close_pykrx(date_str: str) -> float | None:
-    """Try to get KOSPI200 futures close price from pykrx (highest-volume contract)."""
-    try:
-        import pykrx.stock as s
-        df = s.get_future_ohlcv_by_ticker(date_str, "KRDRVFUK2I")
-        if df is not None and not df.empty and "종가" in df.columns and "거래량" in df.columns:
-            active = df[df["거래량"] > 0]
-            if not active.empty:
-                close = float(active.loc[active["거래량"].idxmax(), "종가"])
-                if close > 0:
-                    logger.info("pykrx futures close price fetched: %.2f", close)
-                    return close
-    except Exception as exc:  # noqa: BLE001
-        logger.debug("pykrx futures close fetch failed: %s", exc)
-    return None
-
-
-def _fetch_options_oi_pykrx(date_str: str) -> tuple[float, float, float] | None:
-    """Try to get KOSPI200 options open interest (call_oi, put_oi, futures_oi) from pykrx.
-
-    Uses pykrx's internal 전종목시세 class which includes ACC_OPNINT_QTY column.
-    Call options have 'C' in their short code (e.g. 101C270), puts have 'P'.
-    """
-    try:
-        from pykrx.website.krx.future.core import 전종목시세  # noqa: PLC2403
-        df = 전종목시세().fetch(trdDd=date_str, prodId="KRDRVOPK2I")
-        if df is None or df.empty:
-            return None
-        if "ACC_OPNINT_QTY" not in df.columns or "ISU_SRT_CD" not in df.columns:
-            return None
-
-        df = df.copy()
-        df["ACC_OPNINT_QTY"] = (
-            df["ACC_OPNINT_QTY"]
-            .astype(str)
-            .str.replace(",", "", regex=False)
-            .str.replace("-", "0", regex=False)
-            .str.strip()
-        )
-        df = df[df["ACC_OPNINT_QTY"].str.match(r"^\d+$")]
-        df["ACC_OPNINT_QTY"] = df["ACC_OPNINT_QTY"].astype(float)
-
-        call_mask = df["ISU_SRT_CD"].str.contains("C", na=False)
-        put_mask = df["ISU_SRT_CD"].str.contains("P", na=False)
-        call_oi = float(df.loc[call_mask, "ACC_OPNINT_QTY"].sum())
-        put_oi = float(df.loc[put_mask, "ACC_OPNINT_QTY"].sum())
-
-        # Futures OI from KOSPI200 futures product
-        df_fut = 전종목시세().fetch(trdDd=date_str, prodId="KRDRVFUK2I")
-        futures_oi = 0.0
-        if df_fut is not None and not df_fut.empty and "ACC_OPNINT_QTY" in df_fut.columns:
-            df_fut = df_fut.copy()
-            df_fut["ACC_OPNINT_QTY"] = (
-                df_fut["ACC_OPNINT_QTY"]
-                .astype(str)
-                .str.replace(",", "", regex=False)
-                .str.replace("-", "0", regex=False)
-                .str.strip()
-            )
-            valid_mask = df_fut["ACC_OPNINT_QTY"].str.match(r"^\d+$")
-            futures_oi = float(df_fut.loc[valid_mask, "ACC_OPNINT_QTY"].astype(float).sum())
-
-        if call_oi > 0 or put_oi > 0:
-            logger.info("pykrx options OI fetched: call=%s put=%s futures=%s", call_oi, put_oi, futures_oi)
-            return call_oi, put_oi, futures_oi
-    except Exception as exc:  # noqa: BLE001
-        logger.debug("pykrx options OI fetch failed: %s", exc)
-    return None
-
-
 def _fetch_futures_investor_krx(date_str: str) -> dict | None:
     """Try to get KOSPI200 futures investor data from KRX JSON API.
 
@@ -174,10 +104,10 @@ def collect_derivatives_data(db: Session, trading_date: date) -> None:
     """Collect futures/options/index data.
 
     Source priority:
-      1. pykrx (futures price, options OI)
+      1. FinanceDataReader KS200 index (선물 종가도 지수로 대신)
       2. KRX JSON API (futures investor breakdown)
-      3. FinanceDataReader KS200 index (fallback for index/futures price)
-      4. Demo fallback values when all sources unavailable
+      3. Demo fallback values when all sources unavailable
+    (pykrx 선물 종가·옵션 미결제약정은 KRX 로그인 필수화 이후 계속 실패해 2026-10-03 제거 → OI는 0)
     """
     date_str = trading_date.strftime("%Y%m%d")
     date_iso = trading_date.isoformat()  # FDR은 ISO 형식(YYYY-MM-DD) 필요
@@ -194,21 +124,11 @@ def collect_derivatives_data(db: Session, trading_date: date) -> None:
     except Exception as exc:  # noqa: BLE001
         logger.warning("FDR KS200 index fetch failed, using fallback: %s", exc)
 
-    # ── 2. KOSPI200 futures close (pykrx → index fallback) ──────────────────
-    futures_close = _fetch_futures_close_pykrx(date_str)
-    if futures_close is None:
-        futures_close = index_close
-        logger.info("Futures close: using index fallback (%.2f)", futures_close)
+    # ── 2. KOSPI200 futures close: 지수 종가로 대신 ─────────────────────────
+    futures_close = index_close
 
-    # ── 3. Options & futures open interest (pykrx) ──────────────────────────
-    oi_result = _fetch_options_oi_pykrx(date_str)
-    if oi_result is not None:
-        call_oi, put_oi, futures_oi = oi_result
-        oi_source = "pykrx"
-    else:
-        call_oi, put_oi, futures_oi = 0.0, 0.0, 0.0
-        oi_source = "fallback(0)"
-    logger.info("OI source=%s call_oi=%s put_oi=%s futures_oi=%s", oi_source, call_oi, put_oi, futures_oi)
+    # ── 3. Options & futures open interest: 소스 없음 → 0 ────────────────────
+    call_oi, put_oi, futures_oi = 0.0, 0.0, 0.0
 
     # ── 4. Futures investor breakdown (KRX JSON API) ────────────────────────
     investor = _fetch_futures_investor_krx(date_str)

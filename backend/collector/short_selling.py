@@ -201,99 +201,13 @@ def _kis_short_batch(yyyymmdd: str) -> dict[str, tuple[float, float, float]]:
     return result
 
 
-def _pykrx_short_batch(yyyymmdd: str) -> dict[str, tuple[float, float, float]]:
-    """pykrx로 KOSPI+KOSDAQ 전종목 공매도 데이터 일괄 조회.
-    반환: {종목코드: (short_volume, short_ratio, short_balance)}
-    실패 시 빈 dict 반환.
-    """
-    try:
-        from pykrx import stock as pykrx_stock  # noqa: PLC0415
-
-        result: dict[str, tuple[float, float, float]] = {}
-        vol_map: dict[str, tuple[float, float]] = {}
-        bal_map: dict[str, float] = {}
-
-        for market in ("KOSPI", "KOSDAQ"):
-            try:
-                vol_df = pykrx_stock.get_shorting_volume_by_ticker(yyyymmdd, market=market)
-                if vol_df is not None and not vol_df.empty:
-                    for code, row in vol_df.iterrows():
-                        code_str = str(code).zfill(6)
-                        vol = float(row["공매도"]) if "공매도" in row.index else 0.0
-                        ratio = float(row["비중"]) if "비중" in row.index else 0.0
-                        vol_map[code_str] = (vol, ratio)
-            except Exception:  # noqa: BLE001
-                pass
-
-            try:
-                bal_df = pykrx_stock.get_shorting_balance_by_ticker(yyyymmdd, market=market)
-                if bal_df is not None and not bal_df.empty:
-                    for code, row in bal_df.iterrows():
-                        code_str = str(code).zfill(6)
-                        for col in ("공매도잔고금액", "잔고금액", "공매도잔고"):
-                            if col in row.index:
-                                bal_map[code_str] = float(row[col])
-                                break
-            except Exception:  # noqa: BLE001
-                pass
-
-        all_codes = set(vol_map) | set(bal_map)
-        for code in all_codes:
-            vol, ratio = vol_map.get(code, (0.0, 0.0))
-            bal = bal_map.get(code, 0.0)
-            if vol > 0 or ratio > 0 or bal > 0:
-                result[code] = (vol, ratio, bal)
-
-        logger.info("pykrx batch short selling: %d stocks fetched for %s", len(result), yyyymmdd)
-        return result
-    except Exception as exc:  # noqa: BLE001
-        logger.debug("pykrx batch short selling failed: %s", exc)
-        return {}
-
-
-def _pykrx_short_single(code: str, yyyymmdd: str) -> tuple[float, float, float] | None:
-    """pykrx로 단일 종목 공매도 데이터 조회. 실패 시 None 반환."""
-    try:
-        from pykrx import stock as pykrx_stock  # noqa: PLC0415
-
-        vol_df = pykrx_stock.get_shorting_volume_by_date(yyyymmdd, yyyymmdd, code)
-        bal_df = pykrx_stock.get_shorting_balance_by_date(yyyymmdd, yyyymmdd, code)
-
-        short_volume = 0.0
-        short_ratio = 0.0
-        short_balance = 0.0
-
-        if vol_df is not None and not vol_df.empty:
-            vrow = vol_df.iloc[0]
-            short_volume = float(vrow["공매도"]) if "공매도" in vrow.index else 0.0
-            short_ratio = float(vrow["비중"]) if "비중" in vrow.index else 0.0
-
-        if bal_df is not None and not bal_df.empty:
-            brow = bal_df.iloc[0]
-            for col in ("공매도잔고금액", "잔고금액", "공매도잔고"):
-                if col in brow.index:
-                    short_balance = float(brow[col])
-                    break
-            if short_ratio == 0.0 and "비중" in brow.index:
-                short_ratio = float(brow["비중"])
-
-        if short_volume == 0.0 and short_ratio == 0.0 and short_balance == 0.0:
-            return None
-
-        return short_volume, short_ratio, short_balance
-    except Exception as exc:  # noqa: BLE001
-        logger.debug("pykrx short selling skipped for %s: %s", code, exc)
-        return None
-
-
 def collect_short_selling_data(db: Session, trading_date: date) -> None:
     """Collect short selling data.
 
-    Source priority:
-      1. pykrx 전종목 일괄 조회 (KOSPI + KOSDAQ)
-      2. KRX 데이터포털 직접 HTTP 요청 (pykrx 차단 시)
-      3. pykrx 단건 조회 (배치 실패 시)
-      4. 데이터 없음 → 레코드 미삽입 (signal engine이 None으로 처리 → 중립 점수)
+    Source priority (pykrx는 KRX 로그인 필수화 이후 계속 실패해 2026-10-03 제거):
+      1. KRX 데이터포털 직접 HTTP 요청
+      2. KIS API
+      3. 데이터 없음 → 레코드 미삽입 (signal engine이 None으로 처리 → 중립 점수)
 
     KRX 완전 차단 시 가짜 값 대신 레코드를 삽입하지 않는다.
     signal engine은 short=None일 때 공매도 점수 0.0(중립)으로 처리한다.
@@ -304,15 +218,9 @@ def collect_short_selling_data(db: Session, trading_date: date) -> None:
     yyyymmdd = fetch_date.strftime("%Y%m%d")
     db.execute(delete(ShortSellingDaily).where(ShortSellingDaily.trading_date == trading_date))
 
-    # 1차: pykrx 배치
-    batch_data = _pykrx_short_batch(yyyymmdd)
-    source = "pykrx"
-
-    # 2차: KRX 직접 API (pykrx 실패 시)
-    if not batch_data:
-        logger.info("pykrx 실패 → KRX 직접 API 시도")
-        batch_data = _krx_direct_short_batch(yyyymmdd)
-        source = "krx_direct"
+    # 1차: KRX 직접 API
+    batch_data = _krx_direct_short_batch(yyyymmdd)
+    source = "krx_direct"
 
     # 3차: KIS API (KRX 완전 차단 시)
     if not batch_data:
@@ -342,26 +250,6 @@ def collect_short_selling_data(db: Session, trading_date: date) -> None:
         db.commit()
         return
 
-    # 3차: pykrx 단건 (배치 실패 시만)
-    logger.warning("공매도 배치 모두 실패 — 종목별 단건 조회 시도")
-    single_data: dict[str, tuple[float, float, float]] = {}
-    for stock in get_universe(db):
-        result = _pykrx_short_single(stock.code, yyyymmdd)
-        if result is not None:
-            single_data[stock.code] = result
-
-    if single_data:
-        logger.info("공매도 단건 수집 성공: %d 종목", len(single_data))
-        for code, (vol, ratio, bal) in single_data.items():
-            db.add(ShortSellingDaily(
-                trading_date=trading_date,
-                stock_code=code,
-                short_volume=vol,
-                short_ratio=ratio,
-                short_balance=bal,
-            ))
-        db.commit()
-    else:
-        # 모든 소스 실패 → 레코드 미삽입. signal engine이 short=None → 중립 처리
-        logger.warning("공매도 데이터 수집 실패 (%s) — 레코드 삽입 안 함 (중립 처리)", trading_date)
-        db.commit()
+    # 모든 소스 실패 → 레코드 미삽입. signal engine이 short=None → 중립 처리
+    logger.warning("공매도 데이터 수집 실패 (%s) — 레코드 삽입 안 함 (중립 처리)", trading_date)
+    db.commit()

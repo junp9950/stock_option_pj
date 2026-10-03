@@ -1,7 +1,7 @@
 """
 과거 수급·가격 데이터 일괄 백필.
 
-pykrx로 날짜별 전종목 수급, FDR로 종목별 가격을 한꺼번에 수집해
+FDR로 종목별 가격을 한꺼번에 수집해
 SpotDailyPrice / SpotInvestorFlow 테이블에 저장한다.
 이미 데이터가 있는 날짜는 건너뛴다.
 """
@@ -52,62 +52,6 @@ def _already_collected_dates(db: Session) -> set[date]:
         )
     ).scalars().all()
     return set(rows)
-
-
-# ── pykrx 수급 조회 ───────────────────────────────────────────────────────────
-
-def _pykrx_flow_batch(yyyymmdd: str) -> dict[str, tuple[float, float, float]]:
-    """날짜 하나, 전종목 외국인/기관 순매수(원) 일괄 조회."""
-    try:
-        from pykrx import stock as ps  # noqa: PLC0415
-
-        def _fetch(market: str, investor: str) -> pd.DataFrame:
-            try:
-                df = ps.get_market_net_purchases_of_equities_by_ticker(
-                    yyyymmdd, yyyymmdd, market, investor
-                )
-                return df if df is not None else pd.DataFrame()
-            except Exception:  # noqa: BLE001
-                return pd.DataFrame()
-
-        # KOSPI + KOSDAQ 합산
-        df_f_k = _fetch("KOSPI", "외국인")
-        df_f_q = _fetch("KOSDAQ", "외국인")
-        df_i_k = _fetch("KOSPI", "기관합계")
-        df_i_q = _fetch("KOSDAQ", "기관합계")
-
-        df_foreign = pd.concat([df_f_k, df_f_q]) if not df_f_k.empty or not df_f_q.empty else pd.DataFrame()
-        df_inst = pd.concat([df_i_k, df_i_q]) if not df_i_k.empty or not df_i_q.empty else pd.DataFrame()
-
-        if df_foreign.empty and df_inst.empty:
-            return {}
-
-        def _net(df: pd.DataFrame, code: str) -> float:
-            if df is None or df.empty or code not in df.index:
-                return 0.0
-            row = df.loc[code]
-            for col in ["순매수", "매수", "순매수금액"]:
-                if col in (row.index if hasattr(row, 'index') else []):
-                    return float(row[col])
-            for val in (row if hasattr(row, '__iter__') else []):
-                try:
-                    return float(val)
-                except (TypeError, ValueError):
-                    continue
-            return 0.0
-
-        all_codes: set[str] = set()
-        if not df_foreign.empty:
-            all_codes |= {str(c).zfill(6) for c in df_foreign.index}
-        if not df_inst.empty:
-            all_codes |= {str(c).zfill(6) for c in df_inst.index}
-
-        result = {code: (_net(df_foreign, code), _net(df_inst, code), 0.0) for code in all_codes}
-        logger.debug("pykrx flow batch %s: %d stocks", yyyymmdd, len(result))
-        return result
-    except Exception as exc:  # noqa: BLE001
-        logger.debug("pykrx batch failed for %s: %s", yyyymmdd, exc)
-        return {}
 
 
 # ── 네이버 금융 수급 히스토리 ────────────────────────────────────────────────────
