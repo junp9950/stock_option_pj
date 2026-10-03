@@ -19,11 +19,18 @@ button{background:#1f6feb;color:#fff;border:0;border-radius:7px;padding:9px 16px
 .comment{padding:6px 0;font-size:13px}.comment .meta{font-size:11px;margin-bottom:2px}.comment .content{margin:0;font-size:13px}
 .comment-form{display:flex;gap:6px;margin-top:8px;align-items:center}.comment-form input{flex:1}.comment-form input.name{flex:0 0 90px}.comment-form button{padding:7px 12px;font-size:13px}.comment-form .cam{background:transparent;border:1px solid #30363d;padding:6px 10px}
 .editor{margin-top:8px;padding:10px;border:1px solid #30363d;border-radius:8px;background:#0f141b}.editor textarea{min-height:70px}
+.board{width:100%;border-collapse:collapse}.board td{padding:10px 8px;border-top:1px solid #21262d;vertical-align:middle}.board tr:first-child td{border-top:0}
+.board tr.post{cursor:pointer}.board tr.post:hover{background:#1c2330}.board .b-tag{width:110px;color:#93c5fd;font-size:12.5px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:110px}
+.board .b-title{color:#e6edf3}.board .b-cnt{color:#58a6ff;font-weight:600;font-size:12.5px;margin-left:5px}.board .b-img{font-size:12px;margin-left:4px;color:#8b949e}
+.board .b-author{width:110px;color:#c9d1d9;font-size:13px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:110px}.board .b-time{width:80px;color:#8b949e;font-size:12.5px;text-align:right;white-space:nowrap}
+.topbar{display:flex;justify-content:space-between;align-items:center;margin-top:18px;gap:10px}
+@media(max-width:640px){main{padding:14px}.board .b-tag{display:none}.board .b-author{width:auto;max-width:70px;font-size:12px}.board .b-time{width:auto}}
 .lightbox{display:none;position:fixed;inset:0;background:rgba(0,0,0,.85);z-index:50;align-items:center;justify-content:center;cursor:zoom-out}
 .lightbox.show{display:flex}.lightbox img{max-width:92vw;max-height:92vh;border-radius:6px}
 </style></head><body><main>
 <h1>종목토론</h1><div class="sub">종목 얘기, 차트 스크린샷 자유롭게 남겨 보세요. 사진은 입력창에 <b>Ctrl+V</b>로 붙여넣거나 골라서 올릴 수 있습니다 (글 최대 10장, 댓글 최대 5장).</div>
-<section class="box">
+<div class="topbar"><button class="ghost" id="back" style="display:none">← 목록</button><span class="muted" id="board-info"></span><button id="write-btn">✎ 글쓰기</button></div>
+<section class="box" id="write-box" style="display:none">
   <div class="row">
     <input id="stock-name" class="grow" maxlength="100" placeholder="종목명 (선택)">
     <input id="stock-code" style="max-width:120px" maxlength="20" placeholder="종목코드 (선택)">
@@ -42,7 +49,7 @@ button{background:#1f6feb;color:#fff;border:0;border-radius:7px;padding:9px 16px
 <div class="lightbox" id="lightbox"><img id="lightbox-img" src="" alt=""></div>
 <script>
 const API='__API_PREFIX__/discussion';const MAX_POST=10,MAX_COMMENT=5;
-let all=[];
+let all=[],current=null;   // all: 게시판 목록(요약), current: 열어 본 글 전체
 const esc=s=>String(s).replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
 const when=t=>new Date(t).toLocaleString('ko-KR',{timeZone:'Asia/Seoul',month:'numeric',day:'numeric',hour:'2-digit',minute:'2-digit'});
 async function call(method,url,body){const r=await fetch(url,{method,headers:{'Content-Type':'application/json'},body:body?JSON.stringify(body):undefined});if(!r.ok){let m='요청에 실패했습니다.';try{m=(await r.json()).detail||m}catch(e){}throw Error(typeof m==='string'?m:'입력값을 확인해 주세요.')}return r.json()}
@@ -98,7 +105,9 @@ document.getElementById('submit').onclick=async()=>{
     await call('POST',API,{content,images:newPost.images,author:document.getElementById('author').value.trim(),
       stock_name:document.getElementById('stock-name').value.trim(),stock_code:document.getElementById('stock-code').value.trim()});
     ['content','stock-name','stock-code'].forEach(id=>document.getElementById(id).value='');
-    newPost.images=[];newPost.render();formMsg.textContent='';await load();
+    newPost.images=[];newPost.render();formMsg.textContent='';
+    document.getElementById('write-box').style.display='none';
+    if(location.hash)location.hash='';else await route();
   }catch(e){formMsg.textContent=e.message}
 };
 
@@ -110,9 +119,24 @@ function shotsHtml(images,small){
   if(images.length===1)return`<img class="shot" src="${images[0]}" data-zoom="1" alt="">`;
   return`<div class="shots">${images.map(u=>`<img src="${u}" data-zoom="1" loading="lazy" alt="">`).join('')}</div>`;
 }
-function render(){const box=document.getElementById('list');
-if(!all.length){box.innerHTML='<div class="empty">아직 글이 없습니다. 첫 글을 남겨 주세요.</div>';return}
-box.innerHTML=all.map(x=>`<div class="item" data-id="${x.id}">
+function renderBoard(){
+  const box=document.getElementById('list');
+  document.getElementById('board-info').textContent=all.length?`글 ${all.length}개`:'';
+  if(!all.length){box.innerHTML='<div class="empty">아직 글이 없습니다. 첫 글을 남겨 주세요.</div>';return}
+  box.innerHTML='<table class="board"><tbody>'+all.map(x=>`<tr class="post" data-open="${x.id}">
+    <td class="b-tag">${x.stock_name||x.stock_code?esc(x.stock_name||x.stock_code):'자유'}</td>
+    <td><span class="b-title">${esc(x.title)}</span>${x.comments?`<span class="b-cnt">${x.comments}</span>`:''}${x.images?`<span class="b-img" title="사진 ${x.images}장">🖼</span>`:''}${x.edited?' <span class="edited">(수정됨)</span>':''}</td>
+    <td class="b-author">${x.author?esc(x.author):'익명'}</td>
+    <td class="b-time">${shortWhen(x.created_at)}</td></tr>`).join('')+'</tbody></table>';
+}
+// 오늘 글은 시:분, 그 전은 월.일
+function shortWhen(t){
+  const d=new Date(t),day=v=>v.toLocaleDateString('ko-KR',{timeZone:'Asia/Seoul'});
+  if(day(d)===day(new Date()))return d.toLocaleTimeString('ko-KR',{timeZone:'Asia/Seoul',hour:'2-digit',minute:'2-digit',hour12:false});
+  return d.toLocaleDateString('ko-KR',{timeZone:'Asia/Seoul',month:'2-digit',day:'2-digit'}).replace(/\s/g,'').replace(/\.$/,'');
+}
+function renderPost(){const box=document.getElementById('list');const x=current;
+box.innerHTML=`<div class="item" data-id="${x.id}">
   <div class="meta">${x.stock_name||x.stock_code?`<span class="tag">${esc(x.stock_name||'')}${x.stock_code?' ('+esc(x.stock_code)+')':''}</span>`:''}<span>${x.author?esc(x.author)+' · ':''}${when(x.created_at)}</span>${x.edited?'<span class="edited">(수정됨)</span>':''}</div>
   <div class="body">${x.content?`<p class="content">${esc(x.content)}</p>`:''}${shotsHtml(x.images)}</div>
   <div class="row"><button class="ghost" data-act="edit">수정</button><button class="ghost danger" data-act="del">삭제</button></div>
@@ -130,12 +154,11 @@ box.innerHTML=all.map(x=>`<div class="item" data-id="${x.id}">
     </div>
     <div class="previews small" data-f="c-previews"></div>
   </div>
-</div>`).join('');
-  box.querySelectorAll('.item').forEach(item=>{
-    const set=photoSet(item.querySelector('[data-f="c-previews"]'),MAX_COMMENT,null);
-    commentSets[item.dataset.id]=set;
-    pasteInto(item.querySelector('[data-f="c-content"]'),set);
-  });
+</div>`;
+  const item=box.querySelector('.item');
+  const set=photoSet(item.querySelector('[data-f="c-previews"]'),MAX_COMMENT,null);
+  commentSets[x.id]=set;
+  pasteInto(item.querySelector('[data-f="c-content"]'),set);
 }
 
 // 수정 화면 (글·댓글 공용): 본문 자리에 편집기를 띄운다
@@ -182,7 +205,24 @@ function openLightbox(src){
 }
 document.getElementById('lightbox').onclick=()=>document.getElementById('lightbox').classList.remove('show');
 
-async function load(){try{all=await call('GET',API);render()}catch(e){document.getElementById('list').innerHTML='<div class="empty">목록을 불러오지 못했습니다.</div>'}}
+async function route(){
+  const m=location.hash.match(/^#(\d+)$/);
+  document.getElementById('back').style.display=m?'':'none';
+  document.getElementById('write-btn').style.display=m?'none':'';
+  document.getElementById('board-info').style.display=m?'none':'';
+  if(m)document.getElementById('write-box').style.display='none';
+  const box=document.getElementById('list');
+  try{
+    if(m){current=await call('GET',`${API}/${m[1]}`);renderPost()}
+    else{current=null;all=await call('GET',`${API}/board`);renderBoard()}
+  }catch(e){box.innerHTML=`<div class="empty">${m?'글을 불러오지 못했습니다.':'목록을 불러오지 못했습니다.'}</div>`}
+  // 메인 화면의 iframe 안이라, 글을 열면 iframe 맨 위가 보이게 올린다
+  try{if(window.frameElement)window.frameElement.scrollIntoView({block:'start'});else window.scrollTo(0,0)}catch(e){}
+}
+const load=route;   // 저장·삭제 뒤 지금 화면을 다시 불러온다
+window.addEventListener('hashchange',route);
+document.getElementById('back').onclick=()=>{location.hash=''};
+document.getElementById('write-btn').onclick=()=>{const w=document.getElementById('write-box');w.style.display=w.style.display==='none'?'':'none';if(w.style.display==='')document.getElementById('content').focus()};
 async function addComment(item){
   const contentEl=item.querySelector('[data-f="c-content"]'),set=commentSets[item.dataset.id];
   const content=contentEl.value.trim();
@@ -192,10 +232,11 @@ async function addComment(item){
 }
 document.getElementById('list').addEventListener('click',async e=>{
   if(e.target.matches('img[data-zoom]')){openLightbox(e.target.src);return}
+  const row=e.target.closest('tr[data-open]');if(row){location.hash=row.dataset.open;return}
   const b=e.target.closest('button');if(!b||!b.dataset.act)return;
-  const item=b.closest('.item');const post=all.find(p=>String(p.id)===item.dataset.id);
+  const item=b.closest('.item');const post=current;
   const act=b.dataset.act;
-  if(act==='del'){if(!confirm('이 글을 삭제할까요?'))return;try{await call('DELETE',`${API}/${post.id}`);await load()}catch(err){alert(err.message)}}
+  if(act==='del'){if(!confirm('이 글을 삭제할까요?'))return;try{await call('DELETE',`${API}/${post.id}`);location.hash=''}catch(err){alert(err.message)}}
   if(act==='edit')openEditor(item,{text:post.content,images:post.images,max:MAX_POST,stock:{name:post.stock_name,code:post.stock_code},
     onSave:p=>call('PATCH',`${API}/${post.id}`,p)});
   if(act==='add-comment')addComment(item);
@@ -209,5 +250,5 @@ document.getElementById('list').addEventListener('click',async e=>{
 document.getElementById('list').addEventListener('keydown',e=>{
   if(e.key==='Enter'&&e.target.matches('[data-f="c-content"]')){e.preventDefault();addComment(e.target.closest('.item'))}
 });
-load();
+route();
 </script></body></html>

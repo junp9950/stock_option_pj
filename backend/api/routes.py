@@ -201,6 +201,41 @@ def list_discussion(stock_code: str | None = None, db: Session = Depends(get_db)
     return [_discussion_dict(p, comments_by_post.get(p.id, [])) for p in posts]
 
 
+def _image_count_sql(col):
+    """image_data 칸의 사진 수를 DB에서 센다 (사진 본문을 내려받지 않으려고). 한 장 = data URI, 여러 장 = JSON 배열."""
+    n = (func.length(col) - func.length(func.replace(col, 'data:image', ''))) / 10
+    return func.coalesce(n, 0)
+
+
+@router.get('/discussion/board')
+def discussion_board(db: Session = Depends(get_db)):
+    """게시판 목록: 제목(본문 첫 줄)·댓글 수·사진 수만. 사진과 본문 전체는 글을 열 때 받는다."""
+    n_comments = dict(db.execute(select(DiscussionComment.post_id, func.count()).group_by(DiscussionComment.post_id)).all())
+    rows = db.execute(
+        select(DiscussionPost.id, DiscussionPost.author, DiscussionPost.stock_code, DiscussionPost.stock_name,
+               func.substr(DiscussionPost.content, 1, 200), _image_count_sql(DiscussionPost.image_data),
+               DiscussionPost.created_at, DiscussionPost.updated_at)
+        .order_by(DiscussionPost.id.desc()).limit(500)
+    ).all()
+    out = []
+    for pid, author, code, name, head, n_img, created, updated in rows:
+        title = next((ln.strip() for ln in (head or '').splitlines() if ln.strip()), '')
+        out.append({"id": pid, "author": author, "stock_code": code, "stock_name": name,
+                    "title": title[:80] or '(사진)', "images": int(n_img or 0), "comments": n_comments.get(pid, 0),
+                    "edited": bool(updated and created and (updated - created).total_seconds() > 2),
+                    "created_at": created.isoformat() + "Z"})
+    return out
+
+
+@router.get('/discussion/{pid}')
+def get_discussion(pid: int, db: Session = Depends(get_db)):
+    x = db.get(DiscussionPost, pid)
+    if x is None:
+        raise HTTPException(status_code=404, detail="게시글을 찾을 수 없습니다.")
+    comments = list(db.scalars(select(DiscussionComment).where(DiscussionComment.post_id == pid).order_by(DiscussionComment.id)))
+    return _discussion_dict(x, comments)
+
+
 @router.post('/discussion')
 def create_discussion(body: DiscussionIn, db: Session = Depends(get_db)):
     images = _check_images(body.images or ([body.image_data] if body.image_data else []), MAX_IMAGES)
