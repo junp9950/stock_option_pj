@@ -46,9 +46,12 @@ TRI_MIN_TOUCHES = 3
 TRI_LOW_RISE = 0.03
 TRI_SHRINK = 0.75
 TRI_NEAR_RES = 0.10
+TRI_POLE_DAYS = 15     # 깃대는 15거래일 안의 급등 (두 달 걸친 완만한 반등은 깃대가 아니다)
+TRI_NEAR_HI90 = 0.75   # 지금 가격이 90일 고점의 75% 이상 (폭락 뒤 바닥 반등 제외)
 
 
-def detect_triangle(pl: list) -> dict | None:
+def detect_triangle(pl: list, market: dict | None = None) -> dict | None:
+    """market: 날짜 → 전종목 동일가중 지수. 주면 깃대 상승을 시장 대비로 잰다 (7/30 폭락 뒤 시장 전체 반등을 깃대로 오인하지 않게)."""
     t = len(pl) - 1
     if t < 70:
         return None
@@ -69,18 +72,31 @@ def detect_triangle(pl: list) -> dict | None:
     close = pl[t].close_price
     if not (res * (1 - TRI_NEAR_RES) <= close <= res * 1.02):
         return None
-    # 깃대: 60일 안 저점 '뒤에' 나온 고점까지의 상승이어야 한다 (예전엔 순서를 안 봐서 넥스트칩처럼
-    # 고점→저점으로 빠진 종목도 '상승 +76%'로 잡혔다). 삼각형은 깃대 위쪽 절반에 있어야 한다.
+    # 깃대: 삼각형 시작 전 저점에서 15거래일 안에 '그 뒤' 고점까지 +40% 이상 (시장 대비). 예전엔 60일 안 아무 고점/저점으로
+    # 재서 넥스트칩처럼 빠지기만 한 종목, 미래에셋벤처투자처럼 두 달 완만한 반등, 7/30 폭락 뒤 시장 전체 반등이 다 깃대로 잡혔다.
     w0 = t - TRI_WIN + 1
-    i_low = min(range(t - 60, w0), key=lambda i: pl[i].low_price)
-    base_low = pl[i_low].low_price
-    peak = max(p.high_price for p in pl[i_low + 1: t + 1])
-    if base_low <= 0 or peak / base_low - 1 < TRI_RISE_MIN:
+    if t < 90 or close < TRI_NEAR_HI90 * max(p.high_price for p in pl[t - 90: t + 1]):
         return None
-    if lo1 < base_low + 0.5 * (peak - base_low):
+    best = None
+    for i in range(t - 60, w0):
+        if pl[i].low_price <= 0:
+            continue
+        top = max(range(i + 1, min(i + TRI_POLE_DAYS + 1, t + 1)), key=lambda k: pl[k].high_price)
+        gain = pl[top].high_price / pl[i].low_price
+        if market:
+            m0, m1 = market.get(pl[i].trading_date), market.get(pl[top].trading_date)
+            if m0 and m1:
+                gain /= m1 / m0
+        if gain - 1 >= TRI_RISE_MIN and (best is None or gain > best[0]):
+            best = (gain, i, top)
+    if best is None:
+        return None
+    gain, i_low, i_top = best
+    base_low, peak = pl[i_low].low_price, pl[i_top].high_price
+    if lo1 < base_low + 0.5 * (peak - base_low):   # 삼각형은 깃대 위쪽 절반에
         return None
     return {"resistance": round(res), "support": round(lo2), "touches": touches,
-            "rise_pct": round((peak / base_low - 1) * 100), "shrink": round(r2 / r1, 2)}
+            "rise_pct": round((gain - 1) * 100), "shrink": round(r2 / r1, 2)}
 
 
 def detect_big_doji(pl: list) -> dict | None:
@@ -226,6 +242,17 @@ def scan(db: Session) -> dict:
 
     sectors = _sector_scores(db, by_code)
 
+    # 전종목 동일가중 지수 (상승삼각형 깃대를 시장 대비로 재는 데 쓴다)
+    day_chg: dict = defaultdict(list)
+    for pl in by_code.values():
+        for p in pl:
+            if p.change_pct is not None and abs(p.change_pct) < 30:
+                day_chg[p.trading_date].append(float(p.change_pct))
+    market, level = {}, 100.0
+    for d in sorted(day_chg):
+        level *= 1 + sum(day_chg[d]) / len(day_chg[d]) / 100
+        market[d] = level
+
     found: dict[str, list[dict]] = defaultdict(list)
     for code, pl in by_code.items():
         if pl[-1].trading_date != latest or code not in stocks:
@@ -246,16 +273,16 @@ def scan(db: Session) -> dict:
             state = f" · 돌파 후 {after}일" if after else (" · 돌파" if flag["status"] == "돌파" else "")
             found[code].append({"type": "불플래그", "grade": flag["grade"], "stop": flag["flag_low"],
                                 "detail": f"깃대 +{flag['pole_gain_pct']:.0f}% · 깃발 {flag['flag_days']}일 · 되돌림 {flag['retrace_pct']:.0f}%" + state})
-        tri, after = detect_triangle(pl), 0
+        tri, after = detect_triangle(pl, market), 0
         if not tri:
             for k in range(1, BREAKOUT_KEEP + 1):
-                tr = detect_triangle(pl[:-k])
+                tr = detect_triangle(pl[:-k], market)
                 if tr and pl[-1].close_price > tr["resistance"]:
                     tri, after = tr, k
                     break
         if tri:
             found[code].append({"type": "상승삼각형", "grade": None, "stop": tri["support"],
-                                "detail": f"상승 +{tri['rise_pct']}% · 저항 {tri['resistance']:,}원 {tri['touches']}회 터치"
+                                "detail": f"깃대 +{tri['rise_pct']}%(시장 대비) · 저항 {tri['resistance']:,}원 {tri['touches']}회 터치"
                                           + (f" · 돌파 후 {after}일" if after else "")})
         dj = detect_big_doji(pl)
         if dj:
