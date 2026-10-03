@@ -1132,9 +1132,8 @@ function showToast(msg,err=false){
   t.style.display='block';setTimeout(()=>t.style.display='none',5000);
 }
 
-// 주소 끝의 #탭이름(새로고침 전에 보던 탭)으로 시작
-{ const t=location.hash.slice(1); if(t&&t!=='candidates'&&document.getElementById('panel-'+t))switchTab(t); else loadCandidates(); }
-if (location.hash) switchTab(location.hash.slice(1));
+// 주소 끝의 #탭이름(새로고침 전에 보던 탭, switchTab이 남긴다)으로 시작
+if (location.hash) switchTab(location.hash.slice(1)); else loadCandidates();
 const chartQuery=new URLSearchParams(location.search);
 if (/^[0-9A-Z]{6}$/.test(chartQuery.get('chart')||'')) openChartModal(chartQuery.get('chart'),chartQuery.get('name')||chartQuery.get('chart'),'');
 </script>
