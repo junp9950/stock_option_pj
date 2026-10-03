@@ -268,12 +268,12 @@ select{background:#21262d;border:1px solid #30363d;color:#c9d1d9;padding:6px 10p
     </table>
   </div>
 
-  <!-- 매집 감지 섹터 -->
+  <!-- 매집 감지 테마 -->
   <div style="margin-bottom:20px">
-    <div style="font-size:12px;text-transform:uppercase;color:#8b949e;margin-bottom:8px;letter-spacing:.06em">🕵️ 매집 감지 섹터 (수급↑ 주가↔)</div>
+    <div style="font-size:12px;text-transform:uppercase;color:#8b949e;margin-bottom:8px;letter-spacing:.06em">🕵️ 매집 감지 테마 (수급↑ 주가↔)</div>
     <table id="sec-stealth-table">
       <thead><tr>
-        <th>섹터</th><th>분류</th>
+        <th>테마</th><th>분류</th>
         <th onclick="setSectorSort('foreign')" style="cursor:pointer">외국인</th>
         <th onclick="setSectorSort('inst')" style="cursor:pointer">기관</th>
         <th>합산</th>
@@ -285,22 +285,22 @@ select{background:#21262d;border:1px solid #30363d;color:#c9d1d9;padding:6px 10p
     </table>
   </div>
 
-  <!-- 전체 섹터 수급 랭킹 -->
+  <!-- 전체 테마 수급 랭킹 -->
   <div>
-    <div style="font-size:12px;text-transform:uppercase;color:#8b949e;margin-bottom:8px;letter-spacing:.06em">📊 전체 섹터 수급 랭킹 (<span id="sec-rank-label">스텔스 매집순</span>)</div>
+    <div style="font-size:12px;text-transform:uppercase;color:#8b949e;margin-bottom:8px;letter-spacing:.06em">📊 전체 테마 수급 랭킹 (<span id="sec-rank-label">스텔스 매집순</span>)</div>
     <table id="sec-surged-table">
       <thead><tr>
-        <th>섹터</th><th>분류</th><th>외국인</th><th>기관</th><th>합산</th><th>평균등락</th><th>수급점수</th><th>상태</th>
+        <th>테마</th><th>분류</th><th>외국인</th><th>기관</th><th>합산</th><th>평균등락</th><th>수급점수</th><th>상태</th>
       </tr></thead>
       <tbody id="sec-surged-body"><tr><td colspan="8" style="color:#8b949e;text-align:center;padding:20px">로딩 중…</td></tr></tbody>
     </table>
   </div>
 
-  <!-- 섹터 종목 모달 -->
+  <!-- 테마 종목 모달 -->
   <div class="modal-bg" id="sector-modal-bg" onclick="if(event.target===this)closeSectorModal()">
     <div class="modal">
       <span class="close-btn" onclick="closeSectorModal()">✕</span>
-      <h2 id="sector-modal-title">섹터 소속 종목</h2>
+      <h2 id="sector-modal-title">테마 소속 종목</h2>
       <div id="sector-modal-body"></div>
     </div>
   </div>
@@ -636,11 +636,11 @@ function renderSector(data){
 
   document.getElementById('sec-stealth-body').innerHTML=stealth.length
     ?stealth.slice(0,10).map(d=>sRow(d,true)).join('')
-    :'<tr><td colspan="8" style="color:#8b949e;text-align:center;padding:16px">매집 감지 섹터 없음</td></tr>';
+    :'<tr><td colspan="8" style="color:#8b949e;text-align:center;padding:16px">매집 감지 테마 없음</td></tr>';
 
   document.getElementById('sec-surged-body').innerHTML=surged.length
     ?surged.map(d=>sRow(d,false)).join('')
-    :'<tr><td colspan="8" style="color:#8b949e;text-align:center;padding:16px">섹터 데이터 없음</td></tr>';
+    :'<tr><td colspan="8" style="color:#8b949e;text-align:center;padding:16px">테마 데이터 없음</td></tr>';
 }
 
 async function openSectorModal(sectorId, name){
