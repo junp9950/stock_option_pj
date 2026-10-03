@@ -101,8 +101,17 @@ def scan(db: Session) -> dict:
             row["families"].append(f)
             row["money"] |= money
             row["leader"] |= leader
+    # 대량거래 관심종목과 연결: 오늘 몇 년 만의 최대 거래대금인지, 관심종목 단계(숨고르기·진입 신호 등)
+    from backend.screener.volume_record import scan as vr_scan  # noqa: PLC0415
+    vr = vr_scan(db)
+    vr_stage = {x["code"]: x for x in vr["items"]}
+    record_today = {x["code"] for x in vr["items"] if x["event_date"] == vr["trading_date"]} | {x["code"] for x in vr.get("limit_up", [])}
     rows = []
     for r in cands.values():
+        v = vr_stage.get(r["code"])
+        r["vr_stage"] = v["stage"] if v else ""
+        r["vr_signal"] = bool(v and v["entry_signal"])
+        r["record_today"] = r["code"] in record_today
         r["grade"] = "A" if r["money"] else "B"
         r["close"] = round(r["close"])
         (limit if r["change_pct"] >= LIMIT_UP else rows).append(r)

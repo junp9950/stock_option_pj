@@ -210,6 +210,7 @@ select{background:#21262d;border:1px solid #30363d;color:#c9d1d9;padding:6px 10p
   <p class="note" style="color:#8b949e;font-size:12.5px;margin:0 0 12px">
     순서: <b style="color:#c9d1d9">① 시장 상승·횡보 → ② 뜨거운 섹터(20일 상승 상위 3) → ③ 그날 섹터에 돈 몰림(거래대금 1.2배) → ④ +3% 양봉·거래 2배·윗꼬리 짧음</b>.
     3년 확인(상승·횡보장, 다음 날 "갭상승이면 시가·아니면 종가" 매도): 기본 +0.42%, 뜨거운 섹터 +0.74%, <b style="color:#3fb950">A등급(섹터 돈 몰림까지) +0.94%·수익 71%</b>, 섹터 밖 +0.28%, 하락장 +0.12%.
+    <b style="color:#f85149">🔔 거래대금 신기록</b>은 오늘 거래대금이 몇 년 만의 최대인 종목(상한가면 다음 날 시가 평균 +5.6%, 아니면 일반 후보와 비슷), <b>🔥</b>는 대량거래 관심종목 단계(스윙 관점)입니다.
     <b>파는 법:</b> 다음 날 오전 정리가 기본(시가 매도는 -5% 넘는 손실 2%, 종가까지 들고 가면 18%), 갭이 크면 덜어내기. 숫자는 수수료·세금 빼기 전입니다.
   </p>
   <div style="display:flex;flex-wrap:wrap;align-items:center;gap:10px;margin-bottom:6px">
@@ -519,13 +520,13 @@ function renderJongbe(){
   const body=document.getElementById('jb-body');
   if(!items.length){ body.innerHTML='<tr><td colspan="5" style="color:#8b949e;text-align:center;padding:20px">오늘은 조건에 맞는 종목이 없습니다</td></tr>'; }
   else body.innerHTML=items.map(x=>`<tr style="cursor:pointer" onclick="openChartModal('${x.code}','${x.name}','')">
-    <td><b>${x.name}</b> <span style="color:#8b949e;font-size:11px">${x.code}</span>${x.earn_up?' <span style="color:#3fb950;font-size:11px;border:1px solid #238636;border-radius:8px;padding:0 5px">📈 실적</span>':''}${x.leader?' <span style="color:#e3b341;font-size:11px">👑 대장</span>':''}${x.market_cap?`<br><span class="ts">시총 ${cdWon(x.market_cap)}</span>`:''}</td>
+    <td><b>${x.name}</b> <span style="color:#8b949e;font-size:11px">${x.code}</span>${x.earn_up?' <span style="color:#3fb950;font-size:11px;border:1px solid #238636;border-radius:8px;padding:0 5px">📈 실적</span>':''}${x.leader?' <span style="color:#e3b341;font-size:11px">👑 대장</span>':''}${x.record_today?' <span style="color:#f85149;font-size:11px" title="오늘 몇 년 만의 최대 거래대금">🔔 거래대금 신기록</span>':''}${x.vr_stage&&!x.record_today?` <span style="font-size:11px;color:${x.vr_signal?'#e3b341':'#8b949e'}" title="대량거래 관심종목 단계 (스윙 관점)">🔥 ${x.vr_signal?'진입 신호':x.vr_stage}</span>`:''}${x.market_cap?`<br><span class="ts">시총 ${cdWon(x.market_cap)}</span>`:''}</td>
     <td data-label="등급"><b style="color:${x.grade==='A'?'#3fb950':'#c9d1d9'}">${x.grade}</b><br><span class="ts">${x.grade==='A'?'섹터 돈 몰림':'섹터 돈 몰림 아님'}</span></td>
     <td data-label="그날 봉"><span style="color:#f85149">+${x.change_pct}%</span> · 거래 ${x.tv_x}배<br><span class="ts" style="color:${x.upper_pct<=30?'#3fb950':'#8b949e'}">윗꼬리 ${x.upper_pct}%</span> · <span class="ts">${cdWon(x.value)}</span></td>
     <td data-label="섹터" style="font-size:12px">${x.families.join(', ')}</td>
     <td data-label="종가" style="text-align:right">${x.close.toLocaleString()}원${gapTag(x.gap20_pct)}</td>
   </tr>`).join('');
-  document.getElementById('jb-limit').innerHTML=lim.length?`상한가 (체결 어려움 주의): ${lim.map(x=>`<b style="color:#e6edf3;cursor:pointer" onclick="openChartModal('${x.code}','${x.name}','')">${x.name}</b>`).join(' · ')}`:'';
+  document.getElementById('jb-limit').innerHTML=lim.length?`상한가 (체결 어려움 주의): ${lim.map(x=>`<b style="color:#e6edf3;cursor:pointer" onclick="openChartModal('${x.code}','${x.name}','')">${x.name}</b>${x.record_today?' <span style="color:#f85149;font-size:11px">🔔 신기록 · 3년 다음 날 시가 평균 +5.6%</span>':''}`).join(' · ')}`:'';
 }
 async function jbCheck(){
   const q=document.getElementById('jb-q').value.trim();
