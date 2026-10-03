@@ -327,6 +327,8 @@ def scan(db: Session) -> dict:
             "turnover_pct": round(tv_today / cap * 100, 2) if cap else None,
             "industry": industry.get(code),
             "earn_up": code in earn_up,
+            # 20일선 이격도: 3년 확인 +20~30% 구간부터 20일 뒤 시장 대비 마이너스, +30%↑는 절반 넘게 -15% 이상 하락
+            "gap20_pct": round((close / (sum(p.close_price for p in pl[-20:]) / 20) - 1) * 100, 1),
             "themes": themes.get(code, []),
             "close_price": round(close), "change_pct": round(float(pl[-1].change_pct or 0), 2),
             "patterns": patterns,

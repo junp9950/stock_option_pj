@@ -140,6 +140,7 @@ def scan(db: Session) -> dict:
             "event_value": round(tv[i]), "event_x": round(x),
             "peak_date": pl[i_peak][1].isoformat(), "rise_pct": round((peak / base - 1) * 100, 1),
             "close_price": round(close),
+            "gap20_pct": round((close / (sum(float(p[5]) for p in pl[-20:]) / 20) - 1) * 100, 1),
             "market_cap": caps.get(code, (0, 0))[0] or caps.get(code, (0, 0))[1] * close or marcap.get(code) or 0, "change_pct": round((close / float(pl[-2][5]) - 1) * 100, 2),
             "off_peak_pct": round((close / peak - 1) * 100, 1), "kept_pct": round(kept * 100),
             "dry_pct": round(dry * 100), "rest_days": rest, "days_since": len(pl) - 1 - i,

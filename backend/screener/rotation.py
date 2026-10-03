@@ -3,8 +3,9 @@
 - 20일 상승: 줄기 소속 종목 20일 수익률 중간값, 순위는 16개 중
 - 확산: 20일선 위 종목 비율
 - 자금: 최근 5일 줄기 거래대금 평균 / 그 전 20거래일 평균
-- 과열: 순위 1~2위 + 확산 90% 이상 + 자금이 최근 5일 정점보다 10% 이상 줄어듦
-- 유입: 10거래일 전보다 순위 3계단 이상 상승 + 자금 1.05배 이상
+- 과열: 줄기 안 종목 중 20일선 이격도 +20% 넘은 비율이 20% 이상 (10~20%는 주의)
+  3년 확인(같은 날 16개 줄기 평균 대비 20일 뒤): 0~5% +0.12%p, 10~20% -0.34%p, 20~30% -1.72%p(55건), 30%↑ -3.12%p(8건).
+  1~2위 줄기는 20%↑ -2.36%p(49건). 예전 기준(확산 90%·자금 감소)은 자금 감소가 오히려 덜 빠져 버렸다.
 3년 확인(상승·횡보장): 뜨거운 줄기 상위 3 + 그날 줄기 거래대금 1.2배 이상인 날의 거래 실린 양봉은 다음 날 평균 +0.94%(수익 71%),
 줄기 밖은 +0.28%.
 단 줄기 단위 '다음 10~20일 어느 줄기가 앞서나'는 거의 맞히지 못했다(같은 날 16개 평균 대비): 1~2위 -0.35%p/-0.47%p,
@@ -62,6 +63,7 @@ def scan(db: Session) -> dict:
     CH = px.pivot(index="trading_date", columns="stock_code", values="ch").sort_index()
     ret20 = C / C.shift(20) - 1
     above = C > C.rolling(20).mean()
+    stretched = (C / C.rolling(20).mean() - 1) >= 0.2   # 20일선보다 20% 넘게 뜬 종목
     rows = {}
     for f, mem in family_members(db).items():
         m = [x for x in mem if x in C.columns]
@@ -73,6 +75,7 @@ def scan(db: Session) -> dict:
             "tv5": tv.rolling(5).mean() / tv.shift(5).rolling(20, min_periods=15).mean(),
             "tv1": tv / tv.shift(1).rolling(20, min_periods=15).mean(),
             "ret5": (C[m] / C[m].shift(5) - 1).median(axis=1), "chg": CH[m].median(axis=1), "members": m,
+            "stretch": stretched[m].mean(axis=1),
         }
     ret_df = pd.DataFrame({f: r["ret20"] for f, r in rows.items()})
     rank = ret_df.rank(axis=1, ascending=False)
@@ -80,8 +83,7 @@ def scan(db: Session) -> dict:
     items = []
     for f, r in rows.items():
         tv5 = r["tv5"]
-        overheat = (rank.at[d, f] <= 2 and r["breadth"].iloc[-1] >= 0.9 and tv5.iloc[-1] <= 0.9 * tv5.iloc[-6:].max())
-        inflow = rank.at[d10, f] - rank.at[d, f] >= 3 and tv5.iloc[-1] >= 1.05
+        st = float(r["stretch"].iloc[-1])
         m = r["members"]
         # 오늘 돈이 붙은 종목: 거래대금이 20일 평균의 2배 이상·30억 이상인 것 중 많이 오른 순 (대형주는 여러 줄기에 다 속해서 거래대금 순은 의미가 없다)
         avg20 = TV[m].iloc[-21:-1].mean()
@@ -94,7 +96,8 @@ def scan(db: Session) -> dict:
             "chg_pct": round(float(r["chg"].iloc[-1]), 2),
             "breadth_pct": round(float(r["breadth"].iloc[-1]) * 100), "breadth_10ago": round(float(r["breadth"].loc[d10]) * 100),
             "tv5_x": round(float(tv5.iloc[-1]), 2), "tv5_peak5": round(float(tv5.iloc[-6:].max()), 2), "tv1_x": round(float(r["tv1"].iloc[-1]), 2),
-            "status": "과열" if overheat else ("유입" if inflow else ""),
+            "stretch_pct": round(st * 100), "stretch_10ago": round(float(r["stretch"].loc[d10]) * 100),
+            "status": "과열" if st >= 0.2 else ("주의" if st >= 0.1 else ""),
             "leaders": [{"code": c, "name": names.get(c, c), "change_pct": round(float(x.ch), 1), "tv_x": round(float(x.x), 1)} for c, x in today.iterrows()],
         })
     items.sort(key=lambda x: x["rank"])

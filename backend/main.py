@@ -226,13 +226,13 @@ select{background:#21262d;border:1px solid #30363d;color:#c9d1d9;padding:6px 10p
   <div style="margin-bottom:20px">
     <div style="font-size:12px;color:#8b949e;margin-bottom:6px;letter-spacing:.06em">🔄 순환매 모니터 (이야기 줄기 16개) <span class="ts" id="rot-info"></span></div>
     <p class="note" style="color:#8b949e;font-size:12px;margin:0 0 8px">
-      272개 테마를 큰 줄기로 묶었습니다. <b style="color:#f85149">과열</b> = 1~2위 + 20일선 위 종목 90% 이상 + 거래대금이 최근 5일 정점보다 10% 넘게 줄어듦.
-      <b style="color:#3fb950">유입</b> = 10거래일 전보다 순위 3계단 이상 상승 + 최근 5일 거래대금 1.05배 이상.
+      272개 테마를 큰 줄기로 묶었습니다. <b style="color:#f85149">과열</b> = 줄기 안 종목 중 <b>20일선보다 20% 넘게 뜬 종목이 20% 이상</b>, <b style="color:#d29922">주의</b> = 10~20%.
+      3년 확인: 이 비율이 0~5%인 줄기는 20일 뒤 같은 날 줄기 평균 대비 +0.1%p, 10~20% -0.3%p, 20~30% -1.7%p, 30% 이상 -3.1%p(사례 적음).
       3년 확인: 상위 3 줄기에 그날 거래대금 1.2배 이상 몰린 날의 거래 실린 양봉 종베는 다음 날 평균 +0.94%(수익 71%), 줄기 밖은 +0.28%.
       다만 <b>다음 10~20일에 어느 줄기가 앞설지</b>는 이 지표들로 거의 맞히지 못했습니다(유입 줄기도 같은 날 평균 대비 -0.2%p). <b>"지금 어디에 돈이 붙었나"를 확인하는 용도</b>로 보세요.
     </p>
     <table>
-      <thead><tr><th>줄기</th><th>20일 상승 (순위)</th><th>확산 (20일선 위)</th><th>거래대금 (평소 대비)</th><th>오늘</th><th>오늘 돈 붙은 종목 (거래 2배↑)</th></tr></thead>
+      <thead><tr><th>줄기</th><th>20일 상승 (순위)</th><th>확산 (20일선 위)<br><span class="ts">+20% 넘게 뜬 종목</span></th><th>거래대금 (평소 대비)</th><th>오늘</th><th>오늘 돈 붙은 종목 (거래 2배↑)</th></tr></thead>
       <tbody id="rot-body"><tr><td colspan="6" style="color:#8b949e;text-align:center;padding:16px">로딩 중…</td></tr></tbody>
     </table>
   </div>
@@ -468,13 +468,13 @@ async function loadRotation(){
     document.getElementById('rot-info').textContent=`· ${d.trading_date} 장 마감 기준`;
     const c=n=>n>0?'#f85149':n<0?'#58a6ff':'#8b949e';
     const sg=n=>(n>0?'+':'')+n;
-    const badge={'과열':'<b style="color:#f85149;border:1px solid #f85149;border-radius:8px;padding:0 6px;font-size:11px">과열</b>','유입':'<b style="color:#3fb950;border:1px solid #3fb950;border-radius:8px;padding:0 6px;font-size:11px">유입</b>'};
+    const badge={'과열':'<b style="color:#f85149;border:1px solid #f85149;border-radius:8px;padding:0 6px;font-size:11px">과열</b>','주의':'<b style="color:#d29922;border:1px solid #d29922;border-radius:8px;padding:0 6px;font-size:11px">주의</b>'};
     body.innerHTML=d.items.map(t=>{
       const mv=t.rank_10ago-t.rank;
       return `<tr>
       <td><b>${t.family}</b> ${badge[t.status]||''}<br><span class="ts">${t.count}종목</span></td>
       <td><b style="color:${c(t.ret20_pct)}">${sg(t.ret20_pct)}%</b> <span class="ts">${t.rank}위</span>${mv?` <span style="font-size:11px;color:${mv>0?'#3fb950':'#8b949e'}">${mv>0?'▲':'▼'}${Math.abs(mv)}</span>`:''}<br><span class="ts">5일 ${sg(t.ret5_pct)}%</span></td>
-      <td>${t.breadth_pct}% <span class="ts">(10일 전 ${t.breadth_10ago}%)</span></td>
+      <td>${t.breadth_pct}% <span class="ts">(10일 전 ${t.breadth_10ago}%)</span><br><span class="ts" style="color:${t.stretch_pct>=20?'#f85149':t.stretch_pct>=10?'#d29922':'#8b949e'}">+20% 넘게 뜬 종목 ${t.stretch_pct}% (10일 전 ${t.stretch_10ago}%)</span></td>
       <td><b style="color:${t.tv5_x>=1.1?'#f85149':t.tv5_x<0.9?'#58a6ff':'#c9d1d9'}">${t.tv5_x.toFixed(2)}배</b> <span class="ts">최근 5일 · 5일 정점 ${t.tv5_peak5.toFixed(2)}</span><br><span class="ts">오늘 ${t.tv1_x.toFixed(2)}배</span></td>
       <td style="color:${c(t.chg_pct)}">${sg(t.chg_pct.toFixed(1))}%</td>
       <td style="font-size:12px">${t.leaders.map(l=>`<span style="cursor:pointer" onclick="openChartModal('${l.code}','${l.name}','')">${l.name} <span style="color:${c(l.change_pct)}">${sg(l.change_pct)}%</span></span>`).join(' · ')||'<span class="ts">없음</span>'}</td>
@@ -753,6 +753,12 @@ function cdMatch(it, terms){
     return ind.includes(t) || (it.themes||[]).some(x=>x.includes(t)) || (it.sector_name||'').includes(t);
   });
 }
+// 20일선 이격도 표시: +30%↑ 과열, +20%↑ 주의 (3년 확인 기준)
+function gapTag(g){
+  if(g==null) return '';
+  const col = g>=30?'#f85149':g>=20?'#d29922':'#8b949e';
+  return ` <span style="font-size:11px;color:${col}" title="20일선 대비">${g>=30?'⚠과열 ':g>=20?'주의 ':''}이격 ${g>=0?'+':''}${g}%</span>`;
+}
 function cdWon(v){ return v>=1e12?(v/1e12).toFixed(1)+'조':Math.round(v/1e8).toLocaleString()+'억'; }
 function renderCandidates(){
   const body = document.getElementById('cd-body');
@@ -785,7 +791,7 @@ function renderCandidates(){
       <td><b>${it.name}</b> <span style="color:#8b949e;font-size:11px">${it.code}</span>${it.earn_up?' <span style="color:#3fb950;font-size:11px;border:1px solid #238636;border-radius:8px;padding:0 5px" title="영업이익 +30%·매출 +10%, 120일 안 공시">📈 실적</span>':''}${it.market_cap?`<br><span class="ts">시총 ${cdWon(it.market_cap)}</span>`:''}</td>
       <td data-label="업종 · 테마">${indHtml}</td>
       <td data-label="모양" style="font-size:12px">${pats}</td>
-      <td data-label="현재가" style="text-align:right">${it.close_price.toLocaleString()}원<br><span style="color:${it.change_pct>=0?'#f85149':'#3b82f6'};font-size:11px">${it.change_pct>=0?'+':''}${it.change_pct.toFixed(2)}%</span><br><span class="ts">거래대금 ${cdWon(it.trading_value||0)}${it.turnover_pct!=null?' · 회전율 '+it.turnover_pct.toFixed(1)+'%':''}</span></td>
+      <td data-label="현재가" style="text-align:right">${it.close_price.toLocaleString()}원${gapTag(it.gap20_pct)}<br><span style="color:${it.change_pct>=0?'#f85149':'#3b82f6'};font-size:11px">${it.change_pct>=0?'+':''}${it.change_pct.toFixed(2)}%</span><br><span class="ts">거래대금 ${cdWon(it.trading_value||0)}${it.turnover_pct!=null?' · 회전율 '+it.turnover_pct.toFixed(1)+'%':''}</span></td>
       <td data-label="손절선" style="color:#f85149">${it.stop_price?it.stop_price.toLocaleString()+'원<br><span style="font-size:11px;color:'+({적정:'#3fb950',보통:'#c9d1d9',얕음:'#8b949e',깊음:'#8b949e'}[it.stop_zone])+'">-'+it.stop_dist_pct+'% · '+it.stop_zone+'</span>':'—'}</td>
     </tr>`;
   }).join('');
@@ -825,7 +831,7 @@ function renderVolumeRecords(){
     <td data-label="단계"><b style="color:${color[x.stage]}">${x.stage}</b><br><span class="ts">마지막 대량거래 뒤 ${x.rest_days}일</span></td>
     <td data-label="신기록일">${x.event_date.slice(5)} <span style="color:#f85149">${sg(x.event_change_pct)}%</span><br><span class="ts">${cdWon(x.event_value)} · 평소 ${x.event_x}배</span></td>
     <td data-label="그 뒤 최고" style="color:#f85149">${sg(x.rise_pct)}%<br><span class="ts">${x.peak_date.slice(5)}</span></td>
-    <td data-label="지금" style="text-align:right">${x.close_price.toLocaleString()}원 <span style="color:${x.change_pct>=0?'#f85149':'#3b82f6'};font-size:11px">${sg(x.change_pct.toFixed(2))}%</span><br><span class="ts">고점 ${x.off_peak_pct}% · 상승분 ${x.kept_pct}% 유지 · 거래 ${x.dry_pct}%로 마름</span><br><span class="ts" style="color:#f85149">기준선(손절) ${x.stop_price.toLocaleString()}원 · ${x.stop_gap_pct}%</span>${x.entry_signal?`<br><span class="ts" style="color:#e3b341">매도: 시초가 +5% 이상 갭이면 덜어내기 · ${Math.round(x.close_price*1.1).toLocaleString()}원(+10%)에 절반 · 나머지는 보유 중 최고 종가 -8% 이탈 시</span>`:''}</td>
+    <td data-label="지금" style="text-align:right">${x.close_price.toLocaleString()}원${gapTag(x.gap20_pct)} <span style="color:${x.change_pct>=0?'#f85149':'#3b82f6'};font-size:11px">${sg(x.change_pct.toFixed(2))}%</span><br><span class="ts">고점 ${x.off_peak_pct}% · 상승분 ${x.kept_pct}% 유지 · 거래 ${x.dry_pct}%로 마름</span><br><span class="ts" style="color:#f85149">기준선(손절) ${x.stop_price.toLocaleString()}원 · ${x.stop_gap_pct}%</span>${x.entry_signal?`<br><span class="ts" style="color:#e3b341">매도: 시초가 +5% 이상 갭이면 덜어내기 · ${Math.round(x.close_price*1.1).toLocaleString()}원(+10%)에 절반 · 나머지는 보유 중 최고 종가 -8% 이탈 시</span>`:''}</td>
   </tr>`).join('');
 }
 
