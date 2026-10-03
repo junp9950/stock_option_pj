@@ -109,8 +109,19 @@ MAX_IMAGES = 10              # 글 하나당 사진 수
 MAX_COMMENT_IMAGES = 5       # 댓글 하나당 사진 수
 
 
+DISCUSSION_AUTHORS = ("우라늄", "감사하모니카")   # 작성자는 이 둘 중 하나만
+
+
+def _check_author(author: str) -> str:
+    author = (author or "").strip()
+    if author not in DISCUSSION_AUTHORS:
+        raise HTTPException(status_code=400, detail="작성자를 선택해 주세요.")
+    return author
+
+
 class DiscussionIn(BaseModel):
     author: str = Field("", max_length=40)
+    title: str = Field("", max_length=100)
     content: str = Field("", max_length=2000)
     stock_code: str | None = Field(None, max_length=20)
     stock_name: str | None = Field(None, max_length=100)
@@ -119,6 +130,7 @@ class DiscussionIn(BaseModel):
 
 
 class DiscussionEdit(BaseModel):
+    title: str | None = Field(None, max_length=100)
     content: str | None = Field(None, max_length=2000)
     stock_code: str | None = Field(None, max_length=20)
     stock_name: str | None = Field(None, max_length=100)
@@ -179,7 +191,7 @@ def _comment_dict(c: DiscussionComment) -> dict:
 def _discussion_dict(x: DiscussionPost, comments: list[DiscussionComment] | None = None) -> dict:
     images = _decode_images(x.image_data)
     return {
-        "id": x.id, "author": x.author, "content": x.content,
+        "id": x.id, "author": x.author, "title": x.title or "", "content": x.content,
         "stock_code": x.stock_code, "stock_name": x.stock_name,
         "images": images, "image_data": images[0] if images else None, "edited": _edited(x),
         "created_at": x.created_at.isoformat() + "Z",
@@ -213,13 +225,13 @@ def discussion_board(db: Session = Depends(get_db)):
     n_comments = dict(db.execute(select(DiscussionComment.post_id, func.count()).group_by(DiscussionComment.post_id)).all())
     rows = db.execute(
         select(DiscussionPost.id, DiscussionPost.author, DiscussionPost.stock_code, DiscussionPost.stock_name,
-               func.substr(DiscussionPost.content, 1, 200), _image_count_sql(DiscussionPost.image_data),
+               DiscussionPost.title, func.substr(DiscussionPost.content, 1, 200), _image_count_sql(DiscussionPost.image_data),
                DiscussionPost.created_at, DiscussionPost.updated_at)
         .order_by(DiscussionPost.id.desc()).limit(500)
     ).all()
     out = []
-    for pid, author, code, name, head, n_img, created, updated in rows:
-        title = next((ln.strip() for ln in (head or '').splitlines() if ln.strip()), '')
+    for pid, author, code, name, title, head, n_img, created, updated in rows:
+        title = (title or '').strip() or next((ln.strip() for ln in (head or '').splitlines() if ln.strip()), '')
         out.append({"id": pid, "author": author, "stock_code": code, "stock_name": name,
                     "title": title[:80] or '(사진)', "images": int(n_img or 0), "comments": n_comments.get(pid, 0),
                     "edited": bool(updated and created and (updated - created).total_seconds() > 2),
@@ -239,10 +251,13 @@ def get_discussion(pid: int, db: Session = Depends(get_db)):
 @router.post('/discussion')
 def create_discussion(body: DiscussionIn, db: Session = Depends(get_db)):
     images = _check_images(body.images or ([body.image_data] if body.image_data else []), MAX_IMAGES)
+    author = _check_author(body.author)
+    if not body.title.strip():
+        raise HTTPException(status_code=400, detail="제목을 입력해 주세요.")
     if not body.content.strip() and not images:
         raise HTTPException(status_code=400, detail="내용이나 이미지를 입력해 주세요.")
     x = DiscussionPost(
-        author=body.author.strip(), content=body.content.strip(),
+        author=author, title=body.title.strip(), content=body.content.strip(),
         stock_code=(body.stock_code or "").strip().upper() or None,
         stock_name=(body.stock_name or "").strip() or None,
         image_data=_encode_images(images),
@@ -261,6 +276,10 @@ def update_discussion(pid: int, body: DiscussionEdit, db: Session = Depends(get_
     images = _decode_images(x.image_data) if body.images is None else _check_images(body.images, MAX_IMAGES)
     if not content and not images:
         raise HTTPException(status_code=400, detail="내용이나 이미지를 입력해 주세요.")
+    if body.title is not None:
+        if not body.title.strip():
+            raise HTTPException(status_code=400, detail="제목을 입력해 주세요.")
+        x.title = body.title.strip()
     x.content, x.image_data = content, _encode_images(images)
     if body.stock_code is not None:
         x.stock_code = body.stock_code.strip().upper() or None
@@ -288,7 +307,7 @@ def create_comment(pid: int, body: CommentIn, db: Session = Depends(get_db)):
     images = _check_images(body.images or [], MAX_COMMENT_IMAGES)
     if not body.content.strip() and not images:
         raise HTTPException(status_code=400, detail="댓글 내용이나 사진을 입력해 주세요.")
-    c = DiscussionComment(post_id=pid, author=body.author.strip(), content=body.content.strip(),
+    c = DiscussionComment(post_id=pid, author=_check_author(body.author), content=body.content.strip(),
                           image_data=_encode_images(images))
     db.add(c)
     db.commit()

@@ -324,6 +324,7 @@ class DiscussionPost(Base, TimestampMixin):
     stock_code: Mapped[str | None] = mapped_column(String(20), nullable=True, index=True)
     stock_name: Mapped[str | None] = mapped_column(String(100), nullable=True)
     author: Mapped[str] = mapped_column(String(40), default="")
+    title: Mapped[str | None] = mapped_column(String(100), nullable=True)   # 2026-10-03 이전 글은 없음 (본문 첫 줄로 대신)
     content: Mapped[str] = mapped_column(Text, default="")
     image_data: Mapped[str | None] = mapped_column(Text, nullable=True)
 

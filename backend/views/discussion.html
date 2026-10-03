@@ -23,6 +23,9 @@ button{background:#1f6feb;color:#fff;border:0;border-radius:7px;padding:9px 16px
 .board tr.post{cursor:pointer}.board tr.post:hover{background:#1c2330}.board .b-tag{width:110px;color:#93c5fd;font-size:12.5px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:110px}
 .board .b-title{color:#e6edf3}.board .b-cnt{color:#58a6ff;font-weight:600;font-size:12.5px;margin-left:5px}.board .b-img{font-size:12px;margin-left:4px;color:#8b949e}
 .board .b-author{width:110px;color:#c9d1d9;font-size:13px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:110px}.board .b-time{width:80px;color:#8b949e;font-size:12.5px;text-align:right;white-space:nowrap}
+.who{display:inline-flex;border:1px solid #30363d;border-radius:8px;overflow:hidden}.who button{background:transparent;color:#cbd5e1;border:0;border-radius:0;padding:7px 14px;font-size:13px}.who button.on{background:#1f6feb;color:#fff}
+.title-in{font-weight:600}
+.post-title{font-size:18px;font-weight:700;color:#e6edf3;margin:6px 0 2px}
 .topbar{display:flex;justify-content:space-between;align-items:center;margin-top:18px;gap:10px}
 @media(max-width:640px){main{padding:14px}.board .b-tag{display:none}.board .b-author{width:auto;max-width:70px;font-size:12px}.board .b-time{width:auto}}
 .lightbox{display:none;position:fixed;inset:0;background:rgba(0,0,0,.85);z-index:50;align-items:center;justify-content:center;cursor:zoom-out}
@@ -35,12 +38,13 @@ button{background:#1f6feb;color:#fff;border:0;border-radius:7px;padding:9px 16px
     <input id="stock-name" class="grow" maxlength="100" placeholder="종목명 (선택)">
     <input id="stock-code" style="max-width:120px" maxlength="20" placeholder="종목코드 (선택)">
   </div>
+  <div style="margin-top:10px"><input id="title" class="title-in" maxlength="100" placeholder="제목 (필수)"></div>
   <div style="margin-top:10px">
     <textarea id="content" maxlength="2000" placeholder="내용을 입력하거나, 스크린샷을 복사해서 여기에 Ctrl+V로 붙여넣으세요"></textarea>
   </div>
   <div class="paste-zone" id="paste-zone">여기 눌러서 사진 선택 (여러 장 가능, 최대 10장)</div>
   <div id="preview-area" class="previews"></div>
-  <div class="row"><input id="author" class="grow" maxlength="40" placeholder="이름 (선택)"><button id="submit">남기기</button></div>
+  <div class="row"><span class="muted" style="font-size:13px">작성자</span><span class="who" data-who="post"></span><span class="grow"></span><button id="submit">남기기</button></div>
   <div id="form-msg" class="err" role="status"></div>
 </section>
 <section class="box" id="list"><div class="empty">불러오는 중…</div></section>
@@ -49,6 +53,18 @@ button{background:#1f6feb;color:#fff;border:0;border-radius:7px;padding:9px 16px
 <div class="lightbox" id="lightbox"><img id="lightbox-img" src="" alt=""></div>
 <script>
 const API='__API_PREFIX__/discussion';const MAX_POST=10,MAX_COMMENT=5;
+const AUTHORS=['우라늄','감사하모니카'];
+function getAuthor(){try{const v=localStorage.getItem('disc-author');if(AUTHORS.includes(v))return v}catch(e){}return AUTHORS[0]}
+function setAuthor(v){try{localStorage.setItem('disc-author',v)}catch(e){}}
+// .who 칸에 두 이름 토글 버튼을 그린다. 고른 이름은 data-value에 둔다.
+function whoToggle(el){
+  const v=getAuthor();el.dataset.value=v;
+  el.innerHTML=AUTHORS.map(a=>`<button type="button" class="${a===v?'on':''}" data-name="${a}">${a}</button>`).join('');
+  el.onclick=e=>{const b=e.target.closest('button[data-name]');if(!b)return;
+    el.dataset.value=b.dataset.name;setAuthor(b.dataset.name);
+    el.querySelectorAll('button').forEach(x=>x.classList.toggle('on',x===b));
+    document.querySelectorAll('.who').forEach(o=>{if(o!==el){o.dataset.value=b.dataset.name;o.querySelectorAll('button').forEach(x=>x.classList.toggle('on',x.dataset.name===b.dataset.name))}})};
+}
 let all=[],current=null;   // all: 게시판 목록(요약), current: 열어 본 글 전체
 const esc=s=>String(s).replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
 const when=t=>new Date(t).toLocaleString('ko-KR',{timeZone:'Asia/Seoul',month:'numeric',day:'numeric',hour:'2-digit',minute:'2-digit'});
@@ -99,12 +115,13 @@ const newPost=photoSet(document.getElementById('preview-area'),MAX_POST,formMsg)
 pasteInto(document.getElementById('content'),newPost);
 document.getElementById('paste-zone').onclick=()=>pick(newPost);
 document.getElementById('submit').onclick=async()=>{
-  const content=document.getElementById('content').value.trim();
+  const content=document.getElementById('content').value.trim(),title=document.getElementById('title').value.trim();
+  if(!title){formMsg.textContent='제목을 입력해 주세요.';document.getElementById('title').focus();return}
   if(!content&&!newPost.images.length){formMsg.textContent='내용이나 이미지를 입력해 주세요.';return}
   try{
-    await call('POST',API,{content,images:newPost.images,author:document.getElementById('author').value.trim(),
+    await call('POST',API,{title,content,images:newPost.images,author:document.querySelector('[data-who="post"]').dataset.value,
       stock_name:document.getElementById('stock-name').value.trim(),stock_code:document.getElementById('stock-code').value.trim()});
-    ['content','stock-name','stock-code'].forEach(id=>document.getElementById(id).value='');
+    ['title','content','stock-name','stock-code'].forEach(id=>document.getElementById(id).value='');
     newPost.images=[];newPost.render();formMsg.textContent='';
     document.getElementById('write-box').style.display='none';
     if(location.hash)location.hash='';else await route();
@@ -137,6 +154,7 @@ function shortWhen(t){
 }
 function renderPost(){const box=document.getElementById('list');const x=current;
 box.innerHTML=`<div class="item" data-id="${x.id}">
+  ${x.title?`<div class="post-title">${esc(x.title)}</div>`:''}
   <div class="meta">${x.stock_name||x.stock_code?`<span class="tag">${esc(x.stock_name||'')}${x.stock_code?' ('+esc(x.stock_code)+')':''}</span>`:''}<span>${x.author?esc(x.author)+' · ':''}${when(x.created_at)}</span>${x.edited?'<span class="edited">(수정됨)</span>':''}</div>
   <div class="body">${x.content?`<p class="content">${esc(x.content)}</p>`:''}${shotsHtml(x.images)}</div>
   <div class="row"><button class="ghost" data-act="edit">수정</button><button class="ghost danger" data-act="del">삭제</button></div>
@@ -147,7 +165,7 @@ box.innerHTML=`<div class="item" data-id="${x.id}">
       <div class="body">${c.content?`<p class="content">${esc(c.content)}</p>`:''}${shotsHtml(c.images,true)}</div>
     </div>`).join('')}
     <div class="comment-form">
-      <input class="name" maxlength="40" placeholder="이름" data-f="c-author">
+      <span class="who" data-f="c-author"></span>
       <input maxlength="1000" placeholder="댓글 입력 (사진은 Ctrl+V 또는 📷)" data-f="c-content">
       <button class="cam" data-act="c-photo" title="댓글 사진 추가">📷</button>
       <button data-act="add-comment">등록</button>
@@ -159,6 +177,7 @@ box.innerHTML=`<div class="item" data-id="${x.id}">
   const set=photoSet(item.querySelector('[data-f="c-previews"]'),MAX_COMMENT,null);
   commentSets[x.id]=set;
   pasteInto(item.querySelector('[data-f="c-content"]'),set);
+  whoToggle(item.querySelector('[data-f="c-author"]'));
 }
 
 // 수정 화면 (글·댓글 공용): 본문 자리에 편집기를 띄운다
@@ -166,21 +185,22 @@ function openEditor(host,{text,images,max,stock,onSave}){
   if(host.querySelector('.editor'))return;
   const body=host.querySelector(':scope > .body');body.style.display='none';
   const ed=document.createElement('div');ed.className='editor';
-  ed.innerHTML=`${stock?`<div class="row" style="margin-top:0"><input class="grow" data-e="sname" maxlength="100" placeholder="종목명"><input style="max-width:120px" data-e="scode" maxlength="20" placeholder="종목코드"></div>`:''}
+  ed.innerHTML=`${stock?`<input class="title-in" data-e="title" maxlength="100" placeholder="제목 (필수)" style="margin-bottom:8px">`:''}${stock?`<div class="row" style="margin-top:0"><input class="grow" data-e="sname" maxlength="100" placeholder="종목명"><input style="max-width:120px" data-e="scode" maxlength="20" placeholder="종목코드"></div>`:''}
     <textarea data-e="text" maxlength="${stock?2000:1000}" style="margin-top:${stock?'8px':'0'}"></textarea>
     <div class="previews small" data-e="previews"></div>
     <div class="row"><button class="ghost" data-e="add">사진 추가</button><button data-e="save">저장</button><button class="ghost" data-e="cancel">취소</button><span class="err" data-e="msg"></span></div>`;
   body.after(ed);
   const q=k=>ed.querySelector(`[data-e="${k}"]`);
   q('text').value=text||'';
-  if(stock){q('sname').value=stock.name||'';q('scode').value=stock.code||''}
+  if(stock){q('sname').value=stock.name||'';q('scode').value=stock.code||'';q('title').value=stock.title||''}
   const set=photoSet(q('previews'),max,q('msg'),images||[]);
   pasteInto(q('text'),set);
   q('add').onclick=()=>pick(set);
   q('cancel').onclick=()=>{ed.remove();body.style.display=''};
   q('save').onclick=async()=>{
     const payload={content:q('text').value.trim(),images:set.images};
-    if(stock){payload.stock_name=q('sname').value.trim();payload.stock_code=q('scode').value.trim()}
+    if(stock){payload.stock_name=q('sname').value.trim();payload.stock_code=q('scode').value.trim();payload.title=q('title').value.trim();
+      if(!payload.title){q('msg').textContent='제목을 입력해 주세요.';return}}
     if(!payload.content&&!payload.images.length){q('msg').textContent='내용이나 사진을 남겨 주세요.';return}
     try{await onSave(payload);await load()}catch(err){q('msg').textContent=err.message}
   };
@@ -227,7 +247,7 @@ async function addComment(item){
   const contentEl=item.querySelector('[data-f="c-content"]'),set=commentSets[item.dataset.id];
   const content=contentEl.value.trim();
   if(!content&&!set.images.length)return;
-  try{await call('POST',`${API}/${item.dataset.id}/comments`,{content,images:set.images,author:item.querySelector('[data-f="c-author"]').value.trim()});await load()}
+  try{await call('POST',`${API}/${item.dataset.id}/comments`,{content,images:set.images,author:item.querySelector('[data-f="c-author"]').dataset.value});await load()}
   catch(err){alert(err.message)}
 }
 document.getElementById('list').addEventListener('click',async e=>{
@@ -237,7 +257,7 @@ document.getElementById('list').addEventListener('click',async e=>{
   const item=b.closest('.item');const post=current;
   const act=b.dataset.act;
   if(act==='del'){if(!confirm('이 글을 삭제할까요?'))return;try{await call('DELETE',`${API}/${post.id}`);location.hash=''}catch(err){alert(err.message)}}
-  if(act==='edit')openEditor(item,{text:post.content,images:post.images,max:MAX_POST,stock:{name:post.stock_name,code:post.stock_code},
+  if(act==='edit')openEditor(item,{text:post.content,images:post.images,max:MAX_POST,stock:{name:post.stock_name,code:post.stock_code,title:post.title},
     onSave:p=>call('PATCH',`${API}/${post.id}`,p)});
   if(act==='add-comment')addComment(item);
   if(act==='c-photo')pick(commentSets[item.dataset.id]);
@@ -250,5 +270,6 @@ document.getElementById('list').addEventListener('click',async e=>{
 document.getElementById('list').addEventListener('keydown',e=>{
   if(e.key==='Enter'&&e.target.matches('[data-f="c-content"]')){e.preventDefault();addComment(e.target.closest('.item'))}
 });
+whoToggle(document.querySelector('[data-who="post"]'));
 route();
 </script></body></html>
