@@ -64,6 +64,16 @@ def _build(db: Session) -> dict:
     ), {"d": today, "lo": today - timedelta(days=14)})}
     stock_names = dict(db.execute(text("select code, name from stocks")).all())
 
+    # 테마 거래대금 배수: DB의 가장 최근 거래일 테마 합계 / 그 전 20거래일 평균 (토스 현재가에는 거래대금이 없다)
+    tdays = [d for (d,) in db.execute(text(
+        "select distinct trading_date from spot_daily_prices where trading_date <= :d order by 1 desc limit 21"), {"d": today})]
+    tv_by_day: dict = defaultdict(dict)
+    if len(tdays) >= 6:
+        for code, d, tv in db.execute(text(
+            "select stock_code, trading_date, trading_value from spot_daily_prices where trading_date between :a and :b"),
+            {"a": tdays[-1], "b": tdays[0]}):
+            tv_by_day[code][d] = float(tv or 0)
+
     chg: dict[str, float] = {}
     for code, (px, ts) in prices.items():
         pc = prev.get(code)
@@ -78,16 +88,23 @@ def _build(db: Session) -> dict:
         if len(vals) < _MIN_MEMBERS:
             continue
         core = vals[1:-1] if len(vals) >= 5 else vals
+        tv_x = None
+        if tv_by_day:
+            last = sum(tv_by_day.get(c, {}).get(tdays[0], 0) for c in mem)
+            prev = [sum(tv_by_day.get(c, {}).get(d, 0) for c in mem) for d in tdays[1:]]
+            base = sum(prev) / len(prev) if prev else 0
+            tv_x = round(last / base, 2) if base else None
         items.append({
             "sector_id": sid,
             "sector_name": names[sid],
             "avg_change_pct": round(sum(v for v, _ in core) / len(core), 2),
             "up_ratio": round(sum(1 for v, _ in vals if v > 0) / len(vals) * 100),
             "count": len(vals),
+            "tv_x": tv_x,
             "leaders": [{"code": c, "name": stock_names.get(c, c), "change_pct": round(v, 2)} for v, c in vals[::-1][:3]],
         })
     items.sort(key=lambda x: -x["avg_change_pct"])
-    return {"as_of": as_of, "items": items}
+    return {"as_of": as_of, "tv_date": tdays[0].isoformat() if tdays else None, "items": items}
 
 
 def live_themes(db: Session) -> dict:
