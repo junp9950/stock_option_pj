@@ -53,7 +53,12 @@ def scan(db: Session) -> dict:
         "select stock_code, trading_date, open_price, high_price, low_price, close_price, trading_value, volume "
         "from spot_daily_prices where trading_date >= :s order by stock_code, trading_date"), {"s": load_start}):
         by[r[0]].append(r)
-    names = dict(db.execute(text("select code, name from stocks")).all())
+    names, caps = {}, {}
+    for code, name, cap, shares in db.execute(text("select code, name, market_cap, shares_outstanding from stocks")):
+        names[code] = name
+        caps[code] = (float(cap or 0), float(shares or 0))
+    from backend.services.marcap_caps import caps as marcap_caps  # noqa: PLC0415
+    marcap = marcap_caps()   # stocks에 시총이 없는 종목(유니버스 밖)을 채운다
 
     items = []
     for code, pl in by.items():
@@ -107,7 +112,8 @@ def scan(db: Session) -> dict:
             "event_date": ev[1].isoformat(), "event_change_pct": round((float(ev[5]) / base - 1) * 100, 1),
             "event_value": round(tv[i]), "event_x": round(x),
             "peak_date": pl[i_peak][1].isoformat(), "rise_pct": round((peak / base - 1) * 100, 1),
-            "close_price": round(close), "change_pct": round((close / float(pl[-2][5]) - 1) * 100, 2),
+            "close_price": round(close),
+            "market_cap": caps.get(code, (0, 0))[0] or caps.get(code, (0, 0))[1] * close or marcap.get(code) or 0, "change_pct": round((close / float(pl[-2][5]) - 1) * 100, 2),
             "off_peak_pct": round((close / peak - 1) * 100, 1), "kept_pct": round(kept * 100),
             "dry_pct": round(dry * 100), "rest_days": rest, "days_since": len(pl) - 1 - i,
             "stage": stage, "stop_price": round(base),

@@ -419,6 +419,7 @@ const tagHtml = tags => (tags||[]).map(t=>{
 function switchTab(id) {
   const tabs = ['candidates','screener','sector','heatmap','earnings','suggest','discussion'];
   if(!tabs.includes(id))return;
+  try{ history.replaceState(null,'',id==='candidates'?location.pathname:'#'+id); }catch(e){}   // 새로고침해도 이 탭에 남게
   document.querySelectorAll('.tab').forEach((t,i)=>t.classList.toggle('active',tabs[i]===id));
   document.querySelectorAll('.panel').forEach(p=>p.classList.remove('active'));
   document.getElementById('panel-'+id).classList.add('active');
@@ -757,7 +758,7 @@ function renderVolumeRecords(){
   const color = {'숨고르기':'#3fb950','신규':'#58a6ff','진행 중':'#d29922','설거지':'#f85149','무너짐':'#8b949e'};
   const sg = n=>(n>=0?'+':'')+n;
   body.innerHTML = items.map(x=>`<tr style="cursor:pointer" onclick="openChartModal('${x.code}','${x.name}','${x.event_date}')">
-    <td><b>${x.name}</b> <span style="color:#8b949e;font-size:11px">${x.code}</span></td>
+    <td><b>${x.name}</b> <span style="color:#8b949e;font-size:11px">${x.code}</span>${x.market_cap?`<br><span class="ts">시총 ${cdWon(x.market_cap)}</span>`:''}</td>
     <td data-label="단계"><b style="color:${color[x.stage]}">${x.stage}</b><br><span class="ts">마지막 대량거래 뒤 ${x.rest_days}일</span></td>
     <td data-label="신기록일">${x.event_date.slice(5)} <span style="color:#f85149">${sg(x.event_change_pct)}%</span><br><span class="ts">${cdWon(x.event_value)} · 평소 ${x.event_x}배</span></td>
     <td data-label="그 뒤 최고" style="color:#f85149">${sg(x.rise_pct)}%<br><span class="ts">${x.peak_date.slice(5)}</span></td>
@@ -1131,7 +1132,8 @@ function showToast(msg,err=false){
   t.style.display='block';setTimeout(()=>t.style.display='none',5000);
 }
 
-loadCandidates();
+// 주소 끝의 #탭이름(새로고침 전에 보던 탭)으로 시작
+{ const t=location.hash.slice(1); if(t&&t!=='candidates'&&document.getElementById('panel-'+t))switchTab(t); else loadCandidates(); }
 if (location.hash) switchTab(location.hash.slice(1));
 const chartQuery=new URLSearchParams(location.search);
 if (/^[0-9A-Z]{6}$/.test(chartQuery.get('chart')||'')) openChartModal(chartQuery.get('chart'),chartQuery.get('name')||chartQuery.get('chart'),'');
