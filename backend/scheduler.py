@@ -175,11 +175,8 @@ def start_scheduler() -> BackgroundScheduler:
     # 매주 일요일 새벽 2시에 섹터 매핑 갱신
     scheduler.add_job(_sector_mapping_refresh_job, "cron", day_of_week="sun", hour=2, minute=0, id="sector_mapping_refresh", replace_existing=True)
 
-    from backend.services.quant_strategy import refresh as refresh_quant
-    scheduler.add_job(refresh_quant, 'cron', day_of_week='mon-fri', hour='7,8,17,19,21', minute=10,
-                      id='quant10_daily', replace_existing=True, max_instances=1, coalesce=True)
-    scheduler.add_job(refresh_quant, 'date', run_date=datetime.now(timezone.utc)+timedelta(seconds=20),
-                      id='quant10_startup', replace_existing=True)
+    # AI 10일 전략(quant_strategy) 갱신은 껐다: 화면 탭은 5b0e9aa에서 제거됐고, 입력인 investor_flow_toss 표는
+    # 2026-10-03 DB 용량 정리로 삭제(백업: 서버 /home/junp/backups/investor_flow_toss_2023-09_2026-09.parquet).
     def _price_fix_job() -> None:
         # 07:30: 전날 15:41·18:00 수집 시세는 NXT 시간외 진행 중 값이라 확정 종가로 다시 덮어쓴다 (최근 5거래일)
         from datetime import date as _date  # noqa: PLC0415
