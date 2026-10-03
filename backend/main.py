@@ -205,22 +205,6 @@ select{background:#21262d;border:1px solid #30363d;color:#c9d1d9;padding:6px 10p
 
 <!-- 섹터 수급 탭 -->
 <div id="panel-sector" class="panel content">
-  <div class="toolbar" style="margin-bottom:12px">
-    <select id="sec-sort" onchange="loadSector()">
-      <option value="stealth">스텔스 매집순</option>
-      <option value="flow">수급 점수순</option>
-      <option value="foreign">외국인 순매수순</option>
-      <option value="inst">기관 순매수순</option>
-    </select>
-    <select id="sec-source" onchange="loadSector()">
-      <option value="">전체</option>
-      <option value="custom">커스텀</option>
-      <option value="naver_theme">네이버 테마</option>
-    </select>
-    <button class="btn btn-gray btn-sm" onclick="loadSector()">⟳ 새로고침</button>
-    <button class="btn btn-gray btn-sm" onclick="refreshSectorMapping()">↺ 매핑 갱신</button>
-    <span class="ts" id="sec-info"></span>
-  </div>
 
   <!-- 순환매 모니터 -->
   <div style="margin-bottom:20px">
@@ -503,25 +487,24 @@ setInterval(()=>{if(document.visibilityState==='visible'&&document.getElementByI
 
 // ── 섹터 수급 ──────────────────────────────────────────────────
 let _sectorData = [];
-function setSectorSort(s){document.getElementById('sec-sort').value=s;loadSector();}
+// 정렬은 표 머리(외국인·기관·스텔스점수)를 눌러 바꾼다. 위쪽 정렬·분류·새로고침·매핑 갱신 버튼은 2026-10-04 제거 (매핑은 매주 일요일 자동 갱신)
+let _secSort = 'stealth';
+const SEC_SORT_LABEL = {stealth:'스텔스 매집순',flow:'수급 점수순',foreign:'외국인 순매수순',inst:'기관 순매수순'};
+function setSectorSort(s){_secSort=s;loadSector();}
 
 async function loadSector(){
-  const sort=document.getElementById('sec-sort').value;
-  const source=document.getElementById('sec-source').value;
   try{
-    const data=await fetch(`${API}/sectors/flow?sort=${sort}${source?`&source=${source}`:''}&limit=300`).then(r=>r.ok?r.json():[]);
+    const data=await fetch(`${API}/sectors/flow?sort=${_secSort}&limit=300`).then(r=>r.ok?r.json():[]);
     _sectorData=data;
     renderSector(data);
-    document.getElementById('sec-info').textContent=data.length?`기준일: ${data[0].date}`:'';
   }catch(e){console.error(e);}
 }
 
 function renderSector(data){
   // 고른 정렬 기준으로 두 표 모두 정렬 (매집 감지 표는 순매수·미급등 섹터만)
-  const sel=document.getElementById('sec-sort');
-  const key={stealth:'stealth_score',flow:'flow_score',foreign:'foreign_net_buy',inst:'inst_net_buy'}[sel.value]||'stealth_score';
+  const key={stealth:'stealth_score',flow:'flow_score',foreign:'foreign_net_buy',inst:'inst_net_buy'}[_secSort]||'stealth_score';
   const byKey=(a,b)=>(b[key]||0)-(a[key]||0);
-  document.getElementById('sec-rank-label').textContent=sel.options[sel.selectedIndex].text;
+  document.getElementById('sec-rank-label').textContent=SEC_SORT_LABEL[_secSort]||'';
   const stealth=data.filter(d=>d.combined_net_buy>0&&!d.is_surged).sort(byKey);
   const surged=[...data].sort(byKey);
 
@@ -573,15 +556,6 @@ async function openSectorModal(sectorId, name){
 }
 function closeSectorModal(){document.getElementById('sector-modal-bg').classList.remove('show');}
 
-async function refreshSectorMapping(){
-  if(!confirm('섹터 매핑(커스텀 + 네이버 테마 264개)을 갱신합니다. 네이버 테마를 받느라 3~5분 걸립니다. 계속할까요?'))return;
-  document.getElementById('sec-info').textContent='갱신 중…';
-  try{
-    const r=await fetch(`${API}/sectors/refresh`,{method:'POST'}).then(res=>res.json());
-    document.getElementById('sec-info').textContent=`갱신 완료: 추가 ${r.added} 업데이트 ${r.updated}`;
-    loadSector();
-  }catch(e){document.getElementById('sec-info').textContent='갱신 실패';}
-}
 
 // ── 시장 히트맵(트리맵) ────────────────────────────────────────
 function hmColor(pct){
