@@ -1454,6 +1454,7 @@ def get_chart_candidates(min_cap: float = 0, db: Session = Depends(get_db)):
 def warm_caches(db: Session) -> None:
     """화면 기본값으로 미리 계산해 둔다. 데이터가 그대로면 즉시 끝난다."""
     get_chart_candidates(min_cap=0, db=db)
+    get_volume_records(db=db)
 
 
 @router.get("/screener/picks/performance")

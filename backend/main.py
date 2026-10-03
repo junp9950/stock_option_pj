@@ -673,6 +673,7 @@ function renderHeatmapLegend(){
 // ── 차트 후보 ─────────────────────────────────────────────────
 let _cdData = null;
 async function loadCandidates(){
+  loadVolumeRecords();   // 아래 대량거래 관심종목은 따로 동시에 불러온다
   const body = document.getElementById('cd-body');
   body.innerHTML = '<tr><td colspan="5" style="color:#8b949e;text-align:center;padding:20px">로딩 중…</td></tr>';
   try{
@@ -680,7 +681,6 @@ async function loadCandidates(){
     _cdData = await fetch(`${API}/screener/chart-candidates?min_cap=${cap}`).then(r=>r.ok?r.json():null);
     renderMarket(_cdData && _cdData.market);
     renderCandidates();
-    loadVolumeRecords();
   }catch(e){
     console.error(e);
     body.innerHTML = '<tr><td colspan="5" style="color:#f85149;text-align:center;padding:20px">로딩 실패</td></tr>';
