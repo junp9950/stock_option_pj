@@ -208,12 +208,12 @@ select{background:#21262d;border:1px solid #30363d;color:#c9d1d9;padding:6px 10p
 <div id="panel-jongbe" class="panel content">
   <div id="jb-market" style="border-radius:10px;padding:12px 16px;margin-bottom:12px;border:1px solid #30363d">로딩 중…</div>
   <p class="note" style="color:#8b949e;font-size:12.5px;margin:0 0 12px">
-    순서: <b style="color:#c9d1d9">① 시장 상승·횡보 → ② 뜨거운 이야기 줄기(20일 상승 상위 3) → ③ 그날 줄기에 돈 몰림(거래대금 1.2배) → ④ +3% 양봉·거래 2배·윗꼬리 짧음</b>.
-    3년 확인(상승·횡보장, 다음 날 "갭상승이면 시가·아니면 종가" 매도): 기본 +0.42%, 뜨거운 줄기 +0.74%, <b style="color:#3fb950">A등급(줄기 돈 몰림까지) +0.94%·수익 71%</b>, 줄기 밖 +0.28%, 하락장 +0.12%.
+    순서: <b style="color:#c9d1d9">① 시장 상승·횡보 → ② 뜨거운 섹터(20일 상승 상위 3) → ③ 그날 섹터에 돈 몰림(거래대금 1.2배) → ④ +3% 양봉·거래 2배·윗꼬리 짧음</b>.
+    3년 확인(상승·횡보장, 다음 날 "갭상승이면 시가·아니면 종가" 매도): 기본 +0.42%, 뜨거운 섹터 +0.74%, <b style="color:#3fb950">A등급(섹터 돈 몰림까지) +0.94%·수익 71%</b>, 섹터 밖 +0.28%, 하락장 +0.12%.
     <b>파는 법:</b> 다음 날 오전 정리가 기본(시가 매도는 -5% 넘는 손실 2%, 종가까지 들고 가면 18%), 갭이 크면 덜어내기. 숫자는 수수료·세금 빼기 전입니다.
   </p>
   <div style="display:flex;flex-wrap:wrap;align-items:center;gap:10px;margin-bottom:6px">
-    <span style="font-size:12px;color:#8b949e">🔥 뜨거운 줄기 <span class="ts" id="jb-date"></span></span>
+    <span style="font-size:12px;color:#8b949e">🔥 뜨거운 섹터 <span class="ts" id="jb-date"></span></span>
     <label style="font-size:12.5px;color:#c9d1d9">시총
       <select id="jb-mincap" onchange="try{localStorage.setItem('jb-mincap',this.value)}catch(e){};renderJongbe()">
         <option value="0">전체</option><option value="500">500억 이상</option><option value="1000" selected>1,000억 이상</option>
@@ -223,7 +223,7 @@ select{background:#21262d;border:1px solid #30363d;color:#c9d1d9;padding:6px 10p
   </div>
   <div id="jb-fams" style="display:flex;flex-wrap:wrap;gap:8px;margin-bottom:16px"></div>
   <table class="pb-table">
-    <thead><tr><th>종목</th><th>등급</th><th>그날 봉</th><th>줄기</th><th>종가</th></tr></thead>
+    <thead><tr><th>종목</th><th>등급</th><th>그날 봉</th><th>섹터</th><th>종가</th></tr></thead>
     <tbody id="jb-body"><tr><td colspan="5" style="color:#8b949e;text-align:center;padding:20px">로딩 중…</td></tr></tbody>
   </table>
   <div id="jb-limit" class="ts" style="margin:10px 0 20px"></div>
@@ -246,15 +246,15 @@ select{background:#21262d;border:1px solid #30363d;color:#c9d1d9;padding:6px 10p
 
   <!-- 순환매 모니터 -->
   <div style="margin-bottom:20px">
-    <div style="font-size:12px;color:#8b949e;margin-bottom:6px;letter-spacing:.06em">🔄 순환매 모니터 (이야기 줄기 16개) <span class="ts" id="rot-info"></span></div>
+    <div style="font-size:12px;color:#8b949e;margin-bottom:6px;letter-spacing:.06em">🔄 순환매 모니터 (섹터 16개) <span class="ts" id="rot-info"></span></div>
     <p class="note" style="color:#8b949e;font-size:12px;margin:0 0 8px">
-      272개 테마를 큰 줄기로 묶었습니다. <b style="color:#f85149">과열</b> = 줄기 안 종목 중 <b>20일선보다 20% 넘게 뜬 종목이 20% 이상</b>, <b style="color:#d29922">주의</b> = 10~20%.
-      3년 확인: 이 비율이 0~5%인 줄기는 20일 뒤 같은 날 줄기 평균 대비 +0.1%p, 10~20% -0.3%p, 20~30% -1.7%p, 30% 이상 -3.1%p(사례 적음).
-      3년 확인: 상위 3 줄기에 그날 거래대금 1.2배 이상 몰린 날의 거래 실린 양봉 종베는 다음 날 평균 +0.94%(수익 71%), 줄기 밖은 +0.28%.
-      다만 <b>다음 10~20일에 어느 줄기가 앞설지</b>는 이 지표들로 거의 맞히지 못했습니다(유입 줄기도 같은 날 평균 대비 -0.2%p). <b>"지금 어디에 돈이 붙었나"를 확인하는 용도</b>로 보세요.
+      272개 테마를 큰 섹터로 묶었습니다. <b style="color:#f85149">과열</b> = 섹터 안 종목 중 <b>20일선보다 20% 넘게 뜬 종목이 20% 이상</b>, <b style="color:#d29922">주의</b> = 10~20%.
+      3년 확인: 이 비율이 0~5%인 섹터는 20일 뒤 같은 날 섹터 평균 대비 +0.1%p, 10~20% -0.3%p, 20~30% -1.7%p, 30% 이상 -3.1%p(사례 적음).
+      3년 확인: 상위 3 섹터에 그날 거래대금 1.2배 이상 몰린 날의 거래 실린 양봉 종베는 다음 날 평균 +0.94%(수익 71%), 섹터 밖은 +0.28%.
+      다만 <b>다음 10~20일에 어느 섹터가 앞설지</b>는 이 지표들로 거의 맞히지 못했습니다(유입 섹터도 같은 날 평균 대비 -0.2%p). <b>"지금 어디에 돈이 붙었나"를 확인하는 용도</b>로 보세요.
     </p>
     <table>
-      <thead><tr><th>줄기</th><th>20일 상승 (순위)</th><th>확산 (20일선 위)<br><span class="ts">+20% 넘게 뜬 종목</span></th><th>거래대금 (평소 대비)</th><th>오늘</th><th>오늘 돈 붙은 종목 (거래 2배↑)</th></tr></thead>
+      <thead><tr><th>섹터</th><th>20일 상승 (순위)</th><th>확산 (20일선 위)<br><span class="ts">+20% 넘게 뜬 종목</span></th><th>거래대금 (평소 대비)</th><th>오늘</th><th>오늘 돈 붙은 종목 (거래 2배↑)</th></tr></thead>
       <tbody id="rot-body"><tr><td colspan="6" style="color:#8b949e;text-align:center;padding:16px">로딩 중…</td></tr></tbody>
     </table>
   </div>
@@ -520,9 +520,9 @@ function renderJongbe(){
   if(!items.length){ body.innerHTML='<tr><td colspan="5" style="color:#8b949e;text-align:center;padding:20px">오늘은 조건에 맞는 종목이 없습니다</td></tr>'; }
   else body.innerHTML=items.map(x=>`<tr style="cursor:pointer" onclick="openChartModal('${x.code}','${x.name}','')">
     <td><b>${x.name}</b> <span style="color:#8b949e;font-size:11px">${x.code}</span>${x.earn_up?' <span style="color:#3fb950;font-size:11px;border:1px solid #238636;border-radius:8px;padding:0 5px">📈 실적</span>':''}${x.leader?' <span style="color:#e3b341;font-size:11px">👑 대장</span>':''}${x.market_cap?`<br><span class="ts">시총 ${cdWon(x.market_cap)}</span>`:''}</td>
-    <td data-label="등급"><b style="color:${x.grade==='A'?'#3fb950':'#c9d1d9'}">${x.grade}</b><br><span class="ts">${x.grade==='A'?'줄기 돈 몰림':'줄기 돈 몰림 아님'}</span></td>
+    <td data-label="등급"><b style="color:${x.grade==='A'?'#3fb950':'#c9d1d9'}">${x.grade}</b><br><span class="ts">${x.grade==='A'?'섹터 돈 몰림':'섹터 돈 몰림 아님'}</span></td>
     <td data-label="그날 봉"><span style="color:#f85149">+${x.change_pct}%</span> · 거래 ${x.tv_x}배<br><span class="ts" style="color:${x.upper_pct<=30?'#3fb950':'#8b949e'}">윗꼬리 ${x.upper_pct}%</span> · <span class="ts">${cdWon(x.value)}</span></td>
-    <td data-label="줄기" style="font-size:12px">${x.families.join(', ')}</td>
+    <td data-label="섹터" style="font-size:12px">${x.families.join(', ')}</td>
     <td data-label="종가" style="text-align:right">${x.close.toLocaleString()}원${gapTag(x.gap20_pct)}</td>
   </tr>`).join('');
   document.getElementById('jb-limit').innerHTML=lim.length?`상한가 (체결 어려움 주의): ${lim.map(x=>`<b style="color:#e6edf3;cursor:pointer" onclick="openChartModal('${x.code}','${x.name}','')">${x.name}</b>`).join(' · ')}`:'';
@@ -540,7 +540,7 @@ async function jbCheck(){
     return `<div style="padding:6px 0;border-top:1px solid #21262d"><b style="color:#e6edf3">${x.name}</b> <span class="ts">${x.change_pct>=0?'+':''}${x.change_pct}% · 거래 ${x.tv_x}배 · 윗꼬리 ${x.upper_pct}%</span>${gapTag(x.gap20_pct)}
       <b style="margin-left:6px;color:${ok===tot?'#3fb950':ok>=tot-2?'#d29922':'#f85149'}">${ok}/${tot}</b><br>
       <span style="font-size:12px">${Object.entries(x.checks).map(([k,v])=>`${v?'✅':'❌'} ${k}`).join(' &nbsp; ')}</span>
-      <span class="ts"> · 줄기 ${x.families.join(', ')||'없음'}${x.best_rank?` (최고 ${x.best_rank}위)`:''}</span></div>`;}).join('');
+      <span class="ts"> · 섹터 ${x.families.join(', ')||'없음'}${x.best_rank?` (최고 ${x.best_rank}위)`:''}</span></div>`;}).join('');
 }
 async function loadJongbePerf(){
   const el=document.getElementById('jb-perf');

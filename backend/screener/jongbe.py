@@ -1,10 +1,10 @@
-"""오늘의 종베 후보: 시장 → 뜨거운 이야기 줄기 → 그날 줄기에 돈 몰림 → 거래 실린 양봉.
+"""오늘의 종베 후보: 시장 → 뜨거운 섹터 → 그날 섹터에 돈 몰림 → 거래 실린 양봉.
 
 3년 확인(2023-12~2026-09, 상승·횡보장, 상한가 제외, 다음 날 '갭상승이면 시가·아니면 종가' 매도):
-  기본(+3% 양봉·거래 2배) +0.42% / 뜨거운 줄기 상위 3 +0.74% / + 줄기 거래대금 1.2배 +0.94%(수익 71%) / 줄기 밖 +0.28%.
+  기본(+3% 양봉·거래 2배) +0.42% / 뜨거운 섹터 상위 3 +0.74% / + 섹터 거래대금 1.2배 +0.94%(수익 71%) / 섹터 밖 +0.28%.
   하락장은 같은 조건 +0.12%. 다음 날 시가 매도는 -5% 넘는 손실 2%, 종가까지 보유 18%.
   사용자 실제 매매(2026-09-21~10-02): 손실 대부분이 거래 0.6배 이하·빠진 날·윗꼬리 긴 날의 매수.
-등급: A = 뜨거운 줄기 + 줄기 돈 몰림(1.2배) + 거래 실린 양봉, B = 줄기는 뜨겁지만 돈 몰림 아님.
+등급: A = 뜨거운 섹터 + 섹터 돈 몰림(1.2배) + 거래 실린 양봉, B = 섹터는 뜨겁지만 돈 몰림 아님.
 """
 from __future__ import annotations
 
@@ -17,8 +17,8 @@ from sqlalchemy.orm import Session
 from backend.screener.market_regime import current_regime
 from backend.screener.rotation import family_members
 
-HOT_TOP = 3          # 20일 상승 순위 상위 몇 줄기를 뜨겁다고 볼지
-MONEY_X = 1.2        # 그날 줄기 거래대금 / 직전 20일 평균
+HOT_TOP = 3          # 20일 상승 순위 상위 몇 섹터를 뜨겁다고 볼지
+MONEY_X = 1.2        # 그날 섹터 거래대금 / 직전 20일 평균
 MIN_CHG, VOL_X, MIN_TV = 3.0, 2.0, 3e9
 LIMIT_UP = 29.5
 
@@ -121,7 +121,7 @@ def scan(db: Session) -> dict:
 
 
 def check(db: Session, queries: list[str]) -> dict:
-    """보유·관심 종목이 종베 단계(시장·줄기·돈 몰림·봉·과열)를 통과하는지."""
+    """보유·관심 종목이 종베 단계(시장·섹터·돈 몰림·봉·과열)를 통과하는지."""
     latest, P = _load(db)
     members = family_members(db)
     fam, order = _families(P, members)
@@ -151,8 +151,8 @@ def check(db: Session, queries: list[str]) -> dict:
             "families": fs[:4], "best_rank": best,
             "checks": {
                 "시장 상승·횡보": regime.get("state") in ("상승", "횡보"),
-                "뜨거운 줄기": bool(hot_fs),
-                "줄기에 돈 몰림": any(fam[f]["tv_x"] >= MONEY_X for f in hot_fs),
+                "뜨거운 섹터": bool(hot_fs),
+                "섹터에 돈 몰림": any(fam[f]["tv_x"] >= MONEY_X for f in hot_fs),
                 "+3% 양봉": v["bull"] and v["change_pct"] >= MIN_CHG,
                 "거래 2배 이상": bool(v["tv_x"] and v["tv_x"] >= VOL_X),
                 "윗꼬리 30% 이하": v["upper_pct"] <= 30,
