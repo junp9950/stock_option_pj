@@ -551,6 +551,15 @@ select{background:#21262d;border:1px solid #30363d;color:#c9d1d9;padding:6px 10p
       <tbody id="vr-body"><tr><td colspan="5" style="color:#8b949e;text-align:center;padding:20px">로딩 중…</td></tr></tbody>
     </table>
   </div>
+  <div style="margin-top:26px">
+    <b style="font-size:15px;color:#e6edf3">👀 바닥 박스 감시 (한선엔지니어링형)</b> <span class="ts" id="bb-info"></span>
+    <p class="lead" style="margin-top:6px">크게 빠진 뒤(120일 고점 -40%↓) 15일째 좁은 박스(폭 13%↓)에서 거래 없이 버티는 종목. <b>사 두는 자리가 아니라 감시용</b> — 박스에서 터지는 날(🔔) 섹터·시장이 받쳐 주면 봅니다.</p>
+    <details class="why"><summary>근거 보기</summary>
+      3년 632건: 처음 박스가 된 날 사면 20일 뒤 같은 날 평균 대비 -0.7%p, 40일 -2.8%p(대부분 더 흘러내림). 20일 안 +10%·거래 5배로 터질 확률은 18%로 아무 종목(15%)보다 조금 높을 뿐. 거래가 더 마를수록(0.3배↓) 오히려 나빴습니다. 한선엔지니어링은 8/24~9/15 폭 11.6% 박스 뒤 9/16 +24%.
+    </details>
+    <div id="bb-burst" style="margin-bottom:8px"></div>
+    <div id="bb-body" style="display:flex;flex-wrap:wrap;gap:6px" class="ts">로딩 중…</div>
+  </div>
 </div>
 
 <!-- 캔들차트 모달 (토스증권 실시간) -->
@@ -1218,6 +1227,7 @@ function renderHeatmapLegend(){
 let _cdData = null;
 async function loadCandidates(){
   loadVolumeRecords();   // 아래 대량거래 관심종목은 따로 동시에 불러온다
+  loadBottomBox();
   const body = document.getElementById('cd-body');
   body.innerHTML = '<tr><td colspan="5" style="color:#8b949e;text-align:center;padding:20px">로딩 중…</td></tr>';
   try{
@@ -1295,6 +1305,18 @@ function renderCandidates(){
       <td data-label="손절선" style="color:#f85149">${it.stop_price?it.stop_price.toLocaleString()+'원<br><span style="font-size:11px;color:'+({적정:'#3fb950',보통:'#c9d1d9',얕음:'#8b949e',깊음:'#8b949e'}[it.stop_zone])+'">-'+it.stop_dist_pct+'% · '+it.stop_zone+'</span>':'—'}</td>
     </tr>`;
   }).join('');
+}
+
+// ── 바닥 박스 감시 ────────────────────────────────────────────
+async function loadBottomBox(){
+  const d=await fetch(`${API}/screener/bottom-box`).then(r=>r.ok?r.json():null).catch(()=>null);
+  const el=document.getElementById('bb-body'); if(!el) return;
+  if(!d){ el.textContent='불러오지 못했습니다'; return; }
+  document.getElementById('bb-info').textContent=`${d.trading_date} · ${d.items.length}개${d.burst.length?` · 오늘 터짐 ${d.burst.length}`:''}`;
+  const chip=(x,b)=>`<span onclick="openChartModal('${x.code}','${x.name}','')" style="cursor:pointer;border:1px solid ${b?'#f85149':'#30363d'};border-radius:8px;padding:5px 9px;font-size:12px;line-height:1.5">
+    <b style="color:#e6edf3">${x.name}</b>${b?` <b style="color:#f85149">🔔 +${x.change_pct}%</b>`:''}<br><span class="ts">박스 ${x.days}일째 · 폭 ${x.band_pct}% · 고점 ${x.dd_pct}% · 거래 ${x.dry_x}배${x.families.length?' · '+x.families[0]:''}</span></span>`;
+  document.getElementById('bb-burst').innerHTML=d.burst.length?'<div class="ts" style="color:#f85149;margin-bottom:4px">🔔 오늘 박스에서 터짐</div><div style="display:flex;flex-wrap:wrap;gap:6px">'+d.burst.map(x=>chip(x,true)).join('')+'</div>':'';
+  el.innerHTML=d.items.length?d.items.map(x=>chip(x,false)).join(''):'지금은 없습니다';
 }
 
 // ── 대량거래 관심종목 ──────────────────────────────────────────
