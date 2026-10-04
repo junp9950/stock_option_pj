@@ -381,6 +381,24 @@ class TradeExecution(Base, TimestampMixin):
     kind: Mapped[str] = mapped_column(String(10), default="")       # 유형을 직접 바꿨을 때만
 
 
+class ChartLabel(Base, TimestampMixin):
+    """사용자 차트 판단 기록: 그날 목록을 보고 👍(살 만함)/👎(아님), 또는 나중에 본 '놓친 종목'(hindsight).
+    고르는 눈을 배우려는 재료 — 결과를 모르고 누른 것과 나중에 본 것을 따로 쓴다."""
+
+    __tablename__ = "chart_labels"
+    __table_args__ = (UniqueConstraint("owner", "trading_date", "code", "hindsight", name="uq_chart_labels"),)
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    owner: Mapped[str] = mapped_column(String(40), default="")
+    trading_date: Mapped[date] = mapped_column(Date, index=True)
+    code: Mapped[str] = mapped_column(String(20), index=True)
+    name: Mapped[str] = mapped_column(String(100), default="")
+    label: Mapped[int] = mapped_column(Integer, default=0)          # 1 살 만함 / -1 아님
+    reason: Mapped[str] = mapped_column(String(200), default="")
+    source: Mapped[str] = mapped_column(String(40), default="")      # 어느 목록에서 눌렀나
+    hindsight: Mapped[bool] = mapped_column(Boolean, default=False)
+
+
 class Suggestion(Base, TimestampMixin):
     """건의사항 탭: 사용자가 남긴 기능 요청·불편 사항과 처리 상태."""
 

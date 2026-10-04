@@ -1476,6 +1476,57 @@ def get_jongbe_performance(db: Session = Depends(get_db)):
     return performance(db)
 
 
+class LabelIn(BaseModel):
+    owner: str = Field("", max_length=40)
+    date: str = Field(..., max_length=10)
+    stock: str = Field(..., max_length=100)     # 코드 또는 이름
+    label: int = 1                              # 1 / -1 / 0(지우기)
+    reason: str = Field("", max_length=200)
+    source: str = Field("", max_length=40)
+    hindsight: bool = False
+
+
+@router.post("/labels")
+def post_label(body: LabelIn, db: Session = Depends(get_db)):
+    """차트 판단 👍/👎 또는 놓친 종목 기록."""
+    from backend.db.models import ChartLabel  # noqa: PLC0415
+    q = body.stock.strip()
+    row = db.execute(select(Stock.code, Stock.name).where((Stock.code == q) | (Stock.name == q))).first()
+    if not row:
+        raise HTTPException(status_code=404, detail="종목을 찾을 수 없습니다.")
+    try:
+        d = date.fromisoformat(body.date)
+    except ValueError:
+        raise HTTPException(status_code=400, detail="날짜 형식이 잘못됐습니다.")
+    owner = body.owner.strip()[:40]
+    x = db.scalar(select(ChartLabel).where(ChartLabel.owner == owner, ChartLabel.trading_date == d, ChartLabel.code == row.code,
+                                           ChartLabel.hindsight == body.hindsight))
+    if body.label == 0:
+        if x:
+            db.delete(x)
+            db.commit()
+        return {"ok": True, "removed": True}
+    if x is None:
+        x = ChartLabel(owner=owner, trading_date=d, code=row.code, name=row.name, hindsight=body.hindsight)
+        db.add(x)
+    x.label, x.reason, x.source = (1 if body.label > 0 else -1), body.reason.strip(), body.source
+    db.commit()
+    return {"ok": True, "code": row.code, "name": row.name}
+
+
+@router.get("/labels")
+def get_labels(owner: str = "", day: str = "", db: Session = Depends(get_db)):
+    """내 판단 기록: 전체 개수, 그날 누른 것, 최근 놓친 종목."""
+    from backend.db.models import ChartLabel  # noqa: PLC0415
+    rows = db.scalars(select(ChartLabel).where(ChartLabel.owner == owner)).all()
+    stats = {"up": sum(1 for r in rows if r.label > 0 and not r.hindsight), "down": sum(1 for r in rows if r.label < 0 and not r.hindsight),
+             "missed": sum(1 for r in rows if r.hindsight)}
+    today = [{"code": r.code, "label": r.label} for r in rows if r.trading_date.isoformat() == day and not r.hindsight]
+    missed = [{"date": r.trading_date.isoformat(), "name": r.name, "reason": r.reason}
+              for r in sorted(rows, key=lambda r: r.trading_date, reverse=True) if r.hindsight][:10]
+    return {"stats": stats, "day": today, "missed": missed}
+
+
 @router.get("/stocks/short-watch")
 def get_short_watch(q: str = "", db: Session = Depends(get_db)):
     """공매도·대차잔고 감시: 종목명이나 코드(쉼표, 최대 8개)."""

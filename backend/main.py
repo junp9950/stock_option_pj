@@ -334,6 +334,19 @@ select{background:#21262d;border:1px solid #30363d;color:#c9d1d9;padding:6px 10p
     <div id="sw-out" style="margin-top:10px"></div>
   </div>
 
+  <div style="border:1px solid #30363d;border-radius:10px;padding:12px 16px;margin-bottom:20px">
+    <b style="color:#e6edf3">📝 차트 판단 기록</b> <span class="ts" id="lb-stats"></span>
+    <p class="ts" style="margin:4px 0 8px">목록 종목 옆 👍(살 만함) · 👎(아님)를 눌러 주세요 — 결과를 모를 때 누른 판단이 고르는 눈을 배우는 재료입니다. 👎는 이유 한 단어(매물대·꼬리·거래 약함 등)를 적으면 더 빨리 배웁니다.
+      나중에 보고 "이거 왜 안 들어갔지" 싶은 종목은 아래에 날짜와 함께 따로 남겨 주세요(결과를 알고 고른 것이라 따로 씁니다).</p>
+    <div style="display:flex;gap:6px;flex-wrap:wrap">
+      <input id="lb-mname" placeholder="놓친 종목 (예: 필옵틱스)" style="flex:1;min-width:140px;background:#0d1117;border:1px solid #30363d;color:#c9d1d9;padding:6px 10px;border-radius:6px">
+      <input id="lb-mdate" type="date" style="background:#0d1117;border:1px solid #30363d;color:#c9d1d9;padding:5px 8px;border-radius:6px">
+      <input id="lb-mmemo" placeholder="그날 들어갔어야 한 이유 (선택)" style="flex:2;min-width:180px;background:#0d1117;border:1px solid #30363d;color:#c9d1d9;padding:6px 10px;border-radius:6px">
+      <button class="btn btn-sm" onclick="lbMissed()">남기기</button>
+    </div>
+    <div id="lb-missed" class="ts" style="margin-top:8px"></div>
+  </div>
+
   <details class="why"><summary>📒 이 화면 종베 후보의 실제 다음 날 결과</summary>
   <div id="jb-perf" class="ts">로딩 중…</div></details>
 </div>
@@ -734,6 +747,7 @@ function renderValueRecords(){
 const _jbOpen={};
 function renderJongbe(){
   const d=_jbData; if(!d) return;
+  if(_lbDate!==d.trading_date){ _lbDate=d.trading_date; lbLoad(d.trading_date).then(renderJongbe); }
   const min=parseFloat(document.getElementById('jb-mincap').value)*1e8||0;
   renderValueRecords();
   const nf=document.getElementById('jb-noflag').checked, nc=document.getElementById('jb-nocred').checked;
@@ -747,7 +761,7 @@ function renderJongbe(){
   const body=document.getElementById('jb-body');
   if(!items.length){ body.innerHTML=`<tr><td colspan="5" style="color:#8b949e;text-align:center;padding:20px">${nB&&!showB?`오늘은 A등급이 없습니다. <a href="#" onclick="document.getElementById('jb-showb').checked=true;renderJongbe();return false" style="color:#58a6ff">B등급 ${nB}개 보기</a> (3년 다음 날 평균 +0.35%, A는 +1.20%)`:'오늘은 조건에 맞는 종목이 없습니다'}</td></tr>`; }
   else body.innerHTML=items.map(x=>`<tr style="cursor:pointer" onclick="openChartModal('${x.code}','${x.name}','')">
-    <td><b>${x.name}</b> <span style="color:#8b949e;font-size:11px">${x.code}</span>${x.earn_up?' <span style="color:#3fb950;font-size:11px;border:1px solid #238636;border-radius:8px;padding:0 5px">📈 실적</span>':''}${x.leader?' <span style="color:#e3b341;font-size:11px">👑 대장</span>':''}${flagTag(x)}${x.record_today?' <span style="color:#f85149;font-size:11px" title="오늘 몇 년 만의 최대 거래대금">🔔 거래대금 신기록</span>':''}${x.vr_stage&&x.vr_stage!=='무너짐'&&!x.record_today?` <span style="font-size:11px;color:${x.vr_signal?'#e3b341':'#8b949e'}" title="대량거래 관심종목 단계 (스윙 관점)">🔥 ${x.vr_signal?'진입 신호':x.vr_stage}</span>`:''}${x.market_cap?`<br><span class="ts">시총 ${cdWon(x.market_cap)}</span>`:''}</td>
+    <td><b>${x.name}</b> <span style="color:#8b949e;font-size:11px">${x.code}</span>${x.earn_up?' <span style="color:#3fb950;font-size:11px;border:1px solid #238636;border-radius:8px;padding:0 5px">📈 실적</span>':''}${x.leader?' <span style="color:#e3b341;font-size:11px">👑 대장</span>':''}${flagTag(x)}${x.record_today?' <span style="color:#f85149;font-size:11px" title="오늘 몇 년 만의 최대 거래대금">🔔 거래대금 신기록</span>':''}${x.vr_stage&&x.vr_stage!=='무너짐'&&!x.record_today?` <span style="font-size:11px;color:${x.vr_signal?'#e3b341':'#8b949e'}" title="대량거래 관심종목 단계 (스윙 관점)">🔥 ${x.vr_signal?'진입 신호':x.vr_stage}</span>`:''}${x.market_cap?`<br><span class="ts">시총 ${cdWon(x.market_cap)}</span>`:''}${lbBtns(x,'종베')}</td>
     <td data-label="등급"><b style="color:${x.grade==='A'?'#3fb950':'#c9d1d9'}">${x.grade}</b>${x.pos60_pct!=null?` <span class="ts" title="60일 종가 고점 대비 ${x.pos60_pct}% — 3년 확인상 돌파형·반등형 다음 날 성과는 같았음(+0.5~0.7%)">${x.pos60_pct>=0?(x.under_wick?'돌파형 (전 고점 윗꼬리 아래)':'돌파형'):x.pos60_pct>=-5?'고점 근처':'반등형'}</span>`:''}<br><span class="ts">${(()=>{ const tv=Math.max(...d.families.filter(f=>x.families.includes(f.family)).map(f=>f.tv_med),0); return x.grade==='A'?`섹터 종목 거래 중간 ${tv.toFixed(2)}배`:`섹터 종목 거래 중간 ${tv.toFixed(2)}배<br>(1배↑면 A)`; })()}</span></td>
     <td data-label="그날 봉"><span style="color:#f85149">+${x.change_pct}%</span> · 거래 ${x.tv_x}배<br><span class="ts" style="color:${x.upper_pct<=30?'#3fb950':'#8b949e'}">윗꼬리 ${x.upper_pct}%</span> · <span class="ts">${cdWon(x.value)}</span></td>
     <td data-label="섹터" style="font-size:12px">${x.families.join(', ')}</td>
@@ -767,7 +781,7 @@ function renderJongbe(){
   document.getElementById('jb-ch-info').textContent=`${ch.length}개 · 🚀 돌파 ${cnt('🚀 돌파')} · 돌파 대기 ${cnt('돌파 대기')} · 저가 지킴 ${cnt('저가 지킴')} · 눌림 ${cnt('눌림')} · 버팀 ${cnt('버팀')}`;
   const tagCol={'🚀 돌파':'#3fb950','돌파 대기':'#c9d1d9','저가 지킴':'#3fb950','눌림':'#58a6ff','버팀':'#e3b341'};
   const rowHtml=x=>`<tr style="cursor:pointer" onclick="openChartModal('${x.code}','${x.name}','')">
-    <td><b>${x.name}</b> <span style="color:#8b949e;font-size:11px">${x.code}</span>${flagTag(x)}${x.earn_up?' <span style="color:#3fb950;font-size:11px;border:1px solid #238636;border-radius:8px;padding:0 5px">📈 실적</span>':''}${x.market_cap?`<br><span class="ts">시총 ${cdWon(x.market_cap)}</span>`:''}</td>
+    <td><b>${x.name}</b> <span style="color:#8b949e;font-size:11px">${x.code}</span>${flagTag(x)}${x.earn_up?' <span style="color:#3fb950;font-size:11px;border:1px solid #238636;border-radius:8px;padding:0 5px">📈 실적</span>':''}${x.market_cap?`<br><span class="ts">시총 ${cdWon(x.market_cap)}</span>`:''}${lbBtns(x,'스윙·선취매')}</td>
     <td data-label="근거">${x.tags.map(t=>`<b style="color:${tagCol[t]||'#c9d1d9'}">${t}</b>`).join(' · ')}${x.loud?' <span class="ts" style="color:#d29922" title="거래 2배 넘게 터지며 돌파 — 3년 +0.8%p로 약했음">📢 거래 폭발(약함)</span>':''}
       <br><span class="ts">${x.box?`박스 상단 ${x.box.box_top.toLocaleString()}원 대비 ${x.box.pos_pct>=0?'+':''}${x.box.pos_pct}%`:`20일 고점 ${x.off_high_pct}%`}${x.stop_price?` · 손절선 ${x.stop_price.toLocaleString()}원`:''}</span></td>
     <td data-label="오늘"><span style="color:${x.change_pct>=0?'#f85149':'#58a6ff'}">${x.change_pct>=0?'+':''}${x.change_pct}%</span> · 거래 ${x.tv_x}배</td>
@@ -797,6 +811,38 @@ async function jbMover(fam){
   const ls=(f.leaders||[]);
   el.innerHTML=`<div style="border:1px solid #30363d;border-radius:8px;padding:9px 12px;font-size:12.5px"><b style="color:#e6edf3">${fam}</b> <span class="ts">20일 ${f.ret20_pct>=0?'+':''}${f.ret20_pct}% · 5일 ${f.ret5_pct>=0?'+':''}${f.ret5_pct}% · 오늘 거래 평소 ${f.tv1_x}배</span><br>`
     +(ls.length?'오늘 돈 붙은 종목: '+ls.map(x=>`<b style="cursor:pointer;color:#e6edf3" onclick="openChartModal('${x.code}','${x.name}','')">${x.name}</b> <span style="color:${x.change_pct>=0?'#f85149':'#58a6ff'}">${x.change_pct>=0?'+':''}${x.change_pct}%</span>`).join(' · '):'<span class="ts">오늘 거래 2배 넘게 붙은 종목은 없습니다</span>')+'</div>';
+}
+// ── 차트 판단 기록 (👍/👎) ─────────────────────────────────────
+let _lb={}, _lbDate='', _ssDate='';
+function lbOwner(ask){ try{ let o=localStorage.getItem('jr-owner')||localStorage.getItem('lb-owner'); if(!o){ if(!ask) return '익명'; o=prompt('판단 기록에 쓸 이름 (매매 일지 이름과 같게)','junp')||'익명'; localStorage.setItem('lb-owner',o);} return o; }catch(e){ return '익명'; } }
+async function lbLoad(date){
+  try{ const d=await fetch(`${API}/labels?owner=${encodeURIComponent(lbOwner())}&day=${date}`).then(r=>r.json());
+    d.day.forEach(x=>{ _lb[date+'|'+x.code]=x.label; });
+    const st=document.getElementById('lb-stats'); if(st) st.textContent=`지금까지 👍 ${d.stats.up} · 👎 ${d.stats.down} · 놓친 종목 ${d.stats.missed}`;
+    const ms=document.getElementById('lb-missed'); if(ms) ms.innerHTML=d.missed.length?'최근 놓친 종목: '+d.missed.map(x=>`${x.date.slice(5)} <b style="color:#e6edf3">${x.name}</b>${x.reason?` (${x.reason})`:''}`).join(' · '):'';
+  }catch(e){}
+}
+function lbBtns(x,src,date){
+  date=date||_lbDate; const v=_lb[date+'|'+x.code]||0;
+  const b=(val,ic)=>`<span onclick="event.stopPropagation();lbSet('${x.code}','${x.name}',${val},'${src}','${date}')" title="${val>0?'살 만함':'아님'}" style="cursor:pointer;margin-left:4px;font-size:13px;opacity:${v===val?1:0.35}">${ic}</span>`;
+  return ` <span class="lb" data-k="${date}|${x.code}">${b(1,'👍')}${b(-1,'👎')}</span>`;
+}
+async function lbSet(code,name,val,src,date){
+  const k=date+'|'+code; const cur=_lb[k]||0; const nv=cur===val?0:val;
+  let reason=''; if(nv<0){ reason=prompt(`${name} 👎 이유 한 단어 (선택: 매물대·꼬리·거래 약함·자리 아님 …)`,'')||''; }
+  const r=await fetch(`${API}/labels`,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({owner:lbOwner(true),date,stock:code,label:nv,reason,source:src})}).catch(()=>null);
+  if(!r||!r.ok){ alert('저장 실패'); return; }
+  _lb[k]=nv;
+  document.querySelectorAll(`.lb[data-k="${k}"]`).forEach(s=>{ const sp=s.querySelectorAll('span'); sp[0].style.opacity=nv===1?1:0.35; sp[1].style.opacity=nv===-1?1:0.35; });
+  lbLoad(date);
+}
+async function lbMissed(){
+  const name=document.getElementById('lb-mname').value.trim(), date=document.getElementById('lb-mdate').value, memo=document.getElementById('lb-mmemo').value.trim();
+  if(!name||!date){ alert('종목과 날짜를 넣어 주세요'); return; }
+  const r=await fetch(`${API}/labels`,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({owner:lbOwner(true),date,stock:name,label:1,reason:memo,source:'놓친 종목',hindsight:true})}).catch(()=>null);
+  if(!r||!r.ok){ const e=r?await r.json().catch(()=>({})):{}; alert(e.detail||'저장 실패'); return; }
+  document.getElementById('lb-mname').value=''; document.getElementById('lb-mmemo').value='';
+  lbLoad(_lbDate);
 }
 async function swCheck(){
   const q=document.getElementById('sw-q').value.trim();
@@ -1375,11 +1421,12 @@ async function loadSupportSetups(){
   const d=await fetch(`${API}/screener/support-setups`).then(r=>r.ok?r.json():null).catch(()=>null);
   const el=document.getElementById('ss-body'); if(!el) return;
   if(!d){ el.textContent='불러오지 못했습니다'; return; }
+  _ssDate=d.trading_date; await lbLoad(d.trading_date);
   document.getElementById('ss-info').textContent=`${d.trading_date} · ${d.items.length}개`;
   el.innerHTML=d.items.length?d.items.map(x=>`<span onclick="openChartModal('${x.code}','${x.name}','')" style="cursor:pointer;border:1px solid ${x.type==='추세선 지지'?'#bc8cff':'#58a6ff'};border-radius:8px;padding:6px 10px;font-size:12.5px;line-height:1.55">
     <b style="color:#e6edf3">${x.name}</b>${flagTag(x)} <span style="font-size:11px;color:${x.type==='추세선 지지'?'#bc8cff':'#58a6ff'}">${x.type}</span><br>
     <span style="color:#58a6ff">손절 ${x.stop.toLocaleString()}원 (${x.stop_pct}%)</span> · <span style="color:#f85149">위 ${x.target.toLocaleString()}원 (+${x.target_pct}%)</span><br>
-    <span class="ts">현재 ${x.close.toLocaleString()}원 · 거래 터질 때의 ${x.dry}배 · 터진 뒤 ${x.since_burst}일${x.families.length?' · '+x.families[0]:''}</span>
+    ${lbBtns(x,'손절 짧은 자리',_ssDate)}<br><span class="ts">현재 ${x.close.toLocaleString()}원 · 거래 터질 때의 ${x.dry}배 · 터진 뒤 ${x.since_burst}일${x.families.length?' · '+x.families[0]:''}</span>
     ${x.fund?`<br><span style="font-size:11.5px;color:${x.fund.good?'#3fb950':x.fund.grow?'#c9d1d9':x.fund.loss?'#f85149':'#8b949e'}">${x.fund.good?'📈 실적 개선':x.fund.grow?'이익 증가':x.fund.loss?'⚠ 영업 적자':'이익 감소'} · ${x.fund.period} 영업익 ${x.fund.op_yoy!=null?(x.fund.op_yoy>0?'+':'')+x.fund.op_yoy+'%':'-'} · 매출 ${x.fund.rev_yoy!=null?(x.fund.rev_yoy>0?'+':'')+x.fund.rev_yoy+'%':'-'}${x.fund.margin!=null?' · 이익률 '+x.fund.margin+'%':''}</span>`:''}</span>`).join('')
     :'지금은 없습니다';
 }
