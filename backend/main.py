@@ -108,11 +108,11 @@ select{background:#21262d;border:1px solid #30363d;color:#c9d1d9;padding:6px 10p
 .modal-tab.active{color:#58a6ff;border-bottom-color:#58a6ff}
 .ts{color:#8b949e;font-size:11px}
 .lead{color:#c9d1d9;font-size:13px;margin:0 0 6px}
-.cal-grid{display:grid;grid-template-columns:repeat(5,1fr);gap:4px}.cal-h{font-size:11px;color:#8b949e;text-align:center}
-.cal-c{background:#161b22;border:1px solid #30363d;border-radius:6px;padding:5px 6px;min-height:78px;cursor:pointer;font-size:11px;line-height:1.45;overflow:hidden}
-.cal-c:hover,.cal-c.on{border-color:#58a6ff}.cal-c.empty{background:transparent;border-color:transparent;cursor:default}.cal-c .dt{color:#8b949e;font-size:10.5px}
-.cal-c .th{white-space:nowrap;overflow:hidden;text-overflow:ellipsis;color:#c9d1d9}
-@media(max-width:640px){.cal-grid{grid-template-columns:1fr}.cal-h,.cal-c.empty{display:none}.cal-c{min-height:0}}
+.cal-grid{display:grid;grid-template-columns:repeat(5,minmax(0,1fr));gap:5px}.cal-h{font-size:12px;color:#8b949e;text-align:center;padding:2px 0}
+.cal-c{background:#161b22;border:1px solid #30363d;border-radius:8px;padding:6px 7px;min-height:118px;cursor:pointer;font-size:12px;line-height:1.5;overflow:hidden}
+.cal-c:hover,.cal-c.on{border-color:#58a6ff}.cal-c.empty{background:transparent;border-color:transparent;cursor:default}.cal-c .dt{color:#e6edf3;font-size:12px;font-weight:600}.cal-c .dt span{font-weight:400;font-size:11px}
+.cal-c .th{white-space:nowrap;overflow:hidden;text-overflow:ellipsis;color:#c9d1d9}.cal-c .th.t1{color:#e6edf3;font-weight:600}
+@media(max-width:640px){.cal-grid{gap:3px}.cal-c{min-height:74px;padding:3px 4px;font-size:10px;line-height:1.35}.cal-c .dt{font-size:11px}.cal-c .dt span{display:none}.cal-c .th.t3{display:none}}
 
 .why{margin:0 0 12px;color:#8b949e;font-size:12px;line-height:1.65}
 .why summary{cursor:pointer;color:#8b949e;font-size:12px;width:max-content}
@@ -169,6 +169,7 @@ select{background:#21262d;border:1px solid #30363d;color:#c9d1d9;padding:6px 10p
   <div class="tab active" onclick="switchTab('jongbe')">종베 후보</div>
   <div class="tab" onclick="switchTab('candidates')">차트 후보</div>
   <div class="tab" onclick="switchTab('sector')">섹터 수급</div>
+  <div class="tab" onclick="switchTab('calendar')">섹터 캘린더</div>
   <div class="tab" onclick="switchTab('journal')">매매 일지</div>
   <div class="tab" onclick="switchTab('screener')">거래대금 순위</div>
   <div class="tab" onclick="switchTab('heatmap')">시장 히트맵</div>
@@ -353,6 +354,18 @@ select{background:#21262d;border:1px solid #30363d;color:#c9d1d9;padding:6px 10p
   </div>
 </div>
 
+<!-- 섹터 캘린더 탭 -->
+<div id="panel-calendar" class="panel content">
+  <div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap;margin-bottom:10px">
+    <button class="btn btn-gray btn-sm" onclick="calMove(-1)">◀</button>
+    <b id="cal-month" style="color:#e6edf3;font-size:18px"></b>
+    <button class="btn btn-gray btn-sm" onclick="calMove(1)">▶</button>
+    <span class="ts">그날 가장 강했던 테마 (소속 종목 평균 등락, 거래대금 100억↑) · 날짜를 누르면 섹터·대장주까지</span>
+  </div>
+  <div id="cal-grid" class="cal-grid"></div>
+  <div id="cal-detail" style="margin-top:10px"></div>
+</div>
+
 <!-- 섹터 수급 탭 -->
 <div id="panel-sector" class="panel content">
 
@@ -378,17 +391,6 @@ select{background:#21262d;border:1px solid #30363d;color:#c9d1d9;padding:6px 10p
       <thead><tr><th>테마</th><th>오늘 등락</th><th>상승 비율</th><th title="그 테마 종목 거래대금 합계 / 직전 20거래일 평균 (DB 최근 거래일 기준)">거래대금<br><span class="ts" id="live-theme-tvdate"></span></th><th>주도주</th></tr></thead>
       <tbody id="live-theme-body"><tr><td colspan="5" style="color:#8b949e;text-align:center;padding:16px">로딩 중…</td></tr></tbody>
     </table>
-  </div>
-
-  <!-- 강한 섹터 캘린더 -->
-  <div style="margin-bottom:20px">
-    <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;margin-bottom:8px">
-      <span style="font-size:12px;color:#8b949e;letter-spacing:.06em">📅 강한 섹터 캘린더</span>
-      <button class="btn btn-gray btn-sm" onclick="calMove(-1)">◀</button><b id="cal-month" style="color:#e6edf3;font-size:13px"></b><button class="btn btn-gray btn-sm" onclick="calMove(1)">▶</button>
-      <span class="ts">날짜마다 그날 가장 강했던 테마(평균 등락, 거래대금 100억↑). 날짜를 누르면 대장주까지 보입니다.</span>
-    </div>
-    <div id="cal-grid" class="cal-grid"></div>
-    <div id="cal-detail" style="margin-top:8px"></div>
   </div>
 
   <details class="why" style="margin-top:8px"><summary>외국인·기관 수급 테마 표 보기 (3년 검증 안 된 참고용)</summary>
@@ -578,7 +580,7 @@ const tagHtml = tags => (tags||[]).map(t=>{
 
 function switchTab(id) {
   // 실적 개선 탭은 2026-10-04 숨김 (데이터는 📈 실적 표시로 계속 쓴다, /earnings 주소는 그대로)
-  const tabs = ['jongbe','candidates','sector','journal','screener','heatmap','discussion','suggest'];
+  const tabs = ['jongbe','candidates','sector','calendar','journal','screener','heatmap','discussion','suggest'];
   if(!tabs.includes(id))return;
   try{ history.replaceState(null,'',id==='jongbe'?location.pathname:'#'+id); }catch(e){}   // 새로고침해도 이 탭에 남게
   document.querySelectorAll('.tab').forEach((t,i)=>t.classList.toggle('active',tabs[i]===id));
@@ -587,7 +589,8 @@ function switchTab(id) {
   if(id==='screener')loadTopValue();
   if(id==='jongbe')loadJongbe();
   if(id==='journal')loadJournal();
-  if(id==='sector'){loadSector();loadLiveThemes();loadRotation();loadSectorCal();}
+  if(id==='sector'){loadSector();loadLiveThemes();loadRotation();}
+  if(id==='calendar')loadSectorCal();
   if(id==='heatmap')loadHeatmap();
   if(id==='candidates')loadCandidates();
   if(id==='suggest')document.getElementById('suggest-frame').src='/suggestions';
@@ -817,8 +820,10 @@ let _cal=null,_calMonth=null;
 async function loadSectorCal(){
   if(!_cal){ try{ _cal=await fetch(`${API}/sectors/calendar`).then(r=>r.ok?r.json():null); }catch(e){} }
   if(!_cal||!_cal.days.length){ document.getElementById('cal-grid').innerHTML='<span class="ts">불러오지 못했습니다</span>'; return; }
+  const first=!_calMonth;
   if(!_calMonth) _calMonth=_cal.days[_cal.days.length-1].date.slice(0,7);
   renderCal();
+  if(first) calPick(_cal.days[_cal.days.length-1].date, true);
 }
 function calMove(k){
   const ms=[...new Set(_cal.days.map(d=>d.date.slice(0,7)))];
@@ -839,18 +844,19 @@ function renderCal(){
       else for(let i=prev+1;i<wd;i++) html+='<div class="cal-c empty"></div>';
     }
     prev=wd;
-    html+=`<div class="cal-c" data-d="${d.date}" onclick="calPick('${d.date}')"><div class="dt">${+d.date.slice(8)}일 · 시장 ${pc(d.market_chg)}</div>`
-      +d.themes.slice(0,3).map(t=>`<div class="th">${t.name.split('(')[0]} ${pc(t.chg)}</div>`).join('')+'</div>';
+    html+=`<div class="cal-c" data-d="${d.date}" onclick="calPick('${d.date}')"><div class="dt">${+d.date.slice(8)} <span>시장 ${pc(d.market_chg)}</span></div>`
+      +d.themes.slice(0,3).map((t,i)=>`<div class="th t${i+1}" title="${t.name} ${t.chg}%">${t.name.split('(')[0]} ${pc(t.chg)}</div>`).join('')+'</div>';
   }
   document.getElementById('cal-grid').innerHTML=html;
 }
-function calPick(date){
+function calPick(date, quiet){
   const d=_cal.days.find(x=>x.date===date); if(!d) return;
   document.querySelectorAll('.cal-c').forEach(c=>c.classList.toggle('on',c.dataset.d===date));
   const pc=v=>`<span style="color:${v>=0?'#f85149':'#58a6ff'}">${v>=0?'+':''}${v}%</span>`;
   document.getElementById('cal-detail').innerHTML=`<div style="border:1px solid #30363d;border-radius:8px;padding:10px 12px;font-size:12.5px;line-height:1.8">
     <b style="color:#e6edf3">${date}</b> <span class="ts">시장 평균 ${pc(d.market_chg)} · 섹터 ${d.families.map(f=>f.name+' '+pc(f.chg)).join(' · ')}</span><br>`
     +d.themes.map(t=>`<b style="color:#e6edf3;cursor:pointer" onclick="openSectorModal(${t.id},'${t.name.replace(/'/g,'')}')">${t.name}</b> ${pc(t.chg)} <span class="ts">상승 ${t.up_pct}% · ${t.leaders.map(l=>l.name+' '+(l.chg>=0?'+':'')+l.chg+'%').join(', ')}</span>`).join('<br>')+'</div>';
+  if(!quiet) document.getElementById('cal-detail').scrollIntoView({behavior:'smooth',block:'nearest'});
 }
 
 async function loadRotation(){
