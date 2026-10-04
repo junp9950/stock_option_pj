@@ -1860,10 +1860,10 @@ def post_journal_import(body: JournalImportIn, request: Request, db: Session = D
         d = date.fromisoformat(body.date) if body.date else latest_trading_day()
     except ValueError:
         d = latest_trading_day()
-    rows, bad = parse(db, body.text, d)
+    rows, bad, shift = parse(db, body.text, d)
     if body.preview:
-        return {"rows": [{**r, "trade_date": r["trade_date"].isoformat()} for r in rows], "bad": bad}
-    return {**add(db, owner, rows), "bad": bad}
+        return {"rows": [{**r, "trade_date": r["trade_date"].isoformat()} for r in rows], "bad": bad, "shift": shift}
+    return {**add(db, owner, rows), "bad": bad, "shift": shift}
 
 
 class JournalEditIn(BaseModel):

@@ -749,7 +749,8 @@ async function jrImport(preview){
   const r=await fetch(`${API}/journal/import`,{method:'POST',headers:jrH(),body:JSON.stringify({text,date:document.getElementById('jr-date').value,preview})}).catch(()=>null);
   if(!r||!r.ok){ msg.textContent='실패'; return; }
   const d=await r.json();
-  const bad=d.bad.length?`<div style="color:#d29922;margin-top:4px">못 읽은 줄 ${d.bad.length}개: ${d.bad.slice(0,5).map(x=>x.replace(/</g,'&lt;')).join(' / ')}</div>`:'';
+  const sh=d.shift?`<div style="color:#58a6ff;margin-top:4px">증권사 내역 날짜가 결제일이라 체결일로 ${d.shift}거래일 앞당겨 넣었습니다(체결가가 그날 시세 범위와 맞는 쪽).</div>`:'';
+  const bad=(d.bad.length?`<div style="color:#d29922;margin-top:4px">못 읽은 줄 ${d.bad.length}개: ${d.bad.slice(0,5).map(x=>x.replace(/</g,'&lt;')).join(' / ')}</div>`:'')+sh;
   if(preview){
     msg.textContent=`${d.rows.length}건 읽음`;
     document.getElementById('jr-preview').innerHTML=d.rows.slice(0,50).map(x=>`<span style="display:inline-block;margin:0 10px 3px 0">${x.trade_date.slice(5)} <span style="color:${x.side==='매수'?'#f85149':'#58a6ff'}">${x.side}</span> ${x.name} ${x.qty}주 @${Math.round(x.price).toLocaleString()}</span>`).join('')+(d.rows.length>50?' …':'')+bad;

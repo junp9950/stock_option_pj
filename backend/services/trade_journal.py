@@ -93,8 +93,8 @@ def _date(s: str, today: date) -> date | None:
     return None
 
 
-def parse(db: Session, raw: str, default_date: date) -> tuple[list[dict], list[str]]:
-    """증권사 체결 내역(탭 구분) 또는 '10/5 한양디지텍 매수 100 21500' 같은 자유 형식 줄 → 체결 목록, 못 읽은 줄."""
+def parse(db: Session, raw: str, default_date: date) -> tuple[list[dict], list[str], int]:
+    """증권사 체결 내역(탭 구분) 또는 '10/5 한양디지텍 매수 100 21500' 같은 자유 형식 줄 → 체결 목록, 못 읽은 줄, 날짜 보정(거래일 수)."""
     by_code, by_name = {}, {}
     for code, name in db.execute(select(Stock.code, Stock.name)):
         by_code[code], by_name[name.replace(" ", "")] = name, code
@@ -147,7 +147,45 @@ def parse(db: Session, raw: str, default_date: date) -> tuple[list[dict], list[s
             qty, px = px, qty
         out.append({"trade_date": d, "seq": "", "side": side, "code": code, "name": by_code[code], "qty": int(qty), "price": px,
                     "amount": qty * px, "fee": 0.0, "broker_cost": None, "broker_pnl": None})
-    return out, bad
+    return out, bad, _settle_shift(db, out)
+
+
+def _settle_shift(db: Session, rows: list[dict]) -> int:
+    """증권사 내역의 '일자'가 결제일(체결 +2거래일)인 경우가 있다 (2026-10 사용자 내역: 201건 중 200건이 2거래일 전 시세 범위).
+    체결가가 그날 고가~저가 안에 드는지로 0~2거래일 중 가장 잘 맞는 쪽을 골라 체결일로 옮긴다."""
+    br = [r for r in rows if r["seq"]]
+    if len(br) < 3:
+        return 0
+    lo_d, hi_d = min(r["trade_date"] for r in br), max(r["trade_date"] for r in br)
+    days = [d for (d,) in db.execute(text("select distinct trading_date from spot_daily_prices where trading_date between :a and :b order by 1"),
+                                       {"a": lo_d - timedelta(days=14), "b": hi_d})]
+    d = days[-1] if days else lo_d - timedelta(days=14)
+    while d < hi_d:   # 아직 시세가 없는 미래 결제일은 평일로 채운다
+        d += timedelta(days=1)
+        if d.weekday() < 5 and d not in days:
+            days.append(d)
+    rng = {(c, dd): (lo, hi) for c, dd, lo, hi in db.execute(text(
+        "select stock_code, trading_date, low_price, high_price from spot_daily_prices where trading_date between :a and :b and stock_code = any(:c)"),
+        {"a": days[0], "b": hi_d, "c": list({r["code"] for r in br})})}
+
+    def back(dd: date, k: int) -> date | None:
+        prev = [x for x in days if x <= dd]
+        return prev[-1 - k] if len(prev) > k else None
+
+    fit = {}
+    for k in (0, 1, 2):
+        n = 0
+        for r in br:
+            dd = back(r["trade_date"], k)
+            lohi = rng.get((r["code"], dd))
+            n += bool(lohi and lohi[0] * 0.995 <= r["price"] <= lohi[1] * 1.005)
+        fit[k] = n
+    best = max(fit, key=lambda k: (fit[k], -k))
+    if best == 0 or fit[best] < fit[0] + max(2, 0.2 * len(br)):
+        return 0
+    for r in br:
+        r["trade_date"] = back(r["trade_date"], best) or r["trade_date"]
+    return best
 
 
 def _key(owner: str, e: dict) -> str:
