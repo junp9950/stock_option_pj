@@ -109,7 +109,7 @@ def scan(db: Session) -> dict:
                                           "market_cap": caps.get(code, (0, 0))[0] or caps.get(code, (0, 0))[1] * v["close"] or mc.get(code) or 0})
             row["families"].append(f)
             row["money"] |= money
-            top60 = float(P["h"][code].iloc[-61:-1].max())
+            top60 = float(P["c"][code].iloc[-61:-1].max())   # 종가 기준 (9/18 우리로처럼 장중 윗꼬리 고점에 끌려 반등형으로 잘못 보이지 않게)
             row["pos60_pct"] = round((v["close"] / top60 - 1) * 100, 1) if top60 == top60 and top60 else None
             row["leader"] |= leader
     # 대량거래 관심종목과 연결: 오늘 몇 년 만의 최대 거래대금인지, 관심종목 단계(숨고르기·진입 신호 등)
