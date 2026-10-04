@@ -265,7 +265,7 @@ select{background:#21262d;border:1px solid #30363d;color:#c9d1d9;padding:6px 10p
     <span class="ts" id="jb-count"></span>
   </div>
   <div id="jb-fams" style="display:flex;flex-wrap:wrap;gap:8px;margin-bottom:22px"></div>
-  <b style="font-size:15px;color:#e6edf3;display:block;margin:4px 0 8px">③ 섹터 안 좋은 차트 — 오늘 종베</b>
+  <b style="font-size:15px;color:#e6edf3;display:block;margin:4px 0 8px">③ 뜨는 섹터의 좋은 차트 · 오늘 종가에 살 종목 (종베)</b>
   <table class="pb-table">
     <thead><tr><th>종목</th><th>등급</th><th>그날 봉</th><th>섹터</th><th>종가</th></tr></thead>
     <tbody id="jb-body"><tr><td colspan="5" style="color:#8b949e;text-align:center;padding:20px">로딩 중…</td></tr></tbody>
@@ -281,7 +281,7 @@ select{background:#21262d;border:1px solid #30363d;color:#c9d1d9;padding:6px 10p
   </div>
 
   <div style="margin:4px 0 22px">
-    <b style="font-size:15px;color:#e6edf3;margin:4px 0 8px">③ 섹터 안 좋은 차트 — 스윙·선취매</b> <span class="ts" id="jb-ch-info"></span>
+    <b style="font-size:15px;color:#e6edf3;margin:4px 0 8px">③ 뜨는 섹터의 좋은 차트 · 며칠~몇 주 들고 갈 종목 (스윙·선취매)</b> <span class="ts" id="jb-ch-info"></span>
     <p class="lead" style="margin-top:6px"><b style="color:#3fb950">🚀 돌파</b>·<b>돌파 대기</b> = 박스 상단(60일 고점) 막 넘음·-2% 이내 · <b style="color:#3fb950">저가 지킴</b> = 대량거래 봉 저가 안 깸 · <b style="color:#58a6ff">눌림</b> = 20일 고점 -5~-15% · <b style="color:#e3b341">버팀</b> = 섹터 빠진 날 안 빠짐</p>
     <details class="why"><summary>근거 보기</summary>
       3년(같은 날 시장 대비 20일 뒤): 돌파 +2.9%p, 돌파 대기 +2.4%p, 눌림 +2.2%p, 저가 지킴 +1.3%p (뜨거운 섹터 아무 종목 +1.7%p). 거래 2배 넘게 터지며 돌파(📢)는 +0.8%p로 약함.
@@ -294,7 +294,7 @@ select{background:#21262d;border:1px solid #30363d;color:#c9d1d9;padding:6px 10p
   </div>
 
   <div style="margin:4px 0 22px">
-    <b style="font-size:15px;color:#e6edf3;margin:4px 0 8px">④ 다음 섹터 — 움직이기 시작</b>
+    <b style="font-size:15px;color:#e6edf3;margin:4px 0 8px">④ 다음에 뜰 섹터 후보 (움직이기 시작)</b>
     <p class="lead" style="margin-top:6px">상위 3 밖인데 최근 5일 시장보다 +2%p↑ · 20일 안 돈 유입(섹터 거래대금 1.5배 + 섹터 +1%) 2번↑ · 순위 5일 새 3계단↑ 중 하나. 누르면 그 섹터 종목이 보입니다.</p>
     <details class="why"><summary>근거 보기</summary>
       3년: 테마에 20일 안 돈이 2번 넘게 들어오면 20일 안 주도(상위 10)가 될 확률 7% → 20%, 이미 31~60위면 29%. 다만 돈 들어온 날 바로 사는 건 평균 이득이 없었고, 순위가 올라올 때가 타이밍.
