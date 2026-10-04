@@ -148,6 +148,16 @@ def scan(db: Session) -> dict:
             "turn_today": turn, "earn_up": code in earn_up,
             "entry_signal": stage == "숨고르기" and turn and market_ok,
         })
+    # 섹터 (16개) — 화면에서 어느 섹터 종목인지 보이게
+    from backend.screener.rotation import family_members  # noqa: PLC0415
+    fam_of: dict[str, list[str]] = {}
+    for f, mem in family_members(db).items():
+        for c in mem:
+            fam_of.setdefault(c, []).append(f)
+    for x in items:
+        x["families"] = fam_of.get(x["code"], [])[:2]
+    # 신기록 뒤 경과일로 자르지 않는 이유 (2026-10-04, 진입 신호 130건 40일 시장 대비): 61~80일 뒤 신호 43건 평균 +9.6%p·중간 +2.4%p로
+    # 21~40일(48건 +4.0%p)보다 나빴던 게 아니다. 대신 화면에 '며칠 전 신기록'을 크게 보여 준다.
     order = {"숨고르기": 0, "신규": 1, "진행 중": 2, "설거지": 3, "무너짐": 4}
     items.sort(key=lambda x: x["market_cap"] or 0, reverse=True)   # 단계 안에서는 시총 큰 종목부터
     items.sort(key=lambda x: (order[x["stage"]], not x["entry_signal"]))
