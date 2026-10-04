@@ -108,6 +108,12 @@ select{background:#21262d;border:1px solid #30363d;color:#c9d1d9;padding:6px 10p
 .modal-tab.active{color:#58a6ff;border-bottom-color:#58a6ff}
 .ts{color:#8b949e;font-size:11px}
 .lead{color:#c9d1d9;font-size:13px;margin:0 0 6px}
+.sec{border:1px solid #30363d;border-radius:10px;padding:10px 14px;margin-top:10px;background:#0f141b}
+.sec>summary{cursor:pointer;list-style:none;display:flex;align-items:center;gap:8px;font-size:15px;font-weight:600;color:#e6edf3;flex-wrap:wrap}
+.sec>summary::-webkit-details-marker{display:none}
+.sec>summary::after{content:'펼치기 ▾';margin-left:auto;font-size:12px;font-weight:400;color:#8b949e}
+.sec[open]>summary::after{content:'접기 ▴'}.sec[open]>summary{margin-bottom:10px}
+
 .cal-wrap{max-width:1180px;margin:0 auto}
 .cal-top{display:flex;align-items:center;gap:10px;flex-wrap:wrap;margin-bottom:14px}
 .cal-top .m{font-size:20px;font-weight:700;color:#e6edf3;min-width:130px;text-align:center}
@@ -491,6 +497,21 @@ select{background:#21262d;border:1px solid #30363d;color:#c9d1d9;padding:6px 10p
 <!-- 눌림목 레이더 탭 -->
 <div id="panel-candidates" class="panel content">
   <div id="pb-market" hidden style="border-radius:10px;padding:12px 16px;margin-bottom:14px;border:1px solid #30363d"></div>
+  <p class="ts" style="margin:0 0 6px">제목을 누르면 펼쳐지고 접힙니다 (브라우저가 기억).</p>
+  <details class="sec" data-k="ss">
+    <summary>🎯 손절 짧은 자리 <span class="ts" id="ss-info"></span></summary>
+
+    <p class="lead" style="margin-top:6px"><b>추세선 지지</b>(저점 높이는 추세선 + 위 수평 저항, 전진건설로봇형) · <b>수평 지지 수렴</b>(거래 마르며 좁아지는 박스, SK이터닉스형). 둘 다 앞서 거래가 터진 뒤 거래가 마른 종목. 손절선이 가까운 순.</p>
+    <details class="why"><summary>근거 보기</summary>
+      3년(종가 매수, 손절선 아래 종가면 정리, 손절폭의 3배(+3R)에 절반 익절 후 나머지 본전 손절, 최대 20일):
+      추세선 지지 578건 평균 +0.10R · 이김 37% · 손절 59% · <b>+3R 도달 23%</b> / 수평 지지 수렴 619건 +0.05R · +3R 21%, 뜨거운 섹터 안이면 +0.22R.
+      평균이 크게 남는 자리는 아니고 <b>잃을 땐 손절폭만큼 작게, 4~5번에 1번은 3배 이상</b> 먹는 구조입니다. 손절선은 꼭 지키기.<br>
+      <b>실적으로 크게 갈림</b>(그 시점 공시된 최근 분기, 1,012건): <b style="color:#3fb950">📈 실적 개선(영업익 +30%·매출 +10%) +0.52R · 이김 48%</b>, 이익 증가 +0.36R, 이익률 10%↑ +0.40R, 실적 개선 아님 +0.06R, <b style="color:#f85149">영업 적자 -0.20R · 손절 63%</b>. 그래서 실적 좋은 순으로 보여 줍니다.
+    </details>
+    <div id="ss-body" style="display:flex;flex-wrap:wrap;gap:6px" class="ts">로딩 중…</div>
+  </details>
+  <details class="sec" data-k="cd">
+    <summary>📐 차트 모양 후보 <span class="ts" id="cd-sum"></span></summary>
   <p class="lead">불플래그 · 상승삼각형 · 기준봉 눌림 · 장대음봉도지 중 하나라도 해당하는 종목. 손절선까지 <b style="color:#3fb950">3~6%</b>가 적정.</p>
   <div class="toolbar" style="margin-bottom:12px">
     <label style="display:flex;align-items:center;gap:6px;font-size:13px;color:#8b949e">
@@ -525,20 +546,11 @@ select{background:#21262d;border:1px solid #30363d;color:#c9d1d9;padding:6px 10p
     </tr></thead>
     <tbody id="cd-body"><tr><td colspan="5" style="color:#8b949e;text-align:center;padding:20px">로딩 중…</td></tr></tbody>
   </table>
-  <div style="margin-top:26px">
-    <b style="font-size:15px;color:#e6edf3">🎯 손절 짧은 자리</b> <span class="ts" id="ss-info"></span>
-    <p class="lead" style="margin-top:6px"><b>추세선 지지</b>(저점 높이는 추세선 + 위 수평 저항, 전진건설로봇형) · <b>수평 지지 수렴</b>(거래 마르며 좁아지는 박스, SK이터닉스형). 둘 다 앞서 거래가 터진 뒤 거래가 마른 종목. 손절선이 가까운 순.</p>
-    <details class="why"><summary>근거 보기</summary>
-      3년(종가 매수, 손절선 아래 종가면 정리, 손절폭의 3배(+3R)에 절반 익절 후 나머지 본전 손절, 최대 20일):
-      추세선 지지 578건 평균 +0.10R · 이김 37% · 손절 59% · <b>+3R 도달 23%</b> / 수평 지지 수렴 619건 +0.05R · +3R 21%, 뜨거운 섹터 안이면 +0.22R.
-      평균이 크게 남는 자리는 아니고 <b>잃을 땐 손절폭만큼 작게, 4~5번에 1번은 3배 이상</b> 먹는 구조입니다. 손절선은 꼭 지키기.<br>
-      <b>실적으로 크게 갈림</b>(그 시점 공시된 최근 분기, 1,012건): <b style="color:#3fb950">📈 실적 개선(영업익 +30%·매출 +10%) +0.52R · 이김 48%</b>, 이익 증가 +0.36R, 이익률 10%↑ +0.40R, 실적 개선 아님 +0.06R, <b style="color:#f85149">영업 적자 -0.20R · 손절 63%</b>. 그래서 실적 좋은 순으로 보여 줍니다.
-    </details>
-    <div id="ss-body" style="display:flex;flex-wrap:wrap;gap:6px" class="ts">로딩 중…</div>
-  </div>
-  <div style="margin-top:26px">
+  </details>
+  <details class="sec" data-k="vr">
+    <summary>🔥 대량거래 관심종목 <span class="ts" id="vr-sum"></span></summary>
+
     <div style="display:flex;flex-wrap:wrap;align-items:center;gap:10px;margin-bottom:8px">
-      <b style="font-size:15px;color:#e6edf3">🔥 대량거래 관심종목</b>
       <select id="vr-stage" onchange="renderVolumeRecords()">
         <option value="live">숨고르기 · 신규 · 진행 중</option>
         <option value="숨고르기">숨고르기만</option>
@@ -561,16 +573,17 @@ select{background:#21262d;border:1px solid #30363d;color:#c9d1d9;padding:6px 10p
       <thead><tr><th>종목</th><th>단계</th><th>신기록일</th><th>그 뒤 최고</th><th>지금</th></tr></thead>
       <tbody id="vr-body"><tr><td colspan="5" style="color:#8b949e;text-align:center;padding:20px">로딩 중…</td></tr></tbody>
     </table>
-  </div>
-  <div style="margin-top:26px">
-    <b style="font-size:15px;color:#e6edf3">👀 바닥 박스 감시 (한선엔지니어링형)</b> <span class="ts" id="bb-info"></span>
+  </details>
+  <details class="sec" data-k="bb">
+    <summary>👀 바닥 박스 감시 (한선엔지니어링형) <span class="ts" id="bb-info"></span></summary>
+
     <p class="lead" style="margin-top:6px">급등했다 크게 빠진 뒤(120일 고점 -40%↓, 1년 저점보다는 15%↑ 위) 15일째 좁은 박스(폭 13%↓)에서 거래 없이 버티는 종목. 아직 신저가를 깨는 종목은 뺍니다. <b>추천이 아니라 감시용</b> — 박스에서 터지는 날(🔔) 섹터·시장이 받쳐 주면 봅니다.</p>
     <details class="why"><summary>근거 보기</summary>
       3년 373건: 처음 박스가 된 날 사면 20일 뒤 같은 날 평균 대비 -0.9%p, 40일 -3.2%p(대부분 더 흘러내림). 20일 안 +10%·거래 5배로 터질 확률은 18%로 아무 종목(15%)보다 조금 높을 뿐. 거래가 더 마를수록(0.3배↓) 오히려 나빴습니다. 한선엔지니어링은 8/24~9/15 폭 11.6% 박스 뒤 9/16 +24%.
     </details>
     <div id="bb-burst" style="margin-bottom:8px"></div>
     <div id="bb-body" style="display:flex;flex-wrap:wrap;gap:6px" class="ts">로딩 중…</div>
-  </div>
+  </details>
 </div>
 
 <!-- 캔들차트 모달 (토스증권 실시간) -->
@@ -1300,6 +1313,7 @@ function renderCandidates(){
     .filter(it=>(!pat||it.patterns.some(p=>p.type===pat)) && cdMatch(it, terms) && noFlag(it, document.getElementById('cd-noflag').checked, document.getElementById('cd-nocred').checked))
     .sort((a,b)=>val(b)-val(a));
   document.getElementById('cd-info').textContent = d.trading_date ? `기준일: ${d.trading_date} · ${items.length}개${items.length!==d.items.length?' / 전체 '+d.items.length+'개':''}` : '';
+  document.getElementById('cd-sum').textContent = `${items.length}개`;
   if(!items.length){
     body.innerHTML = '<tr><td colspan="5" style="color:#8b949e;text-align:center;padding:20px">조건에 맞는 종목이 없습니다</td></tr>';
     return;
@@ -1370,6 +1384,7 @@ function renderVolumeRecords(){
   const items = _vrData.items.filter(x=> (sel==='live' ? !['무너짐','설거지'].includes(x.stage) : (!sel || x.stage===sel)) && (!sigOnly || x.entry_signal));
   const cnt = s=>_vrData.items.filter(x=>x.stage===s).length;
   const nsig = _vrData.items.filter(x=>x.entry_signal).length;
+  document.getElementById('vr-sum').textContent = `${_vrData.items.filter(x=>!['무너짐','설거지'].includes(x.stage)).length}개 · 🎯 진입 신호 ${nsig}`;
   document.getElementById('vr-info').textContent = `기준일 ${_vrData.trading_date} · 시장 ${_vrData.market_state||'-'} · 🎯 ${nsig} · 숨고르기 ${cnt('숨고르기')} · 신규 ${cnt('신규')} · 진행 중 ${cnt('진행 중')} · 설거지 ${cnt('설거지')} · 무너짐 ${cnt('무너짐')}`;
   if(!items.length){ body.innerHTML = '<tr><td colspan="5" style="color:#8b949e;text-align:center;padding:20px">해당 종목이 없습니다</td></tr>'; return; }
   const color = {'숨고르기':'#3fb950','신규':'#58a6ff','진행 중':'#d29922','설거지':'#f85149','무너짐':'#8b949e'};
@@ -1750,6 +1765,14 @@ function showToast(msg,err=false){
 }
 
 // 주소 끝의 #탭이름(새로고침 전에 보던 탭, switchTab이 남긴다)으로 시작
+// 차트 후보 탭 접기/펼치기 상태 기억 (기본: 손절 짧은 자리만 펼침)
+(function(){
+  let st={}; try{ st=JSON.parse(localStorage.getItem('cd-open')||'{}'); }catch(e){}
+  document.querySelectorAll('details.sec').forEach(d=>{
+    const k=d.dataset.k; d.open = k in st ? st[k] : k==='ss';
+    d.addEventListener('toggle',()=>{ st[k]=d.open; try{ localStorage.setItem('cd-open',JSON.stringify(st)); }catch(e){} });
+  });
+})();
 try{ for(const id of ['jb-noflag','jb-nocred','cd-noflag','cd-nocred']){ const v=localStorage.getItem(id); if(v!==null) document.getElementById(id).checked=v==='1'; } }catch(e){}
 switchTab(location.hash ? location.hash.slice(1) : 'jongbe');
 const chartQuery=new URLSearchParams(location.search);
