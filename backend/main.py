@@ -263,7 +263,7 @@ select{background:#21262d;border:1px solid #30363d;color:#c9d1d9;padding:6px 10p
     <b style="font-size:15px;color:#e6edf3;margin:4px 0 8px">② 뜨는 섹터</b> <span class="ts" id="jb-date"></span>
     <label style="font-size:12.5px;color:#c9d1d9">시총
       <select id="jb-mincap" onchange="try{localStorage.setItem('jb-mincap',this.value)}catch(e){};renderJongbe()">
-        <option value="0">전체</option><option value="500">500억 이상</option><option value="1000" selected>1,000억 이상</option>
+        <option value="0">전체</option><option value="500">500억 이상</option><option value="1000" selected>1,000억 이상</option><option value="2000">2,000억 이상</option>
         <option value="3000">3,000억 이상</option><option value="10000">1조 이상</option>
       </select></label>
     <label style="font-size:12.5px;color:#c9d1d9;cursor:pointer" title="20일선보다 +20% 넘게 뜬 종목과 그날 +12% 넘게 오른 종목을 뺍니다. 3년 확인: 평균 수익은 비슷한데 다음 날 -5% 넘는 손실이 2~4배"><input type="checkbox" id="jb-safe" checked onchange="try{localStorage.setItem('jb-safe',this.checked?'1':'0')}catch(e){};renderJongbe()"> 급등·과열 빼기</label>
@@ -560,7 +560,7 @@ select{background:#21262d;border:1px solid #30363d;color:#c9d1d9;padding:6px 10p
       </select>
       <label style="font-size:13px;color:#c9d1d9">시총
         <select id="vr-mincap" onchange="try{localStorage.setItem('vr-mincap',this.value)}catch(e){};renderVolumeRecords()">
-          <option value="0">전체</option><option value="500">500억 이상</option><option value="1000">1,000억 이상</option>
+          <option value="0">전체</option><option value="500">500억 이상</option><option value="1000">1,000억 이상</option><option value="2000">2,000억 이상</option>
           <option value="3000">3,000억 이상</option><option value="10000">1조 이상</option>
         </select></label>
       <span class="ts" id="vr-info"></span>
