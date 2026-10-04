@@ -526,6 +526,16 @@ select{background:#21262d;border:1px solid #30363d;color:#c9d1d9;padding:6px 10p
     <tbody id="cd-body"><tr><td colspan="5" style="color:#8b949e;text-align:center;padding:20px">로딩 중…</td></tr></tbody>
   </table>
   <div style="margin-top:26px">
+    <b style="font-size:15px;color:#e6edf3">🎯 손절 짧은 자리</b> <span class="ts" id="ss-info"></span>
+    <p class="lead" style="margin-top:6px"><b>추세선 지지</b>(저점 높이는 추세선 + 위 수평 저항, 전진건설로봇형) · <b>수평 지지 수렴</b>(거래 마르며 좁아지는 박스, SK이터닉스형). 둘 다 앞서 거래가 터진 뒤 거래가 마른 종목. 손절선이 가까운 순.</p>
+    <details class="why"><summary>근거 보기</summary>
+      3년(종가 매수, 손절선 아래 종가면 정리, 손절폭의 3배(+3R)에 절반 익절 후 나머지 본전 손절, 최대 20일):
+      추세선 지지 578건 평균 +0.10R · 이김 37% · 손절 59% · <b>+3R 도달 23%</b> / 수평 지지 수렴 619건 +0.05R · +3R 21%, 뜨거운 섹터 안이면 +0.22R.
+      평균이 크게 남는 자리는 아니고 <b>잃을 땐 손절폭만큼 작게, 4~5번에 1번은 3배 이상</b> 먹는 구조입니다. 손절선은 꼭 지키기.
+    </details>
+    <div id="ss-body" style="display:flex;flex-wrap:wrap;gap:6px" class="ts">로딩 중…</div>
+  </div>
+  <div style="margin-top:26px">
     <div style="display:flex;flex-wrap:wrap;align-items:center;gap:10px;margin-bottom:8px">
       <b style="font-size:15px;color:#e6edf3">🔥 대량거래 관심종목</b>
       <select id="vr-stage" onchange="renderVolumeRecords()">
@@ -1228,6 +1238,7 @@ let _cdData = null;
 async function loadCandidates(){
   loadVolumeRecords();   // 아래 대량거래 관심종목은 따로 동시에 불러온다
   loadBottomBox();
+  loadSupportSetups();
   const body = document.getElementById('cd-body');
   body.innerHTML = '<tr><td colspan="5" style="color:#8b949e;text-align:center;padding:20px">로딩 중…</td></tr>';
   try{
@@ -1305,6 +1316,19 @@ function renderCandidates(){
       <td data-label="손절선" style="color:#f85149">${it.stop_price?it.stop_price.toLocaleString()+'원<br><span style="font-size:11px;color:'+({적정:'#3fb950',보통:'#c9d1d9',얕음:'#8b949e',깊음:'#8b949e'}[it.stop_zone])+'">-'+it.stop_dist_pct+'% · '+it.stop_zone+'</span>':'—'}</td>
     </tr>`;
   }).join('');
+}
+
+// ── 손절 짧은 자리 ────────────────────────────────────────────
+async function loadSupportSetups(){
+  const d=await fetch(`${API}/screener/support-setups`).then(r=>r.ok?r.json():null).catch(()=>null);
+  const el=document.getElementById('ss-body'); if(!el) return;
+  if(!d){ el.textContent='불러오지 못했습니다'; return; }
+  document.getElementById('ss-info').textContent=`${d.trading_date} · ${d.items.length}개`;
+  el.innerHTML=d.items.length?d.items.map(x=>`<span onclick="openChartModal('${x.code}','${x.name}','')" style="cursor:pointer;border:1px solid ${x.type==='추세선 지지'?'#bc8cff':'#58a6ff'};border-radius:8px;padding:6px 10px;font-size:12.5px;line-height:1.55">
+    <b style="color:#e6edf3">${x.name}</b>${flagTag(x)} <span style="font-size:11px;color:${x.type==='추세선 지지'?'#bc8cff':'#58a6ff'}">${x.type}</span><br>
+    <span style="color:#58a6ff">손절 ${x.stop.toLocaleString()}원 (${x.stop_pct}%)</span> · <span style="color:#f85149">위 ${x.target.toLocaleString()}원 (+${x.target_pct}%)</span><br>
+    <span class="ts">현재 ${x.close.toLocaleString()}원 · 거래 터질 때의 ${x.dry}배 · 터진 뒤 ${x.since_burst}일${x.families.length?' · '+x.families[0]:''}</span></span>`).join('')
+    :'지금은 없습니다';
 }
 
 // ── 바닥 박스 감시 ────────────────────────────────────────────

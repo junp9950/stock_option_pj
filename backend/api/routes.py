@@ -1476,6 +1476,14 @@ def get_jongbe_performance(db: Session = Depends(get_db)):
     return performance(db)
 
 
+@router.get("/screener/support-setups")
+def get_support_setups(db: Session = Depends(get_db)):
+    """손절 짧은 자리: 추세선 지지(전진건설로봇형) · 수평 지지 수렴(SK이터닉스형)."""
+    from backend.screener.support_setups import scan  # noqa: PLC0415
+    from backend.services.result_cache import cached  # noqa: PLC0415
+    return cached("support_setups", (), db, lambda: scan(db))
+
+
 @router.get("/screener/bottom-box")
 def get_bottom_box(db: Session = Depends(get_db)):
     """바닥 박스 감시 (한선엔지니어링형) + 오늘 박스에서 터진 종목."""
@@ -1520,6 +1528,7 @@ def warm_caches(db: Session) -> None:
     get_jongbe(db=db)
     get_value_records(db=db)
     get_bottom_box(db=db)
+    get_support_setups(db=db)
 
 
 @router.get("/screener/picks/performance")
