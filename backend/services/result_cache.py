@@ -48,11 +48,32 @@ def refreshing():
         _force.on = False
 
 
+def _code_version() -> str:
+    """배포된 코드 버전(git 커밋). 코드가 바뀌면(새 칸 추가 등) 데이터가 같아도 다시 계산되게 버전에 넣는다."""
+    root = Path(__file__).resolve().parents[2]
+    try:
+        head = (root / ".git" / "HEAD").read_text().strip()
+        if head.startswith("ref:"):
+            ref = root / ".git" / head.split(" ", 1)[1]
+            if ref.exists():
+                return ref.read_text().strip()[:12]
+            packed = (root / ".git" / "packed-refs").read_text()
+            for line in packed.splitlines():
+                if line.endswith(head.split(" ", 1)[1]):
+                    return line[:12]
+        return head[:12]
+    except OSError:
+        return str(int(time.time()))
+
+
+_CODE = _code_version()
+
+
 def data_version(db: Session) -> tuple:
     row = db.execute(text(
         "select (select max(trading_date) from spot_daily_prices), (select max(id) from job_logs)"
     )).one()
-    return tuple(row)
+    return (*tuple(row), _CODE)
 
 
 def cached(name: str, args: tuple, db: Session, compute: Callable[[], Any]) -> Any:
