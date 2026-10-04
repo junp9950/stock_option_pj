@@ -724,7 +724,7 @@ function jrRender(){
   const sel='background:#0d1117;border:1px solid #30363d;color:#c9d1d9;border-radius:6px;padding:2px 4px;font-size:12px';
   document.getElementById('jr-execs').innerHTML=_jr.executions.slice(0,400).map(e=>`<tr><td>${e.date.slice(5)} <span class="ts">${e.seq}</span></td>
     <td data-label="구분" style="color:${e.side==='매수'?'#f85149':'#58a6ff'}">${e.side}</td><td data-label="종목">${e.name}</td>
-    <td data-label="수량·단가">${e.qty}주 · ${Math.round(e.price).toLocaleString()}</td>
+    <td data-label="수량·단가">${e.qty}주 · ${Math.round(e.price).toLocaleString()}${e.price_warn?` <span style="color:#d29922" title="${e.price_warn}">⚠️ ${e.price_warn}</span>`:''}</td>
     <td data-label="근거">${e.side==='매수'?`<select style="${sel}" onchange="jrEdit(${e.id},{tag:this.value})">${tagOpt(e.tag)}</select>`:''}</td>
     <td data-label="유형">${e.side==='매수'?`<select style="${sel}" onchange="jrEdit(${e.id},{kind:this.value})">${kindOpt(e.kind)}</select>`:''}</td>
     <td style="text-align:right"><span style="cursor:pointer;color:#8b949e" title="삭제" onclick="jrDel(${e.id})">✕</span></td></tr>`).join('');

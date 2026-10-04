@@ -319,6 +319,16 @@ def analyze(db: Session, owner: str) -> dict:
         return {"executions": [], "trips": [], "summary": {}, "insights": [], "cfg": cfg, "user_tags": USER_TAGS, "kinds": KINDS}
 
     ctx = _context(db, min(e.trade_date for e in ex))
+    # 입력 점검: 체결가가 그날 시세 범위(고가~저가, 시간외 감안 ±3%) 밖이면 날짜나 가격이 잘못 들어온 것
+    Hh, Ll = ctx["P"]["h"], ctx["P"]["l"]
+    warn = []
+    for x in execs:
+        d = date.fromisoformat(x["date"])
+        if x["code"] in Hh.columns and d in Hh.index and Hh.at[d, x["code"]] == Hh.at[d, x["code"]]:
+            hi, lo = float(Hh.at[d, x["code"]]), float(Ll.at[d, x["code"]])
+            if not lo * 0.97 <= x["price"] <= hi * 1.03:
+                x["price_warn"] = f"그날 시세 {lo:,.0f}~{hi:,.0f}원 밖"
+                warn.append(x)
     tdays = ctx["dates"]
     tidx = {d: i for i, d in enumerate(tdays)}
 
@@ -406,7 +416,7 @@ def analyze(db: Session, owner: str) -> dict:
     summary = {"all": _stats(use), "by_kind": by(g_kind), "by_state": by(g_tag), "by_user_tag": by(g_user),
                "by_month": by(g_month), "by_family": by(g_fam)}
     return {"executions": list(reversed(execs)), "trips": trips, "holding": holding, "summary": summary,
-            "insights": _insights(use, g_tag, g_kind), "cfg": cfg, "user_tags": USER_TAGS, "kinds": KINDS,
+            "insights": ([f"⚠️ 체결가가 그날 시세 범위 밖인 기록 {len(warn)}건 — 날짜나 가격을 확인해 주세요 (체결 내역 보기에 표시)"] if warn else []) + _insights(use, g_tag, g_kind), "cfg": cfg, "user_tags": USER_TAGS, "kinds": KINDS,
             "as_of": last.isoformat()}
 
 
