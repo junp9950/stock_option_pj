@@ -108,11 +108,38 @@ select{background:#21262d;border:1px solid #30363d;color:#c9d1d9;padding:6px 10p
 .modal-tab.active{color:#58a6ff;border-bottom-color:#58a6ff}
 .ts{color:#8b949e;font-size:11px}
 .lead{color:#c9d1d9;font-size:13px;margin:0 0 6px}
-.cal-grid{display:grid;grid-template-columns:repeat(5,minmax(0,1fr));gap:5px}.cal-h{font-size:12px;color:#8b949e;text-align:center;padding:2px 0}
-.cal-c{background:#161b22;border:1px solid #30363d;border-radius:8px;padding:6px 7px;min-height:118px;cursor:pointer;font-size:12px;line-height:1.5;overflow:hidden}
-.cal-c:hover,.cal-c.on{border-color:#58a6ff}.cal-c.empty{background:transparent;border-color:transparent;cursor:default}.cal-c .dt{color:#e6edf3;font-size:12px;font-weight:600}.cal-c .dt span{font-weight:400;font-size:11px}
-.cal-c .th{white-space:nowrap;overflow:hidden;text-overflow:ellipsis;color:#c9d1d9}.cal-c .th.t1{color:#e6edf3;font-weight:600}
-@media(max-width:640px){.cal-grid{gap:3px}.cal-c{min-height:74px;padding:3px 4px;font-size:10px;line-height:1.35}.cal-c .dt{font-size:11px}.cal-c .dt span{display:none}.cal-c .th.t3{display:none}}
+.cal-wrap{max-width:1180px;margin:0 auto}
+.cal-top{display:flex;align-items:center;gap:10px;flex-wrap:wrap;margin-bottom:14px}
+.cal-top .m{font-size:20px;font-weight:700;color:#e6edf3;min-width:130px;text-align:center}
+.cal-nav{background:#161b22;border:1px solid #30363d;color:#c9d1d9;border-radius:8px;width:34px;height:34px;cursor:pointer;font-size:14px}
+.cal-nav:hover{border-color:#58a6ff;color:#fff}
+.cal-grid{display:grid;grid-template-columns:repeat(7,minmax(0,1fr));gap:8px}
+.cal-h{font-size:12px;color:#8b949e;text-align:center;padding-bottom:2px;font-weight:600}
+.cal-c{position:relative;background:#11161d;border:1px solid #262c36;border-radius:10px;padding:10px 10px 9px;min-height:132px;cursor:pointer;display:flex;flex-direction:column;gap:5px;transition:border-color .12s,transform .12s}
+.cal-c:hover{border-color:#3d4a5c;transform:translateY(-1px)}.cal-c.on{border-color:#58a6ff;box-shadow:0 0 0 1px #58a6ff inset}
+.cal-c.off{cursor:default;background:transparent;border-style:dashed;border-color:#1f242c;color:#484f58;font-size:12px;justify-content:center;align-items:center}
+.cal-c.off:hover{transform:none}
+.cal-c.we{cursor:default;background:#0d1117;border-color:#1a1f27}.cal-c.we:hover{transform:none}
+.cal-c.hol{cursor:default;background:#1a1214;border-color:#3a2226}.cal-c.hol:hover{transform:none}
+.cal-c .hn{font-size:11.5px;color:#f47067;margin-top:2px}.cal-c .dn.sun,.cal-h.sun{color:#f47067}.cal-c .dn.sat,.cal-h.sat{color:#6cb6ff}
+.cal-c.today{border-color:#e3b341}
+.cal-c .hd{display:flex;justify-content:space-between;align-items:center}
+.cal-c .dn{font-size:16px;font-weight:700;color:#e6edf3}
+.cal-c .mk{font-size:11px;padding:1px 7px;border-radius:10px;background:#1c2330}
+.cal-c .top{border-radius:7px;padding:6px 8px;font-size:13px;font-weight:600;color:#fff;display:flex;justify-content:space-between;gap:6px;align-items:baseline}
+.cal-c .top .n{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.cal-c .top .v{font-size:12px;white-space:nowrap;opacity:.95}
+.cal-c .sub{display:flex;justify-content:space-between;gap:6px;font-size:12px;color:#adbac7;padding:0 2px}
+.cal-c .sub .n{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}.cal-c .sub .v{color:#f0883e;white-space:nowrap}
+.cal-det{max-width:1180px;margin:14px auto 0;background:#11161d;border:1px solid #262c36;border-radius:12px;padding:14px 16px}
+.cal-det .ttl{display:flex;flex-wrap:wrap;gap:8px;align-items:center;margin-bottom:10px}
+.cal-det .chip{font-size:12px;padding:2px 9px;border-radius:12px;background:#1c2330;color:#c9d1d9}
+.cal-det .rows{display:grid;grid-template-columns:repeat(auto-fill,minmax(260px,1fr));gap:8px}
+.cal-det .tc{border:1px solid #262c36;border-radius:9px;padding:9px 11px;cursor:pointer}.cal-det .tc:hover{border-color:#58a6ff}
+.cal-det .tc .h{display:flex;justify-content:space-between;gap:6px;font-weight:600;color:#e6edf3;font-size:13.5px}
+.cal-det .tc .l{margin-top:5px;display:flex;flex-wrap:wrap;gap:4px}.cal-det .tc .l span{font-size:11.5px;background:#1c2330;border-radius:6px;padding:1px 6px;color:#c9d1d9}
+@media(max-width:640px){.cal-grid{gap:3px}.cal-c{min-height:86px;padding:5px 4px;gap:3px;border-radius:7px}.cal-c .dn{font-size:12px}.cal-c .mk{display:none}
+.cal-c .top{font-size:10px;padding:3px 4px;flex-direction:column;gap:0}.cal-c .top .v{font-size:10px}.cal-c .sub{font-size:9.5px;flex-direction:column;gap:0}.cal-c .sub.s2{display:none}.cal-c.off{font-size:10px}.cal-c .hn{font-size:9px}.cal-c .top .v,.cal-c .sub .v{display:none}.cal-c{min-height:70px}}
 
 .why{margin:0 0 12px;color:#8b949e;font-size:12px;line-height:1.65}
 .why summary{cursor:pointer;color:#8b949e;font-size:12px;width:max-content}
@@ -356,14 +383,16 @@ select{background:#21262d;border:1px solid #30363d;color:#c9d1d9;padding:6px 10p
 
 <!-- 섹터 캘린더 탭 -->
 <div id="panel-calendar" class="panel content">
-  <div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap;margin-bottom:10px">
-    <button class="btn btn-gray btn-sm" onclick="calMove(-1)">◀</button>
-    <b id="cal-month" style="color:#e6edf3;font-size:18px"></b>
-    <button class="btn btn-gray btn-sm" onclick="calMove(1)">▶</button>
-    <span class="ts">그날 가장 강했던 테마 (소속 종목 평균 등락, 거래대금 100억↑) · 날짜를 누르면 섹터·대장주까지</span>
+  <div class="cal-wrap">
+    <div class="cal-top">
+      <button class="cal-nav" onclick="calMove(-1)" aria-label="이전 달">◀</button>
+      <span class="m" id="cal-month"></span>
+      <button class="cal-nav" onclick="calMove(1)" aria-label="다음 달">▶</button>
+      <span class="ts">그날 가장 강했던 테마 (소속 종목 평균 등락 · 거래대금 100억↑) · 날짜를 누르면 섹터·대장주</span>
+    </div>
+    <div id="cal-grid" class="cal-grid"></div>
   </div>
-  <div id="cal-grid" class="cal-grid"></div>
-  <div id="cal-detail" style="margin-top:10px"></div>
+  <div id="cal-detail"></div>
 </div>
 
 <!-- 섹터 수급 탭 -->
@@ -830,22 +859,37 @@ function calMove(k){
   const i=ms.indexOf(_calMonth)+k; if(i<0||i>=ms.length) return;
   _calMonth=ms[i]; document.getElementById('cal-detail').innerHTML=''; renderCal();
 }
+function calHeat(v){ // 등락이 클수록 진한 빨강
+  const k=Math.max(0,Math.min(1,(v-2)/10));
+  return `rgba(${Math.round(150+90*k)},${Math.round(45-20*k)},${Math.round(50-20*k)},${(0.35+0.55*k).toFixed(2)})`;
+}
 function renderCal(){
-  document.getElementById('cal-month').textContent=_calMonth.replace('-','년 ')+'월';
-  const days=_cal.days.filter(d=>d.date.startsWith(_calMonth));
+  const [y,m]=_calMonth.split('-').map(Number);
+  document.getElementById('cal-month').textContent=`${y}년 ${m}월`;
+  const byDate=Object.fromEntries(_cal.days.filter(d=>d.date.startsWith(_calMonth)).map(d=>[d.date,d]));
+  const last=_cal.days[_cal.days.length-1].date;
   const pc=v=>`<span style="color:${v>=0?'#f85149':'#58a6ff'}">${v>=0?'+':''}${v}%</span>`;
-  let html=['월','화','수','목','금'].map(x=>`<div class="cal-h">${x}</div>`).join('');
-  if(days.length){ const wd=(new Date(days[0].date+'T00:00:00').getDay()+6)%7; for(let i=0;i<Math.min(wd,4);i++) html+='<div class="cal-c empty"></div>'; }
-  let prev=null;
-  for(const d of days){
-    const wd=(new Date(d.date+'T00:00:00').getDay()+6)%7;
-    if(prev!==null){
-      if(wd<=prev){ for(let i=prev+1;i<5;i++) html+='<div class="cal-c empty"></div>'; for(let i=0;i<wd;i++) html+='<div class="cal-c empty"></div>'; }
-      else for(let i=prev+1;i<wd;i++) html+='<div class="cal-c empty"></div>';
+  const hol=_cal.holidays||{};
+  let html=['일','월','화','수','목','금','토'].map((x,i)=>`<div class="cal-h ${i===0?'sun':i===6?'sat':''}">${x}</div>`).join('');
+  const nd=new Date(y,m,0).getDate(), first=new Date(y,m-1,1).getDay();
+  for(let k=0;k<first;k++) html+='<div></div>';
+  const tk=new Date(), todayKey=`${tk.getFullYear()}-${String(tk.getMonth()+1).padStart(2,'0')}-${String(tk.getDate()).padStart(2,'0')}`;
+  for(let dd=1;dd<=nd;dd++){
+    const wd=new Date(y,m-1,dd).getDay();
+    const key=`${y}-${String(m).padStart(2,'0')}-${String(dd).padStart(2,'0')}`, d=byDate[key];
+    const dcls=wd===0?'sun':wd===6?'sat':'';
+    if(!d){
+      const hn=hol[key], closed=hn||(wd>0&&wd<6&&key<=last);
+      const cls=hn?'hol':(wd===0||wd===6)?'we':'off';
+      html+=`<div class="cal-c ${cls}${key===todayKey?' today':''}" style="justify-content:flex-start;align-items:stretch"><div class="hd"><span class="dn ${hn?'sun':dcls}">${dd}</span></div>${hn?`<div class="hn">${hn}</div>`:closed&&cls==='off'?'<div class="hn" style="color:#8b949e">휴장</div>':''}</div>`;
+      continue;
     }
-    prev=wd;
-    html+=`<div class="cal-c" data-d="${d.date}" onclick="calPick('${d.date}')"><div class="dt">${+d.date.slice(8)} <span>시장 ${pc(d.market_chg)}</span></div>`
-      +d.themes.slice(0,3).map((t,i)=>`<div class="th t${i+1}" title="${t.name} ${t.chg}%">${t.name.split('(')[0]} ${pc(t.chg)}</div>`).join('')+'</div>';
+    const t=d.themes;
+    html+=`<div class="cal-c${key===todayKey?' today':''}" data-d="${key}" onclick="calPick('${key}')">
+      <div class="hd"><span class="dn ${dcls}">${dd}</span><span class="mk">시장 ${pc(d.market_chg)}</span></div>
+      ${t[0]?`<div class="top" style="background:${calHeat(t[0].chg)}" title="${t[0].name}"><span class="n">${t[0].name.split('(')[0]}</span><span class="v">+${t[0].chg}%</span></div>`:''}
+      ${t.slice(1,3).map((x,i)=>`<div class="sub s${i+1}" title="${x.name}"><span class="n">${x.name.split('(')[0]}</span><span class="v">+${x.chg}%</span></div>`).join('')}
+    </div>`;
   }
   document.getElementById('cal-grid').innerHTML=html;
 }
@@ -853,9 +897,14 @@ function calPick(date, quiet){
   const d=_cal.days.find(x=>x.date===date); if(!d) return;
   document.querySelectorAll('.cal-c').forEach(c=>c.classList.toggle('on',c.dataset.d===date));
   const pc=v=>`<span style="color:${v>=0?'#f85149':'#58a6ff'}">${v>=0?'+':''}${v}%</span>`;
-  document.getElementById('cal-detail').innerHTML=`<div style="border:1px solid #30363d;border-radius:8px;padding:10px 12px;font-size:12.5px;line-height:1.8">
-    <b style="color:#e6edf3">${date}</b> <span class="ts">시장 평균 ${pc(d.market_chg)} · 섹터 ${d.families.map(f=>f.name+' '+pc(f.chg)).join(' · ')}</span><br>`
-    +d.themes.map(t=>`<b style="color:#e6edf3;cursor:pointer" onclick="openSectorModal(${t.id},'${t.name.replace(/'/g,'')}')">${t.name}</b> ${pc(t.chg)} <span class="ts">상승 ${t.up_pct}% · ${t.leaders.map(l=>l.name+' '+(l.chg>=0?'+':'')+l.chg+'%').join(', ')}</span>`).join('<br>')+'</div>';
+  const [y,m,dd]=date.split('-').map(Number), wd='일월화수목금토'[new Date(y,m-1,dd).getDay()];
+  document.getElementById('cal-detail').innerHTML=`<div class="cal-det">
+    <div class="ttl"><b style="color:#e6edf3;font-size:15px">${m}월 ${dd}일 (${wd})</b><span class="chip">시장 평균 ${pc(d.market_chg)}</span>
+      ${d.families.map(f=>`<span class="chip">${f.name} ${pc(f.chg)}</span>`).join('')}</div>
+    <div class="rows">${d.themes.map((t,i)=>`<div class="tc" onclick="openSectorModal(${t.id},'${t.name.replace(/'/g,'')}')">
+      <div class="h"><span>${i+1}. ${t.name}</span>${pc(t.chg)}</div>
+      <div class="ts" style="margin-top:2px">종목 중 ${t.up_pct}% 상승</div>
+      <div class="l">${t.leaders.map(l=>`<span>${l.name} ${l.chg>=0?'+':''}${l.chg}%</span>`).join('')}</div></div>`).join('')}</div></div>`;
   if(!quiet) document.getElementById('cal-detail').scrollIntoView({behavior:'smooth',block:'nearest'});
 }
 

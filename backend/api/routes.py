@@ -1570,7 +1570,7 @@ def get_sector_calendar(db: Session = Depends(get_db)):
     """강한 섹터 캘린더: 최근 약 6개월, 날짜마다 그날 가장 강했던 섹터·테마."""
     from backend.screener.sector_calendar import scan  # noqa: PLC0415
     from backend.services.result_cache import cached  # noqa: PLC0415
-    return cached("sector_calendar", (), db, lambda: scan(db))
+    return cached("sector_calendar_v2", (), db, lambda: scan(db))
 
 
 @router.get("/sectors/rotation")

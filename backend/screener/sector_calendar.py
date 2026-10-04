@@ -50,4 +50,11 @@ def scan(db: Session) -> dict:
         fr = FC.loc[d].dropna().sort_values(ascending=False)
         days.append({"date": d.isoformat(), "market_chg": round(float(CH.loc[d].mean()), 2), "themes": themes,
                      "families": [{"name": f, "chg": round(float(fr[f]), 2)} for f in fr.index[:TOP_FAMS]]})
-    return {"trading_date": latest.isoformat(), "days": days}
+    hol = {}
+    try:   # 공휴일 이름 (달력 표시용). 거래 없는 평일은 이름이 없어도 화면에서 '휴장'으로 보인다
+        import holidays  # noqa: PLC0415
+        yrs = range(CH.index[0].year, latest.year + 2)
+        hol = {d.isoformat(): n for d, n in holidays.KR(years=yrs, language="ko").items()}
+    except Exception:  # noqa: BLE001
+        pass
+    return {"trading_date": latest.isoformat(), "days": days, "holidays": hol}
