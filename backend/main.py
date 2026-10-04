@@ -201,8 +201,8 @@ select{background:#21262d;border:1px solid #30363d;color:#c9d1d9;padding:6px 10p
 <div class="tabs">
   <div class="tab active" onclick="switchTab('jongbe')">종베 후보</div>
   <div class="tab" onclick="switchTab('candidates')">차트 후보</div>
-  <div class="tab" onclick="switchTab('sector')">섹터 수급</div>
   <div class="tab" onclick="switchTab('calendar')">섹터 캘린더</div>
+  <div class="tab" onclick="switchTab('sector')">섹터 수급</div>
   <div class="tab" onclick="switchTab('journal')">매매 일지</div>
   <div class="tab" onclick="switchTab('screener')">거래대금 순위</div>
   <div class="tab" onclick="switchTab('heatmap')">시장 히트맵</div>
@@ -650,7 +650,7 @@ const tagHtml = tags => (tags||[]).map(t=>{
 
 function switchTab(id) {
   // 실적 개선 탭은 2026-10-04 숨김 (데이터는 📈 실적 표시로 계속 쓴다, /earnings 주소는 그대로)
-  const tabs = ['jongbe','candidates','sector','calendar','journal','screener','heatmap','discussion','suggest'];
+  const tabs = ['jongbe','candidates','calendar','sector','journal','screener','heatmap','discussion','suggest'];
   if(!tabs.includes(id))return;
   try{ history.replaceState(null,'',id==='jongbe'?location.pathname:'#'+id); }catch(e){}   // 새로고침해도 이 탭에 남게
   document.querySelectorAll('.tab').forEach((t,i)=>t.classList.toggle('active',tabs[i]===id));
