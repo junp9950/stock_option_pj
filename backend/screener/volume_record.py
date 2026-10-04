@@ -156,6 +156,11 @@ def scan(db: Session) -> dict:
             fam_of.setdefault(c, []).append(f)
     for x in items:
         x["families"] = fam_of.get(x["code"], [])[:2]
+    # 투자주의·경고·위험·단기과열·관리종목·신용불가 (KIS) — 무너짐 빼고 화면에 보이는 종목만
+    from backend.services.stock_flags import get as flags_get  # noqa: PLC0415
+    fl = flags_get([x["code"] for x in items if x["stage"] != "무너짐"])
+    for x in items:
+        x["flags"] = fl.get(x["code"], {}).get("flags", [])
     # 신기록 뒤 경과일로 자르지 않는 이유 (2026-10-04, 진입 신호 130건 40일 시장 대비): 61~80일 뒤 신호 43건 평균 +9.6%p·중간 +2.4%p로
     # 21~40일(48건 +4.0%p)보다 나빴던 게 아니다. 대신 화면에 '며칠 전 신기록'을 크게 보여 준다.
     order = {"숨고르기": 0, "신규": 1, "진행 중": 2, "설거지": 3, "무너짐": 4}
