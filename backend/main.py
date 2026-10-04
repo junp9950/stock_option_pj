@@ -245,6 +245,7 @@ select{background:#21262d;border:1px solid #30363d;color:#c9d1d9;padding:6px 10p
 
 <!-- 종베 후보 탭 -->
 <div id="panel-jongbe" class="panel active content">
+  <b style="font-size:15px;color:#e6edf3;display:block;margin:4px 0 8px">① 시장</b>
   <div id="jb-market" style="border-radius:10px;padding:12px 16px;margin-bottom:12px;border:1px solid #30363d">로딩 중…</div>
   <p class="lead">시장 상승·횡보 → 뜨거운 섹터 → 그날 섹터에 돈 몰림 → 거래 실린 양봉. <b>다음 날 오전 정리</b>가 기본, 갭이 크면 덜어내기.</p>
   <details class="why"><summary>근거 보기</summary>
@@ -253,7 +254,7 @@ select{background:#21262d;border:1px solid #30363d;color:#c9d1d9;padding:6px 10p
     🔔 = 오늘 거래대금이 몇 년 만의 최대, 🔥 = 대량거래 관심종목 단계. 숫자는 수수료·세금 빼기 전.
   </details>
   <div style="display:flex;flex-wrap:wrap;align-items:center;gap:10px;margin-bottom:6px">
-    <span style="font-size:12px;color:#8b949e">🔥 뜨거운 섹터 <span class="ts" id="jb-date"></span></span>
+    <b style="font-size:15px;color:#e6edf3;margin:4px 0 8px">② 뜨는 섹터</b> <span class="ts" id="jb-date"></span>
     <label style="font-size:12.5px;color:#c9d1d9">시총
       <select id="jb-mincap" onchange="try{localStorage.setItem('jb-mincap',this.value)}catch(e){};renderJongbe()">
         <option value="0">전체</option><option value="500">500억 이상</option><option value="1000" selected>1,000억 이상</option>
@@ -263,7 +264,8 @@ select{background:#21262d;border:1px solid #30363d;color:#c9d1d9;padding:6px 10p
     <label style="font-size:12.5px;color:#c9d1d9;cursor:pointer"><input type="checkbox" id="jb-showb" onchange="renderJongbe()"> B등급도 보기</label>
     <span class="ts" id="jb-count"></span>
   </div>
-  <div id="jb-fams" style="display:flex;flex-wrap:wrap;gap:8px;margin-bottom:16px"></div>
+  <div id="jb-fams" style="display:flex;flex-wrap:wrap;gap:8px;margin-bottom:22px"></div>
+  <b style="font-size:15px;color:#e6edf3;display:block;margin:4px 0 8px">③ 섹터 안 좋은 차트 — 오늘 종베</b>
   <table class="pb-table">
     <thead><tr><th>종목</th><th>등급</th><th>그날 봉</th><th>섹터</th><th>종가</th></tr></thead>
     <tbody id="jb-body"><tr><td colspan="5" style="color:#8b949e;text-align:center;padding:20px">로딩 중…</td></tr></tbody>
@@ -278,30 +280,28 @@ select{background:#21262d;border:1px solid #30363d;color:#c9d1d9;padding:6px 10p
     <div id="lu-body" class="ts">로딩 중…</div>
   </div>
 
-  <div style="margin:4px 0 20px">
-    <b style="font-size:15px;color:#e6edf3">📈 스윙 후보 (10~20일)</b> <span class="ts" id="jb-swing-info"></span>
-    <p class="lead" style="margin-top:6px">뜨거운 섹터 안에서 박스 상단(60일 고점)을 <b style="color:#3fb950">조용히 막 돌파</b>(0~+3%)했거나 돌파 직전(-2% 이내)인 종목. 돌파가 3년 성과 가장 좋았고, 박스 안으로 다시 들어오면 손절.</p>
+  <div style="margin:4px 0 22px">
+    <b style="font-size:15px;color:#e6edf3;margin:4px 0 8px">③ 섹터 안 좋은 차트 — 스윙·선취매</b> <span class="ts" id="jb-ch-info"></span>
+    <p class="lead" style="margin-top:6px"><b style="color:#3fb950">🚀 돌파</b>·<b>돌파 대기</b> = 박스 상단(60일 고점) 막 넘음·-2% 이내 · <b style="color:#3fb950">저가 지킴</b> = 대량거래 봉 저가 안 깸 · <b style="color:#58a6ff">눌림</b> = 20일 고점 -5~-15% · <b style="color:#e3b341">버팀</b> = 섹터 빠진 날 안 빠짐</p>
     <details class="why"><summary>근거 보기</summary>
-      3년(같은 날 전 종목 평균 대비 20일 뒤): 돌파 대기(-2% 이내) +2.4%p, <b style="color:#3fb950">돌파(0~+3%) +2.9%p</b>. 거래 2배 넘게 터지며 넘은 경우(📢)는 +0.8%p로 약했고, 이미 +3% 넘게 더 간 종목은 효과가 줄었습니다.
-    </details>
-    <table class="pb-table">
-      <thead><tr><th>종목</th><th>박스 상단 대비</th><th>오늘</th><th>섹터</th><th>종가</th></tr></thead>
-      <tbody id="jb-swing"><tr><td colspan="5" style="color:#8b949e;text-align:center;padding:16px">로딩 중…</td></tr></tbody>
-    </table>
-  </div>
-
-  <div style="margin:4px 0 20px">
-    <b style="font-size:15px;color:#e6edf3">🌱 선취매 후보 (터지기 전)</b> <span class="ts" id="jb-pre-info"></span>
-    <p class="lead" style="margin-top:6px">뜨거운 섹터 안에서 오늘 조용한 종목 중 <b>저가 지킴</b>(대량거래 뒤 그 봉 저가 안 깸) · <b>눌림</b>(20일 고점 -5~-15%) · <b>버팀</b>(섹터 빠진 날 안 빠짐). 고를 범위를 좁히는 용도입니다.</p>
-    <details class="why"><summary>근거 보기</summary>
-      3년(상승·횡보장, 같은 날 시장 대비 20일 뒤): 조건 없는 뜨거운 섹터 조용한 종목 +1.7%p, 저가 지킴 +1.3%p, 눌림 +2.2%p.
-      10일 안에 거래 폭발(+10%·거래 5배)할 확률은 8~11%로 <b>어느 조건이든 비슷</b> — 어떤 종목이 터질지는 차트로 못 맞힙니다. 여러 개로 나누고, 터지면 대부분 챙기기.
-      사용자 실제 선취매 세미파이브 9/23·9/28(저가 지킴+눌림), 하나마이크론 9/28(눌림)이 이 조건에 걸렸습니다. 매매 일지에서 내 선택과 같은 날 후보 평균을 비교합니다.
+      3년(같은 날 시장 대비 20일 뒤): 돌파 +2.9%p, 돌파 대기 +2.4%p, 눌림 +2.2%p, 저가 지킴 +1.3%p (뜨거운 섹터 아무 종목 +1.7%p). 거래 2배 넘게 터지며 돌파(📢)는 +0.8%p로 약함.
+      어느 종목이 터질지는 못 맞힘(10일 안 폭발 8~11%) → 여러 개로 나누고 터지면 대부분 챙기기. 박스 안으로 다시 들어오거나 손절선 깨면 정리.
     </details>
     <table class="pb-table">
       <thead><tr><th>종목</th><th>근거</th><th>오늘</th><th>섹터</th><th>종가</th></tr></thead>
-      <tbody id="jb-pre"><tr><td colspan="5" style="color:#8b949e;text-align:center;padding:16px">로딩 중…</td></tr></tbody>
+      <tbody id="jb-charts"><tr><td colspan="5" style="color:#8b949e;text-align:center;padding:16px">로딩 중…</td></tr></tbody>
     </table>
+  </div>
+
+  <div style="margin:4px 0 22px">
+    <b style="font-size:15px;color:#e6edf3;margin:4px 0 8px">④ 다음 섹터 — 움직이기 시작</b>
+    <p class="lead" style="margin-top:6px">상위 3 밖인데 최근 5일 시장보다 +2%p↑ · 20일 안 돈 유입(섹터 거래대금 1.5배 + 섹터 +1%) 2번↑ · 순위 5일 새 3계단↑ 중 하나. 누르면 그 섹터 종목이 보입니다.</p>
+    <details class="why"><summary>근거 보기</summary>
+      3년: 테마에 20일 안 돈이 2번 넘게 들어오면 20일 안 주도(상위 10)가 될 확률 7% → 20%, 이미 31~60위면 29%. 다만 돈 들어온 날 바로 사는 건 평균 이득이 없었고, 순위가 올라올 때가 타이밍.
+      반도체 → 로봇 → 2차전지 순환은 6번 중 3번 정도. 로봇이 1등인데 반도체가 꺾이고 시장 신호가 약해지면 순환이 아니라 상승장 끝이었던 경우가 많음.
+    </details>
+    <div id="jb-movers" style="display:flex;flex-wrap:wrap;gap:8px"></div>
+    <div id="jb-mover-detail" style="margin-top:8px"></div>
   </div>
 
   <div style="border:1px solid #30363d;border-radius:10px;padding:12px 16px;margin-bottom:20px">
@@ -313,8 +313,8 @@ select{background:#21262d;border:1px solid #30363d;color:#c9d1d9;padding:6px 10p
     <div id="jb-check" style="margin-top:10px"></div>
   </div>
 
-  <div style="font-size:12px;color:#8b949e;margin-bottom:6px">📒 이 화면 후보의 실제 다음 날 결과</div>
-  <div id="jb-perf" class="ts">로딩 중…</div>
+  <details class="why"><summary>📒 이 화면 종베 후보의 실제 다음 날 결과</summary>
+  <div id="jb-perf" class="ts">로딩 중…</div></details>
 </div>
 
 <!-- 매매 일지 탭 -->
@@ -675,26 +675,42 @@ function renderJongbe(){
     <td data-label="섹터" style="font-size:12px">${x.families.join(', ')}</td>
     <td data-label="종가" style="text-align:right">${x.close.toLocaleString()}원${gapTag(x.gap20_pct)}</td>
   </tr>`).join('');
-  const sw=(d.swing||[]).filter(okCap).sort((a,b)=>(a.state==='막 넘음'?0:1)-(b.state==='막 넘음'?0:1));
-  document.getElementById('jb-swing-info').textContent=`${sw.length}개 · 🚀 돌파 ${sw.filter(x=>x.state==='막 넘음').length} · 돌파 대기 ${sw.filter(x=>x.state==='붙음').length}`;
-  document.getElementById('jb-swing').innerHTML=sw.length?sw.map(x=>`<tr style="cursor:pointer" onclick="openChartModal('${x.code}','${x.name}','')">
-    <td><b>${x.name}</b> <span style="color:#8b949e;font-size:11px">${x.code}</span>${x.earn_up?' <span style="color:#3fb950;font-size:11px;border:1px solid #238636;border-radius:8px;padding:0 5px">📈 실적</span>':''}${x.vr_stage&&x.vr_stage!=='무너짐'?` <span class="ts">🔥 ${x.vr_stage}</span>`:''}${x.market_cap?`<br><span class="ts">시총 ${cdWon(x.market_cap)}</span>`:''}</td>
-    <td data-label="박스 상단 대비">${x.state==='막 넘음'?'<b style="color:#3fb950">🚀 돌파</b>':'<b style="color:#c9d1d9">돌파 대기</b>'} ${x.pos_pct>=0?'+':''}${x.pos_pct}%${x.loud?' <span class="ts" style="color:#d29922" title="거래 2배 넘게 터지며 돌파 — 3년 확인상 +0.8%p로 조용한 돌파(+2.9%p)보다 약했음">📢 거래 폭발 돌파(약함)</span>':''}<br><span class="ts">60일 고점 ${x.box_top.toLocaleString()}원</span></td>
+  const merged={};
+  for(const x of (d.swing||[]).filter(okCap)){
+    const t=x.state==='막 넘음'?'🚀 돌파':'돌파 대기';
+    merged[x.code]={...x, tags:[t], loud:x.loud, box:x};
+  }
+  for(const x of (d.prebuy||[]).filter(okCap)){
+    if(merged[x.code]){ merged[x.code].tags.push(...x.tags); merged[x.code].stop_price=x.stop_price; merged[x.code].off_high_pct=x.off_high_pct; }
+    else merged[x.code]={...x, tags:[...x.tags]};
+  }
+  const ch=Object.values(merged).sort((a,b)=>(b.tags.includes('🚀 돌파')-a.tags.includes('🚀 돌파'))||(b.tags.length-a.tags.length)||((b.market_cap||0)-(a.market_cap||0)));
+  const cnt=t=>ch.filter(x=>x.tags.includes(t)).length;
+  document.getElementById('jb-ch-info').textContent=`${ch.length}개 · 🚀 돌파 ${cnt('🚀 돌파')} · 돌파 대기 ${cnt('돌파 대기')} · 저가 지킴 ${cnt('저가 지킴')} · 눌림 ${cnt('눌림')} · 버팀 ${cnt('버팀')}`;
+  const tagCol={'🚀 돌파':'#3fb950','돌파 대기':'#c9d1d9','저가 지킴':'#3fb950','눌림':'#58a6ff','버팀':'#e3b341'};
+  document.getElementById('jb-charts').innerHTML=ch.length?ch.map(x=>`<tr style="cursor:pointer" onclick="openChartModal('${x.code}','${x.name}','')">
+    <td><b>${x.name}</b> <span style="color:#8b949e;font-size:11px">${x.code}</span>${x.earn_up?' <span style="color:#3fb950;font-size:11px;border:1px solid #238636;border-radius:8px;padding:0 5px">📈 실적</span>':''}${x.market_cap?`<br><span class="ts">시총 ${cdWon(x.market_cap)}</span>`:''}</td>
+    <td data-label="근거">${x.tags.map(t=>`<b style="color:${tagCol[t]||'#c9d1d9'}">${t}</b>`).join(' · ')}${x.loud?' <span class="ts" style="color:#d29922" title="거래 2배 넘게 터지며 돌파 — 3년 +0.8%p로 약했음">📢 거래 폭발(약함)</span>':''}
+      <br><span class="ts">${x.box?`박스 상단 ${x.box.box_top.toLocaleString()}원 대비 ${x.box.pos_pct>=0?'+':''}${x.box.pos_pct}%`:`20일 고점 ${x.off_high_pct}%`}${x.stop_price?` · 손절선 ${x.stop_price.toLocaleString()}원`:''}</span></td>
     <td data-label="오늘"><span style="color:${x.change_pct>=0?'#f85149':'#58a6ff'}">${x.change_pct>=0?'+':''}${x.change_pct}%</span> · 거래 ${x.tv_x}배</td>
     <td data-label="섹터" style="font-size:12px">${x.families.join(', ')}</td>
     <td data-label="종가" style="text-align:right">${x.close.toLocaleString()}원${gapTag(x.gap20_pct)}</td>
   </tr>`).join(''):'<tr><td colspan="5" style="color:#8b949e;text-align:center;padding:16px">오늘은 해당 종목이 없습니다</td></tr>';
-  const pre=(d.prebuy||[]).filter(okCap);
-  document.getElementById('jb-pre-info').textContent=`${pre.length}개 · 저가 지킴 ${pre.filter(x=>x.tags.includes('저가 지킴')).length} · 눌림 ${pre.filter(x=>x.tags.includes('눌림')).length} · 버팀 ${pre.filter(x=>x.tags.includes('버팀')).length}`;
-  const tagCol={'저가 지킴':'#3fb950','눌림':'#58a6ff','버팀':'#e3b341'};
-  document.getElementById('jb-pre').innerHTML=pre.length?pre.map(x=>`<tr style="cursor:pointer" onclick="openChartModal('${x.code}','${x.name}','')">
-    <td><b>${x.name}</b> <span style="color:#8b949e;font-size:11px">${x.code}</span>${x.earn_up?' <span style="color:#3fb950;font-size:11px;border:1px solid #238636;border-radius:8px;padding:0 5px">📈 실적</span>':''}${x.in_swing?' <span class="ts">(스윙 후보에도)</span>':''}${x.market_cap?`<br><span class="ts">시총 ${cdWon(x.market_cap)}</span>`:''}</td>
-    <td data-label="근거">${x.tags.map(t=>`<b style="color:${tagCol[t]}">${t}</b>`).join(' · ')}<br><span class="ts">20일 고점 ${x.off_high_pct}%${x.stop_price?` · 손절선 ${x.stop_price.toLocaleString()}원`:''}</span></td>
-    <td data-label="오늘"><span style="color:${x.change_pct>=0?'#f85149':'#58a6ff'}">${x.change_pct>=0?'+':''}${x.change_pct}%</span> · 거래 ${x.tv_x}배</td>
-    <td data-label="섹터" style="font-size:12px">${x.families.join(', ')}</td>
-    <td data-label="종가" style="text-align:right">${x.close.toLocaleString()}원${gapTag(x.gap20_pct)}</td>
-  </tr>`).join(''):'<tr><td colspan="5" style="color:#8b949e;text-align:center;padding:16px">오늘은 해당 종목이 없습니다</td></tr>';
+  const mv=d.movers||[];
+  document.getElementById('jb-movers').innerHTML=mv.length?mv.map(m=>`<span onclick="jbMover('${m.family}')" style="cursor:pointer;padding:7px 11px;border:1px solid ${m.why.length>=2?'#3fb950':'#30363d'};border-radius:8px;font-size:12.5px">
+      <b style="color:#e6edf3">${m.family}</b> <span class="ts">${m.rank}위</span><br><span class="ts" style="color:#c9d1d9">${m.why.join(' · ')}</span></span>`).join('')
+    :'<span class="ts">지금 상위 3 밖에서 움직이기 시작한 섹터는 없습니다</span>';
   document.getElementById('jb-limit').innerHTML=lim.length?`상한가 (체결 어려움 주의): ${lim.map(x=>`<b style="color:#e6edf3;cursor:pointer" onclick="openChartModal('${x.code}','${x.name}','')">${x.name}</b>${x.record_today?' <span style="color:#f85149;font-size:11px">🔔 신기록 · 3년 다음 날 시가 평균 +5.6%</span>':''}`).join(' · ')}`:'';
+}
+async function jbMover(fam){
+  const el=document.getElementById('jb-mover-detail');
+  el.innerHTML='<span class="ts">불러오는 중…</span>';
+  const d=await fetch(`${API}/sectors/rotation`).then(r=>r.ok?r.json():null).catch(()=>null);
+  const f=d&&(d.families||d.items||[]).find(x=>x.family===fam);
+  if(!f){ el.innerHTML=`<span class="ts">섹터 수급 탭 순환매 모니터에서 ${fam}을 보세요</span>`; return; }
+  const ls=(f.leaders||[]);
+  el.innerHTML=`<div style="border:1px solid #30363d;border-radius:8px;padding:9px 12px;font-size:12.5px"><b style="color:#e6edf3">${fam}</b> <span class="ts">20일 ${f.ret20_pct>=0?'+':''}${f.ret20_pct}% · 5일 ${f.ret5_pct>=0?'+':''}${f.ret5_pct}% · 오늘 거래 평소 ${f.tv1_x}배</span><br>`
+    +(ls.length?'오늘 돈 붙은 종목: '+ls.map(x=>`<b style="cursor:pointer;color:#e6edf3" onclick="openChartModal('${x.code}','${x.name}','')">${x.name}</b> <span style="color:${x.change_pct>=0?'#f85149':'#58a6ff'}">${x.change_pct>=0?'+':''}${x.change_pct}%</span>`).join(' · '):'<span class="ts">오늘 거래 2배 넘게 붙은 종목은 없습니다</span>')+'</div>';
 }
 async function jbCheck(){
   const q=document.getElementById('jb-q').value.trim();

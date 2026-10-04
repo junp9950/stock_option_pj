@@ -35,19 +35,28 @@ def _load(db: Session):
 def _families(P, members: dict[str, list[str]]):
     C, TV = P["c"], P["tv"]
     ret20 = C / C.shift(20) - 1
+    ret5 = C / C.shift(5) - 1
+    dchg = C / C.shift(1) - 1
     gap = C / C.rolling(20).mean() - 1
     d = C.index[-1]
+    mkt5 = float(ret5.loc[d].median())
     fam = {}
     for f, mem in members.items():
         m = [x for x in mem if x in C.columns]
         if len(m) < 5:
             continue
         tv = TV[m].sum(axis=1)
+        tvx = tv / tv.shift(1).rolling(20).mean()
+        inflow = ((tvx >= 1.5) & (dchg[m].median(axis=1) >= 0.01)).iloc[-20:]   # 섹터 거래대금 1.5배 + 섹터 +1% 날
         fam[f] = {"ret20": float(ret20.loc[d, m].median()), "tv_x": float(tv.iloc[-1] / tv.iloc[-21:-1].mean()),
-                  "stretch": float((gap.loc[d, m] >= 0.2).mean()), "members": m}
+                  "stretch": float((gap.loc[d, m] >= 0.2).mean()), "members": m,
+                  "ret5_rel": float(ret5.loc[d, m].median()) - mkt5, "inflow": int(inflow.sum()),
+                  "ret20_prev": float(ret20.iloc[-6][m].median())}
     order = sorted(fam, key=lambda f: -fam[f]["ret20"])
     for i, f in enumerate(order):
         fam[f]["rank"] = i + 1
+    for i, f in enumerate(sorted(fam, key=lambda f: -fam[f]["ret20_prev"])):
+        fam[f]["rank_prev"] = i + 1
     return fam, order
 
 
@@ -162,8 +171,27 @@ def scan(db: Session) -> dict:
                       "stretch_pct": round(fam[f]["stretch"] * 100),
                       "status": "과열" if fam[f]["stretch"] >= 0.2 else ("주의" if fam[f]["stretch"] >= 0.1 else "")}
                      for f in order[:6]],
+        "movers": _movers(fam, order),
         "hot": hot, "items": rows, "limit_up": limit, "swing": swing, "prebuy": prebuy,
     }
+
+
+def _movers(fam: dict, order: list[str]) -> list[dict]:
+    """움직이기 시작한 섹터: 상위 3 밖인데 최근 5일 시장 대비 +2%p↑ · 20일 안 돈 유입(거래대금 1.5배 + 섹터 +1%) 2번↑ · 순위 5일 새 3계단↑ 중 하나."""
+    out = []
+    for f in order[HOT_TOP:]:
+        x = fam[f]
+        why = []
+        if x["ret5_rel"] >= 0.02:
+            why.append(f"5일 시장 대비 +{x['ret5_rel'] * 100:.1f}%p")
+        if x["inflow"] >= 2:
+            why.append(f"20일 안 돈 유입 {x['inflow']}번")
+        if x["rank_prev"] - x["rank"] >= 3:
+            why.append(f"순위 {x['rank_prev']}→{x['rank']}위")
+        if why:
+            out.append({"family": f, "rank": x["rank"], "rank_prev": x["rank_prev"], "ret5_rel_pct": round(x["ret5_rel"] * 100, 1),
+                        "inflow": x["inflow"], "tv_x": round(x["tv_x"], 2), "why": why})
+    return sorted(out, key=lambda r: -len(r["why"]))
 
 
 def check(db: Session, queries: list[str]) -> dict:
