@@ -111,6 +111,8 @@ def scan(db: Session) -> dict:
             row["money"] |= money
             top60 = float(P["c"][code].iloc[-61:-1].max())   # 종가 기준 (9/18 우리로처럼 장중 윗꼬리 고점에 끌려 반등형으로 잘못 보이지 않게)
             row["pos60_pct"] = round((v["close"] / top60 - 1) * 100, 1) if top60 == top60 and top60 else None
+            wick60 = float(P["h"][code].iloc[-61:-1].max())
+            row["under_wick"] = bool(wick60 == wick60 and v["close"] < wick60)   # 종가 신고가여도 전 고점 윗꼬리 아래면 매물 남음
             row["leader"] |= leader
     # 대량거래 관심종목과 연결: 오늘 몇 년 만의 최대 거래대금인지, 관심종목 단계(숨고르기·진입 신호 등)
     from backend.screener.volume_record import scan as vr_scan  # noqa: PLC0415
