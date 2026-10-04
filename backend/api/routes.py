@@ -4,7 +4,7 @@ from collections import defaultdict
 from datetime import date, timedelta
 import json
 
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends, HTTPException, Request
 from pydantic import BaseModel, Field
 from sqlalchemy import desc, func, select
 from sqlalchemy.orm import Session
@@ -1786,3 +1786,114 @@ def screener_volume_anomaly(top_n: int | None = None, db: Session = Depends(get_
     """
     from backend.screener.volume_anomaly import scan  # noqa: PLC0415
     return scan(db, top_n_by_value=top_n)
+
+
+# ── 매매 일지 (이름 + 비밀번호로 사람별 기록) ─────────────────────
+_journal_fails: dict = {}
+
+
+def _journal_owner(request: Request, db: Session) -> str:
+    import time  # noqa: PLC0415
+    from urllib.parse import unquote  # noqa: PLC0415
+    from backend.services.trade_journal import auth  # noqa: PLC0415
+    owner = unquote(request.headers.get("x-owner", "")).strip()[:20]
+    pin = unquote(request.headers.get("x-pin", ""))
+    now = time.time()
+    fails = [t for t in _journal_fails.get(owner, []) if now - t < 600]
+    if len(fails) >= 10:
+        raise HTTPException(status_code=429, detail="비밀번호를 여러 번 틀려서 10분간 잠겼습니다.")
+    if auth(db, owner, pin) != "ok":
+        _journal_fails[owner] = fails + [now]
+        raise HTTPException(status_code=401, detail="이름 또는 비밀번호가 맞지 않습니다.")
+    _journal_fails.pop(owner, None)
+    return owner
+
+
+class JournalLoginIn(BaseModel):
+    owner: str = Field(..., max_length=20)
+    pin: str = Field(..., max_length=40)
+    create: bool = False
+
+
+@router.get("/journal/owners")
+def get_journal_owners(db: Session = Depends(get_db)):
+    from backend.services.trade_journal import owners  # noqa: PLC0415
+    return {"owners": owners(db)}
+
+
+@router.post("/journal/login")
+def post_journal_login(body: JournalLoginIn, db: Session = Depends(get_db)):
+    """처음 쓰는 이름이면 create=True로 비밀번호를 정한다 (4자 이상)."""
+    import time  # noqa: PLC0415
+    from backend.services.trade_journal import auth  # noqa: PLC0415
+    owner = body.owner.strip()
+    now = time.time()
+    fails = [t for t in _journal_fails.get(owner, []) if now - t < 600]
+    if len(fails) >= 10:
+        raise HTTPException(status_code=429, detail="비밀번호를 여러 번 틀려서 10분간 잠겼습니다.")
+    r = auth(db, owner, body.pin, create=body.create)
+    if r == "bad":
+        _journal_fails[owner] = fails + [now]
+        raise HTTPException(status_code=401, detail="비밀번호가 맞지 않습니다 (4자 이상).")
+    if r == "none":
+        raise HTTPException(status_code=404, detail="처음 쓰는 이름입니다.")
+    return {"owner": owner, "result": r}
+
+
+@router.get("/journal")
+def get_journal(request: Request, db: Session = Depends(get_db)):
+    from backend.services.trade_journal import analyze  # noqa: PLC0415
+    return analyze(db, _journal_owner(request, db))
+
+
+class JournalImportIn(BaseModel):
+    text: str = Field(..., max_length=300_000)
+    date: str = ""     # 자유 형식 줄에 날짜가 없을 때 쓸 날짜 (비면 최근 거래일)
+    preview: bool = False
+
+
+@router.post("/journal/import")
+def post_journal_import(body: JournalImportIn, request: Request, db: Session = Depends(get_db)):
+    from backend.services.trade_journal import add, parse  # noqa: PLC0415
+    owner = _journal_owner(request, db)
+    try:
+        d = date.fromisoformat(body.date) if body.date else latest_trading_day()
+    except ValueError:
+        d = latest_trading_day()
+    rows, bad = parse(db, body.text, d)
+    if body.preview:
+        return {"rows": [{**r, "trade_date": r["trade_date"].isoformat()} for r in rows], "bad": bad}
+    return {**add(db, owner, rows), "bad": bad}
+
+
+class JournalEditIn(BaseModel):
+    tag: str | None = Field(None, max_length=40)
+    memo: str | None = Field(None, max_length=200)
+    kind: str | None = Field(None, max_length=10)
+
+
+@router.patch("/journal/{ex_id}")
+def patch_journal(ex_id: int, body: JournalEditIn, request: Request, db: Session = Depends(get_db)):
+    from backend.services.trade_journal import update_exec  # noqa: PLC0415
+    if not update_exec(db, _journal_owner(request, db), ex_id, body.model_dump()):
+        raise HTTPException(status_code=404, detail="없는 기록입니다.")
+    return {"ok": True}
+
+
+@router.delete("/journal/{ex_id}")
+def delete_journal(ex_id: int, request: Request, db: Session = Depends(get_db)):
+    from backend.services.trade_journal import delete_exec  # noqa: PLC0415
+    if not delete_exec(db, _journal_owner(request, db), ex_id):
+        raise HTTPException(status_code=404, detail="없는 기록입니다.")
+    return {"ok": True}
+
+
+class JournalCfgIn(BaseModel):
+    exclude: list[str] = Field(default_factory=list, max_length=100)
+
+
+@router.post("/journal/config")
+def post_journal_config(body: JournalCfgIn, request: Request, db: Session = Depends(get_db)):
+    """분석에서 뺄 종목 코드 (장투 종목 등)."""
+    from backend.services.trade_journal import set_cfg  # noqa: PLC0415
+    return set_cfg(db, _journal_owner(request, db), {"exclude": [x.strip()[:20] for x in body.exclude if x.strip()]})

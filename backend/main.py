@@ -158,6 +158,7 @@ select{background:#21262d;border:1px solid #30363d;color:#c9d1d9;padding:6px 10p
 <div class="tabs">
   <div class="tab active" onclick="switchTab('candidates')">차트 후보</div>
   <div class="tab" onclick="switchTab('jongbe')">종베 후보</div>
+  <div class="tab" onclick="switchTab('journal')">매매 일지</div>
   <div class="tab" onclick="switchTab('screener')">거래대금 순위</div>
   <div class="tab" onclick="switchTab('sector')">섹터 수급</div>
   <div class="tab" onclick="switchTab('heatmap')">시장 히트맵</div>
@@ -255,6 +256,70 @@ select{background:#21262d;border:1px solid #30363d;color:#c9d1d9;padding:6px 10p
 
   <div style="font-size:12px;color:#8b949e;margin-bottom:6px">📒 실전 기록 (매일 18:20 후보 저장 → 다음 거래일 결과)</div>
   <div id="jb-perf" class="ts">로딩 중…</div>
+</div>
+
+<!-- 매매 일지 탭 -->
+<div id="panel-journal" class="panel content">
+  <div id="jr-login" style="border:1px solid #30363d;border-radius:10px;padding:16px;max-width:420px">
+    <b style="color:#e6edf3">🔒 매매 일지</b> <span class="ts">사람마다 따로 기록됩니다. 금액이 보이는 화면이라 비밀번호로 잠급니다.</span>
+    <div style="display:flex;flex-direction:column;gap:8px;margin-top:12px">
+      <input id="jr-owner" list="jr-owners" placeholder="이름 (예: 우라늄)" style="background:#0d1117;border:1px solid #30363d;color:#c9d1d9;padding:8px 10px;border-radius:6px">
+      <datalist id="jr-owners"></datalist>
+      <input id="jr-pin" type="password" placeholder="비밀번호 (4자 이상)" onkeydown="if(event.key==='Enter')jrLogin()" style="background:#0d1117;border:1px solid #30363d;color:#c9d1d9;padding:8px 10px;border-radius:6px">
+      <button class="btn" onclick="jrLogin()">열기</button>
+      <div id="jr-login-msg" class="ts"></div>
+    </div>
+  </div>
+
+  <div id="jr-main" style="display:none">
+    <div style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:8px;margin-bottom:12px">
+      <div><b style="color:#e6edf3;font-size:16px" id="jr-who"></b> <span class="ts" id="jr-asof"></span></div>
+      <div style="display:flex;gap:6px">
+        <button class="btn btn-sm" onclick="jrToggle('jr-input')">＋ 기록 넣기</button>
+        <button class="btn btn-sm" onclick="jrLogout()">잠그기</button>
+      </div>
+    </div>
+
+    <div id="jr-input" style="display:none;border:1px solid #30363d;border-radius:10px;padding:12px 16px;margin-bottom:16px">
+      <b style="color:#e6edf3">기록 넣기</b>
+      <div class="ts" style="margin:4px 0 8px">증권사 체결 내역을 그대로 복사해 붙여넣으세요(같은 체결은 두 번 안 들어갑니다). 한 줄씩 직접 쓸 때는
+        <b style="color:#c9d1d9">10/5 한양디지텍 매수 100 21500</b>처럼 쓰면 됩니다(날짜를 빼면 아래 날짜). 사진은 Claude한테 보내면 대신 넣어 드립니다.</div>
+      <textarea id="jr-text" rows="7" style="width:100%;box-sizing:border-box;background:#0d1117;border:1px solid #30363d;color:#c9d1d9;padding:8px;border-radius:6px;font-family:monospace;font-size:12px"></textarea>
+      <div style="display:flex;gap:8px;margin-top:8px;align-items:center;flex-wrap:wrap">
+        <input id="jr-date" type="date" style="background:#0d1117;border:1px solid #30363d;color:#c9d1d9;padding:5px 8px;border-radius:6px">
+        <button class="btn btn-sm" onclick="jrImport(true)">미리보기</button>
+        <button class="btn btn-sm" onclick="jrImport(false)" style="border-color:#238636;color:#3fb950">저장</button>
+        <span id="jr-import-msg" class="ts"></span>
+      </div>
+      <div id="jr-preview" style="margin-top:8px;font-size:12px"></div>
+    </div>
+
+    <div id="jr-cards" style="display:flex;flex-wrap:wrap;gap:8px;margin-bottom:14px"></div>
+    <div id="jr-insights" style="border:1px solid #30363d;border-radius:10px;padding:10px 14px;margin-bottom:16px;font-size:13px;line-height:1.7"></div>
+
+    <div style="display:flex;gap:6px;flex-wrap:wrap;margin-bottom:8px" id="jr-groupbtns"></div>
+    <table class="pb-table" style="margin-bottom:18px">
+      <thead><tr><th id="jr-gname">구분</th><th>건수</th><th>이긴 비율</th><th>평균</th><th>평균 이익 / 손실</th><th>손익</th></tr></thead>
+      <tbody id="jr-group"></tbody>
+    </table>
+
+    <div id="jr-holding"></div>
+
+    <div style="font-size:12px;color:#8b949e;margin:6px 0">📒 청산 기록 (선입선출로 짝지음 · 수수료·세금은 증권사 내역에 있을 때만 반영)
+      <label style="margin-left:8px"><select id="jr-kindf" onchange="jrRenderTrips()" style="background:#0d1117;border:1px solid #30363d;color:#c9d1d9;border-radius:6px;padding:2px 6px"><option value="">전체</option></select></label></div>
+    <table class="pb-table" style="margin-bottom:18px">
+      <thead><tr><th>종목</th><th>유형</th><th>산 날 → 판 날</th><th>매수 → 매도</th><th>수익률</th><th>산 날 상태</th></tr></thead>
+      <tbody id="jr-trips"></tbody>
+    </table>
+
+    <details style="margin-bottom:16px">
+      <summary style="cursor:pointer;color:#8b949e;font-size:12.5px">체결 내역 보기 · 근거 적기 · 삭제</summary>
+      <div class="ts" style="margin:8px 0">매수 줄에 근거를 고르면 분석의 "내 근거별"에 반영됩니다. "장투"를 고르면 분석에서 빠집니다. 유형이 틀렸으면 바꿀 수 있습니다.</div>
+      <div style="margin-bottom:8px;font-size:12px">분석에서 뺄 종목(코드나 이름, 쉼표): <input id="jr-excl" style="background:#0d1117;border:1px solid #30363d;color:#c9d1d9;padding:4px 8px;border-radius:6px;min-width:220px"> <button class="btn btn-sm" onclick="jrSaveExcl()">저장</button></div>
+      <table class="pb-table"><thead><tr><th>날짜</th><th>구분</th><th>종목</th><th>수량·단가</th><th>근거</th><th>유형</th><th></th></tr></thead>
+        <tbody id="jr-execs"></tbody></table>
+    </details>
+  </div>
 </div>
 
 <!-- 섹터 수급 탭 -->
@@ -483,7 +548,7 @@ const tagHtml = tags => (tags||[]).map(t=>{
 
 function switchTab(id) {
   // 실적 개선 탭은 2026-10-04 숨김 (데이터는 📈 실적 표시로 계속 쓴다, /earnings 주소는 그대로)
-  const tabs = ['candidates','jongbe','screener','sector','heatmap','suggest','discussion'];
+  const tabs = ['candidates','jongbe','journal','screener','sector','heatmap','suggest','discussion'];
   if(!tabs.includes(id))return;
   try{ history.replaceState(null,'',id==='candidates'?location.pathname:'#'+id); }catch(e){}   // 새로고침해도 이 탭에 남게
   document.querySelectorAll('.tab').forEach((t,i)=>t.classList.toggle('active',tabs[i]===id));
@@ -491,6 +556,7 @@ function switchTab(id) {
   document.getElementById('panel-'+id).classList.add('active');
   if(id==='screener')loadTopValue();
   if(id==='jongbe')loadJongbe();
+  if(id==='journal')loadJournal();
   if(id==='sector'){loadSector();loadLiveThemes();loadRotation();}
   if(id==='heatmap')loadHeatmap();
   if(id==='candidates')loadCandidates();
@@ -589,6 +655,117 @@ async function loadJongbePerf(){
   if(!gs.length){ el.textContent='아직 기록이 없습니다. 장 마감 후 18:20부터 매일 쌓이고, 다음 거래일 시세가 들어오면 결과가 보입니다.'; return; }
   el.innerHTML=gs.map(([g,s])=>`<b style="color:#e6edf3">${g}</b> ${s.count}건 · 수익 ${s.win_pct}% · 평균 ${s.avg_rule_pct>=0?'+':''}${s.avg_rule_pct}% (갭상승이면 시가·아니면 종가) · 다음 날 고가 평균 +${s.avg_high_pct}%`).join('<br>')
     +'<div style="margin-top:6px">'+d.items.slice(0,40).map(x=>`<span style="display:inline-block;margin:0 10px 4px 0">${x.date.slice(5)} ${x.name}(${x.grade}) <span style="color:${x.rule_pct>=0?'#f85149':'#58a6ff'}">${x.rule_pct>=0?'+':''}${x.rule_pct}%</span> <span class="ts">고가 +${x.high_pct}%</span></span>`).join('')+'</div>';
+}
+
+// ── 매매 일지 ─────────────────────────────────────────────────
+let _jr=null, _jrGroup='by_kind';
+function jrAuth(){ try{ return {o:localStorage.getItem('jr-owner')||'', p:localStorage.getItem('jr-pin')||''}; }catch(e){ return {o:'',p:''}; } }
+function jrH(){ const a=jrAuth(); return {'X-Owner':encodeURIComponent(a.o),'X-Pin':encodeURIComponent(a.p),'Content-Type':'application/json'}; }
+function jrToggle(id){ const el=document.getElementById(id); el.style.display=el.style.display==='none'?'block':'none'; }
+function jrPct(v){ return v==null?'-':`<span style="color:${v>0?'#f85149':v<0?'#58a6ff':'#8b949e'}">${v>0?'+':''}${v}%</span>`; }
+function jrWon(v){ return `<span style="color:${v>0?'#f85149':v<0?'#58a6ff':'#8b949e'}">${v>0?'+':''}${Math.round(v).toLocaleString()}원</span>`; }
+async function loadJournal(){
+  const a=jrAuth();
+  if(!a.o||!a.p){
+    document.getElementById('jr-login').style.display='block'; document.getElementById('jr-main').style.display='none';
+    const d=await fetch(`${API}/journal/owners`).then(r=>r.json()).catch(()=>({owners:[]}));
+    document.getElementById('jr-owners').innerHTML=d.owners.map(o=>`<option value="${o}">`).join('');
+    if(a.o) document.getElementById('jr-owner').value=a.o;
+    return;
+  }
+  const r=await fetch(`${API}/journal`,{headers:jrH()}).catch(()=>null);
+  if(!r||!r.ok){ if(r&&(r.status===401||r.status===429)){ try{localStorage.removeItem('jr-pin');}catch(e){} } document.getElementById('jr-login-msg').textContent=r?'다시 입력해 주세요':'불러오지 못했습니다'; jrShowLogin(); return; }
+  _jr=await r.json();
+  document.getElementById('jr-login').style.display='none'; document.getElementById('jr-main').style.display='block';
+  document.getElementById('jr-who').textContent=`${a.o}의 매매 일지`;
+  document.getElementById('jr-asof').textContent=_jr.as_of?`· 시세 ${_jr.as_of} 기준`:'';
+  if(!document.getElementById('jr-date').value) document.getElementById('jr-date').value=_jr.as_of||'';
+  jrRender();
+}
+function jrShowLogin(){ document.getElementById('jr-login').style.display='block'; document.getElementById('jr-main').style.display='none'; }
+async function jrLogin(create){
+  const o=document.getElementById('jr-owner').value.trim(), p=document.getElementById('jr-pin').value;
+  const msg=document.getElementById('jr-login-msg');
+  if(!o||p.length<4){ msg.textContent='이름과 4자 이상 비밀번호를 넣어 주세요'; return; }
+  const r=await fetch(`${API}/journal/login`,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({owner:o,pin:p,create:!!create})}).catch(()=>null);
+  if(r&&r.status===404){
+    msg.innerHTML=`처음 쓰는 이름입니다. 이 비밀번호로 <b style="color:#3fb950;cursor:pointer;text-decoration:underline" onclick="jrLogin(true)">새로 만들기</b> (잊으면 되찾을 수 없으니 기억해 두세요)`;
+    return;
+  }
+  if(!r||!r.ok){ const e=r?await r.json().catch(()=>({})):{}; msg.textContent=e.detail||'실패'; return; }
+  try{ localStorage.setItem('jr-owner',o); localStorage.setItem('jr-pin',p); }catch(e){}
+  document.getElementById('jr-pin').value=''; msg.textContent='';
+  loadJournal();
+}
+function jrLogout(){ try{ localStorage.removeItem('jr-pin'); }catch(e){} _jr=null; loadJournal(); }
+function jrRender(){
+  const s=_jr.summary, all=s.all||{count:0};
+  const card=(t,v,sub)=>`<div style="border:1px solid #30363d;border-radius:10px;padding:10px 14px;min-width:110px"><div class="ts">${t}</div><div style="font-size:17px;font-weight:600;color:#e6edf3">${v}</div>${sub?`<div class="ts">${sub}</div>`:''}</div>`;
+  document.getElementById('jr-cards').innerHTML=!all.count?'<div class="ts">아직 청산된 매매가 없습니다. 위 "＋ 기록 넣기"로 체결 내역을 붙여넣으세요.</div>':
+    card('청산',`${all.count}건`,'')+card('이긴 비율',`${all.win_pct}%`,'')+card('평균 수익률',jrPct(all.avg_pct),`이익 ${all.avg_win_pct??'-'}% · 손실 ${all.avg_loss_pct??'-'}%`)
+    +card('손익 합계',jrWon(all.pnl),`투입 대비 ${all.ret_on_cost_pct}%`)+card('최고 / 최악',`${jrPct(all.best_pct)} / ${jrPct(all.worst_pct)}`,'');
+  document.getElementById('jr-insights').innerHTML='<b style="color:#e6edf3">🔎 숫자로 보이는 것</b><br>'+(_jr.insights.length?_jr.insights.map(x=>'· '+x).join('<br>'):'<span class="ts">아직 없음</span>');
+  const groups={by_kind:'유형별',by_state:'산 날 상태별',by_user_tag:'내 근거별',by_family:'섹터별',by_month:'월별'};
+  document.getElementById('jr-groupbtns').innerHTML=Object.entries(groups).map(([k,v])=>`<button class="btn btn-sm" style="${k===_jrGroup?'border-color:#58a6ff;color:#58a6ff':''}" onclick="_jrGroup='${k}';jrRender()">${v}</button>`).join('');
+  document.getElementById('jr-gname').textContent=groups[_jrGroup];
+  const g=Object.entries(s[_jrGroup]||{}).sort((a,b)=>_jrGroup==='by_month'?b[0].localeCompare(a[0]):b[1].count-a[1].count);
+  document.getElementById('jr-group').innerHTML=g.length?g.map(([k,v])=>`<tr><td><b>${k}</b></td><td data-label="건수">${v.count}</td><td data-label="이긴 비율">${v.win_pct}%</td><td data-label="평균">${jrPct(v.avg_pct)}</td>
+    <td data-label="평균 이익 / 손실"><span class="ts">${v.avg_win_pct??'-'}% / ${v.avg_loss_pct??'-'}%</span></td><td data-label="손익" style="text-align:right">${jrWon(v.pnl)}</td></tr>`).join('')
+    :'<tr><td colspan="6" class="ts" style="text-align:center;padding:14px">없음</td></tr>';
+  const h=_jr.holding||[];
+  document.getElementById('jr-holding').innerHTML=h.length?`<div style="font-size:12px;color:#8b949e;margin:6px 0">📦 아직 들고 있는 것 (일지에 산 기록이 있는 물량만)</div><div style="display:flex;flex-wrap:wrap;gap:8px;margin-bottom:16px">`+
+    h.map(x=>`<span style="border:1px solid #30363d;border-radius:8px;padding:6px 10px;font-size:12.5px;cursor:pointer" onclick="openChartModal('${x.code}','${x.name}','')"><b style="color:#e6edf3">${x.name}</b> <span class="ts">${x.buy_date.slice(5)} ${x.qty}주 @${Math.round(x.price).toLocaleString()}</span> ${jrPct(x.eval_pct)}</span>`).join('')+'</div>':'';
+  const kf=document.getElementById('jr-kindf'), kinds=[...new Set(_jr.trips.map(t=>t.kind))];
+  const cur=kf.value; kf.innerHTML='<option value="">전체</option>'+kinds.map(k=>`<option ${k===cur?'selected':''}>${k}</option>`).join('');
+  jrRenderTrips();
+  document.getElementById('jr-excl').value=(_jr.cfg.exclude||[]).map(c=>{ const e=_jr.executions.find(e=>e.code===c); return e?e.name:c; }).join(', ');
+  const tagOpt=(sel)=>'<option value="">-</option>'+_jr.user_tags.map(t=>`<option ${t===sel?'selected':''}>${t}</option>`).join('');
+  const kindOpt=(sel)=>'<option value="">자동</option>'+_jr.kinds.map(t=>`<option ${t===sel?'selected':''}>${t}</option>`).join('');
+  const sel='background:#0d1117;border:1px solid #30363d;color:#c9d1d9;border-radius:6px;padding:2px 4px;font-size:12px';
+  document.getElementById('jr-execs').innerHTML=_jr.executions.slice(0,400).map(e=>`<tr><td>${e.date.slice(5)} <span class="ts">${e.seq}</span></td>
+    <td data-label="구분" style="color:${e.side==='매수'?'#f85149':'#58a6ff'}">${e.side}</td><td data-label="종목">${e.name}</td>
+    <td data-label="수량·단가">${e.qty}주 · ${Math.round(e.price).toLocaleString()}</td>
+    <td data-label="근거">${e.side==='매수'?`<select style="${sel}" onchange="jrEdit(${e.id},{tag:this.value})">${tagOpt(e.tag)}</select>`:''}</td>
+    <td data-label="유형">${e.side==='매수'?`<select style="${sel}" onchange="jrEdit(${e.id},{kind:this.value})">${kindOpt(e.kind)}</select>`:''}</td>
+    <td style="text-align:right"><span style="cursor:pointer;color:#8b949e" title="삭제" onclick="jrDel(${e.id})">✕</span></td></tr>`).join('');
+}
+function jrRenderTrips(){
+  const k=document.getElementById('jr-kindf').value;
+  const ts=_jr.trips.filter(t=>!k||t.kind===k);
+  const tagc={'거래 실린 양봉':'#3fb950','뜨거운 섹터':'#e3b341','섹터 돈 몰림':'#e3b341','박스 상단':'#58a6ff','조용한 날':'#f85149','빠진 날':'#f85149','윗꼬리 긴 날':'#f85149','과열(이격 20%↑)':'#f85149','하락장':'#f85149','섹터 밖':'#8b949e'};
+  document.getElementById('jr-trips').innerHTML=ts.length?ts.slice(0,300).map(t=>{
+    const st=t.state;
+    const tags=st?st.tags.map(x=>`<span style="color:${tagc[x]||'#8b949e'};border:1px solid #30363d;border-radius:8px;padding:0 5px;margin:0 3px 3px 0;display:inline-block">${x}</span>`).join(''):'<span class="ts">-</span>';
+    const det=st?`<br><span class="ts">그날 ${st.change_pct>0?'+':''}${st.change_pct}% · 거래 ${st.tv_x??'-'}배 · 윗꼬리 ${st.upper_pct}% · 이격 ${st.gap20_pct??'-'}% · 종가 대비 ${st.vs_close_pct>0?'+':''}${st.vs_close_pct}%에 삼${st.families.length?' · '+st.families.join(', '):''}</span>`:'';
+    return `<tr style="${t.excluded?'opacity:.45':''}"><td><b style="cursor:pointer" onclick="openChartModal('${t.code}','${t.name}','')">${t.name}</b>${t.user_tags.length?` <span class="ts">${t.user_tags.join(', ')}</span>`:''}${t.excluded?' <span class="ts">(분석 제외)</span>':''}</td>
+      <td data-label="유형">${t.kind}</td><td data-label="산 날 → 판 날">${t.buy_date?t.buy_date.slice(5):'?'} → ${t.sell_date.slice(5)}${t.days!=null?` <span class="ts">${t.days}일</span>`:''}</td>
+      <td data-label="매수 → 매도">${Math.round(t.buy_px).toLocaleString()} → ${Math.round(t.sell_px).toLocaleString()} <span class="ts">${t.qty}주</span></td>
+      <td data-label="수익률">${jrPct(t.pct)}<br>${jrWon(t.pnl)}</td><td data-label="산 날 상태" style="font-size:11.5px;max-width:340px">${tags}${det}</td></tr>`;}).join('')
+    :'<tr><td colspan="6" class="ts" style="text-align:center;padding:14px">없음</td></tr>';
+}
+async function jrImport(preview){
+  const text=document.getElementById('jr-text').value, msg=document.getElementById('jr-import-msg');
+  if(!text.trim()){ msg.textContent='붙여넣은 내용이 없습니다'; return; }
+  const r=await fetch(`${API}/journal/import`,{method:'POST',headers:jrH(),body:JSON.stringify({text,date:document.getElementById('jr-date').value,preview})}).catch(()=>null);
+  if(!r||!r.ok){ msg.textContent='실패'; return; }
+  const d=await r.json();
+  const bad=d.bad.length?`<div style="color:#d29922;margin-top:4px">못 읽은 줄 ${d.bad.length}개: ${d.bad.slice(0,5).map(x=>x.replace(/</g,'&lt;')).join(' / ')}</div>`:'';
+  if(preview){
+    msg.textContent=`${d.rows.length}건 읽음`;
+    document.getElementById('jr-preview').innerHTML=d.rows.slice(0,50).map(x=>`<span style="display:inline-block;margin:0 10px 3px 0">${x.trade_date.slice(5)} <span style="color:${x.side==='매수'?'#f85149':'#58a6ff'}">${x.side}</span> ${x.name} ${x.qty}주 @${Math.round(x.price).toLocaleString()}</span>`).join('')+(d.rows.length>50?' …':'')+bad;
+    return;
+  }
+  msg.textContent=`${d.added}건 저장${d.skipped?` · 이미 있던 ${d.skipped}건 건너뜀`:''}`;
+  document.getElementById('jr-preview').innerHTML=bad;
+  if(d.added){ document.getElementById('jr-text').value=''; loadJournal(); }
+}
+async function jrEdit(id,body){ await fetch(`${API}/journal/${id}`,{method:'PATCH',headers:jrH(),body:JSON.stringify(body)}).catch(()=>null); loadJournal(); }
+async function jrDel(id){ if(!confirm('이 체결을 지울까요?'))return; await fetch(`${API}/journal/${id}`,{method:'DELETE',headers:jrH()}).catch(()=>null); loadJournal(); }
+async function jrSaveExcl(){
+  const v=document.getElementById('jr-excl').value.split(',').map(x=>x.trim()).filter(Boolean);
+  const codes=v.map(x=>{ const e=_jr.executions.find(e=>e.name===x||e.code===x); return e?e.code:x; });
+  await fetch(`${API}/journal/config`,{method:'POST',headers:jrH(),body:JSON.stringify({exclude:codes})}).catch(()=>null);
+  loadJournal();
 }
 
 async function loadRotation(){

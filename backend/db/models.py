@@ -357,6 +357,30 @@ class JongbePick(Base, TimestampMixin):
     market_ok: Mapped[bool] = mapped_column(Boolean, default=True)
 
 
+class TradeExecution(Base, TimestampMixin):
+    """매매 일지 체결 한 건. owner별로 나뉘고 dedup_key로 같은 체결을 두 번 넣지 않는다."""
+
+    __tablename__ = "trade_executions"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    owner: Mapped[str] = mapped_column(String(40), index=True)
+    dedup_key: Mapped[str] = mapped_column(String(200), unique=True)
+    trade_date: Mapped[date] = mapped_column(Date, index=True)
+    seq: Mapped[str] = mapped_column(String(20), default="")       # 증권사 체결 번호
+    side: Mapped[str] = mapped_column(String(4))                    # 매수 / 매도
+    code: Mapped[str] = mapped_column(String(20))
+    name: Mapped[str] = mapped_column(String(100), default="")
+    qty: Mapped[int] = mapped_column(Integer)
+    price: Mapped[float] = mapped_column(Float)
+    amount: Mapped[float] = mapped_column(Float, default=0.0)
+    fee: Mapped[float] = mapped_column(Float, default=0.0)          # 수수료+세금 (증권사 내역에 있을 때)
+    broker_cost: Mapped[float | None] = mapped_column(Float, nullable=True)   # 매도 시 증권사가 계산한 매입금액
+    broker_pnl: Mapped[float | None] = mapped_column(Float, nullable=True)
+    tag: Mapped[str] = mapped_column(String(40), default="")        # 직접 고른 근거
+    memo: Mapped[str] = mapped_column(Text, default="")
+    kind: Mapped[str] = mapped_column(String(10), default="")       # 유형을 직접 바꿨을 때만
+
+
 class Suggestion(Base, TimestampMixin):
     """건의사항 탭: 사용자가 남긴 기능 요청·불편 사항과 처리 상태."""
 
