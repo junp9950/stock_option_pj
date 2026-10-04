@@ -27,7 +27,7 @@ def _load(db: Session):
     latest = db.execute(text("select max(trading_date) from spot_daily_prices")).scalar()
     px = pd.read_sql(text(
         "select stock_code, trading_date, open_price o, high_price h, low_price l, close_price c, trading_value tv, change_pct ch "
-        "from spot_daily_prices where trading_date >= :d"), db.connection(), params={"d": latest - timedelta(days=110)})
+        "from spot_daily_prices where trading_date >= :d"), db.connection(), params={"d": latest - timedelta(days=160)})   # 선취매 후보의 60거래일 대량거래 이력까지
     P = {k: px.pivot(index="trading_date", columns="stock_code", values=k).sort_index() for k in ("o", "h", "l", "c", "tv", "ch")}
     return latest, P
 
@@ -143,6 +143,16 @@ def scan(db: Session) -> dict:
                       "vr_stage": vr_v["stage"] if vr_v else "",
                       "market_cap": caps.get(code, (0, 0))[0] or caps.get(code, (0, 0))[1] * v["close"] or mc.get(code) or 0})
     swing.sort(key=lambda x: (x["loud"], -(x["market_cap"] or 0)))
+
+    # 선취매 후보 (backend/screener/prebuy.py): 거래 터지기 전 조용한 종목
+    from backend.screener.prebuy import frames, pick  # noqa: PLC0415
+    swing_codes = {x["code"] for x in swing}
+    prebuy = []
+    for x in pick(P, frames(P), d, hot, {f: fam[f]["members"] for f in hot}, skip=lambda c: any(k in names.get(c, "") for k in skip)):
+        x.update(name=names.get(x["code"], x["code"]), close=round(x["close"]), earn_up=x["code"] in earn_up, in_swing=x["code"] in swing_codes,
+                 market_cap=caps.get(x["code"], (0, 0))[0] or caps.get(x["code"], (0, 0))[1] * x["close"] or mc.get(x["code"]) or 0)
+        prebuy.append(x)
+    prebuy.sort(key=lambda x: (-len(x["tags"]), -(x["market_cap"] or 0)))
     limit.sort(key=lambda r: -(r["market_cap"] or 0))
     return {
         "trading_date": d.isoformat(), "market": regime,
@@ -152,7 +162,7 @@ def scan(db: Session) -> dict:
                       "stretch_pct": round(fam[f]["stretch"] * 100),
                       "status": "과열" if fam[f]["stretch"] >= 0.2 else ("주의" if fam[f]["stretch"] >= 0.1 else "")}
                      for f in order[:6]],
-        "hot": hot, "items": rows, "limit_up": limit, "swing": swing,
+        "hot": hot, "items": rows, "limit_up": limit, "swing": swing, "prebuy": prebuy,
     }
 
 

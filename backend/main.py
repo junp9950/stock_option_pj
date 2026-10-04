@@ -256,6 +256,20 @@ select{background:#21262d;border:1px solid #30363d;color:#c9d1d9;padding:6px 10p
     </table>
   </div>
 
+  <div style="margin:4px 0 20px">
+    <b style="font-size:15px;color:#e6edf3">🌱 선취매 후보 (터지기 전)</b> <span class="ts" id="jb-pre-info"></span>
+    <p class="lead" style="margin-top:6px">뜨거운 섹터 안에서 오늘 조용한 종목 중 <b>저가 지킴</b>(대량거래 뒤 그 봉 저가 안 깸) · <b>눌림</b>(20일 고점 -5~-15%) · <b>버팀</b>(섹터 빠진 날 안 빠짐). 고를 범위를 좁히는 용도입니다.</p>
+    <details class="why"><summary>근거 보기</summary>
+      3년(상승·횡보장, 같은 날 시장 대비 20일 뒤): 조건 없는 뜨거운 섹터 조용한 종목 +1.7%p, 저가 지킴 +1.3%p, 눌림 +2.2%p.
+      10일 안에 거래 폭발(+10%·거래 5배)할 확률은 8~11%로 <b>어느 조건이든 비슷</b> — 어떤 종목이 터질지는 차트로 못 맞힙니다. 여러 개로 나누고, 터지면 대부분 챙기기.
+      사용자 실제 선취매 세미파이브 9/23·9/28(저가 지킴+눌림), 하나마이크론 9/28(눌림)이 이 조건에 걸렸습니다. 매매 일지에서 내 선택과 같은 날 후보 평균을 비교합니다.
+    </details>
+    <table class="pb-table">
+      <thead><tr><th>종목</th><th>근거</th><th>오늘</th><th>섹터</th><th>종가</th></tr></thead>
+      <tbody id="jb-pre"><tr><td colspan="5" style="color:#8b949e;text-align:center;padding:16px">로딩 중…</td></tr></tbody>
+    </table>
+  </div>
+
   <div style="border:1px solid #30363d;border-radius:10px;padding:12px 16px;margin-bottom:20px">
     <b style="color:#e6edf3">✅ 보유·관심 종목 체크</b> <span class="ts">종목명이나 코드를 쉼표로 (브라우저에 기억됩니다)</span>
     <div style="display:flex;gap:8px;margin-top:8px;flex-wrap:wrap">
@@ -621,6 +635,16 @@ function renderJongbe(){
     <td data-label="섹터" style="font-size:12px">${x.families.join(', ')}</td>
     <td data-label="종가" style="text-align:right">${x.close.toLocaleString()}원${gapTag(x.gap20_pct)}</td>
   </tr>`).join(''):'<tr><td colspan="5" style="color:#8b949e;text-align:center;padding:16px">오늘은 해당 종목이 없습니다</td></tr>';
+  const pre=(d.prebuy||[]).filter(okCap);
+  document.getElementById('jb-pre-info').textContent=`${pre.length}개 · 저가 지킴 ${pre.filter(x=>x.tags.includes('저가 지킴')).length} · 눌림 ${pre.filter(x=>x.tags.includes('눌림')).length} · 버팀 ${pre.filter(x=>x.tags.includes('버팀')).length}`;
+  const tagCol={'저가 지킴':'#3fb950','눌림':'#58a6ff','버팀':'#e3b341'};
+  document.getElementById('jb-pre').innerHTML=pre.length?pre.map(x=>`<tr style="cursor:pointer" onclick="openChartModal('${x.code}','${x.name}','')">
+    <td><b>${x.name}</b> <span style="color:#8b949e;font-size:11px">${x.code}</span>${x.earn_up?' <span style="color:#3fb950;font-size:11px;border:1px solid #238636;border-radius:8px;padding:0 5px">📈 실적</span>':''}${x.in_swing?' <span class="ts">(스윙 후보에도)</span>':''}${x.market_cap?`<br><span class="ts">시총 ${cdWon(x.market_cap)}</span>`:''}</td>
+    <td data-label="근거">${x.tags.map(t=>`<b style="color:${tagCol[t]}">${t}</b>`).join(' · ')}<br><span class="ts">20일 고점 ${x.off_high_pct}%${x.stop_price?` · 손절선 ${x.stop_price.toLocaleString()}원`:''}</span></td>
+    <td data-label="오늘"><span style="color:${x.change_pct>=0?'#f85149':'#58a6ff'}">${x.change_pct>=0?'+':''}${x.change_pct}%</span> · 거래 ${x.tv_x}배</td>
+    <td data-label="섹터" style="font-size:12px">${x.families.join(', ')}</td>
+    <td data-label="종가" style="text-align:right">${x.close.toLocaleString()}원${gapTag(x.gap20_pct)}</td>
+  </tr>`).join(''):'<tr><td colspan="5" style="color:#8b949e;text-align:center;padding:16px">오늘은 해당 종목이 없습니다</td></tr>';
   document.getElementById('jb-limit').innerHTML=lim.length?`상한가 (체결 어려움 주의): ${lim.map(x=>`<b style="color:#e6edf3;cursor:pointer" onclick="openChartModal('${x.code}','${x.name}','')">${x.name}</b>${x.record_today?' <span style="color:#f85149;font-size:11px">🔔 신기록 · 3년 다음 날 시가 평균 +5.6%</span>':''}`).join(' · ')}`:'';
 }
 async function jbCheck(){
@@ -703,7 +727,8 @@ function jrRender(){
   const card=(t,v,sub)=>`<div style="border:1px solid #30363d;border-radius:10px;padding:10px 14px;min-width:110px"><div class="ts">${t}</div><div style="font-size:17px;font-weight:600;color:#e6edf3">${v}</div>${sub?`<div class="ts">${sub}</div>`:''}</div>`;
   document.getElementById('jr-cards').innerHTML=!all.count?'<div class="ts">아직 청산된 매매가 없습니다. 위 "＋ 기록 넣기"로 체결 내역을 붙여넣으세요.</div>':
     card('청산',`${all.count}건`,'')+card('이긴 비율',`${all.win_pct}%`,'')+card('평균 수익률',jrPct(all.avg_pct),`이익 ${all.avg_win_pct??'-'}% · 손실 ${all.avg_loss_pct??'-'}%`)
-    +card('손익 합계',jrWon(all.pnl),`투입 대비 ${all.ret_on_cost_pct}%`)+card('최고 / 최악',`${jrPct(all.best_pct)} / ${jrPct(all.worst_pct)}`,'');
+    +card('손익 합계',jrWon(all.pnl),`투입 대비 ${all.ret_on_cost_pct}%`)+card('최고 / 최악',`${jrPct(all.best_pct)} / ${jrPct(all.worst_pct)}`,'')
+    +(s.pool_cmp?card('내 선택 vs 같은 날 후보',`${jrPct(s.pool_cmp.my_avg_pct)} / ${jrPct(s.pool_cmp.pool_avg_pct)}`,`${s.pool_cmp.count}건 중 후보 평균 이김 ${s.pool_cmp.beat_pct}%`):'');
   document.getElementById('jr-insights').innerHTML='<b style="color:#e6edf3">🔎 숫자로 보이는 것</b><br>'+(_jr.insights.length?_jr.insights.map(x=>'· '+x).join('<br>'):'<span class="ts">아직 없음</span>');
   const groups={by_kind:'유형별',by_state:'산 날 상태별',by_user_tag:'내 근거별',by_family:'섹터별',by_month:'월별'};
   document.getElementById('jr-groupbtns').innerHTML=Object.entries(groups).map(([k,v])=>`<button class="btn btn-sm" style="${k===_jrGroup?'border-color:#58a6ff;color:#58a6ff':''}" onclick="_jrGroup='${k}';jrRender()">${v}</button>`).join('');
@@ -737,10 +762,11 @@ function jrRenderTrips(){
     const st=t.state;
     const tags=st?st.tags.map(x=>`<span style="color:${tagc[x]||'#8b949e'};border:1px solid #30363d;border-radius:8px;padding:0 5px;margin:0 3px 3px 0;display:inline-block">${x}</span>`).join(''):'<span class="ts">-</span>';
     const det=st?`<br><span class="ts">그날 ${st.change_pct>0?'+':''}${st.change_pct}% · 거래 ${st.tv_x??'-'}배 · 윗꼬리 ${st.upper_pct}% · 이격 ${st.gap20_pct??'-'}% · 종가 대비 ${st.vs_close_pct>0?'+':''}${st.vs_close_pct}%에 삼${st.families.length?' · '+st.families.join(', '):''}</span>`:'';
+    const pl=t.pool?`<br><span class="ts">같은 날 선취매 후보 ${t.pool.n}개를 같은 기간 들었다면 평균 ${t.pool.avg_pct>0?'+':''}${t.pool.avg_pct}%${t.pool.in_pool?' · <b style="color:#3fb950">이 종목도 후보에 있었음</b>':''}</span>`:'';
     return `<tr style="${t.excluded?'opacity:.45':''}"><td><b style="cursor:pointer" onclick="openChartModal('${t.code}','${t.name}','')">${t.name}</b>${t.user_tags.length?` <span class="ts">${t.user_tags.join(', ')}</span>`:''}${t.excluded?' <span class="ts">(분석 제외)</span>':''}</td>
       <td data-label="유형">${t.kind}</td><td data-label="산 날 → 판 날">${t.buy_date?t.buy_date.slice(5):'?'} → ${t.sell_date.slice(5)}${t.days!=null?` <span class="ts">${t.days}일</span>`:''}</td>
       <td data-label="매수 → 매도">${Math.round(t.buy_px).toLocaleString()} → ${Math.round(t.sell_px).toLocaleString()} <span class="ts">${t.qty}주</span></td>
-      <td data-label="수익률">${jrPct(t.pct)}<br>${jrWon(t.pnl)}</td><td data-label="산 날 상태" style="font-size:11.5px;max-width:340px">${tags}${det}</td></tr>`;}).join('')
+      <td data-label="수익률">${jrPct(t.pct)}<br>${jrWon(t.pnl)}</td><td data-label="산 날 상태" style="font-size:11.5px;max-width:340px">${tags}${det}${pl}</td></tr>`;}).join('')
     :'<tr><td colspan="6" class="ts" style="text-align:center;padding:14px">없음</td></tr>';
 }
 async function jrImport(preview){

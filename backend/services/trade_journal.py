@@ -386,6 +386,7 @@ def analyze(db: Session, owner: str) -> dict:
                       "buy_amount": round(g["buy_amount"]), "pnl": round(pnl), "pct": round(pnl / g["buy_amount"] * 100, 2),
                       "user_tags": user_tags, "state": st, "excluded": g["code"] in excl or "장투" in user_tags})
     trips.sort(key=lambda t: (t["sell_date"], t["buy_date"] or ""), reverse=True)
+    _attach_pool(ctx, trips)
 
     # 아직 들고 있는 물량
     holding = []
@@ -413,16 +414,59 @@ def analyze(db: Session, owner: str) -> dict:
                 g_tag[a].append(t)
             for f in t["state"]["families"][:1] or ["섹터 없음"]:
                 g_fam[f].append(t)
-    summary = {"all": _stats(use), "by_kind": by(g_kind), "by_state": by(g_tag), "by_user_tag": by(g_user),
+    pooled = [t for t in use if t.get("pool") and t["pool"]["n"] >= 3]
+    pool_cmp = None
+    if pooled:
+        pool_cmp = {"count": len(pooled), "my_avg_pct": round(sum(t["pct"] for t in pooled) / len(pooled), 2),
+                    "pool_avg_pct": round(sum(t["pool"]["avg_pct"] for t in pooled) / len(pooled), 2),
+                    "beat_pct": round(sum(t["pct"] > t["pool"]["avg_pct"] for t in pooled) / len(pooled) * 100),
+                    "in_pool": sum(t["pool"]["in_pool"] for t in pooled)}
+    summary = {"pool_cmp": pool_cmp, "all": _stats(use), "by_kind": by(g_kind), "by_state": by(g_tag), "by_user_tag": by(g_user),
                "by_month": by(g_month), "by_family": by(g_fam)}
     return {"executions": list(reversed(execs)), "trips": trips, "holding": holding, "summary": summary,
             "insights": ([f"⚠️ 체결가가 그날 시세 범위 밖인 기록 {len(warn)}건 — 날짜나 가격을 확인해 주세요 (체결 내역 보기에 표시)"] if warn else []) + _insights(use, g_tag, g_kind), "cfg": cfg, "user_tags": USER_TAGS, "kinds": KINDS,
             "as_of": last.isoformat()}
 
 
+def _attach_pool(ctx, trips: list[dict]) -> None:
+    """각 매매에 '같은 날 선취매 후보를 종가에 사서 내가 판 날 종가에 팔았다면'의 평균을 붙인다 (내 선택이 후보보다 나았나)."""
+    from backend.screener.prebuy import frames, pick  # noqa: PLC0415
+    P = ctx["P"]
+    if "F" not in ctx:
+        ctx["F"] = frames(P)
+        fam_members = defaultdict(list)
+        for c, fs in ctx["code_fams"].items():
+            for f in fs:
+                fam_members[f].append(c)
+        ctx["fam_members"] = fam_members
+        ctx["pool_cache"] = {}
+    C = P["c"]
+    for t in trips:
+        if not t["buy_date"] or not t["days"]:   # 장중(같은 날)은 종가 비교가 안 맞아 뺀다
+            continue
+        bd, sd = date.fromisoformat(t["buy_date"]), date.fromisoformat(t["sell_date"])
+        if bd not in C.index or sd not in C.index or bd not in ctx["fam_rank"].index:
+            continue
+        if bd not in ctx["pool_cache"]:
+            r = ctx["fam_rank"].loc[bd]
+            hot = [f for f in r.index if r[f] <= 3]
+            ctx["pool_cache"][bd] = [x["code"] for x in pick(P, ctx["F"], bd, hot, ctx["fam_members"])]
+        codes = ctx["pool_cache"][bd]
+        rets = (C.loc[sd, codes] / C.loc[bd, codes] - 1).dropna() * 100 if codes else pd.Series(dtype=float)
+        if len(rets):
+            t["pool"] = {"n": int(len(rets)), "avg_pct": round(float(rets.mean()), 2), "in_pool": t["code"] in codes}
+
+
 def _insights(use: list[dict], g_tag: dict, g_kind: dict) -> list[str]:
     """숫자로 보이는 차이만 짧게. 건수가 적으면 말하지 않는다."""
     out = []
+    pooled = [t for t in use if t.get("pool") and t["pool"]["n"] >= 3]
+    if len(pooled) >= 3:
+        my = sum(t["pct"] for t in pooled) / len(pooled)
+        pl = sum(t["pool"]["avg_pct"] for t in pooled) / len(pooled)
+        beat = sum(t["pct"] > t["pool"]["avg_pct"] for t in pooled)
+        out.append(f"내 선택 vs 같은 날 선취매 후보({len(pooled)}건, 같은 보유 기간): 내 평균 {my:+.2f}% / 후보 평균 {pl:+.2f}% — "
+                   f"{'내가 나음' if my > pl else '후보가 나음'}, 후보 평균을 이긴 매매 {beat}건({beat / len(pooled) * 100:.0f}%)")
     if len(use) < 5:
         return ["아직 기록이 적어서 경향을 말하기 이릅니다 (청산 5건 이상부터)."]
     base = _stats(use)
