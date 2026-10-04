@@ -18,7 +18,10 @@ from backend.screener.market_regime import current_regime
 from backend.screener.rotation import FAMILIES, family_members, get_overrides
 
 HOT_TOP = 3          # 20일 상승 순위 상위 몇 섹터를 뜨겁다고 볼지
-MONEY_X = 1.2        # 그날 섹터 거래대금 / 직전 20일 평균
+MONEY_X = 1.2        # (참고 표시용) 그날 섹터 거래대금 합계 / 직전 20일 평균 — 대형주 몇 개가 좌우
+MONEY_MED = 1.0      # A등급: 섹터 종목들 '그날 거래대금 / 자기 20일 평균'의 중간값 (절반 이상이 평소 이상 거래)
+# 2026-10-04 3년 비교(종베 후보 6,991건, 다음 날 갭이면 시가·아니면 종가): 합계 1.2배↑ +0.86%(70%) vs 중간값 1.0↑ +1.20%(74%)·미만 +0.35%,
+# 중간값 1.2↑ +1.46%(78%, 1,487건). 종목 자체가 5배↑ 터져도 섹터가 조용하면 +0.43% — 섹터 전체에 돈이 도는지가 중요.
 MIN_CHG, VOL_X, MIN_TV = 3.0, 2.0, 3e9
 LIMIT_UP = 29.5
 
@@ -49,6 +52,7 @@ def _families(P, members: dict[str, list[str]]):
         tvx = tv / tv.shift(1).rolling(20).mean()
         inflow = ((tvx >= 1.5) & (dchg[m].median(axis=1) >= 0.01)).iloc[-20:]   # 섹터 거래대금 1.5배 + 섹터 +1% 날
         fam[f] = {"ret20": float(ret20.loc[d, m].median()), "tv_x": float(tv.iloc[-1] / tv.iloc[-21:-1].mean()),
+                  "tv_med": float((TV[m].iloc[-1] / TV[m].iloc[-21:-1].mean()).median()),
                   "stretch": float((gap.loc[d, m] >= 0.2).mean()), "members": m,
                   "ret5_rel": float(ret5.loc[d, m].median()) - mkt5, "inflow": int(inflow.sum()),
                   "ret20_prev": float(ret20.iloc[-6][m].median())}
@@ -93,7 +97,7 @@ def scan(db: Session) -> dict:
     cands, limit = {}, []
     for f in hot:
         info = fam[f]
-        money = info["tv_x"] >= MONEY_X
+        money = info["tv_med"] >= MONEY_MED
         tv_rank = TV.loc[d, info["members"]].rank(ascending=False)
         for code in info["members"]:
             v = _stock_view(P, code)
@@ -171,7 +175,7 @@ def scan(db: Session) -> dict:
         "trading_date": d.isoformat(), "market": regime,
         "market_ok": regime.get("state") in ("상승", "횡보"),
         "families": [{"family": f, "rank": fam[f]["rank"], "ret20_pct": round(fam[f]["ret20"] * 100, 1),
-                      "tv_x": round(fam[f]["tv_x"], 2), "money": fam[f]["tv_x"] >= MONEY_X,
+                      "tv_x": round(fam[f]["tv_x"], 2), "tv_med": round(fam[f]["tv_med"], 2), "money": fam[f]["tv_med"] >= MONEY_MED,
                       "stretch_pct": round(fam[f]["stretch"] * 100),
                       "status": "과열" if fam[f]["stretch"] >= 0.2 else ("주의" if fam[f]["stretch"] >= 0.1 else "")}
                      for f in order[:6]],
@@ -237,7 +241,7 @@ def check(db: Session, queries: list[str]) -> dict:
             "checks": {
                 "시장 상승·횡보": regime.get("state") in ("상승", "횡보"),
                 "뜨거운 섹터": bool(hot_fs),
-                "섹터에 돈 몰림": any(fam[f]["tv_x"] >= MONEY_X for f in hot_fs),
+                "섹터에 돈 몰림": any(fam[f]["tv_med"] >= MONEY_MED for f in hot_fs),
                 "+3% 양봉": v["bull"] and v["change_pct"] >= MIN_CHG,
                 "거래 2배 이상": bool(v["tv_x"] and v["tv_x"] >= VOL_X),
                 "윗꼬리 30% 이하": v["upper_pct"] <= 30,

@@ -228,8 +228,7 @@ def _context(db: Session, start: date):
         if len(m) < 5:
             continue
         fam_ret[f] = ret20[m].median(axis=1)
-        tv = TV[m].sum(axis=1)
-        fam_tvx[f] = tv / tv.shift(1).rolling(20).mean()
+        fam_tvx[f] = (TV[m] / TV[m].shift(1).rolling(20).mean()).median(axis=1)   # 섹터 종목 거래 배수 중간값 (종베 A등급과 같은 기준)
     fam_rank = pd.DataFrame(fam_ret).rank(axis=1, ascending=False)
     chg = P["ch"].clip(-30, 30).mean(axis=1)
     regime = regime_series({d: float(v) for d, v in chg.items()})
@@ -259,7 +258,7 @@ def _state(ctx, code: str, d: date, buy_px: float) -> dict | None:
     fams = ctx["code_fams"].get(code, [])
     ranks = {f: int(ctx["fam_rank"].at[d, f]) for f in fams if f in ctx["fam_rank"].columns and ctx["fam_rank"].at[d, f] == ctx["fam_rank"].at[d, f]}
     hot = [f for f, r in ranks.items() if r <= 3]
-    money = any(float(ctx["fam_tvx"].at[d, f]) >= 1.2 for f in hot)
+    money = any(float(ctx["fam_tvx"].at[d, f]) >= 1.0 for f in hot)
     reg = ctx["regime"].get(d, {}).get("state", "")
     tags = []
     if c > o and ch >= 3 and tv_x and tv_x >= 2:

@@ -249,7 +249,7 @@ select{background:#21262d;border:1px solid #30363d;color:#c9d1d9;padding:6px 10p
   <div id="jb-market" style="border-radius:10px;padding:12px 16px;margin-bottom:12px;border:1px solid #30363d">로딩 중…</div>
   <p class="lead">시장 상승·횡보 → 뜨거운 섹터 → 그날 섹터에 돈 몰림 → 거래 실린 양봉. <b>다음 날 오전 정리</b>가 기본, 갭이 크면 덜어내기.</p>
   <details class="why"><summary>근거 보기</summary>
-    3년(상승·횡보장, 다음 날 "갭상승이면 시가·아니면 종가" 매도): 기본 +0.42%, 뜨거운 섹터(20일 상승 상위 3) +0.74%, <b style="color:#3fb950">A등급(섹터 거래대금 1.2배까지) +0.94%·수익 71%</b>, 섹터 밖 +0.28%, 하락장 +0.12%.
+    3년(상승·횡보장, 다음 날 "갭상승이면 시가·아니면 종가" 매도): 기본 +0.42%, 뜨거운 섹터(20일 상승 상위 3) +0.74%, <b style="color:#3fb950">A등급(섹터 종목 거래 중간값 1배↑) +1.20%·수익 74%</b>, B +0.35%. 종목 혼자 5배↑ 터져도 섹터가 조용하면 +0.43%, 섹터 밖 +0.28%, 하락장 +0.12%.
     시가 매도는 -5% 넘는 손실 2%, 종가까지 들고 가면 18%. 이격 +20%↑·그날 +12%↑는 평균은 비슷한데 큰 손실이 2~4배("급등·과열 빼기" 필터).
     🔔 = 오늘 거래대금이 몇 년 만의 최대, 🔥 = 대량거래 관심종목 단계. 숫자는 수수료·세금 빼기 전.
   </details>
@@ -404,7 +404,7 @@ select{background:#21262d;border:1px solid #30363d;color:#c9d1d9;padding:6px 10p
     <p class="lead">지금 어느 섹터에 돈이 붙었나를 보는 표. 다음에 어디가 오를지 맞히는 용도는 아닙니다.</p>
     <details class="why"><summary>근거 보기</summary>
       272개 테마를 16개 섹터로 묶음. <b style="color:#f85149">과열</b> = 섹터 안 종목 중 20일선보다 20%↑ 뜬 종목이 20% 이상, <b style="color:#d29922">주의</b> = 10~20%.
-      3년: 이 비율 0~5% 섹터는 20일 뒤 +0.1%p, 10~20% -0.3%p, 20~30% -1.7%p, 30%↑ -3.1%p. 상위 3 섹터 + 그날 거래대금 1.2배의 거래 실린 양봉 종베 +0.94%(섹터 밖 +0.28%).
+      3년: 이 비율 0~5% 섹터는 20일 뒤 +0.1%p, 10~20% -0.3%p, 20~30% -1.7%p, 30%↑ -3.1%p. 상위 3 섹터 + 섹터 종목 거래 중간값 1배↑의 거래 실린 양봉 종베 +1.20%(섹터 밖 +0.28%).
       다음 10~20일 앞설 섹터는 거의 못 맞힘(-0.2%p). 섹터 밖에서 돈이 반복해 들어오는 테마는 주도가 될 확률이 3~4배지만, 들어온 날 사는 건 평균 이득이 없었습니다.
     </details>
     <table>
@@ -648,7 +648,7 @@ async function loadJongbe(){
     const isHot=d.hot.includes(f.family);
     return `<span style="padding:6px 10px;border:1px solid ${isHot?'#e3b341':'#30363d'};border-radius:8px;font-size:12.5px">
       <b style="color:${isHot?'#e6edf3':'#8b949e'}">${f.rank}. ${f.family}</b> <span class="ts">20일 ${f.ret20_pct>=0?'+':''}${f.ret20_pct}%</span>
-      · <span style="color:${f.money?'#3fb950':'#8b949e'}" title="오늘 섹터 거래대금 / 평소(20일 평균). 1.2배 이상이면 오늘 이 섹터로 돈이 더 들어온 것">오늘 거래 평소 ${f.tv_x.toFixed(2)}배${f.money?' 💰':''}</span>
+      · <span style="color:${f.money?'#3fb950':'#8b949e'}" title="섹터 종목들의 '오늘 거래대금 ÷ 자기 평소(20일 평균)' 중간값. 1배 이상 = 섹터 종목 절반 이상이 평소보다 거래가 많음 (대형주 몇 개에 안 끌리게 합계 대신 중간값)">종목 거래 중간 ${f.tv_med.toFixed(2)}배${f.money?' 💰':''}</span>
       ${f.status?` · <b style="color:${stc[f.status]}">${f.status}</b>`:''}</span>`;}).join('');
   renderJongbe();
   try{ const saved=localStorage.getItem('jb-q'); if(saved&&!document.getElementById('jb-q').value){document.getElementById('jb-q').value=saved; jbCheck();} }catch(e){}
@@ -668,10 +668,10 @@ function renderJongbe(){
   const items=pool.filter(x=>showB||x.grade==='A');
   document.getElementById('jb-count').textContent=`A ${nA}개 · B ${nB}개 (전체 후보 ${d.items.length}개)`;
   const body=document.getElementById('jb-body');
-  if(!items.length){ body.innerHTML=`<tr><td colspan="5" style="color:#8b949e;text-align:center;padding:20px">${nB&&!showB?`오늘은 A등급이 없습니다. <a href="#" onclick="document.getElementById('jb-showb').checked=true;renderJongbe();return false" style="color:#58a6ff">B등급 ${nB}개 보기</a> (3년 다음 날 평균 +0.48%, A는 +0.94%)`:'오늘은 조건에 맞는 종목이 없습니다'}</td></tr>`; }
+  if(!items.length){ body.innerHTML=`<tr><td colspan="5" style="color:#8b949e;text-align:center;padding:20px">${nB&&!showB?`오늘은 A등급이 없습니다. <a href="#" onclick="document.getElementById('jb-showb').checked=true;renderJongbe();return false" style="color:#58a6ff">B등급 ${nB}개 보기</a> (3년 다음 날 평균 +0.35%, A는 +1.20%)`:'오늘은 조건에 맞는 종목이 없습니다'}</td></tr>`; }
   else body.innerHTML=items.map(x=>`<tr style="cursor:pointer" onclick="openChartModal('${x.code}','${x.name}','')">
     <td><b>${x.name}</b> <span style="color:#8b949e;font-size:11px">${x.code}</span>${x.earn_up?' <span style="color:#3fb950;font-size:11px;border:1px solid #238636;border-radius:8px;padding:0 5px">📈 실적</span>':''}${x.leader?' <span style="color:#e3b341;font-size:11px">👑 대장</span>':''}${x.record_today?' <span style="color:#f85149;font-size:11px" title="오늘 몇 년 만의 최대 거래대금">🔔 거래대금 신기록</span>':''}${x.vr_stage&&x.vr_stage!=='무너짐'&&!x.record_today?` <span style="font-size:11px;color:${x.vr_signal?'#e3b341':'#8b949e'}" title="대량거래 관심종목 단계 (스윙 관점)">🔥 ${x.vr_signal?'진입 신호':x.vr_stage}</span>`:''}${x.market_cap?`<br><span class="ts">시총 ${cdWon(x.market_cap)}</span>`:''}</td>
-    <td data-label="등급"><b style="color:${x.grade==='A'?'#3fb950':'#c9d1d9'}">${x.grade}</b>${x.pos60_pct!=null?` <span class="ts" title="60일 종가 고점 대비 ${x.pos60_pct}% — 3년 확인상 돌파형·반등형 다음 날 성과는 같았음(+0.5~0.7%)">${x.pos60_pct>=0?(x.under_wick?'돌파형 (전 고점 윗꼬리 아래)':'돌파형'):x.pos60_pct>=-5?'고점 근처':'반등형'}</span>`:''}<br><span class="ts">${(()=>{ const tv=Math.max(...d.families.filter(f=>x.families.includes(f.family)).map(f=>f.tv_x),0); return x.grade==='A'?`섹터 거래대금 평소 ${tv.toFixed(2)}배`:`섹터 거래대금 평소 ${tv.toFixed(2)}배<br>(1.2배↑면 A)`; })()}</span></td>
+    <td data-label="등급"><b style="color:${x.grade==='A'?'#3fb950':'#c9d1d9'}">${x.grade}</b>${x.pos60_pct!=null?` <span class="ts" title="60일 종가 고점 대비 ${x.pos60_pct}% — 3년 확인상 돌파형·반등형 다음 날 성과는 같았음(+0.5~0.7%)">${x.pos60_pct>=0?(x.under_wick?'돌파형 (전 고점 윗꼬리 아래)':'돌파형'):x.pos60_pct>=-5?'고점 근처':'반등형'}</span>`:''}<br><span class="ts">${(()=>{ const tv=Math.max(...d.families.filter(f=>x.families.includes(f.family)).map(f=>f.tv_med),0); return x.grade==='A'?`섹터 종목 거래 중간 ${tv.toFixed(2)}배`:`섹터 종목 거래 중간 ${tv.toFixed(2)}배<br>(1배↑면 A)`; })()}</span></td>
     <td data-label="그날 봉"><span style="color:#f85149">+${x.change_pct}%</span> · 거래 ${x.tv_x}배<br><span class="ts" style="color:${x.upper_pct<=30?'#3fb950':'#8b949e'}">윗꼬리 ${x.upper_pct}%</span> · <span class="ts">${cdWon(x.value)}</span></td>
     <td data-label="섹터" style="font-size:12px">${x.families.join(', ')}</td>
     <td data-label="종가" style="text-align:right">${x.close.toLocaleString()}원${gapTag(x.gap20_pct)}</td>
