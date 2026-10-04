@@ -1,7 +1,8 @@
 """선취매 후보: 뜨거운 섹터 안에서 거래가 터지기 전 조용한 종목 (사용자 선취매 근거 유형을 규칙으로).
 
 A 저가 지킴 = 최근 5~60일 안 대량거래 양봉(거래 5배·+5%) 뒤 종가가 그 봉 저가를 한 번도 안 깸 (손절선 = 그 저가)
-B 눌림     = 20일 고점 대비 -5~-15%, 20일선 위
+B 눌림     = 20일 종가 고점(3거래일 이상 전) 대비 -5~-15%, 20일선 위 — 그날 윗꼬리만으로 눌림이 되지 않게 종가 기준
+제외: 최근 5일 안에 이미 터진 종목(거래 3배·+8% 이상 양봉) — 선취매가 아니라 터진 뒤 (2026-10-04 티에프이 10/1 +16% 다음 날이 눌림으로 잡혔던 문제)
 D 버팀     = 소속 뜨거운 섹터가 그날 -1.5% 이하인데 종목은 0% 이상
 공통: 오늘 조용(거래 1.3배 미만, 등락 ±4% 안), 20일선 이격 25% 미만, 최근 5일 평균 거래대금 10억 이상.
 
@@ -23,7 +24,9 @@ def frames(P: dict) -> dict:
     tv20 = TV.shift(1).rolling(20).mean()
     tvx = TV / tv20
     ma20 = C.rolling(20).mean()
-    hi20 = H.rolling(20).max()
+    hi20 = C.rolling(20).max()                      # 종가 기준 고점
+    peak_old = C.shift(3).rolling(17).max() >= hi20   # 그 고점이 3거래일 이상 전
+    burst5 = ((tvx >= 3) & (CH >= 8) & (C > O)).astype(float).rolling(5).max() > 0
     spike = ((tvx >= 5) & (CH >= 5) & (C > O)).fillna(False)
     sp_low = L.where(spike).ffill(limit=60)
     idx = pd.DataFrame(np.arange(len(C))[:, None].repeat(C.shape[1], 1), index=C.index, columns=C.columns)
@@ -37,7 +40,7 @@ def frames(P: dict) -> dict:
         mn[i] = run
     mn[np.isinf(mn)] = np.nan
     held = (pd.DataFrame(mn, index=C.index, columns=C.columns) >= sp_low) & (age >= 5) & (age <= 60)
-    return {"held": held, "sp_low": sp_low, "age": age, "pull": ((C / hi20 - 1) <= -0.05) & ((C / hi20 - 1) >= -0.15) & (C > ma20),
+    return {"held": held, "sp_low": sp_low, "age": age, "pull": ((C / hi20 - 1) <= -0.05) & ((C / hi20 - 1) >= -0.15) & (C > ma20) & peak_old, "burst5": burst5,
             "off_hi": (C / hi20 - 1) * 100, "quiet": (tvx < QUIET_X) & (CH.abs() < QUIET_CHG), "gap": (C / ma20 - 1) * 100,
             "tvx": tvx, "tv5": TV.rolling(5).mean()}
 
@@ -55,7 +58,7 @@ def pick(P: dict, F: dict, d, hot_fams: list[str], members: dict[str, list[str]]
             c = C.at[d, code]
             if not (c == c and c >= 1000) or skip(code):
                 continue
-            if not (bool(F["quiet"].at[d, code]) and F["gap"].at[d, code] < MAX_GAP and F["tv5"].at[d, code] >= MIN_TV5):
+            if not (bool(F["quiet"].at[d, code]) and F["gap"].at[d, code] < MAX_GAP and F["tv5"].at[d, code] >= MIN_TV5) or bool(F["burst5"].at[d, code]):
                 continue
             tags = []
             if bool(F["held"].at[d, code]):
