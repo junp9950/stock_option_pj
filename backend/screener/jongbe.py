@@ -170,6 +170,12 @@ def scan(db: Session) -> dict:
                  market_cap=caps.get(x["code"], (0, 0))[0] or caps.get(x["code"], (0, 0))[1] * x["close"] or mc.get(x["code"]) or 0)
         prebuy.append(x)
     prebuy.sort(key=lambda x: (-len(x["tags"]), -(x["market_cap"] or 0)))
+
+    # 투자주의·경고·위험, 단기과열, 관리종목, 신용불가 (KIS, 후보 종목만)
+    from backend.services.stock_flags import get as flags_get  # noqa: PLC0415
+    fl = flags_get([x["code"] for x in rows + limit + swing + prebuy])
+    for x in rows + limit + swing + prebuy:
+        x["flags"] = fl.get(x["code"], {}).get("flags", [])
     limit.sort(key=lambda r: -(r["market_cap"] or 0))
     return {
         "trading_date": d.isoformat(), "market": regime,

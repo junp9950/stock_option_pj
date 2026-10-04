@@ -262,6 +262,8 @@ select{background:#21262d;border:1px solid #30363d;color:#c9d1d9;padding:6px 10p
       </select></label>
     <label style="font-size:12.5px;color:#c9d1d9;cursor:pointer" title="20일선보다 +20% 넘게 뜬 종목과 그날 +12% 넘게 오른 종목을 뺍니다. 3년 확인: 평균 수익은 비슷한데 다음 날 -5% 넘는 손실이 2~4배"><input type="checkbox" id="jb-safe" checked onchange="try{localStorage.setItem('jb-safe',this.checked?'1':'0')}catch(e){};renderJongbe()"> 급등·과열 빼기</label>
     <label style="font-size:12.5px;color:#c9d1d9;cursor:pointer"><input type="checkbox" id="jb-showb" onchange="renderJongbe()"> B등급도 보기</label>
+    <label style="font-size:12.5px;color:#c9d1d9;cursor:pointer" title="투자주의·경고·위험, 단기과열, 관리종목을 모든 목록에서 뺍니다"><input type="checkbox" id="jb-noflag" onchange="try{localStorage.setItem('jb-noflag',this.checked?'1':'0')}catch(e){};renderJongbe()"> 경고 빼기</label>
+    <label style="font-size:12.5px;color:#c9d1d9;cursor:pointer" title="신용 매수 불가(증거금 100%, 한국투자증권 기준) 종목을 뺍니다"><input type="checkbox" id="jb-nocred" onchange="try{localStorage.setItem('jb-nocred',this.checked?'1':'0')}catch(e){};renderJongbe()"> 신용불가 빼기</label>
     <span class="ts" id="jb-count"></span>
   </div>
   <div id="jb-fams" style="display:flex;flex-wrap:wrap;gap:8px;margin-bottom:22px"></div>
@@ -508,6 +510,8 @@ select{background:#21262d;border:1px solid #30363d;color:#c9d1d9;padding:6px 10p
       <option value="기준봉 눌림">기준봉 눌림</option>
       <option value="장대음봉도지">장대음봉도지</option>
     </select>
+    <label style="display:flex;align-items:center;gap:5px;font-size:13px;color:#c9d1d9;cursor:pointer" title="투자주의·경고·위험, 단기과열, 관리종목을 뺍니다"><input type="checkbox" id="cd-noflag" onchange="try{localStorage.setItem('cd-noflag',this.checked?'1':'0')}catch(e){};renderCandidates()"> 경고 빼기</label>
+    <label style="display:flex;align-items:center;gap:5px;font-size:13px;color:#c9d1d9;cursor:pointer" title="신용 매수 불가(증거금 100%) 종목을 뺍니다"><input type="checkbox" id="cd-nocred" onchange="try{localStorage.setItem('cd-nocred',this.checked?'1':'0')}catch(e){};renderCandidates()"> 신용불가 빼기</label>
     <button class="btn btn-gray btn-sm" onclick="loadCandidates()">⟳ 새로고침</button>
     <span class="ts" id="cd-info"></span>
   </div>
@@ -660,7 +664,8 @@ const _jbOpen={};
 function renderJongbe(){
   const d=_jbData; if(!d) return;
   const min=parseFloat(document.getElementById('jb-mincap').value)*1e8||0;
-  const okCap=x=>!min||!x.market_cap||x.market_cap>=min;
+  const nf=document.getElementById('jb-noflag').checked, nc=document.getElementById('jb-nocred').checked;
+  const okCap=x=>(!min||!x.market_cap||x.market_cap>=min)&&noFlag(x,nf,nc);
   const safe=document.getElementById('jb-safe').checked, showB=document.getElementById('jb-showb').checked;
   const okSafe=x=>!safe||((x.gap20_pct==null||x.gap20_pct<20)&&x.change_pct<12);
   const pool=d.items.filter(x=>okCap(x)&&okSafe(x)), lim=d.limit_up.filter(okCap);
@@ -670,7 +675,7 @@ function renderJongbe(){
   const body=document.getElementById('jb-body');
   if(!items.length){ body.innerHTML=`<tr><td colspan="5" style="color:#8b949e;text-align:center;padding:20px">${nB&&!showB?`오늘은 A등급이 없습니다. <a href="#" onclick="document.getElementById('jb-showb').checked=true;renderJongbe();return false" style="color:#58a6ff">B등급 ${nB}개 보기</a> (3년 다음 날 평균 +0.35%, A는 +1.20%)`:'오늘은 조건에 맞는 종목이 없습니다'}</td></tr>`; }
   else body.innerHTML=items.map(x=>`<tr style="cursor:pointer" onclick="openChartModal('${x.code}','${x.name}','')">
-    <td><b>${x.name}</b> <span style="color:#8b949e;font-size:11px">${x.code}</span>${x.earn_up?' <span style="color:#3fb950;font-size:11px;border:1px solid #238636;border-radius:8px;padding:0 5px">📈 실적</span>':''}${x.leader?' <span style="color:#e3b341;font-size:11px">👑 대장</span>':''}${x.record_today?' <span style="color:#f85149;font-size:11px" title="오늘 몇 년 만의 최대 거래대금">🔔 거래대금 신기록</span>':''}${x.vr_stage&&x.vr_stage!=='무너짐'&&!x.record_today?` <span style="font-size:11px;color:${x.vr_signal?'#e3b341':'#8b949e'}" title="대량거래 관심종목 단계 (스윙 관점)">🔥 ${x.vr_signal?'진입 신호':x.vr_stage}</span>`:''}${x.market_cap?`<br><span class="ts">시총 ${cdWon(x.market_cap)}</span>`:''}</td>
+    <td><b>${x.name}</b> <span style="color:#8b949e;font-size:11px">${x.code}</span>${x.earn_up?' <span style="color:#3fb950;font-size:11px;border:1px solid #238636;border-radius:8px;padding:0 5px">📈 실적</span>':''}${x.leader?' <span style="color:#e3b341;font-size:11px">👑 대장</span>':''}${flagTag(x)}${x.record_today?' <span style="color:#f85149;font-size:11px" title="오늘 몇 년 만의 최대 거래대금">🔔 거래대금 신기록</span>':''}${x.vr_stage&&x.vr_stage!=='무너짐'&&!x.record_today?` <span style="font-size:11px;color:${x.vr_signal?'#e3b341':'#8b949e'}" title="대량거래 관심종목 단계 (스윙 관점)">🔥 ${x.vr_signal?'진입 신호':x.vr_stage}</span>`:''}${x.market_cap?`<br><span class="ts">시총 ${cdWon(x.market_cap)}</span>`:''}</td>
     <td data-label="등급"><b style="color:${x.grade==='A'?'#3fb950':'#c9d1d9'}">${x.grade}</b>${x.pos60_pct!=null?` <span class="ts" title="60일 종가 고점 대비 ${x.pos60_pct}% — 3년 확인상 돌파형·반등형 다음 날 성과는 같았음(+0.5~0.7%)">${x.pos60_pct>=0?(x.under_wick?'돌파형 (전 고점 윗꼬리 아래)':'돌파형'):x.pos60_pct>=-5?'고점 근처':'반등형'}</span>`:''}<br><span class="ts">${(()=>{ const tv=Math.max(...d.families.filter(f=>x.families.includes(f.family)).map(f=>f.tv_med),0); return x.grade==='A'?`섹터 종목 거래 중간 ${tv.toFixed(2)}배`:`섹터 종목 거래 중간 ${tv.toFixed(2)}배<br>(1배↑면 A)`; })()}</span></td>
     <td data-label="그날 봉"><span style="color:#f85149">+${x.change_pct}%</span> · 거래 ${x.tv_x}배<br><span class="ts" style="color:${x.upper_pct<=30?'#3fb950':'#8b949e'}">윗꼬리 ${x.upper_pct}%</span> · <span class="ts">${cdWon(x.value)}</span></td>
     <td data-label="섹터" style="font-size:12px">${x.families.join(', ')}</td>
@@ -690,7 +695,7 @@ function renderJongbe(){
   document.getElementById('jb-ch-info').textContent=`${ch.length}개 · 🚀 돌파 ${cnt('🚀 돌파')} · 돌파 대기 ${cnt('돌파 대기')} · 저가 지킴 ${cnt('저가 지킴')} · 눌림 ${cnt('눌림')} · 버팀 ${cnt('버팀')}`;
   const tagCol={'🚀 돌파':'#3fb950','돌파 대기':'#c9d1d9','저가 지킴':'#3fb950','눌림':'#58a6ff','버팀':'#e3b341'};
   const rowHtml=x=>`<tr style="cursor:pointer" onclick="openChartModal('${x.code}','${x.name}','')">
-    <td><b>${x.name}</b> <span style="color:#8b949e;font-size:11px">${x.code}</span>${x.earn_up?' <span style="color:#3fb950;font-size:11px;border:1px solid #238636;border-radius:8px;padding:0 5px">📈 실적</span>':''}${x.market_cap?`<br><span class="ts">시총 ${cdWon(x.market_cap)}</span>`:''}</td>
+    <td><b>${x.name}</b> <span style="color:#8b949e;font-size:11px">${x.code}</span>${flagTag(x)}${x.earn_up?' <span style="color:#3fb950;font-size:11px;border:1px solid #238636;border-radius:8px;padding:0 5px">📈 실적</span>':''}${x.market_cap?`<br><span class="ts">시총 ${cdWon(x.market_cap)}</span>`:''}</td>
     <td data-label="근거">${x.tags.map(t=>`<b style="color:${tagCol[t]||'#c9d1d9'}">${t}</b>`).join(' · ')}${x.loud?' <span class="ts" style="color:#d29922" title="거래 2배 넘게 터지며 돌파 — 3년 +0.8%p로 약했음">📢 거래 폭발(약함)</span>':''}
       <br><span class="ts">${x.box?`박스 상단 ${x.box.box_top.toLocaleString()}원 대비 ${x.box.pos_pct>=0?'+':''}${x.box.pos_pct}%`:`20일 고점 ${x.off_high_pct}%`}${x.stop_price?` · 손절선 ${x.stop_price.toLocaleString()}원`:''}</span></td>
     <td data-label="오늘"><span style="color:${x.change_pct>=0?'#f85149':'#58a6ff'}">${x.change_pct>=0?'+':''}${x.change_pct}%</span> · 거래 ${x.tv_x}배</td>
@@ -1219,6 +1224,12 @@ function cdMatch(it, terms){
   });
 }
 // 20일선 이격도 표시: +30%↑ 과열, +20%↑ 주의 (3년 확인 기준)
+function flagTag(x){   // 투자주의·경고·위험, 단기과열, 관리종목, 신용불가
+  const f=(x&&x.flags)||[]; if(!f.length) return '';
+  const col=t=>t==='투자위험'||t==='투자경고'||t==='관리종목'?'#f85149':t==='신용불가'?'#d29922':'#e3b341';
+  return ' '+f.map(t=>`<span style="font-size:10.5px;color:${col(t)};border:1px solid ${col(t)};border-radius:6px;padding:0 4px;white-space:nowrap" title="${t==='신용불가'?'신용 매수 불가 (증거금 100%, 한국투자증권 기준)':t}">${t}</span>`).join(' ');
+}
+function noFlag(x, warnOff, credOff){ const f=x.flags||[]; return !(warnOff&&f.some(t=>t!=='신용불가')) && !(credOff&&f.includes('신용불가')); }
 function gapTag(g){
   if(g==null) return '';
   const col = g>=30?'#f85149':g>=20?'#d29922':'#8b949e';
@@ -1240,7 +1251,7 @@ function renderCandidates(){
   const sortKey = document.getElementById('cd-sort').value;
   const val = {value:x=>x.trading_value||0, cap:x=>x.market_cap||0, turnover:x=>x.turnover_pct||0, up:x=>x.change_pct||0}[sortKey];
   const items = d.items
-    .filter(it=>(!pat||it.patterns.some(p=>p.type===pat)) && cdMatch(it, terms))
+    .filter(it=>(!pat||it.patterns.some(p=>p.type===pat)) && cdMatch(it, terms) && noFlag(it, document.getElementById('cd-noflag').checked, document.getElementById('cd-nocred').checked))
     .sort((a,b)=>val(b)-val(a));
   document.getElementById('cd-info').textContent = d.trading_date ? `기준일: ${d.trading_date} · ${items.length}개${items.length!==d.items.length?' / 전체 '+d.items.length+'개':''}` : '';
   if(!items.length){
@@ -1253,7 +1264,7 @@ function renderCandidates(){
       + (it.sector_name?`<br><span class="ts">${it.sector_name} · 20일 ${it.sector_ret20>=0?'+':''}${it.sector_ret20}%</span>`:'');
     const pats = it.patterns.map(p=>`<span style="display:inline-block;margin:0 4px 3px 0;padding:1px 7px;border-radius:10px;border:1px solid ${tagColor[p.type]};color:${tagColor[p.type]};font-size:11.5px">${p.type}${p.grade?'·'+p.grade:''}</span><br><span class="ts">${p.detail}</span>`).join('<br>');
     return `<tr style="cursor:pointer" onclick="openChartModal('${it.code}','${it.name}','')">
-      <td><b>${it.name}</b> <span style="color:#8b949e;font-size:11px">${it.code}</span>${it.earn_up?' <span style="color:#3fb950;font-size:11px;border:1px solid #238636;border-radius:8px;padding:0 5px" title="영업이익 +30%·매출 +10%, 120일 안 공시">📈 실적</span>':''}${it.market_cap?`<br><span class="ts">시총 ${cdWon(it.market_cap)}</span>`:''}</td>
+      <td><b>${it.name}</b> <span style="color:#8b949e;font-size:11px">${it.code}</span>${flagTag(it)}${it.earn_up?' <span style="color:#3fb950;font-size:11px;border:1px solid #238636;border-radius:8px;padding:0 5px" title="영업이익 +30%·매출 +10%, 120일 안 공시">📈 실적</span>':''}${it.market_cap?`<br><span class="ts">시총 ${cdWon(it.market_cap)}</span>`:''}</td>
       <td data-label="업종 · 테마">${indHtml}</td>
       <td data-label="모양" style="font-size:12px">${pats}</td>
       <td data-label="현재가" style="text-align:right">${it.close_price.toLocaleString()}원${gapTag(it.gap20_pct)}<br><span style="color:${it.change_pct>=0?'#f85149':'#3b82f6'};font-size:11px">${it.change_pct>=0?'+':''}${it.change_pct.toFixed(2)}%</span><br><span class="ts">거래대금 ${cdWon(it.trading_value||0)}${it.turnover_pct!=null?' · 회전율 '+it.turnover_pct.toFixed(1)+'%':''}</span></td>
@@ -1667,6 +1678,7 @@ function showToast(msg,err=false){
 }
 
 // 주소 끝의 #탭이름(새로고침 전에 보던 탭, switchTab이 남긴다)으로 시작
+try{ for(const id of ['jb-noflag','jb-nocred','cd-noflag','cd-nocred']){ const v=localStorage.getItem(id); if(v!==null) document.getElementById(id).checked=v==='1'; } }catch(e){}
 switchTab(location.hash ? location.hash.slice(1) : 'jongbe');
 const chartQuery=new URLSearchParams(location.search);
 if (/^[0-9A-Z]{6}$/.test(chartQuery.get('chart')||'')) openChartModal(chartQuery.get('chart'),chartQuery.get('name')||chartQuery.get('chart'),'');

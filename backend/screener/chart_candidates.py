@@ -343,5 +343,9 @@ def scan(db: Session) -> dict:
         # 백테스트에서 두 기간 모두 가장 좋았던 조합: 강한 대표 테마 + 손절 3~6%
         items[-1]["best_combo"] = items[-1]["strong_sector"] and items[-1]["stop_zone"] == "적정"
     items.sort(key=lambda x: (x["sector_score"] is None, -(x["sector_score"] or 0), -len(x["patterns"])))
+    from backend.services.stock_flags import get as flags_get  # noqa: PLC0415
+    fl = flags_get([x["code"] for x in items])
+    for x in items:
+        x["flags"] = fl.get(x["code"], {}).get("flags", [])
     return {"trading_date": latest.isoformat(), "market": current_regime(db), "items": items}
 
