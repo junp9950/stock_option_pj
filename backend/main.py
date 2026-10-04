@@ -558,6 +558,11 @@ select{background:#21262d;border:1px solid #30363d;color:#c9d1d9;padding:6px 10p
         <option value="설거지">설거지만</option>
         <option value="">설거지·무너짐 포함 전체</option>
       </select>
+      <label style="font-size:13px;color:#c9d1d9">시총
+        <select id="vr-mincap" onchange="try{localStorage.setItem('vr-mincap',this.value)}catch(e){};renderVolumeRecords()">
+          <option value="0">전체</option><option value="500">500억 이상</option><option value="1000">1,000억 이상</option>
+          <option value="3000">3,000억 이상</option><option value="10000">1조 이상</option>
+        </select></label>
       <span class="ts" id="vr-info"></span>
       <label style="display:flex;align-items:center;gap:5px;font-size:13px;color:#c9d1d9;cursor:pointer"><input type="checkbox" id="vr-signal" onchange="renderVolumeRecords()"> 🎯 진입 신호만</label>
     </div>
@@ -1381,7 +1386,8 @@ function renderVolumeRecords(){
   if(!_vrData){ body.innerHTML = '<tr><td colspan="5" style="color:#f85149;text-align:center;padding:20px">로딩 실패</td></tr>'; return; }
   const sel = document.getElementById('vr-stage').value;
   const sigOnly = document.getElementById('vr-signal').checked;
-  const items = _vrData.items.filter(x=> (sel==='live' ? !['무너짐','설거지'].includes(x.stage) : (!sel || x.stage===sel)) && (!sigOnly || x.entry_signal));
+  const vmin = parseFloat(document.getElementById('vr-mincap').value)*1e8||0;
+  const items = _vrData.items.filter(x=> (sel==='live' ? !['무너짐','설거지'].includes(x.stage) : (!sel || x.stage===sel)) && (!sigOnly || x.entry_signal) && (!vmin || !x.market_cap || x.market_cap>=vmin));
   const cnt = s=>_vrData.items.filter(x=>x.stage===s).length;
   const nsig = _vrData.items.filter(x=>x.entry_signal).length;
   document.getElementById('vr-sum').textContent = `${_vrData.items.filter(x=>!['무너짐','설거지'].includes(x.stage)).length}개 · 🎯 진입 신호 ${nsig}`;
@@ -1773,7 +1779,8 @@ function showToast(msg,err=false){
     d.addEventListener('toggle',()=>{ st[k]=d.open; try{ localStorage.setItem('cd-open',JSON.stringify(st)); }catch(e){} });
   });
 })();
-try{ for(const id of ['jb-noflag','jb-nocred','cd-noflag','cd-nocred']){ const v=localStorage.getItem(id); if(v!==null) document.getElementById(id).checked=v==='1'; } }catch(e){}
+try{ try{ const v=localStorage.getItem('vr-mincap'); if(v!==null) document.getElementById('vr-mincap').value=v; }catch(e){}
+  for(const id of ['jb-noflag','jb-nocred','cd-noflag','cd-nocred']){ const v=localStorage.getItem(id); if(v!==null) document.getElementById(id).checked=v==='1'; } }catch(e){}
 switchTab(location.hash ? location.hash.slice(1) : 'jongbe');
 const chartQuery=new URLSearchParams(location.search);
 if (/^[0-9A-Z]{6}$/.test(chartQuery.get('chart')||'')) openChartModal(chartQuery.get('chart'),chartQuery.get('name')||chartQuery.get('chart'),'');
