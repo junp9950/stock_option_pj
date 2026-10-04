@@ -656,6 +656,7 @@ async function loadJongbe(){
   if(_vrData) renderLimitUp(); else loadVolumeRecords();
 }
 // 시총 기준(억 원) 미만은 숨긴다. 시총을 모르는 종목(0)은 그대로 보여 준다.
+const _jbOpen={};
 function renderJongbe(){
   const d=_jbData; if(!d) return;
   const min=parseFloat(document.getElementById('jb-mincap').value)*1e8||0;
@@ -688,14 +689,22 @@ function renderJongbe(){
   const cnt=t=>ch.filter(x=>x.tags.includes(t)).length;
   document.getElementById('jb-ch-info').textContent=`${ch.length}개 · 🚀 돌파 ${cnt('🚀 돌파')} · 돌파 대기 ${cnt('돌파 대기')} · 저가 지킴 ${cnt('저가 지킴')} · 눌림 ${cnt('눌림')} · 버팀 ${cnt('버팀')}`;
   const tagCol={'🚀 돌파':'#3fb950','돌파 대기':'#c9d1d9','저가 지킴':'#3fb950','눌림':'#58a6ff','버팀':'#e3b341'};
-  document.getElementById('jb-charts').innerHTML=ch.length?ch.map(x=>`<tr style="cursor:pointer" onclick="openChartModal('${x.code}','${x.name}','')">
+  const rowHtml=x=>`<tr style="cursor:pointer" onclick="openChartModal('${x.code}','${x.name}','')">
     <td><b>${x.name}</b> <span style="color:#8b949e;font-size:11px">${x.code}</span>${x.earn_up?' <span style="color:#3fb950;font-size:11px;border:1px solid #238636;border-radius:8px;padding:0 5px">📈 실적</span>':''}${x.market_cap?`<br><span class="ts">시총 ${cdWon(x.market_cap)}</span>`:''}</td>
     <td data-label="근거">${x.tags.map(t=>`<b style="color:${tagCol[t]||'#c9d1d9'}">${t}</b>`).join(' · ')}${x.loud?' <span class="ts" style="color:#d29922" title="거래 2배 넘게 터지며 돌파 — 3년 +0.8%p로 약했음">📢 거래 폭발(약함)</span>':''}
       <br><span class="ts">${x.box?`박스 상단 ${x.box.box_top.toLocaleString()}원 대비 ${x.box.pos_pct>=0?'+':''}${x.box.pos_pct}%`:`20일 고점 ${x.off_high_pct}%`}${x.stop_price?` · 손절선 ${x.stop_price.toLocaleString()}원`:''}</span></td>
     <td data-label="오늘"><span style="color:${x.change_pct>=0?'#f85149':'#58a6ff'}">${x.change_pct>=0?'+':''}${x.change_pct}%</span> · 거래 ${x.tv_x}배</td>
     <td data-label="섹터" style="font-size:12px">${x.families.join(', ')}</td>
     <td data-label="종가" style="text-align:right">${x.close.toLocaleString()}원${gapTag(x.gap20_pct)}</td>
-  </tr>`).join(''):'<tr><td colspan="5" style="color:#8b949e;text-align:center;padding:16px">오늘은 해당 종목이 없습니다</td></tr>';
+  </tr>`;
+  const brk=ch.filter(x=>x.tags.some(t=>t==='🚀 돌파'||t==='돌파 대기')), pre=ch.filter(x=>!brk.includes(x));
+  const grp=(title,sub,arr,key)=>{
+    const open=_jbOpen[key], shown=open?arr:arr.slice(0,8);
+    return `<tr><td colspan="5" style="background:#0d1117;padding:10px 4px 6px;border:none"><b style="color:#e6edf3">${title}</b> <span class="ts">${arr.length}개 · ${sub}</span></td></tr>`
+      +(arr.length?shown.map(rowHtml).join(''):'<tr><td colspan="5" class="ts" style="text-align:center;padding:10px">오늘은 없습니다</td></tr>')
+      +(arr.length>8?`<tr><td colspan="5" style="text-align:center;border:none"><a href="#" style="color:#58a6ff;font-size:12.5px" onclick="_jbOpen['${key}']=!_jbOpen['${key}'];renderJongbe();return false">${open?'접기':`${arr.length-8}개 더 보기`}</a></td></tr>`:'');
+  };
+  document.getElementById('jb-charts').innerHTML=grp('🚀 돌파형','박스 상단 막 넘음·-2% 이내 (20일 +2.4~2.9%p)',brk,'b')+grp('🌱 선취매형','터지기 전 조용한 눌림·저가 지킴·버팀 (20일 +1.3~2.2%p)',pre,'p');
   const mv=d.movers||[];
   document.getElementById('jb-movers').innerHTML=mv.length?mv.map(m=>`<span onclick="jbMover('${m.family}')" style="cursor:pointer;padding:7px 11px;border:1px solid ${m.why.length>=2?'#3fb950':'#30363d'};border-radius:8px;font-size:12.5px">
       <b style="color:#e6edf3">${m.family}</b> <span class="ts">${m.rank}위</span><br><span class="ts" style="color:#c9d1d9">${m.why.join(' · ')}</span></span>`).join('')
