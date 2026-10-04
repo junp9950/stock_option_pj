@@ -1,4 +1,6 @@
 """바닥 박스 감시 (한선엔지니어링형): 120일 고점 -40%↓ 빠진 뒤 15일 폭 13%↓ 박스 + 거래 평소(그 전 60일) 0.6배↓.
++ 1년 저점보다 15%↑ 위(아직 신저가를 깨며 내려가는 종목 제외 — 2026-10-04 JYP가 3년 최저가에서 잡혔던 문제)
++ 1년 안에 저점 대비 2배↑ 급등 이력(한선처럼 급등 → 급락 → 바닥 다지기).
 3년(632건): 사 두면 20일 -0.7%p·40일 -2.8%p로 손해, 20일 안 터질 확률 18%(아무 종목 15%) → 매수 신호가 아니라 감시용.
 '터짐' = 어제까지 박스였는데 오늘 +8%↑·거래 3배↑ 양봉 (한선 9/16 +24%). 그날 섹터·시장이 받쳐 주면 들어갈 후보."""
 from __future__ import annotations
@@ -15,13 +17,17 @@ N, MAX_BAND, MAX_DD, MAX_DRY = 15, 0.13, -0.40, 0.6
 def scan(db: Session) -> dict:
     latest = db.execute(text("select max(trading_date) from spot_daily_prices")).scalar()
     px = pd.read_sql(text("select stock_code, trading_date, open_price o, high_price h, low_price l, close_price c, trading_value tv, change_pct ch "
-                          "from spot_daily_prices where trading_date >= :d"), db.connection(), params={"d": latest - timedelta(days=300)})
+                          "from spot_daily_prices where trading_date >= :d"), db.connection(), params={"d": latest - timedelta(days=420)})
     P = {k: px.pivot(index="trading_date", columns="stock_code", values=k).sort_index() for k in ("o", "h", "l", "c", "tv", "ch")}
     C, O, H, L, TV, CH = (P[k] for k in ("c", "o", "h", "l", "tv", "ch"))
     band = H.rolling(N).max() / L.rolling(N).min() - 1
     dd = C / C.rolling(120).max() - 1
     dry = TV.rolling(N).mean() / TV.shift(N).rolling(60).mean()
-    box = (band <= MAX_BAND) & (dd <= MAX_DD) & (dry <= MAX_DRY) & (TV.rolling(5).mean() >= 3e8) & (C >= 1000)
+    low250 = L.rolling(250, min_periods=120).min().shift(N)
+    above_low = C / low250 - 1
+    surge = H.rolling(250, min_periods=120).max() / low250 - 1
+    box = ((band <= MAX_BAND) & (dd <= MAX_DD) & (dry <= MAX_DRY) & (TV.rolling(5).mean() >= 3e8) & (C >= 1000)
+           & (above_low >= 0.15) & (surge >= 1.0))
     tvx = TV / TV.shift(1).rolling(20).mean()
     names, caps = {}, {}
     for code, name, cap in db.execute(text("select code, name, market_cap from stocks")):
