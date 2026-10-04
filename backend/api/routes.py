@@ -1476,6 +1476,22 @@ def get_jongbe_performance(db: Session = Depends(get_db)):
     return performance(db)
 
 
+@router.get("/stocks/short-watch")
+def get_short_watch(q: str = "", db: Session = Depends(get_db)):
+    """공매도·대차잔고 감시: 종목명이나 코드(쉼표, 최대 8개)."""
+    from backend.services.float_ratio import get as float_get  # noqa: PLC0415
+    from backend.services.short_watch import watch  # noqa: PLC0415
+    out = []
+    for t in [x.strip() for x in q.replace(chr(10), ",").split(",") if x.strip()][:8]:
+        row = db.execute(select(Stock.code, Stock.name).where((Stock.code == t) | (Stock.name == t))).first()
+        if not row:
+            out.append({"query": t, "found": False}); continue
+        fr = float_get([row.code]).get(row.code)
+        w = watch(row.code, fr[0] if fr else None, fr[1] if fr else None)
+        out.append({"query": t, "found": True, "name": row.name, "float_ratio": fr[1] if fr else None, **w})
+    return {"items": out}
+
+
 @router.get("/screener/support-setups")
 def get_support_setups(db: Session = Depends(get_db)):
     """손절 짧은 자리: 추세선 지지(전진건설로봇형) · 수평 지지 수렴(SK이터닉스형)."""

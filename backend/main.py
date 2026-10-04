@@ -325,6 +325,15 @@ select{background:#21262d;border:1px solid #30363d;color:#c9d1d9;padding:6px 10p
     <div id="jb-check" style="margin-top:10px"></div>
   </div>
 
+  <div style="border:1px solid #30363d;border-radius:10px;padding:12px 16px;margin-bottom:20px">
+    <b style="color:#e6edf3">🔎 공매도·대차잔고 감시</b> <span class="ts">대차잔고 = 빌려 간 주식(공매도 실탄). 교환사채·유상증자 앞두고 늘면 매도 압력. 종목명·코드 쉼표로 (브라우저 기억)</span>
+    <div style="display:flex;gap:8px;margin-top:8px;flex-wrap:wrap">
+      <input id="sw-q" placeholder="예: 가온전선, 티에스이" style="flex:1;min-width:220px;background:#0d1117;border:1px solid #30363d;color:#c9d1d9;padding:6px 10px;border-radius:6px">
+      <button class="btn btn-sm" onclick="swCheck()">확인</button>
+    </div>
+    <div id="sw-out" style="margin-top:10px"></div>
+  </div>
+
   <details class="why"><summary>📒 이 화면 종베 후보의 실제 다음 날 결과</summary>
   <div id="jb-perf" class="ts">로딩 중…</div></details>
 </div>
@@ -698,6 +707,7 @@ async function loadJongbe(){
       ${f.status?` · <b style="color:${stc[f.status]}">${f.status}</b>`:''}</span>`;}).join('');
   renderJongbe();
   try{ const saved=localStorage.getItem('jb-q'); if(saved&&!document.getElementById('jb-q').value){document.getElementById('jb-q').value=saved; jbCheck();} }catch(e){}
+  try{ const sw=localStorage.getItem('sw-q'); if(sw&&!document.getElementById('sw-q').value){document.getElementById('sw-q').value=sw; swCheck();} }catch(e){}
   loadJongbePerf();
   if(_vrData) renderLimitUp(); else loadVolumeRecords();
   loadValueRecords();
@@ -787,6 +797,28 @@ async function jbMover(fam){
   const ls=(f.leaders||[]);
   el.innerHTML=`<div style="border:1px solid #30363d;border-radius:8px;padding:9px 12px;font-size:12.5px"><b style="color:#e6edf3">${fam}</b> <span class="ts">20일 ${f.ret20_pct>=0?'+':''}${f.ret20_pct}% · 5일 ${f.ret5_pct>=0?'+':''}${f.ret5_pct}% · 오늘 거래 평소 ${f.tv1_x}배</span><br>`
     +(ls.length?'오늘 돈 붙은 종목: '+ls.map(x=>`<b style="cursor:pointer;color:#e6edf3" onclick="openChartModal('${x.code}','${x.name}','')">${x.name}</b> <span style="color:${x.change_pct>=0?'#f85149':'#58a6ff'}">${x.change_pct>=0?'+':''}${x.change_pct}%</span>`).join(' · '):'<span class="ts">오늘 거래 2배 넘게 붙은 종목은 없습니다</span>')+'</div>';
+}
+async function swCheck(){
+  const q=document.getElementById('sw-q').value.trim();
+  try{ localStorage.setItem('sw-q',q); }catch(e){}
+  const el=document.getElementById('sw-out');
+  if(!q){ el.innerHTML=''; return; }
+  el.innerHTML='<span class="ts">불러오는 중… (종목당 1~2초)</span>';
+  const d=await fetch(`${API}/stocks/short-watch?q=${encodeURIComponent(q)}`).then(r=>r.ok?r.json():null).catch(()=>null);
+  if(!d){ el.textContent='불러오지 못했습니다'; return; }
+  const n=v=>v==null?'-':Math.round(v).toLocaleString();
+  const sg=v=>v==null?'-':(v>0?'+':'')+Math.round(v).toLocaleString();
+  el.innerHTML=d.items.map(x=>{
+    if(!x.found) return `<div class="ts">${x.query}: 못 찾음</div>`;
+    const hot5=x.loan_5d_chg!=null&&x.loan_now&&x.loan_5d_chg/x.loan_now>=0.05;
+    const shortUp=x.short_pct_5d!=null&&x.short_pct_prev20&&x.short_pct_5d>=x.short_pct_prev20*1.5;
+    const rows=(x.days||[]).slice(-10).reverse().map(r=>`<tr><td>${r.date.slice(5)}</td><td style="text-align:right">${n(r.close)}</td><td style="text-align:right">${r.short_pct!=null?r.short_pct.toFixed(1)+'%':'-'}</td><td style="text-align:right">${n(r.loan_bal)}</td><td style="text-align:right;color:${(r.loan_new||0)>(r.loan_repay||0)?'#f85149':'#58a6ff'}">${sg((r.loan_new||0)-(r.loan_repay||0))}</td></tr>`).join('');
+    return `<div style="padding:8px 0;border-top:1px solid #21262d">
+      <b style="color:#e6edf3">${x.name}</b> <span class="ts">대차잔고 ${n(x.loan_now)}주${x.loan_pct_shares!=null?` (발행주식의 ${x.loan_pct_shares}%`+(x.loan_pct_float!=null?`, 유통주식의 <b style="color:${x.loan_pct_float>=10?'#f85149':'#c9d1d9'}">${x.loan_pct_float}%</b>`:'')+')':''}
+      · 5일 ${sg(x.loan_5d_chg)}주 · 20일 ${sg(x.loan_20d_chg)}주 · 공매도 비중 최근 5일 ${x.short_pct_5d??'-'}% (그 전 ${x.short_pct_prev20??'-'}%)</span>
+      ${hot5?' <b style="color:#f85149;font-size:12px">⚠ 대차잔고 5일 새 5%↑ 증가</b>':''}${shortUp?' <b style="color:#f85149;font-size:12px">⚠ 공매도 비중 증가</b>':''}
+      <details class="why" style="margin:4px 0 0"><summary>최근 10일 보기</summary>
+        <table style="font-size:12px"><thead><tr><th>날짜</th><th>종가</th><th>공매도 비중</th><th>대차잔고</th><th>대차 순증</th></tr></thead><tbody>${rows}</tbody></table></details></div>`;}).join('');
 }
 async function jbCheck(){
   const q=document.getElementById('jb-q').value.trim();
