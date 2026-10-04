@@ -83,7 +83,19 @@ def _fundamentals() -> dict[str, dict]:
     """종목별 가장 최근 공시 분기: 영업이익·매출 전년 동기 대비, 영업이익률 (6시간 캐시)."""
     if time.time() - _fund_cache["t"] < 6 * 3600 and _fund_cache["v"]:
         return _fund_cache["v"]
-    from backend.services.earnings_screen import build_pit  # noqa: PLC0415
+    import json  # noqa: PLC0415
+    from pathlib import Path  # noqa: PLC0415
+    from backend.services.earnings_screen import RAW, build_pit  # noqa: PLC0415
+    # 원본 공시 파일 수천 개를 다시 읽는 데 20초 → 원본이 안 바뀌었으면 디스크에 저장한 결과를 쓴다
+    stamp = max((f.stat().st_mtime for f in RAW.glob("*.json")), default=0)
+    disk = Path.home() / ".support_fund.json"
+    try:
+        saved = json.loads(disk.read_text(encoding="utf-8"))
+        if saved.get("stamp") == stamp:
+            _fund_cache.update(t=time.time(), v=saved["v"])
+            return saved["v"]
+    except (OSError, ValueError):
+        pass
     pit = build_pit()
     out = {}
     if not pit.empty:
@@ -101,6 +113,10 @@ def _fundamentals() -> dict[str, dict]:
                 "grow": bool(ok(op) and ok(ob) and op > 0 and op > ob),
             }
     _fund_cache.update(t=time.time(), v=out)
+    try:
+        disk.write_text(json.dumps({"stamp": stamp, "v": out}, ensure_ascii=False), encoding="utf-8")
+    except OSError:
+        pass
     return out
 
 

@@ -575,7 +575,7 @@ select{background:#21262d;border:1px solid #30363d;color:#c9d1d9;padding:6px 10p
     </table>
   </details>
   <details class="sec" data-k="bb">
-    <summary>👀 바닥 박스 감시 (한선엔지니어링형) <span class="ts" id="bb-info"></span></summary>
+    <summary>👀 바닥 박스 감시 <span class="ts" id="bb-info"></span></summary>
 
     <p class="lead" style="margin-top:6px">급등했다 크게 빠진 뒤(120일 고점 -40%↓, 1년 저점보다는 15%↑ 위) 15일째 좁은 박스(폭 13%↓)에서 거래 없이 버티는 종목. 아직 신저가를 깨는 종목은 뺍니다. <b>추천이 아니라 감시용</b> — 박스에서 터지는 날(🔔) 섹터·시장이 받쳐 주면 봅니다.</p>
     <details class="why"><summary>근거 보기</summary>
