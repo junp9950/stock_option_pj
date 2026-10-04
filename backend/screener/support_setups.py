@@ -6,8 +6,12 @@ B 수평 지지 수렴 (SK이터닉스형): 120일 안 거래 터짐(박스 전)
    박스 하단을 60일 동안 3번↑ 닿음, 거래 바닥(5일 / 120일 최대 0.15↓), 1년 저점보다 15%↑ 위, 지금 하단 위 4% 안. 손절 = 하단 -2% 아래 종가.
 3년(종가 매수, 손절선 종가 이탈 시 정리, +3R에 절반 익절 후 본전, 20일): A 578건 평균 +0.10R·이김 37%·손절 59%·+3R 23%,
 B 619건 +0.05R·+3R 21%, B + 뜨거운 섹터(상위 5) 143건 +0.22R. 잃을 땐 작고(-1R) 4~5번에 1번 3배 이상 먹는 구조.
+실적(그 시점 공시된 최근 분기, 전년 동기 대비)으로 크게 갈림 — 두 모양 합쳐 1,012건: 실적 개선(영업익 +30%·매출 +10%) +0.52R·이김 48%,
+영업이익 흑자+증가 +0.36R, 이익률 10%↑ +0.40R, 실적 개선 아님 +0.06R, 영업 적자 -0.20R(손절 63%).
 """
 from __future__ import annotations
+
+import time
 
 from datetime import timedelta
 
@@ -72,6 +76,34 @@ def _flat(lo, hi, cl, tvv, tvx, chv, low250, W=20):
             "dist_pct": round(dist * 100, 1), "dry": round(float(dry), 3), "since_burst": 119 - int(sp[-1])}
 
 
+_fund_cache: dict = {"t": 0.0, "v": {}}
+
+
+def _fundamentals() -> dict[str, dict]:
+    """종목별 가장 최근 공시 분기: 영업이익·매출 전년 동기 대비, 영업이익률 (6시간 캐시)."""
+    if time.time() - _fund_cache["t"] < 6 * 3600 and _fund_cache["v"]:
+        return _fund_cache["v"]
+    from backend.services.earnings_screen import build_pit  # noqa: PLC0415
+    pit = build_pit()
+    out = {}
+    if not pit.empty:
+        pit = pit.dropna(subset=["filed"]).sort_values("filed")
+        for r in pit.groupby("stock_code").tail(1).itertuples():
+            op, ob, rev, rb = r.op_income, r.op_income_base, r.revenue, r.revenue_base
+            ok = lambda v: v == v and v is not None  # noqa: E731
+            out[r.stock_code] = {
+                "period": f"{r.year} {r.quarter}분기",
+                "op_yoy": round((op - ob) / abs(ob) * 100) if ok(op) and ok(ob) and ob else None,
+                "rev_yoy": round((rev / rb - 1) * 100) if ok(rev) and ok(rb) and rb else None,
+                "margin": round(op / rev * 100, 1) if ok(op) and ok(rev) and rev else None,
+                "loss": bool(ok(op) and op <= 0),
+                "good": bool(ok(op) and ok(ob) and ok(rb) and op > 0 and ob > 0 and rb > 0 and (op - ob) / ob >= 0.3 and rev / rb >= 1.1),
+                "grow": bool(ok(op) and ok(ob) and op > 0 and op > ob),
+            }
+    _fund_cache.update(t=time.time(), v=out)
+    return out
+
+
 def scan(db: Session) -> dict:
     latest = db.execute(text("select max(trading_date) from spot_daily_prices")).scalar()
     px = pd.read_sql(text("select stock_code, trading_date, high_price h, low_price l, close_price c, trading_value tv, change_pct ch "
@@ -106,7 +138,12 @@ def scan(db: Session) -> dict:
                          stop_pct=round((r["stop"] / c - 1) * 100, 1), target_pct=round((r["target"] / c - 1) * 100, 1),
                          families=fam_of.get(code, [])[:2], market_cap=caps.get(code, 0))
                 items.append(r)
-    items.sort(key=lambda x: x["stop_pct"], reverse=True)    # 손절이 가까운 순
+    fund = _fundamentals()
+    for x in items:
+        f = fund.get(x["code"])
+        x["fund"] = f
+        x["fund_tier"] = 0 if not f else (3 if f["good"] else 2 if f["grow"] else 0 if f["loss"] else 1)
+    items.sort(key=lambda x: (-x["fund_tier"], -x["stop_pct"]))    # 실적 좋은 순 → 손절이 가까운 순
     from backend.services.stock_flags import get as flags_get  # noqa: PLC0415
     fl = flags_get([x["code"] for x in items])
     for x in items:

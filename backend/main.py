@@ -531,7 +531,8 @@ select{background:#21262d;border:1px solid #30363d;color:#c9d1d9;padding:6px 10p
     <details class="why"><summary>근거 보기</summary>
       3년(종가 매수, 손절선 아래 종가면 정리, 손절폭의 3배(+3R)에 절반 익절 후 나머지 본전 손절, 최대 20일):
       추세선 지지 578건 평균 +0.10R · 이김 37% · 손절 59% · <b>+3R 도달 23%</b> / 수평 지지 수렴 619건 +0.05R · +3R 21%, 뜨거운 섹터 안이면 +0.22R.
-      평균이 크게 남는 자리는 아니고 <b>잃을 땐 손절폭만큼 작게, 4~5번에 1번은 3배 이상</b> 먹는 구조입니다. 손절선은 꼭 지키기.
+      평균이 크게 남는 자리는 아니고 <b>잃을 땐 손절폭만큼 작게, 4~5번에 1번은 3배 이상</b> 먹는 구조입니다. 손절선은 꼭 지키기.<br>
+      <b>실적으로 크게 갈림</b>(그 시점 공시된 최근 분기, 1,012건): <b style="color:#3fb950">📈 실적 개선(영업익 +30%·매출 +10%) +0.52R · 이김 48%</b>, 이익 증가 +0.36R, 이익률 10%↑ +0.40R, 실적 개선 아님 +0.06R, <b style="color:#f85149">영업 적자 -0.20R · 손절 63%</b>. 그래서 실적 좋은 순으로 보여 줍니다.
     </details>
     <div id="ss-body" style="display:flex;flex-wrap:wrap;gap:6px" class="ts">로딩 중…</div>
   </div>
@@ -1327,7 +1328,8 @@ async function loadSupportSetups(){
   el.innerHTML=d.items.length?d.items.map(x=>`<span onclick="openChartModal('${x.code}','${x.name}','')" style="cursor:pointer;border:1px solid ${x.type==='추세선 지지'?'#bc8cff':'#58a6ff'};border-radius:8px;padding:6px 10px;font-size:12.5px;line-height:1.55">
     <b style="color:#e6edf3">${x.name}</b>${flagTag(x)} <span style="font-size:11px;color:${x.type==='추세선 지지'?'#bc8cff':'#58a6ff'}">${x.type}</span><br>
     <span style="color:#58a6ff">손절 ${x.stop.toLocaleString()}원 (${x.stop_pct}%)</span> · <span style="color:#f85149">위 ${x.target.toLocaleString()}원 (+${x.target_pct}%)</span><br>
-    <span class="ts">현재 ${x.close.toLocaleString()}원 · 거래 터질 때의 ${x.dry}배 · 터진 뒤 ${x.since_burst}일${x.families.length?' · '+x.families[0]:''}</span></span>`).join('')
+    <span class="ts">현재 ${x.close.toLocaleString()}원 · 거래 터질 때의 ${x.dry}배 · 터진 뒤 ${x.since_burst}일${x.families.length?' · '+x.families[0]:''}</span>
+    ${x.fund?`<br><span style="font-size:11.5px;color:${x.fund.good?'#3fb950':x.fund.grow?'#c9d1d9':x.fund.loss?'#f85149':'#8b949e'}">${x.fund.good?'📈 실적 개선':x.fund.grow?'이익 증가':x.fund.loss?'⚠ 영업 적자':'이익 감소'} · ${x.fund.period} 영업익 ${x.fund.op_yoy!=null?(x.fund.op_yoy>0?'+':'')+x.fund.op_yoy+'%':'-'} · 매출 ${x.fund.rev_yoy!=null?(x.fund.rev_yoy>0?'+':'')+x.fund.rev_yoy+'%':'-'}${x.fund.margin!=null?' · 이익률 '+x.fund.margin+'%':''}</span>`:''}</span>`).join('')
     :'지금은 없습니다';
 }
 
