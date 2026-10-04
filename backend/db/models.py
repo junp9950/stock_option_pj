@@ -391,6 +391,7 @@ class Suggestion(Base, TimestampMixin):
     content: Mapped[str] = mapped_column(Text)
     status: Mapped[str] = mapped_column(String(10), default="접수", index=True)
     reply: Mapped[str] = mapped_column(Text, default="")
+    image_data: Mapped[str | None] = mapped_column(Text, nullable=True)   # 사진 JSON 배열 (종목토론과 같은 형식)
 
 
 class JobLog(Base, TimestampMixin):

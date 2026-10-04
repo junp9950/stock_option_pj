@@ -7,18 +7,28 @@ button{background:#1f6feb;color:#fff;border:0;border-radius:7px;padding:9px 16px
 .row{display:flex;gap:10px;align-items:center;margin-top:10px}.row .grow{flex:1}.bar{display:flex;flex-wrap:wrap;gap:6px;margin-top:18px}.bar button{background:transparent;color:#cbd5e1;border:1px solid #30363d;padding:6px 12px}.bar button.on{background:#1f6feb;color:#fff;border-color:#1f6feb}
 .item{border-top:1px solid #2b3340;padding:14px 0}.item:first-child{border-top:0}.meta{display:flex;flex-wrap:wrap;gap:8px;align-items:center;font-size:12px;color:#94a3b8}.content{white-space:pre-wrap;margin:6px 0 0;color:#e6edf3}
 .st{font-size:12px;padding:2px 9px;border-radius:12px;border:1px solid}.st-접수{color:#93c5fd;border-color:#1f6feb}.st-진행{color:#d29922;border-color:#9e6a03}.st-완료{color:#3fb950;border-color:#238636}.st-보류{color:#8b949e;border-color:#484f58}
+.paste-zone{border:1.5px dashed #30363d;border-radius:8px;padding:10px;margin-top:10px;font-size:12.5px;color:#8b949e;text-align:center;cursor:pointer}
+.previews{display:flex;flex-wrap:wrap;gap:10px}.preview{position:relative;margin-top:8px}.preview img{width:90px;height:90px;object-fit:cover;border-radius:8px;border:1px solid #30363d;display:block}
+.preview .rm{position:absolute;top:-8px;right:-8px;background:#f85149;color:#fff;border:0;border-radius:50%;width:22px;height:22px;line-height:22px;padding:0;font-size:13px}
+.shots{display:flex;flex-wrap:wrap;gap:6px;margin-top:8px}.shots img{width:140px;height:140px;object-fit:cover;border-radius:8px;border:1px solid #30363d;cursor:zoom-in}
+.lightbox{display:none;position:fixed;inset:0;background:rgba(0,0,0,.85);z-index:50;align-items:center;justify-content:center;cursor:zoom-out}.lightbox.show{display:flex}.lightbox img{max-width:92vw;max-height:92vh;border-radius:6px}
 .reply{margin-top:8px;padding:10px 12px;border-left:3px solid #238636;background:#12261a;border-radius:6px;white-space:pre-wrap}.tools{display:flex;flex-wrap:wrap;gap:6px;margin-top:8px}.tools select{width:auto;padding:5px 8px;font-size:13px}.edit{margin-top:8px}.empty{text-align:center;color:#94a3b8;padding:24px}.err{color:#f87171;font-size:13px}
 </style></head><body><main>
 <h1>건의사항</h1><div class="sub">원하는 기능이나 불편한 점을 남겨 주세요. 처리 상황과 답변이 여기에 표시됩니다.</div>
 <section class="box">
   <label for="content" class="muted">내용</label>
-  <textarea id="content" maxlength="2000" placeholder="예: 차트 후보에 거래량 급증 종목도 같이 보여 주세요"></textarea>
+  <textarea id="content" maxlength="2000" placeholder="예: 차트 후보에 거래량 급증 종목도 같이 보여 주세요 (사진은 Ctrl+V로 붙여넣기 가능)"></textarea>
+  <div class="paste-zone" id="paste-zone">📷 여기 눌러서 사진 추가 (최대 5장)</div>
+  <div id="previews" class="previews"></div>
   <div class="row"><input id="author" class="grow" maxlength="40" placeholder="이름 (선택)" aria-label="이름"><button id="submit">남기기</button></div>
   <div id="form-msg" class="err" role="status"></div>
 </section>
 <div class="bar" id="filter"><button data-v="" class="on">전체</button><button data-v="접수">접수</button><button data-v="진행 중">진행 중</button><button data-v="완료">완료</button><button data-v="보류">보류</button></div>
 <section class="box" id="list"><div class="empty">불러오는 중…</div></section>
-</main><script>
+</main>
+<input type="file" id="file-picker" accept="image/*" multiple style="display:none">
+<div class="lightbox" id="lightbox"><img id="lightbox-img" src="" alt=""></div>
+<script>
 const API='__API_PREFIX__/suggestions';const STATUS=['접수','진행 중','완료','보류'];let all=[],filter='';
 const esc=s=>String(s).replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
 const when=t=>new Date(t).toLocaleString('ko-KR',{timeZone:'Asia/Seoul',month:'numeric',day:'numeric',hour:'2-digit',minute:'2-digit'});
@@ -26,11 +36,21 @@ async function call(method,url,body){const r=await fetch(url,{method,headers:{'C
 function render(){const box=document.getElementById('list');const rows=all.filter(x=>!filter||x.status===filter);
 if(!rows.length){box.innerHTML='<div class="empty">'+(all.length?'이 상태의 건의가 없습니다.':'아직 건의가 없습니다. 첫 건의를 남겨 주세요.')+'</div>';return}
 box.innerHTML=rows.map(x=>`<div class="item" data-id="${x.id}"><div class="meta"><span class="st st-${x.status.split(' ')[0]}">${esc(x.status)}</span><span>#${x.id}</span><span>${x.author?esc(x.author)+' · ':''}${when(x.created_at)}</span></div>
-<p class="content">${esc(x.content)}</p>${x.reply?`<div class="reply"><b>답변</b><br>${esc(x.reply)}</div>`:''}
+<p class="content">${esc(x.content)}</p>${(x.images||[]).length?`<div class="shots">${x.images.map(u=>`<img src="${u}" alt="첨부 사진">`).join('')}</div>`:''}${x.reply?`<div class="reply"><b>답변</b><br>${esc(x.reply)}</div>`:''}
 <div class="tools"><select aria-label="상태 변경" data-act="status">${STATUS.map(s=>`<option${s===x.status?' selected':''}>${s}</option>`).join('')}</select><button class="ghost" data-act="reply">${x.reply?'답변 수정':'답변 달기'}</button><button class="ghost danger" data-act="del">삭제</button></div></div>`).join('')}
 async function load(){try{all=await call('GET',API);render()}catch(e){document.getElementById('list').innerHTML='<div class="empty">목록을 불러오지 못했습니다.</div>'}}
 document.getElementById('submit').onclick=async()=>{const msg=document.getElementById('form-msg');const content=document.getElementById('content').value.trim();if(!content){msg.textContent='내용을 입력해 주세요.';return}
-try{await call('POST',API,{content,author:document.getElementById('author').value.trim()});document.getElementById('content').value='';msg.textContent='';await load()}catch(e){msg.textContent=e.message}};
+try{await call('POST',API,{content,author:document.getElementById('author').value.trim(),images});document.getElementById('content').value='';images=[];renderPrev();msg.textContent='';await load()}catch(e){msg.textContent=e.message}};
+// 사진: 큰 이미지는 가로 1280px·JPEG 80%로 줄여서 저장
+let images=[];
+function resizeImage(file){return new Promise((resolve,reject)=>{const img=new Image(),rd=new FileReader();rd.onload=()=>{img.onload=()=>{const k=Math.min(1,1280/img.width),w=Math.round(img.width*k),h=Math.round(img.height*k);const c=document.createElement('canvas');c.width=w;c.height=h;c.getContext('2d').drawImage(img,0,0,w,h);resolve(c.toDataURL('image/jpeg',0.8))};img.onerror=reject;img.src=rd.result};rd.onerror=reject;rd.readAsDataURL(file)})}
+function renderPrev(){const a=document.getElementById('previews');a.innerHTML=images.map((u,i)=>`<div class="preview"><img src="${u}" alt=""><button type="button" class="rm" data-i="${i}">✕</button></div>`).join('');a.querySelectorAll('.rm').forEach(b=>b.onclick=()=>{images.splice(Number(b.dataset.i),1);renderPrev()})}
+async function addFiles(files){const list=[...files].filter(f=>f&&f.type&&f.type.startsWith('image/'));for(const f of list){if(images.length>=5){document.getElementById('form-msg').textContent='사진은 최대 5장까지입니다.';break}try{images.push(await resizeImage(f))}catch(e){}}renderPrev()}
+const picker=document.getElementById('file-picker');picker.onchange=e=>{addFiles(e.target.files);e.target.value=''};
+document.getElementById('paste-zone').onclick=()=>picker.click();
+document.getElementById('content').addEventListener('paste',e=>{const it=e.clipboardData&&e.clipboardData.items;if(!it)return;const fs=[...it].filter(x=>x.type&&x.type.startsWith('image/')).map(x=>x.getAsFile());if(fs.length){e.preventDefault();addFiles(fs)}});
+document.getElementById('list').addEventListener('click',e=>{if(e.target.matches('.shots img')){document.getElementById('lightbox-img').src=e.target.src;document.getElementById('lightbox').classList.add('show')}});
+document.getElementById('lightbox').onclick=()=>document.getElementById('lightbox').classList.remove('show');
 document.getElementById('filter').onclick=e=>{const b=e.target.closest('button');if(!b)return;filter=b.dataset.v;document.querySelectorAll('#filter button').forEach(x=>x.classList.toggle('on',x===b));render()};
 document.getElementById('list').addEventListener('change',async e=>{if(e.target.dataset.act!=='status')return;const id=e.target.closest('.item').dataset.id;try{await call('PATCH',`${API}/${id}`,{status:e.target.value});await load()}catch(err){alert(err.message)}});
 document.getElementById('list').addEventListener('click',async e=>{const b=e.target.closest('button');if(!b)return;const item=b.closest('.item');const id=item.dataset.id;const x=all.find(v=>String(v.id)===id);

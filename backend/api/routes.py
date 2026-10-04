@@ -345,6 +345,7 @@ SUGGESTION_STATUS = ("접수", "진행 중", "완료", "보류")
 class SuggestionIn(BaseModel):
     author: str = Field("", max_length=40)
     content: str = Field(..., min_length=1, max_length=2000)
+    images: list[str] | None = None
 
 
 class SuggestionPatch(BaseModel):
@@ -354,6 +355,7 @@ class SuggestionPatch(BaseModel):
 
 def _suggestion_dict(x: Suggestion) -> dict:
     return {"id": x.id, "author": x.author, "content": x.content, "status": x.status, "reply": x.reply,
+            "images": _decode_images(x.image_data),
             "created_at": x.created_at.isoformat() + "Z", "updated_at": x.updated_at.isoformat() + "Z"}
 
 
@@ -366,7 +368,8 @@ def list_suggestions(db: Session = Depends(get_db)):
 def create_suggestion(body: SuggestionIn, db: Session = Depends(get_db)):
     if not body.content.strip():
         raise HTTPException(status_code=400, detail="내용을 입력해 주세요.")
-    x = Suggestion(author=body.author.strip(), content=body.content.strip(), status="접수", reply="")
+    images = _check_images(body.images or [], MAX_COMMENT_IMAGES)
+    x = Suggestion(author=body.author.strip(), content=body.content.strip(), status="접수", reply="", image_data=_encode_images(images))
     db.add(x)
     db.commit()
     return _suggestion_dict(x)
@@ -1497,6 +1500,7 @@ def warm_caches(db: Session) -> None:
     get_chart_candidates(min_cap=0, db=db)
     get_volume_records(db=db)
     get_sector_rotation(db=db)
+    get_sector_calendar(db=db)
     get_jongbe(db=db)
 
 
@@ -1559,6 +1563,14 @@ def get_sectors(source: str | None = None, db: Session = Depends(get_db)):
         )
         for r in rows
     ]
+
+
+@router.get("/sectors/calendar")
+def get_sector_calendar(db: Session = Depends(get_db)):
+    """강한 섹터 캘린더: 최근 약 6개월, 날짜마다 그날 가장 강했던 섹터·테마."""
+    from backend.screener.sector_calendar import scan  # noqa: PLC0415
+    from backend.services.result_cache import cached  # noqa: PLC0415
+    return cached("sector_calendar", (), db, lambda: scan(db))
 
 
 @router.get("/sectors/rotation")
@@ -1743,6 +1755,8 @@ def get_sector_stocks(sector_id: int, db: Session = Depends(get_db)):
     }
 
     name_fallback: dict[str, str] = {}   # Stock 표에 없는 종목은 코드로 표시 (pykrx 이름 조회는 2026-10-03 제거)
+    from backend.services.float_ratio import get as float_get  # noqa: PLC0415
+    floats = float_get(codes)
 
     result = []
     for code in codes:
@@ -1763,8 +1777,12 @@ def get_sector_stocks(sector_id: int, db: Session = Depends(get_db)):
             combined_net_buy=f_net + i_net,
             change_pct=float(price.change_pct or 0) if price else 0.0,
             close_price=float(price.close_price or 0) if price else 0.0,
+            trading_value=float(price.trading_value or 0) if price else 0.0,
+            float_ratio=floats[code][1] if code in floats else None,
+            float_turnover_pct=round(float(price.volume or 0) / (floats[code][0] * floats[code][1] / 100) * 100, 1)
+            if price and code in floats and floats[code][0] and floats[code][1] else None,
         ))
-    result.sort(key=lambda x: x.combined_net_buy, reverse=True)
+    result.sort(key=lambda x: -(x.float_turnover_pct or 0))   # 유통 물량을 많이 돌린 순
     return result
 
 

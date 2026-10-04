@@ -96,4 +96,7 @@ class SectorStockItem(BaseModel):
     combined_net_buy: float
     change_pct: float
     close_price: float
+    trading_value: float = 0.0
+    float_ratio: float | None = None          # 유동비율 %
+    float_turnover_pct: float | None = None   # 그날 거래량 / 유통주식수
 

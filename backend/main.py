@@ -108,6 +108,12 @@ select{background:#21262d;border:1px solid #30363d;color:#c9d1d9;padding:6px 10p
 .modal-tab.active{color:#58a6ff;border-bottom-color:#58a6ff}
 .ts{color:#8b949e;font-size:11px}
 .lead{color:#c9d1d9;font-size:13px;margin:0 0 6px}
+.cal-grid{display:grid;grid-template-columns:repeat(5,1fr);gap:4px}.cal-h{font-size:11px;color:#8b949e;text-align:center}
+.cal-c{background:#161b22;border:1px solid #30363d;border-radius:6px;padding:5px 6px;min-height:78px;cursor:pointer;font-size:11px;line-height:1.45;overflow:hidden}
+.cal-c:hover,.cal-c.on{border-color:#58a6ff}.cal-c.empty{background:transparent;border-color:transparent;cursor:default}.cal-c .dt{color:#8b949e;font-size:10.5px}
+.cal-c .th{white-space:nowrap;overflow:hidden;text-overflow:ellipsis;color:#c9d1d9}
+@media(max-width:640px){.cal-grid{grid-template-columns:1fr}.cal-h,.cal-c.empty{display:none}.cal-c{min-height:0}}
+
 .why{margin:0 0 12px;color:#8b949e;font-size:12px;line-height:1.65}
 .why summary{cursor:pointer;color:#8b949e;font-size:12px;width:max-content}
 .why[open] summary{margin-bottom:4px}
@@ -374,6 +380,17 @@ select{background:#21262d;border:1px solid #30363d;color:#c9d1d9;padding:6px 10p
     </table>
   </div>
 
+  <!-- 강한 섹터 캘린더 -->
+  <div style="margin-bottom:20px">
+    <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;margin-bottom:8px">
+      <span style="font-size:12px;color:#8b949e;letter-spacing:.06em">📅 강한 섹터 캘린더</span>
+      <button class="btn btn-gray btn-sm" onclick="calMove(-1)">◀</button><b id="cal-month" style="color:#e6edf3;font-size:13px"></b><button class="btn btn-gray btn-sm" onclick="calMove(1)">▶</button>
+      <span class="ts">날짜마다 그날 가장 강했던 테마(평균 등락, 거래대금 100억↑). 날짜를 누르면 대장주까지 보입니다.</span>
+    </div>
+    <div id="cal-grid" class="cal-grid"></div>
+    <div id="cal-detail" style="margin-top:8px"></div>
+  </div>
+
   <details class="why" style="margin-top:8px"><summary>외국인·기관 수급 테마 표 보기 (3년 검증 안 된 참고용)</summary>
   <!-- 매집 감지 테마 -->
   <div style="margin:10px 0 20px">
@@ -570,7 +587,7 @@ function switchTab(id) {
   if(id==='screener')loadTopValue();
   if(id==='jongbe')loadJongbe();
   if(id==='journal')loadJournal();
-  if(id==='sector'){loadSector();loadLiveThemes();loadRotation();}
+  if(id==='sector'){loadSector();loadLiveThemes();loadRotation();loadSectorCal();}
   if(id==='heatmap')loadHeatmap();
   if(id==='candidates')loadCandidates();
   if(id==='suggest')document.getElementById('suggest-frame').src='/suggestions';
@@ -795,6 +812,47 @@ async function jrSaveExcl(){
   loadJournal();
 }
 
+// ── 강한 섹터 캘린더 ─────────────────────────────────────────
+let _cal=null,_calMonth=null;
+async function loadSectorCal(){
+  if(!_cal){ try{ _cal=await fetch(`${API}/sectors/calendar`).then(r=>r.ok?r.json():null); }catch(e){} }
+  if(!_cal||!_cal.days.length){ document.getElementById('cal-grid').innerHTML='<span class="ts">불러오지 못했습니다</span>'; return; }
+  if(!_calMonth) _calMonth=_cal.days[_cal.days.length-1].date.slice(0,7);
+  renderCal();
+}
+function calMove(k){
+  const ms=[...new Set(_cal.days.map(d=>d.date.slice(0,7)))];
+  const i=ms.indexOf(_calMonth)+k; if(i<0||i>=ms.length) return;
+  _calMonth=ms[i]; document.getElementById('cal-detail').innerHTML=''; renderCal();
+}
+function renderCal(){
+  document.getElementById('cal-month').textContent=_calMonth.replace('-','년 ')+'월';
+  const days=_cal.days.filter(d=>d.date.startsWith(_calMonth));
+  const pc=v=>`<span style="color:${v>=0?'#f85149':'#58a6ff'}">${v>=0?'+':''}${v}%</span>`;
+  let html=['월','화','수','목','금'].map(x=>`<div class="cal-h">${x}</div>`).join('');
+  if(days.length){ const wd=(new Date(days[0].date+'T00:00:00').getDay()+6)%7; for(let i=0;i<Math.min(wd,4);i++) html+='<div class="cal-c empty"></div>'; }
+  let prev=null;
+  for(const d of days){
+    const wd=(new Date(d.date+'T00:00:00').getDay()+6)%7;
+    if(prev!==null){
+      if(wd<=prev){ for(let i=prev+1;i<5;i++) html+='<div class="cal-c empty"></div>'; for(let i=0;i<wd;i++) html+='<div class="cal-c empty"></div>'; }
+      else for(let i=prev+1;i<wd;i++) html+='<div class="cal-c empty"></div>';
+    }
+    prev=wd;
+    html+=`<div class="cal-c" data-d="${d.date}" onclick="calPick('${d.date}')"><div class="dt">${+d.date.slice(8)}일 · 시장 ${pc(d.market_chg)}</div>`
+      +d.themes.slice(0,3).map(t=>`<div class="th">${t.name.split('(')[0]} ${pc(t.chg)}</div>`).join('')+'</div>';
+  }
+  document.getElementById('cal-grid').innerHTML=html;
+}
+function calPick(date){
+  const d=_cal.days.find(x=>x.date===date); if(!d) return;
+  document.querySelectorAll('.cal-c').forEach(c=>c.classList.toggle('on',c.dataset.d===date));
+  const pc=v=>`<span style="color:${v>=0?'#f85149':'#58a6ff'}">${v>=0?'+':''}${v}%</span>`;
+  document.getElementById('cal-detail').innerHTML=`<div style="border:1px solid #30363d;border-radius:8px;padding:10px 12px;font-size:12.5px;line-height:1.8">
+    <b style="color:#e6edf3">${date}</b> <span class="ts">시장 평균 ${pc(d.market_chg)} · 섹터 ${d.families.map(f=>f.name+' '+pc(f.chg)).join(' · ')}</span><br>`
+    +d.themes.map(t=>`<b style="color:#e6edf3;cursor:pointer" onclick="openSectorModal(${t.id},'${t.name.replace(/'/g,'')}')">${t.name}</b> ${pc(t.chg)} <span class="ts">상승 ${t.up_pct}% · ${t.leaders.map(l=>l.name+' '+(l.chg>=0?'+':'')+l.chg+'%').join(', ')}</span>`).join('<br>')+'</div>';
+}
+
 async function loadRotation(){
   const body=document.getElementById('rot-body');
   try{
@@ -893,16 +951,18 @@ async function openSectorModal(sectorId, name){
   try{
     const stocks=await fetch(`${API}/sectors/${sectorId}/stocks`).then(r=>r.ok?r.json():[]);
     const fmtBil=n=>(n>=0?'<span style="color:#3fb950">+':' <span style="color:#58a6ff">')+Math.round(n/1e8)+'억</span>';
-    const rows=stocks.map(s=>`<tr>
-      <td>${s.stock_code}</td><td>${s.stock_name}</td><td style="color:#8b949e">${s.market}</td>
-      <td>${fmtBil(s.foreign_net_buy)}</td><td>${fmtBil(s.inst_net_buy)}</td>
-      <td style="color:${s.change_pct>0?'#3fb950':s.change_pct<0?'#f85149':'#8b949e'}">${s.change_pct>=0?'+':''}${s.change_pct.toFixed(2)}%</td>
+    const rows=stocks.map(s=>`<tr style="cursor:pointer" onclick="closeSectorModal();openChartModal('${s.stock_code}','${s.stock_name}','')">
+      <td><b>${s.stock_name}</b> <span class="ts">${s.stock_code}</span></td>
+      <td style="color:${s.change_pct>0?'#f85149':s.change_pct<0?'#58a6ff':'#8b949e'}">${s.change_pct>=0?'+':''}${s.change_pct.toFixed(2)}%</td>
       <td>${Number(s.close_price).toLocaleString()}원</td>
+      <td>${s.trading_value?cdWon(s.trading_value):'-'}</td>
+      <td title="그날 거래량 / 유통주식수 (발행주식 × 유동비율)">${s.float_turnover_pct!=null?`<b style="color:${s.float_turnover_pct>=50?'#f85149':s.float_turnover_pct>=10?'#e3b341':'#c9d1d9'}">${s.float_turnover_pct}%</b> <span class="ts">유동 ${s.float_ratio}%</span>`:'<span class="ts">-</span>'}</td>
+      <td>${fmtBil(s.foreign_net_buy)}</td><td>${fmtBil(s.inst_net_buy)}</td>
     </tr>`).join('');
-    document.getElementById('sector-modal-body').innerHTML=`<table>
-      <thead><tr><th>코드</th><th>종목명</th><th>시장</th><th>외국인</th><th>기관</th><th>등락</th><th>종가</th></tr></thead>
+    document.getElementById('sector-modal-body').innerHTML=`<div class="ts" style="margin-bottom:6px">유통 회전율 = 그날 거래량 ÷ 유통주식수(발행주식 × 유동비율, 네이버 기업정보). 100%면 유통 물량을 하루에 한 바퀴 돌린 것. 많이 돌린 순.</div><div style="overflow-x:auto"><table>
+      <thead><tr><th>종목</th><th>등락</th><th>종가</th><th>거래대금</th><th>유통 회전율</th><th>외국인</th><th>기관</th></tr></thead>
       <tbody>${rows||'<tr><td colspan="7" style="color:#8b949e;text-align:center">데이터 없음</td></tr>'}</tbody>
-    </table>`;
+    </table></div>`;
   }catch(e){document.getElementById('sector-modal-body').innerHTML='<div style="color:#f85149;padding:16px">오류 발생</div>';}
 }
 function closeSectorModal(){document.getElementById('sector-modal-bg').classList.remove('show');}
@@ -1545,6 +1605,7 @@ def startup_event() -> None:
         conn.execute(text("ALTER TABLE radar_picks ADD COLUMN IF NOT EXISTS market_cap FLOAT DEFAULT 0.0"))
         conn.execute(text("ALTER TABLE discussion_comments ADD COLUMN IF NOT EXISTS image_data TEXT"))
         conn.execute(text("ALTER TABLE discussion_posts ADD COLUMN IF NOT EXISTS title VARCHAR(100)"))
+        conn.execute(text("ALTER TABLE suggestions ADD COLUMN IF NOT EXISTS image_data TEXT"))
     db = SessionLocal()
     try:
         seed_reference_data(db)
