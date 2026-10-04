@@ -104,13 +104,27 @@ def scan(db: Session) -> dict:
             nm = names.get(code, code)
             if not v or any(k in nm for k in skip) or v["close"] < 1000 or v["tv"] < MIN_TV:
                 continue
+            kind, extra = "양봉", {}
             if not (v["bull"] and v["change_pct"] >= MIN_CHG and v["tv_x"] and v["tv_x"] >= VOL_X):
-                continue
+                # 두 번째 유형: 어제 큰 양봉(+5%·거래 3배·30억↑) → 오늘 밑꼬리 긴 도지 (사용자 PS일렉·LS머트리얼즈 직관, 2026-10-05)
+                # 3년(상승·횡보장): 1,213건 다음 날(갭이면 시가) +0.50%(밑꼬리 짧은 도지 +0.16%), 뜨는 섹터 A 152건 +1.37%·이김 70%·분할 매도 +1.29%.
+                o_, h_, l_, c_ = (float(P[k][code].iloc[-1]) for k in ("o", "h", "l", "c"))
+                po, pc, ptv = float(P["o"][code].iloc[-2]), float(P["c"][code].iloc[-2]), float(P["tv"][code].iloc[-2])
+                pch = float(P["ch"][code].iloc[-2])
+                pavg = float(P["tv"][code].iloc[-22:-2].mean())
+                rng = h_ - l_
+                if not (rng > 0 and pc > po and pch >= 5 and pavg > 0 and ptv >= 3 * pavg and ptv >= 3e9):
+                    continue
+                low_wick = (min(o_, c_) - l_) / rng
+                if not (abs(c_ - o_) / o_ <= 0.015 and rng / c_ >= 0.03 and low_wick >= 0.5 and c_ >= pc * 0.97):
+                    continue
+                kind, extra = "밑꼬리 도지", {"low_wick_pct": round(low_wick * 100), "prev_chg": round(pch, 1), "prev_tv_x": round(ptv / pavg, 1)}
             leader = bool(tv_rank.get(code, 99) <= 5)
             row = cands.setdefault(code, {"code": code, "name": nm, **{k: v[k] for k in ("close", "change_pct", "tv_x", "upper_pct", "gap20_pct")},
                                           "value": round(v["tv"]), "families": [], "money": False, "leader": False,
                                           "earn_up": code in earn_up,
-                                          "market_cap": caps.get(code, (0, 0))[0] or caps.get(code, (0, 0))[1] * v["close"] or mc.get(code) or 0})
+                                          "market_cap": caps.get(code, (0, 0))[0] or caps.get(code, (0, 0))[1] * v["close"] or mc.get(code) or 0,
+                                          "kind": kind, **extra})
             row["families"].append(f)
             row["money"] |= money
             top60 = float(P["c"][code].iloc[-61:-1].max())   # 종가 기준 (9/18 우리로처럼 장중 윗꼬리 고점에 끌려 반등형으로 잘못 보이지 않게)

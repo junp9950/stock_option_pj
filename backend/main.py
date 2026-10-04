@@ -253,7 +253,7 @@ select{background:#21262d;border:1px solid #30363d;color:#c9d1d9;padding:6px 10p
 <div id="panel-jongbe" class="panel active content">
   <b style="font-size:15px;color:#e6edf3;display:block;margin:4px 0 8px">① 시장</b>
   <div id="jb-market" style="border-radius:10px;padding:12px 16px;margin-bottom:12px;border:1px solid #30363d">로딩 중…</div>
-  <p class="lead">시장 상승·횡보 → 뜨거운 섹터 → 그날 섹터에 돈 몰림 → 거래 실린 양봉. <b>다음 날 오전 정리</b>가 기본, 갭이 크면 덜어내기.</p>
+  <p class="lead">시장 상승·횡보 → 뜨거운 섹터 → 그날 섹터에 돈 몰림 → 거래 실린 양봉, 또는 <b style="color:#e3b341">🕯 큰 양봉 다음 날 밑꼬리 도지</b>. <b>파는 법:</b> 다음 날 +2% 미만이면 전부 정리, +2% 이상이면 30% · 그다음 날도 오르면 30% 더 · 나머지는 최고 종가 -15% 이탈 시 (3년 평균 +0.98%, 이김 43%).</p>
   <details class="why"><summary>근거 보기</summary>
     3년(상승·횡보장, 다음 날 "갭상승이면 시가·아니면 종가" 매도): 기본 +0.42%, 뜨거운 섹터(20일 상승 상위 3) +0.74%, <b style="color:#3fb950">A등급(섹터 종목 거래 중간값 1배↑) +1.20%·수익 74%</b>, B +0.35%. 종목 혼자 5배↑ 터져도 섹터가 조용하면 +0.43%, 섹터 밖 +0.28%, 하락장 +0.12%.
     시가 매도는 -5% 넘는 손실 2%, 종가까지 들고 가면 18%. 이격 +20%↑·그날 +12%↑는 평균은 비슷한데 큰 손실이 2~4배("급등·과열 빼기" 필터).
@@ -763,7 +763,7 @@ function renderJongbe(){
   else body.innerHTML=items.map(x=>`<tr style="cursor:pointer" onclick="openChartModal('${x.code}','${x.name}','')">
     <td><b>${x.name}</b> <span style="color:#8b949e;font-size:11px">${x.code}</span>${x.earn_up?' <span style="color:#3fb950;font-size:11px;border:1px solid #238636;border-radius:8px;padding:0 5px">📈 실적</span>':''}${x.leader?' <span style="color:#e3b341;font-size:11px">👑 대장</span>':''}${flagTag(x)}${x.record_today?' <span style="color:#f85149;font-size:11px" title="오늘 몇 년 만의 최대 거래대금">🔔 거래대금 신기록</span>':''}${x.vr_stage&&x.vr_stage!=='무너짐'&&!x.record_today?` <span style="font-size:11px;color:${x.vr_signal?'#e3b341':'#8b949e'}" title="대량거래 관심종목 단계 (스윙 관점)">🔥 ${x.vr_signal?'진입 신호':x.vr_stage}</span>`:''}${x.market_cap?`<br><span class="ts">시총 ${cdWon(x.market_cap)}</span>`:''}${lbBtns(x,'종베')}</td>
     <td data-label="등급"><b style="color:${x.grade==='A'?'#3fb950':'#c9d1d9'}">${x.grade}</b>${x.pos60_pct!=null?` <span class="ts" title="60일 종가 고점 대비 ${x.pos60_pct}% — 3년 확인상 돌파형·반등형 다음 날 성과는 같았음(+0.5~0.7%)">${x.pos60_pct>=0?(x.under_wick?'돌파형 (전 고점 윗꼬리 아래)':'돌파형'):x.pos60_pct>=-5?'고점 근처':'반등형'}</span>`:''}<br><span class="ts">${(()=>{ const tv=Math.max(...d.families.filter(f=>x.families.includes(f.family)).map(f=>f.tv_med),0); return x.grade==='A'?`섹터 종목 거래 중간 ${tv.toFixed(2)}배`:`섹터 종목 거래 중간 ${tv.toFixed(2)}배<br>(1배↑면 A)`; })()}</span></td>
-    <td data-label="그날 봉"><span style="color:#f85149">+${x.change_pct}%</span> · 거래 ${x.tv_x}배<br><span class="ts" style="color:${x.upper_pct<=30?'#3fb950':'#8b949e'}">윗꼬리 ${x.upper_pct}%</span> · <span class="ts">${cdWon(x.value)}</span></td>
+    <td data-label="그날 봉">${x.kind==='밑꼬리 도지'?`<b style="color:#e3b341;font-size:12px">🕯 밑꼬리 도지</b> <span style="color:${x.change_pct>=0?'#f85149':'#58a6ff'}">${x.change_pct>=0?'+':''}${x.change_pct}%</span><br><span class="ts">밑꼬리 ${x.low_wick_pct}% · 전날 +${x.prev_chg}% 거래 ${x.prev_tv_x}배</span>`:`<span style="color:#f85149">+${x.change_pct}%</span> · 거래 ${x.tv_x}배<br><span class="ts" style="color:${x.upper_pct<=30?'#3fb950':'#8b949e'}">윗꼬리 ${x.upper_pct}%</span> · <span class="ts">${cdWon(x.value)}</span>`}</td>
     <td data-label="섹터" style="font-size:12px">${x.families.join(', ')}</td>
     <td data-label="종가" style="text-align:right">${x.close.toLocaleString()}원${gapTag(x.gap20_pct)}</td>
   </tr>`).join('');
