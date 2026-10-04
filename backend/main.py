@@ -263,7 +263,7 @@ select{background:#21262d;border:1px solid #30363d;color:#c9d1d9;padding:6px 10p
     <label style="font-size:12.5px;color:#c9d1d9;cursor:pointer" title="20일선보다 +20% 넘게 뜬 종목과 그날 +12% 넘게 오른 종목을 뺍니다. 3년 확인: 평균 수익은 비슷한데 다음 날 -5% 넘는 손실이 2~4배"><input type="checkbox" id="jb-safe" checked onchange="try{localStorage.setItem('jb-safe',this.checked?'1':'0')}catch(e){};renderJongbe()"> 급등·과열 빼기</label>
     <label style="font-size:12.5px;color:#c9d1d9;cursor:pointer"><input type="checkbox" id="jb-showb" onchange="renderJongbe()"> B등급도 보기</label>
     <label style="font-size:12.5px;color:#c9d1d9;cursor:pointer" title="투자주의·경고·위험, 단기과열, 관리종목을 모든 목록에서 뺍니다"><input type="checkbox" id="jb-noflag" onchange="try{localStorage.setItem('jb-noflag',this.checked?'1':'0')}catch(e){};renderJongbe()"> 경고 빼기</label>
-    <label style="font-size:12.5px;color:#c9d1d9;cursor:pointer" title="신용 매수 불가(증거금 100%, 한국투자증권 기준) 종목을 뺍니다"><input type="checkbox" id="jb-nocred" onchange="try{localStorage.setItem('jb-nocred',this.checked?'1':'0')}catch(e){};renderJongbe()"> 신용불가 빼기</label>
+    <label style="font-size:12.5px;color:#c9d1d9;cursor:pointer" title="신용 매수 불가(증거금 100%, 한국투자증권 기준) 종목을 뺍니다"><input type="checkbox" id="jb-nocred" onchange="try{localStorage.setItem('jb-nocred',this.checked?'1':'0')}catch(e){};renderJongbe()"> 신용불가(한투) 빼기</label>
     <span class="ts" id="jb-count"></span>
   </div>
   <div id="jb-fams" style="display:flex;flex-wrap:wrap;gap:8px;margin-bottom:22px"></div>
@@ -511,7 +511,7 @@ select{background:#21262d;border:1px solid #30363d;color:#c9d1d9;padding:6px 10p
       <option value="장대음봉도지">장대음봉도지</option>
     </select>
     <label style="display:flex;align-items:center;gap:5px;font-size:13px;color:#c9d1d9;cursor:pointer" title="투자주의·경고·위험, 단기과열, 관리종목을 뺍니다"><input type="checkbox" id="cd-noflag" onchange="try{localStorage.setItem('cd-noflag',this.checked?'1':'0')}catch(e){};renderCandidates()"> 경고 빼기</label>
-    <label style="display:flex;align-items:center;gap:5px;font-size:13px;color:#c9d1d9;cursor:pointer" title="신용 매수 불가(증거금 100%) 종목을 뺍니다"><input type="checkbox" id="cd-nocred" onchange="try{localStorage.setItem('cd-nocred',this.checked?'1':'0')}catch(e){};renderCandidates()"> 신용불가 빼기</label>
+    <label style="display:flex;align-items:center;gap:5px;font-size:13px;color:#c9d1d9;cursor:pointer" title="신용 매수 불가(증거금 100%) 종목을 뺍니다"><input type="checkbox" id="cd-nocred" onchange="try{localStorage.setItem('cd-nocred',this.checked?'1':'0')}catch(e){};renderCandidates()"> 신용불가(한투) 빼기</label>
     <button class="btn btn-gray btn-sm" onclick="loadCandidates()">⟳ 새로고침</button>
     <span class="ts" id="cd-info"></span>
   </div>
@@ -1227,7 +1227,7 @@ function cdMatch(it, terms){
 function flagTag(x){   // 투자주의·경고·위험, 단기과열, 관리종목, 신용불가
   const f=(x&&x.flags)||[]; if(!f.length) return '';
   const col=t=>t==='투자위험'||t==='투자경고'||t==='관리종목'?'#f85149':t==='신용불가'?'#d29922':'#e3b341';
-  return ' '+f.map(t=>`<span style="font-size:10.5px;color:${col(t)};border:1px solid ${col(t)};border-radius:6px;padding:0 4px;white-space:nowrap" title="${t==='신용불가'?'신용 매수 불가 (증거금 100%, 한국투자증권 기준)':t}">${t}</span>`).join(' ');
+  return ' '+f.map(t=>`<span style="font-size:10.5px;color:${col(t)};border:1px solid ${col(t)};border-radius:6px;padding:0 4px;white-space:nowrap" title="${t==='신용불가'?'신용 매수 불가 (증거금 100%) — 한국투자증권 기준이라 메리츠 등 다른 증권사와 다를 수 있음':'거래소 지정 — 모든 증권사 공통'}">${t==='신용불가'?'신용불가(한투)':t}</span>`).join(' ');
 }
 function noFlag(x, warnOff, credOff){ const f=x.flags||[]; return !(warnOff&&f.some(t=>t!=='신용불가')) && !(credOff&&f.includes('신용불가')); }
 function gapTag(g){
