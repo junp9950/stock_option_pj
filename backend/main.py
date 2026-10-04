@@ -274,12 +274,16 @@ select{background:#21262d;border:1px solid #30363d;color:#c9d1d9;padding:6px 10p
   </table>
   <div id="jb-limit" class="ts" hidden></div>
   <div style="margin:12px 0 22px">
-    <b style="font-size:14px;color:#e6edf3">🔔 오늘 거래대금 신기록 + 상한가</b> <span class="ts" id="lu-info"></span>
-    <details class="why" style="margin:2px 0 6px"><summary>근거 보기</summary>
+    <b style="font-size:14px;color:#e6edf3">🔔 오늘 거래대금 신기록</b> <span class="ts" id="vrc-info"></span>
+    <p class="lead" style="margin:4px 0 6px">오늘 거래대금이 6개월 넘게 만의 최고인 종목 (거래대금 30억↑). 오래된 기록일수록 위. 관심 등록용 — 터진 날 추격보다 며칠 쉬는 걸 보고 들어가기.</p>
+    <div id="vrc-body" style="display:flex;flex-wrap:wrap;gap:6px">로딩 중…</div>
+    <span class="ts" id="lu-info" hidden></span>
+    <details class="why" style="margin:6px 0 6px"><summary>근거 보기</summary>
+      평소 10배↑·+5% 양봉 신기록을 터진 날 종가에 사면 20일 뒤 중간 -7%(대신 95%가 20일 안 더 높은 가격을 찍음) → 차트 후보 탭 '대량거래 관심종목'에서 숨고르기 뒤 진입 신호를 보세요.
       몇 년 만의 최대 거래대금(평소 10배↑)이면서 상한가로 끝난 종목. 3년 247건: 종가 매수 → 다음 날 시가 평균 +5.6%(중간 +4.3%, 수익 74%).
       <b style="color:#f85149">단 상한가에 묶이면 실제로 못 사는 경우가 많습니다.</b> 점상 = 하루 종일 상한가.
     </details>
-    <div id="lu-body" class="ts">로딩 중…</div>
+    <div id="lu-body" class="ts" hidden></div>
   </div>
 
   <div style="margin:4px 0 22px">
@@ -658,12 +662,32 @@ async function loadJongbe(){
   try{ const saved=localStorage.getItem('jb-q'); if(saved&&!document.getElementById('jb-q').value){document.getElementById('jb-q').value=saved; jbCheck();} }catch(e){}
   loadJongbePerf();
   if(_vrData) renderLimitUp(); else loadVolumeRecords();
+  loadValueRecords();
+}
+let _vrcData=null;
+async function loadValueRecords(){
+  if(!_vrcData){ try{ _vrcData=await fetch(`${API}/screener/value-records`).then(r=>r.ok?r.json():null); }catch(e){} }
+  renderValueRecords();
+}
+function renderValueRecords(){
+  const el=document.getElementById('vrc-body'); if(!el) return;
+  if(!_vrcData){ el.textContent='로딩 중…'; return; }
+  const min=parseFloat(document.getElementById('jb-mincap').value)*1e8||0;
+  const nf=document.getElementById('jb-noflag').checked, nc=document.getElementById('jb-nocred').checked;
+  const xs=_vrcData.items.filter(x=>(!min||!x.market_cap||x.market_cap>=min)&&noFlag(x,nf,nc));
+  document.getElementById('vrc-info').textContent=`${_vrcData.trading_date} · ${xs.length}개`;
+  el.innerHTML=xs.length?xs.map(x=>`<span onclick="openChartModal('${x.code}','${x.name}','')" style="cursor:pointer;border:1px solid ${x.since_days>=365?'#e3b341':'#30363d'};border-radius:8px;padding:6px 10px;font-size:12.5px;line-height:1.5">
+      <b style="color:#e6edf3">${x.name}</b>${flagTag(x)}${x.limit_up?' <b style="color:#f85149;font-size:11px">상한가</b>':''}<br>
+      <span style="color:${x.since_days>=365?'#e3b341':'#c9d1d9'}">${x.label} 거래대금</span><br>
+      <span class="ts">${cdWon(x.value)}${x.tv_x?` (평소 ${x.tv_x}배)`:''} · <span style="color:${x.change_pct>=0?'#f85149':'#58a6ff'}">${x.change_pct>=0?'+':''}${x.change_pct}%</span>${x.families.length?' · '+x.families[0]:''}</span></span>`).join('')
+    :'<span class="ts">오늘은 6개월 넘게 만의 최고 거래대금 종목이 없습니다</span>';
 }
 // 시총 기준(억 원) 미만은 숨긴다. 시총을 모르는 종목(0)은 그대로 보여 준다.
 const _jbOpen={};
 function renderJongbe(){
   const d=_jbData; if(!d) return;
   const min=parseFloat(document.getElementById('jb-mincap').value)*1e8||0;
+  renderValueRecords();
   const nf=document.getElementById('jb-noflag').checked, nc=document.getElementById('jb-nocred').checked;
   const okCap=x=>(!min||!x.market_cap||x.market_cap>=min)&&noFlag(x,nf,nc);
   const safe=document.getElementById('jb-safe').checked, showB=document.getElementById('jb-showb').checked;

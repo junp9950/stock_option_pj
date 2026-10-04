@@ -1476,6 +1476,14 @@ def get_jongbe_performance(db: Session = Depends(get_db)):
     return performance(db)
 
 
+@router.get("/screener/value-records")
+def get_value_records(db: Session = Depends(get_db)):
+    """오늘 거래대금이 6개월 넘게 만의 최고인 종목 ('25년 3월 이후 최고')."""
+    from backend.screener.value_records import scan  # noqa: PLC0415
+    from backend.services.result_cache import cached  # noqa: PLC0415
+    return cached("value_records", (), db, lambda: scan(db))
+
+
 @router.get("/screener/volume-records")
 def get_volume_records(db: Session = Depends(get_db)):
     """대량거래 관심종목: 최근 약 4개월 안 몇 년 만의 최대 거래대금이 터진 종목과 지금 단계 (신규·숨고르기·진행 중·무너짐)."""
@@ -1502,6 +1510,7 @@ def warm_caches(db: Session) -> None:
     get_sector_rotation(db=db)
     get_sector_calendar(db=db)
     get_jongbe(db=db)
+    get_value_records(db=db)
 
 
 @router.get("/screener/picks/performance")
