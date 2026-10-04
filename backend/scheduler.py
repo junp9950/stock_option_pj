@@ -165,15 +165,17 @@ def start_scheduler() -> BackgroundScheduler:
         from backend.api.routes import warm_caches  # noqa: PLC0415
         db = SessionLocal()
         try:
-            warm_caches(db)
+            from backend.services.result_cache import refreshing  # noqa: PLC0415
+            with refreshing():
+                warm_caches(db)
         except Exception as exc:  # noqa: BLE001
             logger.error("Scheduler cache warm error: %s", exc)
         finally:
             db.close()
 
-    # 5분마다 화면용 스캔 결과를 미리 계산 (데이터가 안 바뀌었으면 버전 확인만 하고 바로 끝남). 서버 시작 5초 뒤 한 번
+    # 2분마다 화면용 스캔 결과를 미리 계산 (데이터가 안 바뀌었으면 버전 확인만 하고 바로 끝남). 서버 시작 5초 뒤 한 번
     from datetime import datetime, timedelta, timezone  # noqa: PLC0415
-    scheduler.add_job(_warm_cache_job, "interval", minutes=5, id="warm_cache", replace_existing=True,
+    scheduler.add_job(_warm_cache_job, "interval", minutes=2, id="warm_cache", replace_existing=True,
                       next_run_time=datetime.now(timezone.utc) + timedelta(seconds=5), max_instances=1)
     # 평일 17:30~21:30 매시 정각 30분: 파이프라인 재시도가 늦어져도 그날 기록이 빠지지 않게
     scheduler.add_job(_record_picks_job, "cron", day_of_week="mon-fri", hour="17-21", minute=30, id="record_picks", replace_existing=True)
