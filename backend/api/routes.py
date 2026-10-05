@@ -264,6 +264,10 @@ def create_discussion(body: DiscussionIn, db: Session = Depends(get_db)):
     )
     db.add(x)
     db.commit()
+    from backend.services.telegram import SITE, _cut, notify_async  # noqa: PLC0415
+    notify_async(f"💬 종목토론 새 글 — {x.author or '익명'}{chr(10)}[{x.title}]{(' · ' + x.stock_name) if x.stock_name else ''}"
+                 f"{(chr(10) + _cut(x.content)) if x.content else ''}{(chr(10) + '🖼 사진 ' + str(len(images)) + '장') if images else ''}"
+                 f"{chr(10)}{SITE}/discussion#{x.id}", author=x.author)
     return _discussion_dict(x)
 
 
@@ -311,6 +315,10 @@ def create_comment(pid: int, body: CommentIn, db: Session = Depends(get_db)):
                           image_data=_encode_images(images))
     db.add(c)
     db.commit()
+    from backend.services.telegram import SITE, _cut, notify_async  # noqa: PLC0415
+    post = db.get(DiscussionPost, pid)
+    notify_async(f"💬 댓글 — {c.author or '익명'} → [{post.title or '제목 없음'}]{chr(10)}{_cut(c.content) or '(사진)'}"
+                 f"{(chr(10) + '🖼 사진 ' + str(len(images)) + '장') if images else ''}{chr(10)}{SITE}/discussion#{pid}", author=c.author)
     return _comment_dict(c)
 
 
@@ -372,6 +380,9 @@ def create_suggestion(body: SuggestionIn, db: Session = Depends(get_db)):
     x = Suggestion(author=body.author.strip(), content=body.content.strip(), status="접수", reply="", image_data=_encode_images(images))
     db.add(x)
     db.commit()
+    from backend.services.telegram import SITE, _cut, notify_async  # noqa: PLC0415
+    notify_async(f"📮 건의사항 새 글 — {x.author or '이름 없음'}{chr(10)}{_cut(x.content, 200)}"
+                 f"{(chr(10) + '🖼 사진 ' + str(len(images)) + '장') if images else ''}{chr(10)}{SITE}/#suggest", author=x.author)
     return _suggestion_dict(x)
 
 

@@ -71,6 +71,36 @@ def send(db: Session, msg: str, chat_id: int | str | None = None) -> None:
             _api("sendMessage", chat_id=c, text=msg[i:i + 3900], disable_web_page_preview=True)
 
 
+SITE = "http://20.196.212.146"
+
+
+ME = "감사하모니카"      # 사용자 본인 — 본인이 쓴 글·댓글은 알리지 않는다 (2026-10-05 "내꺼는 빼고 우라늄이 뭐 달았을 때만")
+
+
+def notify_async(msg: str, author: str = "") -> None:
+    """요청 처리를 늦추지 않게 별도 스레드로 보낸다 (종목토론·건의사항 새 글·댓글). 본인이 쓴 건 보내지 않는다."""
+    import threading  # noqa: PLC0415
+    if (author or "").strip() == ME:
+        return
+
+    def _run():
+        from backend.db.database import SessionLocal  # noqa: PLC0415
+        db = SessionLocal()
+        try:
+            send(db, msg)
+        except Exception as exc:  # noqa: BLE001
+            logger.warning("텔레그램 알림 실패: %s", type(exc).__name__)
+        finally:
+            db.close()
+    if _token():
+        threading.Thread(target=_run, daemon=True).start()
+
+
+def _cut(s: str, n: int = 120) -> str:
+    s = (s or "").strip().replace(chr(10), " ")
+    return s if len(s) <= n else s[:n] + "…"
+
+
 # ── 장 마감 요약 ────────────────────────────────────────────────
 def jongbe_summary(db: Session) -> str:
     from backend.screener.jongbe import scan  # noqa: PLC0415
