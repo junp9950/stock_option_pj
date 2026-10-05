@@ -20,7 +20,7 @@ button{background:#1f6feb;color:#fff;border:0;border-radius:7px;padding:9px 16px
 .comments{margin-top:10px;padding-left:14px;border-left:2px solid #21262d}
 .comment{padding:6px 0;font-size:13px}.comment .meta{font-size:11px;margin-bottom:2px}.comment .content{margin:0;font-size:13px}
 .comment-form{display:flex;gap:6px;margin-top:8px;align-items:center}.comment-form input{flex:1}.comment-form input.name{flex:0 0 90px}.comment-form button{padding:7px 12px;font-size:13px}.comment-form .cam{background:transparent;border:1px solid #30363d;padding:6px 10px}
-.editor{margin-top:8px;padding:10px;border:1px solid #30363d;border-radius:8px;background:#0f141b}.editor textarea{min-height:70px}.editor textarea.post-ed{min-height:320px}#content{min-height:220px}
+.editor{margin-top:8px;padding:10px;border:1px solid #30363d;border-radius:8px;background:#0f141b}.editor textarea{min-height:70px}.rich{min-height:220px;background:#0d1117;color:#e6edf3;border:1px solid #30363d;border-radius:8px;padding:10px;white-space:pre-wrap;word-break:break-word;outline:none;cursor:text}.rich:focus{border-color:#1f6feb;outline:2px solid #1f6feb}.rich:empty:before{content:attr(data-ph);color:#6e7681}.rich img{display:block;max-width:100%;height:auto;margin:8px 0;border-radius:6px;border:2px solid transparent;cursor:pointer}.rich img.sel{border-color:#f85149}.editor .rich{min-height:320px}
 .board{width:100%;border-collapse:collapse}.board td{padding:10px 8px;border-top:1px solid #21262d;vertical-align:middle}.board tr:first-child td{border-top:0}
 .board tr.post{cursor:pointer}.board tr.post:hover{background:#1c2330}.board .b-tag{width:110px;color:#93c5fd;font-size:12.5px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:110px}
 .board .b-title{color:#e6edf3}.board .b-cnt{color:#58a6ff;font-weight:600;font-size:12.5px;margin-left:5px}.board .b-img{font-size:12px;margin-left:4px;color:#8b949e}
@@ -42,10 +42,9 @@ button{background:#1f6feb;color:#fff;border:0;border-radius:7px;padding:9px 16px
   </div>
   <div style="margin-top:10px"><input id="title" class="title-in" maxlength="100" placeholder="제목 (필수)"></div>
   <div style="margin-top:10px">
-    <textarea id="content" maxlength="5000" placeholder="내용을 입력하세요. 스크린샷은 원하는 줄에서 Ctrl+V 하면 그 자리에 [사진1]처럼 들어가고, 글에서 그 위치에 크게 보입니다"></textarea>
+    <div id="content" class="rich" contenteditable="true" data-ph="내용을 입력하세요. 스크린샷은 원하는 줄에서 Ctrl+V 하면 그 자리에 바로 들어갑니다 (사진을 누르고 Delete로 빼기)"></div>
   </div>
   <div class="paste-zone" id="paste-zone">여기 눌러서 사진 선택 (여러 장 가능, 최대 20장)</div>
-  <div id="preview-area" class="previews"></div>
   <div class="row"><span class="muted" style="font-size:13px">작성자</span><span class="who" data-who="post"></span><span class="grow"></span><button id="submit">남기기</button></div>
   <div id="form-msg" class="err" role="status"></div>
 </section>
@@ -87,7 +86,64 @@ function resizeImage(file){
 
 // 글 칸은 내용 길이만큼 늘어난다 (스크롤 없이 전체를 보며 [사진N] 자리를 잡게)
 function autoGrow(t){if(!t)return;t.style.height='auto';t.style.height=(t.scrollHeight+4)+'px'}
-document.addEventListener('input',e=>{if(e.target.matches('#content,textarea.post-ed'))autoGrow(e.target)});
+
+// 글 본문 편집기: 사진이 글 사이에 그대로 보이는 칸 (2026-10-05 "수정도 사진이 본문에 들어가 있으면 좋겠다").
+// 저장할 때는 사진 자리를 [사진N]으로 바꿔 글자와 사진 목록으로 보낸다 — 서버·글 보기 형식은 그대로.
+function richEditor(el,max,msgEl){
+  let saved=null;
+  const inEl=n=>n&&(n===el||el.contains(n));
+  document.addEventListener('selectionchange',()=>{const s=getSelection();if(s.rangeCount&&inEl(s.anchorNode))saved=s.getRangeAt(0).cloneRange()});
+  const count=()=>el.querySelectorAll('img').length;
+  const mkImg=src=>{const i=document.createElement('img');i.src=src;i.alt='';return i};
+  function place(node){
+    const s=getSelection();let r=s.rangeCount&&inEl(s.anchorNode)?s.getRangeAt(0):saved;
+    if(!r||!inEl(r.startContainer)){el.appendChild(node);r=document.createRange();r.setStartAfter(node)}
+    else{r.deleteContents();r.insertNode(node);r=r.cloneRange();r.setStartAfter(node)}
+    const nl=document.createTextNode('\n');r.insertNode(nl);r.setStartAfter(nl);r.collapse(true);
+    s.removeAllRanges();s.addRange(r);saved=r.cloneRange();
+  }
+  const ed={el,
+    load(text,images){
+      el.innerHTML='';images=images||[];const used=new Set();
+      const parts=String(text||'').split(/\[사진(\d+)\]\n?/);
+      for(let k=0;k<parts.length;k++){
+        if(k%2){const i=Number(parts[k])-1;if(images[i]&&!used.has(i)){used.add(i);el.appendChild(mkImg(images[i]));el.appendChild(document.createTextNode('\n'))}continue}
+        if(parts[k])el.appendChild(document.createTextNode(parts[k]));
+      }
+      images.forEach((u,i)=>{if(!used.has(i)){el.appendChild(document.createTextNode('\n'));el.appendChild(mkImg(u))}});
+    },
+    value(){
+      let out='';const imgs=[];
+      const walk=n=>{for(const c of n.childNodes){
+        if(c.nodeType===3)out+=c.nodeValue.replace(/\u00a0/g,' ');
+        else if(c.nodeName==='BR')out+='\n';
+        else if(c.nodeName==='IMG'){imgs.push(c.src);if(out&&!out.endsWith('\n'))out+='\n';out+=`[사진${imgs.length}]\n`}
+        else if(c.nodeType===1){const blk=/^(DIV|P)$/.test(c.nodeName);if(blk&&out&&!out.endsWith('\n'))out+='\n';walk(c);if(blk&&!out.endsWith('\n'))out+='\n'}
+      }};
+      walk(el);
+      return{content:out.replace(/\n{3,}/g,'\n\n').trim(),images:imgs};
+    },
+    clear(){el.innerHTML=''},
+    async add(files){
+      const list=[...files].filter(f=>f&&f.type&&f.type.startsWith('image/'));if(!list.length)return;
+      const room=max-count();
+      if(room<=0){if(msgEl)msgEl.textContent=`사진은 최대 ${max}장까지입니다.`;return}
+      if(msgEl)msgEl.textContent=list.length>room?`사진은 최대 ${max}장까지라 ${room}장만 넣었습니다.`:'';
+      for(const f of list.slice(0,room)){try{place(mkImg(await resizeImage(f)))}catch(e){if(msgEl)msgEl.textContent='이미지를 처리하지 못했습니다.'}}
+    }};
+  el.addEventListener('paste',e=>{
+    const cd=e.clipboardData;if(!cd)return;
+    const files=[...cd.items].filter(it=>it.type&&it.type.startsWith('image/')).map(it=>it.getAsFile());
+    e.preventDefault();
+    if(files.length){ed.add(files);return}
+    const t=cd.getData('text/plain');if(t)document.execCommand('insertText',false,t);
+  });
+  el.addEventListener('drop',e=>{const f=e.dataTransfer&&e.dataTransfer.files;if(f&&f.length){e.preventDefault();ed.add(f)}});
+  // 사진 누르면 선택(빨간 테두리) → Delete/Backspace로 빼기
+  el.addEventListener('click',e=>{el.querySelectorAll('img.sel').forEach(i=>i.classList.remove('sel'));if(e.target.tagName==='IMG')e.target.classList.add('sel')});
+  el.addEventListener('keydown',e=>{const i=el.querySelector('img.sel');if(i&&(e.key==='Delete'||e.key==='Backspace')){e.preventDefault();const n=i.nextSibling;if(n&&n.nodeType===3&&n.nodeValue.startsWith('\n'))n.nodeValue=n.nodeValue.slice(1);i.remove()}});
+  return ed;
+}
 // 사진 묶음: 미리보기 영역 + 목록 + 최대 장수. 새 글·댓글 입력·수정 화면이 모두 이걸 쓴다.
 function photoSet(area,max,msgEl,initial=[],textEl=null){
   const set={images:[...initial],max,
@@ -97,7 +153,7 @@ function photoSet(area,max,msgEl,initial=[],textEl=null){
         set.render()})},
     mark(n){if(!textEl)return;const t=textEl,a=t.selectionStart??t.value.length,b=t.selectionEnd??a;
       const pre=t.value.slice(0,a),ins=(pre&&!pre.endsWith('\n')?'\n':'')+`[사진${n}]\n`;
-      t.value=pre+ins+t.value.slice(b);const c=a+ins.length;try{t.setSelectionRange(c,c)}catch(e){};if(t.matches('#content,textarea.post-ed'))autoGrow(t)},
+      t.value=pre+ins+t.value.slice(b);const c=a+ins.length;try{t.setSelectionRange(c,c)}catch(e){};},
     async add(files){
       const list=[...files].filter(f=>f&&f.type&&f.type.startsWith('image/'));if(!list.length)return;
       const room=max-set.images.length;
@@ -121,18 +177,17 @@ function pasteInto(el,set){el.addEventListener('paste',e=>{
 
 // 새 글
 const formMsg=document.getElementById('form-msg');
-const newPost=photoSet(document.getElementById('preview-area'),MAX_POST,formMsg,[],document.getElementById('content'));
-pasteInto(document.getElementById('content'),newPost);
+const newPost=richEditor(document.getElementById('content'),MAX_POST,formMsg);
 document.getElementById('paste-zone').onclick=()=>pick(newPost);
 document.getElementById('submit').onclick=async()=>{
-  const content=document.getElementById('content').value.trim(),title=document.getElementById('title').value.trim();
+  const v=newPost.value(),content=v.content,title=document.getElementById('title').value.trim();
   if(!title){formMsg.textContent='제목을 입력해 주세요.';document.getElementById('title').focus();return}
-  if(!content&&!newPost.images.length){formMsg.textContent='내용이나 이미지를 입력해 주세요.';return}
+  if(!content&&!v.images.length){formMsg.textContent='내용이나 이미지를 입력해 주세요.';return}
   try{
-    await call('POST',API,{title,content,images:newPost.images,author:document.querySelector('[data-who="post"]').dataset.value,
+    await call('POST',API,{title,content,images:v.images,author:document.querySelector('[data-who="post"]').dataset.value,
       stock_name:document.getElementById('stock-name').value.trim(),stock_code:document.getElementById('stock-code').value.trim()});
-    ['title','content','stock-name','stock-code'].forEach(id=>document.getElementById(id).value='');
-    newPost.images=[];newPost.render();formMsg.textContent='';
+    ['title','stock-name','stock-code'].forEach(id=>document.getElementById(id).value='');
+    newPost.clear();formMsg.textContent='';
     document.getElementById('write-box').style.display='none';
     if(location.hash)location.hash='';else await route();
   }catch(e){formMsg.textContent=e.message}
@@ -208,25 +263,25 @@ function openEditor(host,{text,images,max,stock,onSave}){
   const body=host.querySelector(':scope > .body');body.style.display='none';
   const ed=document.createElement('div');ed.className='editor';
   ed.innerHTML=`${stock?`<input class="title-in" data-e="title" maxlength="100" placeholder="제목 (필수)" style="margin-bottom:8px">`:''}${stock?`<div class="row" style="margin-top:0"><input class="grow" data-e="sname" maxlength="100" placeholder="종목명"><input style="max-width:120px" data-e="scode" maxlength="20" placeholder="종목코드"></div>`:''}
-    <textarea data-e="text" class="${stock?'post-ed':''}" maxlength="${stock?5000:1000}" style="margin-top:${stock?'8px':'0'}"></textarea>
-    <div class="previews small" data-e="previews"></div>
+    ${stock?`<div data-e="rich" class="rich" contenteditable="true" style="margin-top:8px" data-ph="내용 (사진은 원하는 줄에서 Ctrl+V)"></div>`:`<textarea data-e="text" maxlength="1000"></textarea>
+    <div class="previews small" data-e="previews"></div>`}
     <div class="row"><button class="ghost" data-e="add">사진 추가</button><button data-e="save">저장</button><button class="ghost" data-e="cancel">취소</button><span class="err" data-e="msg"></span></div>`;
   body.after(ed);
   const q=k=>ed.querySelector(`[data-e="${k}"]`);
-  q('text').value=text||'';if(stock)requestAnimationFrame(()=>autoGrow(q('text')));
-  if(stock){q('sname').value=stock.name||'';q('scode').value=stock.code||'';q('title').value=stock.title||''}
-  const set=photoSet(q('previews'),max,q('msg'),images||[],stock?q('text'):null);
-  pasteInto(q('text'),set);
-  q('add').onclick=()=>pick(set);
+  let set,rich;
+  if(stock){q('sname').value=stock.name||'';q('scode').value=stock.code||'';q('title').value=stock.title||'';
+    rich=richEditor(q('rich'),max,q('msg'));rich.load(text,images)}
+  else{q('text').value=text||'';set=photoSet(q('previews'),max,q('msg'),images||[]);pasteInto(q('text'),set)}
+  q('add').onclick=()=>pick(rich||set);
   q('cancel').onclick=()=>{ed.remove();body.style.display=''};
   q('save').onclick=async()=>{
-    const payload={content:q('text').value.trim(),images:set.images};
+    const payload=rich?rich.value():{content:q('text').value.trim(),images:set.images};
     if(stock){payload.stock_name=q('sname').value.trim();payload.stock_code=q('scode').value.trim();payload.title=q('title').value.trim();
       if(!payload.title){q('msg').textContent='제목을 입력해 주세요.';return}}
     if(!payload.content&&!payload.images.length){q('msg').textContent='내용이나 사진을 남겨 주세요.';return}
     try{await onSave(payload);await load()}catch(err){q('msg').textContent=err.message}
   };
-  q('text').focus();
+  (rich?rich.el:q('text')).focus();
 }
 
 // 이 페이지는 메인 화면의 긴 iframe 안에 있어서, 확대 창은 메인 화면(같은 출처)에 띄워야 보고 있는 화면 가운데에 보인다.
