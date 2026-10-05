@@ -1,4 +1,4 @@
-"""차트 후보: 원하는 모양(불플래그 · 상승삼각형 · 기준봉 눌림)인 종목을 섹터 강도 순으로.
+"""차트 후보: 원하는 모양(불플래그 · 상승삼각형 · 기준봉 눌림 · 장대음봉도지 · VCP)인 종목을 섹터 강도 순으로.
 
 점수(0~100) = 종목의 대표 테마(주가가 가장 비슷하게 움직인 테마)의 최근 20일 수익률 백분위.
 3년 백테스트: 강한 대표 테마(80+) + 차트 후보는 탐색·검증 두 기간 모두 같은 날 아무 종목보다 20일 +1.4~1.6%p
@@ -97,6 +97,57 @@ def detect_triangle(pl: list, market: dict | None = None) -> dict | None:
         return None
     return {"resistance": round(res), "support": round(lo2), "touches": touches,
             "rise_pct": round((gain - 1) * 100), "shrink": round(r2 / r1, 2)}
+
+
+VCP_SEG = 15     # 수축 구간 길이(거래일) — 10일보다 15일이 3년 확인에서 일관됨
+
+
+def _vcp_core(pl: list) -> dict | None:
+    """마지막 날 기준 VCP 성립 여부: 상승 추세 + 최근 45일을 15일씩 세 구간으로 나눴을 때
+    눌림 폭(구간 고가 대비 저가)이 차례로 줄고 마지막 폭 12% 이하, 첫 폭이 마지막의 1.8배 이상, 거래대금도 줄어듦."""
+    if len(pl) < 200:
+        return None
+    c = [p.close_price for p in pl]
+    h = [p.high_price for p in pl]
+    lo = [p.low_price for p in pl]
+    v = [float(p.trading_value or 0) for p in pl]
+    close = c[-1]
+    ma50, ma150 = sum(c[-50:]) / 50, sum(c[-150:]) / 150
+    hi, low = max(h[-250:]), min(x for x in lo[-250:] if x)
+    if not (close > ma50 > ma150 and close >= hi * 0.8 and close >= low * 1.3):
+        return None
+    segs = []
+    n = len(pl)
+    for k in (2, 1, 0):
+        a, b = n - VCP_SEG * (k + 1), n - VCP_SEG * k
+        hh, ll = max(h[a:b]), min(lo[a:b])
+        if not hh or not ll:
+            return None
+        segs.append(((1 - ll / hh) * 100, sum(v[a:b]) / VCP_SEG))
+    (r1, v1), (r2, v2), (r3, v3) = segs
+    if not (r1 > r2 > r3 and r3 <= 12 and r1 >= r3 * 1.8 and v3 < v1):
+        return None
+    return {"r": [round(r1), round(r2), round(r3)], "v": [v1, v2, v3], "low": min(lo[-VCP_SEG:])}
+
+
+def detect_vcp(pl: list) -> dict | None:
+    """VCP(변동성 축소 패턴, 사용자 정의 "박스 돌파하기 위해 거래량 죽이면서 변동성 압축하는 그림") — 2026-10-05.
+    매수선 = 직전 15일 고가. 상태: 매수선 -5~0% 안(돌파 대기) 또는 어제까지 VCP였고 오늘 매수선 0~+5% 돌파.
+    3년(상승·횡보장, 같은 날 전 종목 평균 대비 20일): 성립 275건 +2.93%p(중간 +0.3, 이김 51%), 매수선 -5% 안 +3.29,
+    뜨는 섹터 + 매수선 -5% 안 60건 +7.19%p(중간 +3.3, 이김 60%), 돌파일 +2.77(뜨는 섹터 +4.59). 기준 전 종목 +0.32.
+    손절 = 마지막 수축 구간 저점."""
+    if len(pl) < 201:
+        return None
+    close = pl[-1].close_price
+    pivot = max(p.high_price for p in pl[-VCP_SEG - 1:-1])
+    core = _vcp_core(pl)
+    if core and pivot * 0.95 <= close <= pivot:
+        return {**core, "pivot": pivot, "state": "돌파 대기", "pos": round((close / pivot - 1) * 100, 1)}
+    if pivot < close <= pivot * 1.05:
+        y = _vcp_core(pl[:-1])
+        if y:
+            return {**y, "pivot": pivot, "state": "돌파", "pos": round((close / pivot - 1) * 100, 1)}
+    return None
 
 
 def detect_big_doji(pl: list) -> dict | None:
@@ -232,7 +283,7 @@ def scan(db: Session) -> dict:
         select(SpotDailyPrice.stock_code, SpotDailyPrice.trading_date, SpotDailyPrice.open_price,
                SpotDailyPrice.high_price, SpotDailyPrice.low_price, SpotDailyPrice.close_price,
                SpotDailyPrice.volume, SpotDailyPrice.trading_value, SpotDailyPrice.change_pct)
-        .where(SpotDailyPrice.trading_date >= latest - timedelta(days=160))
+        .where(SpotDailyPrice.trading_date >= latest - timedelta(days=380))   # VCP 추세 확인에 250거래일
         .order_by(SpotDailyPrice.stock_code, SpotDailyPrice.trading_date)
     ).all()
     by_code: dict[str, list] = defaultdict(list)
@@ -284,6 +335,11 @@ def scan(db: Session) -> dict:
             found[code].append({"type": "상승삼각형", "grade": None, "stop": tri["support"],
                                 "detail": f"깃대 +{tri['rise_pct']}%(시장 대비) · 저항 {tri['resistance']:,}원 {tri['touches']}회 터치"
                                           + (f" · 돌파 후 {after}일" if after else "")})
+        vc = detect_vcp(pl)
+        if vc:
+            found[code].append({"type": "VCP", "grade": None, "stop": vc["low"],
+                                "detail": f"눌림 {vc['r'][0]}%→{vc['r'][1]}%→{vc['r'][2]}% · 거래 {vc['v'][0] / 1e8:.0f}→{vc['v'][2] / 1e8:.0f}억 · "
+                                          f"매수선 {vc['pivot']:,.0f}원 {vc['pos']:+.1f}% ({vc['state']})"})
         dj = detect_big_doji(pl)
         if dj:
             found[code].append({"type": "장대음봉도지", "grade": None, "stop": dj["stop"],

@@ -534,7 +534,7 @@ select{background:#21262d;border:1px solid #30363d;color:#c9d1d9;padding:6px 10p
   </details>
   <details class="sec" data-k="cd">
     <summary>📐 차트 모양 후보 <span class="ts" id="cd-sum"></span></summary>
-  <p class="lead">불플래그 · 상승삼각형 · 기준봉 눌림 · 장대음봉도지 중 하나라도 해당하는 종목. 손절선까지 <b style="color:#3fb950">3~6%</b>가 적정.</p>
+  <p class="lead">불플래그 · 상승삼각형 · 기준봉 눌림 · 장대음봉도지 · <b style="color:#f778ba">VCP</b>(눌림 폭이 15일마다 줄고 거래 마름 · 매수선 -5% 안이 3년 +3.3%p, 뜨는 섹터면 +7.2%p) 중 하나라도 해당하는 종목. 손절선까지 <b style="color:#3fb950">3~6%</b>가 적정.</p>
   <div class="toolbar" style="margin-bottom:12px">
     <label style="display:flex;align-items:center;gap:6px;font-size:13px;color:#8b949e">
       최소 시가총액(억원)
@@ -554,6 +554,7 @@ select{background:#21262d;border:1px solid #30363d;color:#c9d1d9;padding:6px 10p
       <option value="">모든 모양</option>
       <option value="불플래그">불플래그</option>
       <option value="상승삼각형">상승삼각형</option>
+      <option value="VCP">VCP</option>
       <option value="기준봉 눌림">기준봉 눌림</option>
       <option value="장대음봉도지">장대음봉도지</option>
     </select>
@@ -1404,7 +1405,7 @@ function renderCandidates(){
     body.innerHTML = '<tr><td colspan="5" style="color:#8b949e;text-align:center;padding:20px">조건에 맞는 종목이 없습니다</td></tr>';
     return;
   }
-  const tagColor = {'불플래그':'#58a6ff','상승삼각형':'#bc8cff','기준봉 눌림':'#d29922','장대음봉도지':'#3fb950'};
+  const tagColor = {'불플래그':'#58a6ff','상승삼각형':'#bc8cff','기준봉 눌림':'#d29922','장대음봉도지':'#3fb950','VCP':'#f778ba'};
   body.innerHTML = items.map(it=>{
     const indHtml = `<span style="font-size:12.5px">${it.industry||'업종 정보 없음'}</span>`
       + (it.sector_name?`<br><span class="ts">${it.sector_name} · 20일 ${it.sector_ret20>=0?'+':''}${it.sector_ret20}%</span>`:'');
