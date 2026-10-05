@@ -21,7 +21,9 @@ button{background:#1f6feb;color:#fff;border:0;border-radius:7px;padding:9px 16px
 .replies{margin-left:22px;border-left:2px solid #21262d;padding-left:10px}.replies .comment .meta:before{content:'↳ ';color:#6e7681}
 .reply-form{margin:4px 0 6px 22px}.reply-form .comment-form{margin-top:4px}
 .comment{padding:6px 0;font-size:13px}.comment .meta{font-size:11px;margin-bottom:2px}.comment .content{margin:0;font-size:13px}
-.comment-form{display:flex;gap:6px;margin-top:8px;align-items:center}.comment-form input{flex:1}.comment-form input.name{flex:0 0 90px}.comment-form button{padding:7px 12px;font-size:13px}.comment-form .cam{background:transparent;border:1px solid #30363d;padding:6px 10px}
+.comment-form{margin-top:10px}.cf-top{display:flex;gap:8px;align-items:center;margin-bottom:6px;flex-wrap:wrap}.cf-hint{font-size:11.5px;color:#6e7681}
+.comment-form textarea{min-height:76px;font-size:14px;line-height:1.5;resize:vertical}.cf-btns{display:flex;justify-content:flex-end;gap:6px;margin-top:6px}
+.comment-form button{padding:7px 14px;font-size:13px}.comment-form .cam{background:transparent;border:1px solid #30363d;padding:6px 10px}.editor textarea{min-height:110px}
 .editor{margin-top:8px;padding:10px;border:1px solid #30363d;border-radius:8px;background:#0f141b}.editor textarea{min-height:70px}.rich{min-height:220px;background:#0d1117;color:#e6edf3;border:1px solid #30363d;border-radius:8px;padding:10px;white-space:pre-wrap;word-break:break-word;outline:none;cursor:text}.rich:focus{border-color:#1f6feb;outline:2px solid #1f6feb}.rich:empty:before{content:attr(data-ph);color:#6e7681}.rich img{display:block;max-width:100%;height:auto;margin:8px 0;border-radius:6px;border:2px solid transparent;cursor:pointer}.rich img.sel{border-color:#f85149}.editor .rich{min-height:320px}
 .board{width:100%;border-collapse:collapse}.board td{padding:10px 8px;border-top:1px solid #21262d;vertical-align:middle}.board tr:first-child td{border-top:0}
 .board tr.post{cursor:pointer}.board tr.post:hover{background:#1c2330}.board .b-tag{width:110px;color:#93c5fd;font-size:12.5px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:110px}
@@ -31,7 +33,7 @@ button{background:#1f6feb;color:#fff;border:0;border-radius:7px;padding:9px 16px
 .title-in{font-weight:600}
 .post-title{font-size:18px;font-weight:700;color:#e6edf3;margin:6px 0 2px}
 .topbar{display:flex;justify-content:space-between;align-items:center;margin-top:18px;gap:10px}
-@media(max-width:640px){main{padding:14px}.comment-form{flex-wrap:wrap}.comment-form .who{flex:0 0 100%}.comment-form .who button{flex:1}.comment-form input{flex:1 1 0;min-width:0;font-size:16px}.board .b-tag{display:none}.board .b-author{width:auto;max-width:70px;font-size:12px}.board .b-time{width:auto}}
+@media(max-width:640px){main{padding:14px}.comment-form textarea{font-size:16px}.board .b-tag{display:none}.board .b-author{width:auto;max-width:70px;font-size:12px}.board .b-time{width:auto}}
 .lightbox{display:none;position:fixed;inset:0;background:rgba(0,0,0,.85);z-index:50;align-items:center;justify-content:center;cursor:zoom-out}
 .lightbox.show{display:flex}.lightbox img{max-width:92vw;max-height:92vh;border-radius:6px}
 </style></head><body><main>
@@ -88,6 +90,7 @@ function resizeImage(file){
 
 // 글 칸은 내용 길이만큼 늘어난다 (스크롤 없이 전체를 보며 [사진N] 자리를 잡게)
 function autoGrow(t){if(!t)return;t.style.height='auto';t.style.height=(t.scrollHeight+4)+'px'}
+document.addEventListener('input',e=>{if(e.target.matches('.comment-form textarea,.editor textarea'))autoGrow(e.target)});
 
 // 글 본문 편집기: 사진이 글 사이에 그대로 보이는 칸 (2026-10-05 "수정도 사진이 본문에 들어가 있으면 좋겠다").
 // 저장할 때는 사진 자리를 [사진N]으로 바꿔 글자와 사진 목록으로 보낸다 — 서버·글 보기 형식은 그대로.
@@ -246,17 +249,17 @@ function commentsHtml(list){
     +`${kids[c.id]?`<div class="replies">${kids[c.id].map(r=>commentHtml(r,true)).join('')}</div>`:''}</div>`).join('');
 }
 function openReply(thread){
-  if(thread.querySelector('.reply-form')){thread.querySelector('.reply-form input').focus();return}
+  if(thread.querySelector('.reply-form')){thread.querySelector('.reply-form textarea').focus();return}
   const f=document.createElement('div');f.className='reply-form';
-  f.innerHTML=`<div class="comment-form"><span class="who" data-f="r-author"></span>
-      <input maxlength="1000" placeholder="답글 입력 (사진은 Ctrl+V 또는 📷)" data-f="r-content">
-      <button class="cam" data-act="r-photo" title="답글 사진 추가">📷</button><button data-act="add-reply">등록</button><button class="ghost" data-act="r-cancel">취소</button></div>
+  f.innerHTML=`<div class="comment-form"><div class="cf-top"><span class="who" data-f="r-author"></span><span class="cf-hint">Enter 등록 · Shift+Enter 줄바꿈</span></div>
+      <textarea maxlength="1000" placeholder="답글 입력 (사진은 Ctrl+V 또는 📷)" data-f="r-content"></textarea>
+      <div class="cf-btns"><button class="cam" data-act="r-photo" title="답글 사진 추가">📷</button><button class="ghost" data-act="r-cancel">취소</button><button data-act="add-reply">등록</button></div></div>
     <div class="previews small" data-f="r-previews"></div>`;
   thread.appendChild(f);
   f._set=photoSet(f.querySelector('[data-f="r-previews"]'),MAX_COMMENT,null);
   pasteInto(f.querySelector('[data-f="r-content"]'),f._set);
   whoToggle(f.querySelector('[data-f="r-author"]'));
-  f.querySelector('input').focus();
+  f.querySelector('textarea').focus();
 }
 async function addReply(f){
   const thread=f.closest('.thread'),content=f.querySelector('[data-f="r-content"]').value.trim();
@@ -273,10 +276,9 @@ box.innerHTML=`<div class="item" data-id="${x.id}">
   <div class="comments">
     ${commentsHtml(x.comments||[])}
     <div class="comment-form">
-      <span class="who" data-f="c-author"></span>
-      <input maxlength="1000" placeholder="댓글 입력 (사진은 Ctrl+V 또는 📷)" data-f="c-content">
-      <button class="cam" data-act="c-photo" title="댓글 사진 추가">📷</button>
-      <button data-act="add-comment">등록</button>
+      <div class="cf-top"><span class="who" data-f="c-author"></span><span class="cf-hint">Enter 등록 · Shift+Enter 줄바꿈</span></div>
+      <textarea maxlength="1000" placeholder="댓글 입력 (사진은 Ctrl+V 또는 📷)" data-f="c-content"></textarea>
+      <div class="cf-btns"><button class="cam" data-act="c-photo" title="댓글 사진 추가">📷</button><button data-act="add-comment">등록</button></div>
     </div>
     <div class="previews small" data-f="c-previews"></div>
   </div>
@@ -380,8 +382,9 @@ document.getElementById('list').addEventListener('click',async e=>{
   }
 });
 document.getElementById('list').addEventListener('keydown',e=>{
-  if(e.key==='Enter'&&e.target.matches('[data-f="c-content"]')){e.preventDefault();addComment(e.target.closest('.item'))}
-  if(e.key==='Enter'&&e.target.matches('[data-f="r-content"]')){e.preventDefault();addReply(e.target.closest('.reply-form'))}
+  if(e.key!=='Enter'||e.shiftKey||e.isComposing)return;
+  if(e.target.matches('[data-f="c-content"]')){e.preventDefault();addComment(e.target.closest('.item'))}
+  if(e.target.matches('[data-f="r-content"]')){e.preventDefault();addReply(e.target.closest('.reply-form'))}
 });
 whoToggle(document.querySelector('[data-who="post"]'));
 route();
