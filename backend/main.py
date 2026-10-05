@@ -294,7 +294,7 @@ select{background:#21262d;border:1px solid #30363d;color:#c9d1d9;padding:6px 10p
 
   <div style="margin:4px 0 22px">
     <b style="font-size:15px;color:#e6edf3;margin:4px 0 8px">③ 뜨는 섹터의 좋은 차트 · 며칠~몇 주 들고 갈 종목 (스윙·선취매)</b> <span class="ts" id="jb-ch-info"></span>
-    <p class="lead" style="margin-top:6px"><b style="color:#3fb950">🚀 돌파</b>·<b>돌파 대기</b> = 120일 박스 상단(20일 넘게 묵은 고점) 처음 넘음·-3% 이내 (이미 많이 오른 종목·꼬리만 남은 종목 뺌) · <b style="color:#3fb950">저가 지킴</b> = 대량거래 봉 저가 안 깸 · <b style="color:#58a6ff">눌림</b> = 20일 고점 -5~-15% · <b style="color:#e3b341">버팀</b> = 섹터 빠진 날 안 빠짐</p>
+    <p class="lead" style="margin-top:6px"><b style="color:#3fb950">🚀 돌파</b>·<b>돌파 대기</b> = 120일 박스 상단(20일 넘게 묵은 고점) 처음 넘음·-3% 이내 (이미 많이 오른 종목·꼬리만 남은 종목 뺌) · <b style="color:#3fb950">🚀 꼬리 돌파</b> = 종가 고점 넘고 버티다 옛 꼬리 끝까지 종가로 넘음(물린 사람 0) · <b style="color:#3fb950">저가 지킴</b> = 대량거래 봉 저가 안 깸 · <b style="color:#58a6ff">눌림</b> = 20일 고점 -5~-15% · <b style="color:#e3b341">버팀</b> = 섹터 빠진 날 안 빠짐</p>
     <details class="why"><summary>근거 보기</summary>
       3년(같은 날 시장 대비 20일 뒤): 돌파 +2.9%p, 돌파 대기 +2.4%p, 눌림 +2.2%p, 저가 지킴 +1.3%p (뜨거운 섹터 아무 종목 +1.7%p). 거래 2배 넘게 터지며 돌파(📢)는 +0.8%p로 약함.
       어느 종목이 터질지는 못 맞힘(10일 안 폭발 8~11%) → 여러 개로 나누고 터지면 대부분 챙기기. 박스 안으로 다시 들어오거나 손절선 깨면 정리.
@@ -769,7 +769,7 @@ function renderJongbe(){
   </tr>`).join('');
   const merged={};
   for(const x of (d.swing||[]).filter(okCap)){
-    const t=x.state==='막 넘음'?'🚀 돌파':'돌파 대기';
+    const t=x.state==='막 넘음'?(x.held?'🚀 꼬리 돌파':'🚀 돌파'):'돌파 대기';
     merged[x.code]={...x, tags:[t], loud:x.loud, box:x};
   }
   for(const x of (d.prebuy||[]).filter(okCap)){
@@ -779,7 +779,7 @@ function renderJongbe(){
   const ch=Object.values(merged).sort((a,b)=>(b.tags.includes('🚀 돌파')-a.tags.includes('🚀 돌파'))||(b.tags.length-a.tags.length)||((b.market_cap||0)-(a.market_cap||0)));
   const cnt=t=>ch.filter(x=>x.tags.includes(t)).length;
   document.getElementById('jb-ch-info').textContent=`${ch.length}개 · 🚀 돌파 ${cnt('🚀 돌파')} · 돌파 대기 ${cnt('돌파 대기')} · 저가 지킴 ${cnt('저가 지킴')} · 눌림 ${cnt('눌림')} · 버팀 ${cnt('버팀')}`;
-  const tagCol={'🚀 돌파':'#3fb950','돌파 대기':'#c9d1d9','저가 지킴':'#3fb950','눌림':'#58a6ff','버팀':'#e3b341'};
+  const tagCol={'🚀 돌파':'#3fb950','🚀 꼬리 돌파':'#3fb950','돌파 대기':'#c9d1d9','저가 지킴':'#3fb950','눌림':'#58a6ff','버팀':'#e3b341'};
   const rowHtml=x=>`<tr style="cursor:pointer" onclick="openChartModal('${x.code}','${x.name}','')">
     <td><b>${x.name}</b> <span style="color:#8b949e;font-size:11px">${x.code}</span>${flagTag(x)}${x.earn_up?' <span style="color:#3fb950;font-size:11px;border:1px solid #238636;border-radius:8px;padding:0 5px">📈 실적</span>':''}${x.market_cap?`<br><span class="ts">시총 ${cdWon(x.market_cap)}</span>`:''}${lbBtns(x,'스윙·선취매')}</td>
     <td data-label="근거">${x.tags.map(t=>`<b style="color:${tagCol[t]||'#c9d1d9'}">${t}</b>`).join(' · ')}${x.loud?' <span class="ts" style="color:#d29922" title="거래 2배 넘게 터지며 돌파 (긴 박스에선 약하지 않음 +5.4%p)">📢 거래 폭발</span>':''}

@@ -172,12 +172,23 @@ def scan(db: Session) -> dict:
         if not top or top != top or not bool(under20.get(code, False)) or H[code].iloc[-121:-21].isna().sum() > 10:
             continue
         pos = v["close"] / top - 1
-        if not -0.03 <= pos < 0.03 or not bool(fresh.get(code, False)) or (v["gap20_pct"] or 0) >= 20 or float(run20.get(code, 0)) >= 0.4:
+        held = False
+        if not bool(fresh.get(code, False)):
+            # 종가 고점은 이미 넘고 꼬리 아래서 버티던 종목(가온전선형): 오늘 종가가 120일 꼬리 끝(최근 꼬리 포함)을 처음 넘으면 '물린 사람 0' 돌파.
+            # 3년 120일: 횡보 뒤 꼬리 넘음 +3.36%p, 꼬리 처음 넘음 전체 +4.19 vs 꼬리 아래(매물 남음) +2.08 (250일 +5.43 vs +3.63).
+            top = float(H[code].iloc[-121:-1].max())
+            pos = v["close"] / top - 1
+            if not (0 <= pos < 0.03 and C[code].iloc[-21:-1].max() < top):
+                continue
+            held = True
+        elif float(run20.get(code, 0)) >= 0.4:
             continue
-        box_day = H[code].iloc[-121:-21].idxmax()
+        if not -0.03 <= pos < 0.03 or (v["gap20_pct"] or 0) >= 20:
+            continue
+        box_day = H[code].iloc[-121:-1].idxmax() if held else H[code].iloc[-121:-21].idxmax()
         vr_v = vr_stage.get(code)
         swing.append({"code": code, "name": nm, "close": round(v["close"]), "change_pct": v["change_pct"], "box_top": round(top),
-                      "pos_pct": round(pos * 100, 1), "state": "막 넘음" if pos >= 0 else "붙음", "tv_x": v["tv_x"],
+                      "pos_pct": round(pos * 100, 1), "state": "막 넘음" if pos >= 0 else "붙음", "held": held, "tv_x": v["tv_x"],
                       "loud": bool(v["tv_x"] and v["tv_x"] >= VOL_X and pos >= 0), "gap20_pct": v["gap20_pct"],
                       "box_date": box_day.isoformat(), "box_age": int(len(C.index) - 1 - C.index.get_loc(box_day)),
                       "families": [f for f in hot if code in fam[f]["members"]], "earn_up": code in earn_up,
