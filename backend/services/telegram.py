@@ -65,11 +65,12 @@ def _put(db: Session, key: str, value) -> None:
     db.commit()
 
 
-def send(db: Session, msg: str, chat_id: int | str | None = None) -> None:
+def send(db: Session, msg: str, chat_id: int | str | None = None, html: bool = False) -> None:
     targets = [chat_id] if chat_id is not None else list(_get(db, "telegram_chats", {}).keys())
+    extra = {"parse_mode": "HTML"} if html else {}
     for c in targets:
-        for i in range(0, len(msg), 3900):      # 텔레그램 한 메시지 4096자 제한
-            _api("sendMessage", chat_id=c, text=msg[i:i + 3900], disable_web_page_preview=True)
+        for i in range(0, len(msg), 3900):      # 텔레그램 한 메시지 4096자 제한 (HTML은 짧게 써서 태그가 안 잘리게)
+            _api("sendMessage", chat_id=c, text=msg[i:i + 3900], disable_web_page_preview=True, **extra)
 
 
 SITE = "http://20.196.212.146"

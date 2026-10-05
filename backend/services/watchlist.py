@@ -108,10 +108,16 @@ def _shape(c: list[dict]) -> dict | None:
             "width": (max(closes) / min(closes) - 1) * 100 if closes else 0, "tags": tags}
 
 
+def _won(x: float) -> str:
+    return f"{x:,.0f}"
+
+
 def report(db: Session, force: bool = False) -> str | None:
+    """텔레그램 HTML. 할 일 있는 종목만 한 줄씩 굵게, 조용한 종목은 이름만 묶는다 (2026-10-05 "가독성이 너무 안 좋노")."""
+    from html import escape  # noqa: PLC0415
     from backend.services.toss_client import fetch_candles  # noqa: PLC0415
     today = datetime.now(ZoneInfo("Asia/Seoul")).date().isoformat()
-    hit, near, warn, rest = [], [], [], []
+    g = {k: [] for k in ("brk", "fire", "close", "candle", "warn", "dry", "far")}
     last_date = ""
     for it in _items(db):
         c = fetch_candles(it["code"], "1d", 25)
@@ -120,35 +126,42 @@ def report(db: Session, force: bool = False) -> str | None:
         if not s:
             continue
         last_date = max(last_date, s["date"])
-        lv, p = it["level"], s["close"]
-        base = f"{it['name']} {p:,.0f}원 ({s['chg']:+.1f}%) 거래 {s['vx']:.1f}배 · 10일 폭 {s['width']:.0f}%"
-        tag = (" " + " ".join(s["tags"])) if s["tags"] else ""
-        if it["kind"] == "above":
-            line = f"{base} · {lv:,}원 {'위 마감 ✅' if p >= lv else f'까지 {(lv / p - 1) * 100:+.1f}%'}{tag}"
-            (hit if p >= lv else near if p >= lv * 0.97 else rest).append(line)
-        elif it["kind"] == "near":
-            d = (p / lv - 1) * 100
-            line = f"{base} · 기준 {lv:,}원 {d:+.1f}%{tag}"
-            (near if abs(d) <= 3 else rest).append(line)
-        elif it["kind"] == "hold":
-            line = f"{base} · {lv:,}원 {'지킴' if p >= lv else '이탈 ⚠'}{tag}"
-            (warn if p < lv else rest).append(line)
+        lv, p, nm = it["level"], s["close"], f"<b>{escape(it['name'])}</b>"
+        pct = f"{s['chg']:+.1f}%"
+        candle = next((t for t in s["tags"] if "도지" in t), "")
+        if "🔥장대양봉" in s["tags"]:
+            g["fire"].append(f"{nm} {pct} · 거래 {s['vx']:.0f}배" + (f" · {_won(lv)} 위 마감 ✅" if it["kind"] == "above" and p >= lv else ""))
+        elif it["kind"] == "above" and p >= lv:
+            g["brk"].append(f"{nm} {_won(p)} ({pct}) · {_won(lv)} 위 마감")
+        elif "⚠장대음봉" in s["tags"] or (it["kind"] == "hold" and p < lv):
+            g["warn"].append(f"{nm} {pct}" + (f" · {_won(lv)} 이탈" if it["kind"] == "hold" and p < lv else " · 장대음봉"))
+        elif it["kind"] == "above" and p >= lv * 0.97:
+            g["close"].append(f"{nm} {_won(p)} → {_won(lv)}  <i>{(lv / p - 1) * 100:.1f}% 남음</i>")
+        elif it["kind"] == "near" and abs(p / lv - 1) <= 0.03:
+            g["close"].append(f"{nm} {_won(p)} · 기준 {_won(lv)} 근처 ({(p / lv - 1) * 100:+.1f}%)")
+        elif candle:
+            g["candle"].append(f"{nm} {candle.replace('🕯', '')} ({pct})")
+        elif "거래 마름" in s["tags"]:
+            g["dry"].append(escape(it["name"]))
         else:
-            line = f"{base}{tag}"
-            (warn if "⚠장대음봉" in s["tags"] else near if s["tags"] else rest).append(line)
-        if "🔥장대양봉" in s["tags"] and line not in hit:      # 기준가와 상관없이 거래 실린 장대양봉은 맨 위로
-            for arr in (near, warn, rest):
-                if line in arr:
-                    arr.remove(line)
-            hit.append(line)
+            far = f"(선까지 {(lv / p - 1) * 100:.0f}%)" if it["kind"] == "above" else ""
+            g["far"].append(escape(it["name"]) + far)
     if not force and last_date != today:
         return None     # 휴장일
-    out = [f"📋 관심 종목 장 마감 점검 ({last_date})"]
-    for title, arr in (("🔔 조건 충족·장대양봉", hit), ("👀 기준가 근처·봉 신호", near), ("⚠ 이탈·장대음봉", warn), ("· 나머지", rest)):
-        if arr:
-            out.append(f"\n{title} ({len(arr)})")
-            out += [f"· {x}" for x in arr]
-    out.append("\n종가 판단은 시간외 단일가(16:00~18:00) 전 기준입니다.")
+    d = last_date[5:].replace("-", "/")
+    out = [f"📋 <b>관심 종목 {d} 마감</b>"]
+    blocks = (("✅ 선 위 마감", "brk"), ("🔥 거래 실린 장대양봉", "fire"), ("👀 선 코앞 (3% 안)", "close"),
+              ("🕯 도지", "candle"), ("⚠ 이탈·장대음봉", "warn"))
+    for title, k in blocks:
+        if g[k]:
+            out.append(f"\n{title}")
+            out += g[k]
+    if g["dry"]:
+        out.append(f"\n💤 거래 마름 (수렴 중)\n{', '.join(g['dry'])}")
+    if g["far"]:
+        out.append(f"\n· 변화 없음\n<i>{', '.join(g['far'])}</i>")
+    if not any(g[k] for _, k in blocks):
+        out.insert(1, "\n오늘은 조건에 닿은 종목이 없습니다.")
     return "\n".join(out)
 
 
@@ -162,4 +175,4 @@ def send_report(db: Session, force: bool = False, chat_id: str | None = None) ->
         chats = list(_get(db, "telegram_chats", {}).keys())
         _put(db, CHAT_KEY, chats)
     for c in chats:
-        send(db, msg, c)
+        send(db, msg, c, html=True)
