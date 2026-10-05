@@ -355,6 +355,7 @@ class JongbePick(Base, TimestampMixin):
     close_price: Mapped[float] = mapped_column(Float, default=0.0)
     change_pct: Mapped[float] = mapped_column(Float, default=0.0)
     market_ok: Mapped[bool] = mapped_column(Boolean, default=True)
+    ai_pick: Mapped[bool] = mapped_column(Boolean, default=False)   # 장 마감 뒤 결과 모르고 규칙으로 고른 3개 (사용자 선택과 비교용)
 
 
 class TradeExecution(Base, TimestampMixin):

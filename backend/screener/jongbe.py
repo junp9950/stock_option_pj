@@ -191,7 +191,7 @@ def scan(db: Session) -> dict:
     for x in rows + limit + swing + prebuy:
         x["flags"] = fl.get(x["code"], {}).get("flags", [])
     limit.sort(key=lambda r: -(r["market_cap"] or 0))
-    return {
+    out = {
         "trading_date": d.isoformat(), "market": regime,
         "market_ok": regime.get("state") in ("상승", "횡보"),
         "families": [{"family": f, "rank": fam[f]["rank"], "ret20_pct": round(fam[f]["ret20"] * 100, 1),
@@ -202,6 +202,8 @@ def scan(db: Session) -> dict:
         "movers": _movers(fam, order),
         "hot": hot, "items": rows, "limit_up": limit, "swing": swing, "prebuy": prebuy,
     }
+    out["ai_picks"] = [x["code"] for x in ai_picks(out)]
+    return out
 
 
 def _movers(fam: dict, order: list[str]) -> list[dict]:
@@ -277,19 +279,45 @@ def record(db: Session) -> int:
     res = scan(db)
     d = pd.Timestamp(res["trading_date"]).date()
     db.query(JongbePick).filter(JongbePick.trading_date == d).delete()
+    ai = {x["code"] for x in ai_picks(res)}
     n = 0
     for r in res["items"] + res["limit_up"]:
         db.add(JongbePick(trading_date=d, code=r["code"], name=r["name"], grade="상한가" if r in res["limit_up"] else r["grade"],
-                          close_price=r["close"], change_pct=r["change_pct"], market_ok=res["market_ok"]))
+                          close_price=r["close"], change_pct=r["change_pct"], market_ok=res["market_ok"], ai_pick=r["code"] in ai))
         n += 1
     db.commit()
     return n
 
 
+def ai_picks(res: dict, k: int = 3) -> list[dict]:
+    """결과를 모르는 장 마감 시점에 규칙만으로 고르는 3개 (2026-10-05, 사용자 선택과 비교하려고 매일 기록).
+    시장 상승·횡보 + A등급 + 급등·과열 빼기(이격 20%·그날 +12% 미만) + 시총 1,000억↑ + 투자경고·위험 아님
+    → 합산 점수(실적 개선 +3/증가 +2/이익률 10% +1/적자 -2, A +1, 이격 penalty) 높은 순, 같으면 윗꼬리 짧은 순."""
+    if not res.get("market_ok"):
+        return []
+    from backend.screener.support_setups import _fundamentals  # noqa: PLC0415
+    fund = _fundamentals()
+    pool = []
+    for x in res["items"]:
+        if x["grade"] != "A" or (x.get("gap20_pct") or 0) >= 20 or x["change_pct"] >= 12 or (x.get("market_cap") or 0) < 1e11:
+            continue
+        if any(t in ("투자경고", "투자위험") for t in x.get("flags", [])):
+            continue
+        f = fund.get(x["code"])
+        s = 3   # 섹터 상위 3 +2, A +1
+        if f:
+            s += 3 if f["good"] else 2 if f["grow"] else 0
+            s -= 2 if f["loss"] else 0
+            s += 1 if (f["margin"] or 0) >= 10 and not f["loss"] else 0
+        pool.append((s, -(x.get("upper_pct") or 0) if x.get("kind") != "밑꼬리 도지" else 0, x))
+    pool.sort(key=lambda t: (t[0], t[1]), reverse=True)
+    return [x for _, _, x in pool[:k]]
+
+
 def performance(db: Session, days: int = 60) -> dict:
     """저장된 후보의 다음 거래일 시가·고가·종가 결과."""
     rows = db.execute(text("""
-        select p.trading_date, p.code, p.name, p.grade, p.close_price, p.market_ok,
+        select p.trading_date, p.code, p.name, p.grade, p.close_price, p.market_ok, p.ai_pick,
                n.trading_date, n.open_price, n.high_price, n.close_price
         from jongbe_picks p
         join lateral (select trading_date, open_price, high_price, close_price from spot_daily_prices s
@@ -297,19 +325,20 @@ def performance(db: Session, days: int = 60) -> dict:
         where p.trading_date >= current_date - :days
         order by p.trading_date desc"""), {"days": days}).all()
     items, agg = [], {}
-    for d, code, name, grade, c, ok, nd, no, nh, nc in rows:
+    for d, code, name, grade, c, ok, ai, nd, no, nh, nc in rows:
         if not c or not no:
             continue
         r_open, r_high, r_close = no / c - 1, nh / c - 1, nc / c - 1
         r_rule = r_open if no > c else r_close
         items.append({"date": d.isoformat(), "next_date": nd.isoformat(), "code": code, "name": name, "grade": grade, "market_ok": ok,
                       "open_pct": round(r_open * 100, 1), "high_pct": round(r_high * 100, 1), "close_pct": round(r_close * 100, 1),
-                      "rule_pct": round(r_rule * 100, 1)})
-        a = agg.setdefault(grade, {"n": 0, "win": 0, "rule": 0.0, "high": 0.0})
-        a["n"] += 1
-        a["win"] += r_rule > 0
-        a["rule"] += r_rule
-        a["high"] += r_high
+                      "rule_pct": round(r_rule * 100, 1), "ai_pick": bool(ai)})
+        for key in ([grade] + (["Claude 선택 3"] if ai else [])):
+            a = agg.setdefault(key, {"n": 0, "win": 0, "rule": 0.0, "high": 0.0})
+            a["n"] += 1
+            a["win"] += r_rule > 0
+            a["rule"] += r_rule
+            a["high"] += r_high
     summary = {g: {"count": a["n"], "win_pct": round(a["win"] / a["n"] * 100), "avg_rule_pct": round(a["rule"] / a["n"] * 100, 2),
                    "avg_high_pct": round(a["high"] / a["n"] * 100, 2)} for g, a in agg.items() if a["n"]}
     return {"summary": summary, "items": items[:200]}
