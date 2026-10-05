@@ -7,8 +7,9 @@ hold = 종가가 기준가를 지킴(아래면 이탈), watch = 기준가 없이
 """
 from __future__ import annotations
 
+import re
 import time
-from datetime import datetime
+from datetime import datetime, timedelta
 from zoneinfo import ZoneInfo
 
 from sqlalchemy.orm import Session
@@ -96,7 +97,7 @@ def _shape(c: list[dict]) -> dict | None:
     tags = []
     chg = (cl / pc - 1) * 100 if pc else 0
     vx = v / avg if avg else 0
-    if rng > 0 and abs(cl - o) / o <= 0.01 and rng / cl >= 0.03:
+    if rng > 0 and abs(cl - o) / o <= 0.01 and abs(cl - o) / rng <= 0.35:   # 몸통 1% 이하·변동폭의 35% 이하 (작은 도지도 포함)
         tags.append("🕯밑꼬리 도지" if (min(o, cl) - l) / rng >= 0.5 else "🕯도지")
     if chg >= 5 and vx >= 2:
         tags.append("🔥장대양봉")
@@ -104,7 +105,7 @@ def _shape(c: list[dict]) -> dict | None:
         tags.append("⚠장대음봉")
     if vx and vx <= 0.5:
         tags.append("거래 마름")
-    return {"date": c[-1]["timestamp"][:10], "close": cl, "chg": chg, "vx": vx,
+    return {"date": c[-1]["timestamp"][:10], "close": cl, "chg": chg, "vx": vx, "open": o, "low": l, "high": h,
             "width": (max(closes) / min(closes) - 1) * 100 if closes else 0, "tags": tags}
 
 
@@ -119,10 +120,11 @@ def report(db: Session, force: bool = False) -> str | None:
     today = datetime.now(ZoneInfo("Asia/Seoul")).date().isoformat()
     g = {k: [] for k in ("brk", "fire", "close", "candle", "warn", "dry", "far")}
     last_date = ""
+    skip = set(post_items(db))       # 정리 글에 있는 종목은 정리 글 체크 메시지에서 따로 본다
     for it in _items(db):
-        c = fetch_candles(it["code"], "1d", 25)
-        time.sleep(0.15)
-        s = _shape(c) if c and len(c) >= 3 else None
+        if it["code"] in skip:
+            continue
+        s = _day(it["code"], fetch_candles)
         if not s:
             continue
         last_date = max(last_date, s["date"])
@@ -167,12 +169,149 @@ def report(db: Session, force: bool = False) -> str | None:
 
 def send_report(db: Session, force: bool = False, chat_id: str | None = None) -> None:
     from backend.services.telegram import _get, _put, send  # noqa: PLC0415
+    _CANDLES.clear()
     msg = report(db, force=force)
-    if not msg:
+    msg2 = post_report(db, force=force)
+    if not msg and not msg2:
         return
     chats = [chat_id] if chat_id else _get(db, CHAT_KEY, None)
     if chats is None:       # 처음 실행 때 등록된 대화방(사용자 본인)으로 고정
         chats = list(_get(db, "telegram_chats", {}).keys())
         _put(db, CHAT_KEY, chats)
     for c in chats:
-        send(db, msg, c, html=True)
+        if msg:
+            send(db, msg, c, html=True)
+        if msg2:
+            send(db, msg2, c, html=True)
+
+
+
+# ── 정리 글 조건 체크 (2026-10-05 "내가 종목토론방에 정리로 적어 놓은 것들 분석해서 담날 체크") ──────
+# 사용자가 종목토론에 "1. 종목명 / 메모" 꼴로 올린 정리 글을 종목별로 나누고, 메모에서 가격선·조건(뚫으면·터치·안 밀리면·도지 뜨면)을 읽어
+# 장 마감 뒤 그 조건이 맞았는지 본다. 같은 종목이 여러 글에 있으면 최신 글 메모를 쓴다.
+_CANDLES: dict = {}
+ALIAS = {"포홀": "POSCO홀딩스", "롯에머": "롯데에너지머티리얼즈", "S-oil": "S-Oil", "s-oil": "S-Oil", "에스오일": "S-Oil", "PS일렉": "PS일렉트로닉스"}
+_HEAD = re.compile(r"(?m)^\s*(\d{1,2})\s*[.)]\s*(.+?)\s*$")
+_NUM = re.compile(r"(\d{1,3}(?:,\d{3})+|\d{3,7})\s*(만\s*원|만원|원)?|(\d{1,3})\s*만\s*원?\s*(초반|중반|후반)?")
+_KW = [("above", r"뚫|돌파|위\s*마감|넘|올려|위로|올리"), ("hold", r"안\s*밀|지키|지켜|지지|이탈|밀리"), ("near", r"터치|근처|수렴|붙|비비|오면|닿")]
+_DOJI_ENTRY = re.compile(r"도지[^.\n]{0,10}?(뜨면|나오면|주면|나올까|뜰까)|도지\s*캔들에서\s*진입|도지에서\s*진입")
+
+
+def _day(code: str, fetch) -> dict | None:
+    if code not in _CANDLES:
+        c = fetch(code, "1d", 25)
+        time.sleep(0.15)
+        _CANDLES[code] = _shape(c) if c and len(c) >= 3 else None
+    return _CANDLES[code]
+
+
+def _sections(content: str) -> list[tuple[str, str]]:
+    content = content or ""
+    ms = list(_HEAD.finditer(content))
+    out = []
+    for k, m in enumerate(ms):
+        end = ms[k + 1].start() if k + 1 < len(ms) else len(content)
+        memo = re.sub(r"\[사진\d+\]", "", content[m.end():end]).strip()
+        out.append((re.sub(r"\(.*?\)", "", m.group(2)).strip(), memo))
+    return out
+
+
+def _condition(memo: str) -> dict:
+    lv, kind = 0, "watch"
+    for m in _NUM.finditer(memo):
+        if m.group(3):
+            base = int(m.group(3))
+            v = base * 10000 + {"초반": 2000, "중반": 5000, "후반": 8000}.get(m.group(4) or "", 0) * (10 if base >= 10 else 1)
+        else:
+            v = int(m.group(1).replace(",", "")) * (10000 if m.group(2) and "만" in m.group(2) else 1)
+        if v < 100:
+            continue
+        ctx = memo[max(0, m.start() - 6): m.end() + 14]
+        kind, lv = next((k for k, pat in _KW if re.search(pat, ctx)), "near"), v
+        break
+    return {"kind": kind, "level": lv, "doji": bool(_DOJI_ENTRY.search(memo))}
+
+
+def post_items(db: Session, days: int = 14) -> dict:
+    from sqlalchemy import select  # noqa: PLC0415
+    from backend.db.models import DiscussionPost  # noqa: PLC0415
+    from backend.services.telegram import ME, _find  # noqa: PLC0415
+    since = datetime.utcnow() - timedelta(days=days)
+    out: dict = {}
+    for p in db.scalars(select(DiscussionPost).where(DiscussionPost.author == ME, DiscussionPost.created_at >= since,
+                                                      DiscussionPost.title.like("%정리%")).order_by(DiscussionPost.id)):
+        secs = _sections(p.content)
+        if len(secs) < 3:
+            continue
+        for name, memo in secs:
+            q = ALIAS.get(name) or ALIAS.get(name.replace(" ", "")) or name.replace(" ", "")
+            row = _find(db, q)
+            if not row:
+                continue
+            wrote = (p.created_at + timedelta(hours=9)).date().isoformat()      # created_at은 UTC
+            out[row.code] = {"code": row.code, "name": row.name, "memo": memo, "post": p.id, "title": p.title or "", "wrote": wrote, **_condition(memo)}
+    return out
+
+
+def _candle_word(s: dict) -> str:
+    if "🔥장대양봉" in s["tags"]:
+        return "장대양봉"
+    if "⚠장대음봉" in s["tags"]:
+        return "장대음봉"
+    t = next((x.replace("🕯", "") for x in s["tags"] if "도지" in x), "")
+    return t or ("양봉" if s["close"] > s["open"] else "음봉" if s["close"] < s["open"] else "보합")
+
+
+def post_report(db: Session, force: bool = False) -> str | None:
+    from html import escape  # noqa: PLC0415
+    from backend.services.toss_client import fetch_candles  # noqa: PLC0415
+    items = post_items(db)
+    if not items:
+        return None
+    ok, bad, rest = [], [], []
+    last_date = ""
+    wl = {x["code"]: x for x in _items(db)}
+    for it in items.values():
+        w = wl.get(it["code"])
+        if not it["level"] and w and w.get("level"):      # 메모에 가격이 없으면 관심 목록 기준가를 이어서 쓴다
+            it = {**it, "kind": w["kind"], "level": w["level"]}
+        s = _day(it["code"], fetch_candles)
+        if not s:
+            continue
+        last_date = max(last_date, s["date"])
+        p, lv, kind = s["close"], it["level"], it["kind"]
+        if s["date"] <= it["wrote"]:      # 글 쓴 날 이전 봉은 이미 보고 쓴 것 — 다음 거래일부터 채점
+            rest.append(f"{escape(it['name'])} (글 쓴 뒤 첫 거래일 전)")
+            continue
+        is_doji = any("도지" in x for x in s["tags"])
+        hits, warn = [], ""
+        if kind == "above" and lv and p > lv:
+            hits.append(f"{_won(lv)} 돌파 마감")
+        elif kind == "near" and lv and abs(p / lv - 1) <= 0.03:
+            hits.append(f"{_won(lv)} 근처 ({(p / lv - 1) * 100:+.1f}%)")
+        elif kind == "hold" and lv and p < lv:
+            warn = f"{_won(lv)} 이탈"
+        if it["doji"] and is_doji and not warn:
+            hits.append("말씀하신 도지 떴음")
+        cond = ""
+        if lv:
+            cond = {"above": f"{_won(lv)}까지 {(lv / p - 1) * 100:+.1f}%", "near": f"{_won(lv)} 대비 {(p / lv - 1) * 100:+.1f}%",
+                    "hold": f"{_won(lv)} {'지킴' if p >= lv else '이탈'}"}[kind]
+        base = f"<b>{escape(it['name'])}</b> {_won(p)} ({s['chg']:+.1f}%) · {_candle_word(s)} · 거래 {s['vx']:.1f}배"
+        memo = escape(it["memo"].replace(chr(10), " ")[:70])
+        if warn:
+            bad.append(f"{base} · ⚠ {warn}{chr(10)}   └ <i>{memo}</i>")
+        elif hits:
+            ok.append(f"{base} · ✅ {', '.join(hits)}{chr(10)}   └ <i>{memo}</i>")
+        else:
+            rest.append(f"{escape(it['name'])} {s['chg']:+.1f}% {_candle_word(s)}" + (f" · {cond}" if cond else ""))
+    if not force and last_date != datetime.now(ZoneInfo("Asia/Seoul")).date().isoformat():
+        return None
+    out = [f"📝 <b>정리 글 조건 체크 {last_date[5:].replace('-', '/')} 마감</b> ({len(items)}종목)"]
+    if ok:
+        out += ["", "✅ <b>적어 두신 조건이 맞은 종목</b>"] + ok
+    if bad:
+        out += ["", "⚠ <b>지지선 이탈</b>"] + bad
+    if rest:
+        out += ["", "· 아직", "<i>" + chr(10).join(rest) + "</i>"]
+    return chr(10).join(out)
