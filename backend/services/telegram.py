@@ -28,6 +28,7 @@ HELP = ("주식 레이더 봇 명령\n"
         "/알림 종목명 가격 — 현재가가 그 가격 이상이면 알림 (예: /알림 PS일렉트로닉스 9420)\n"
         "/알림목록 · /알림삭제 종목명\n"
         "/관심 — 관심 종목 점검 지금 받기 (평일 15:40 자동)\n"
+        "종목토론 알림에 '답장' — 그 글에 댓글(댓글 알림이면 답글)로 달림 · /이름 우라늄 — 댓글 이름 정하기\n"
         "/stop — 알림 끄기")
 
 
@@ -65,31 +66,50 @@ def _put(db: Session, key: str, value) -> None:
     db.commit()
 
 
-def send(db: Session, msg: str, chat_id: int | str | None = None, html: bool = False) -> None:
+def send(db: Session, msg: str, chat_id: int | str | None = None, html: bool = False) -> dict[str, int]:
+    """보낸 대화방별 마지막 메시지 id를 돌려준다 (답장으로 댓글 달기 연결용)."""
     targets = [chat_id] if chat_id is not None else list(_get(db, "telegram_chats", {}).keys())
     extra = {"parse_mode": "HTML"} if html else {}
+    sent = {}
     for c in targets:
         for i in range(0, len(msg), 3900):      # 텔레그램 한 메시지 4096자 제한 (HTML은 짧게 써서 태그가 안 잘리게)
-            _api("sendMessage", chat_id=c, text=msg[i:i + 3900], disable_web_page_preview=True, **extra)
+            r = _api("sendMessage", chat_id=c, text=msg[i:i + 3900], disable_web_page_preview=True, **extra)
+            mid = (r.get("result") or {}).get("message_id")
+            if mid:
+                sent[str(c)] = mid
+    return sent
 
 
-SITE = "http://20.196.212.146"
+# 사이트 주소: IP로 https를 열면 인증서가 없어 안 열린다 (Caddy가 http→https로 돌림) — 인증서 있는 도메인으로 (2026-10-05)
+SITE = "https://stock.20-196-212-146.sslip.io"
+AUTHORS = ("우라늄", "감사하모니카")
+MSGMAP_MAX = 300
 
 
 ME = "감사하모니카"      # 사용자 본인 — 본인이 쓴 글·댓글은 알리지 않는다 (2026-10-05 "내꺼는 빼고 우라늄이 뭐 달았을 때만")
 
 
-def notify_async(msg: str, author: str = "") -> None:
-    """요청 처리를 늦추지 않게 별도 스레드로 보낸다 (종목토론·건의사항 새 글·댓글). 본인이 쓴 건 보내지 않는다."""
+def notify_async(msg: str, author: str = "", ref: dict | None = None) -> None:
+    """요청 처리를 늦추지 않게 별도 스레드로 보낸다 (종목토론·건의사항 새 글·댓글). 본인이 쓴 건 보내지 않는다.
+    ref = {"post": 글 id, "comment": 댓글 id} 이면 그 알림에 텔레그램 '답장'으로 댓글을 달 수 있게 기억해 둔다."""
     import threading  # noqa: PLC0415
     if (author or "").strip() == ME:
         return
+    if ref:
+        msg += f"{chr(10)}↩ 이 메시지에 답장하면 {'답글' if ref.get('comment') else '댓글'}로 달립니다"
 
     def _run():
         from backend.db.database import SessionLocal  # noqa: PLC0415
         db = SessionLocal()
         try:
-            send(db, msg)
+            sent = send(db, msg)
+            if ref and sent:
+                mm = _get(db, "telegram_msgmap", {})
+                for c, mid in sent.items():
+                    mm[f"{c}:{mid}"] = ref
+                if len(mm) > MSGMAP_MAX:
+                    mm = dict(list(mm.items())[-MSGMAP_MAX:])
+                _put(db, "telegram_msgmap", mm)
         except Exception as exc:  # noqa: BLE001
             logger.warning("텔레그램 알림 실패: %s", type(exc).__name__)
         finally:
@@ -234,7 +254,9 @@ def poll(db: Session) -> None:
         msg = u.get("message") or {}
         chat = msg.get("chat") or {}
         cid, txt = str(chat.get("id", "")), (msg.get("text") or "").strip()
-        if not cid or not txt:
+        if not txt:
+            txt = (msg.get("caption") or "").strip()
+        if not cid or (not txt and not msg.get("photo")):
             continue
         who = chat.get("first_name") or chat.get("username") or cid
         if txt.startswith("/start"):
@@ -251,9 +273,25 @@ def poll(db: Session) -> None:
             continue
         if cid not in chats:
             send(db, "먼저 /start 를 보내 주세요.", cid); continue
+        rep = msg.get("reply_to_message") or {}
+        if rep and not txt.startswith("/"):
+            _put(db, "telegram_offset", off)     # 실패해도 같은 답장으로 댓글이 두 번 달리지 않게 먼저 저장
+            try:
+                _reply_comment(db, cid, rep.get("message_id"), msg)
+            except Exception as exc:  # noqa: BLE001
+                db.rollback()
+                logger.warning("텔레그램 답장 댓글 실패: %s", type(exc).__name__)
+                send(db, "댓글을 못 달았습니다. 사이트에서 직접 달아 주세요.", cid)
+            continue
         if txt.startswith("/stop"):
             chats.pop(cid, None); _put(db, "telegram_chats", chats)
             send(db, "알림을 껐습니다. 다시 받으려면 /start", cid)
+        elif txt.startswith("/이름"):
+            name = txt.split(maxsplit=1)[1].strip() if " " in txt else ""
+            if name not in AUTHORS:
+                send(db, f"예: /이름 우라늄 (가능한 이름: {', '.join(AUTHORS)})", cid); continue
+            au = _get(db, "telegram_authors", {}); au[cid] = name; _put(db, "telegram_authors", au)
+            send(db, f"✅ 이 대화방에서 답장으로 다는 댓글은 '{name}' 이름으로 올라갑니다.", cid)
         elif txt.startswith("/관심"):
             from backend.services.watchlist import send_report  # noqa: PLC0415
             send_report(db, force=True, chat_id=cid)
@@ -288,6 +326,46 @@ def poll(db: Session) -> None:
         else:
             send(db, HELP, cid)
     _put(db, "telegram_offset", off)
+
+
+def _tg_photo(file_id: str) -> str | None:
+    """텔레그램 사진을 받아 data URI로 (종목토론 사진 형식)."""
+    import base64  # noqa: PLC0415
+    info = _api("getFile", file_id=file_id).get("result") or {}
+    path = info.get("file_path")
+    if not path:
+        return None
+    try:
+        r = requests.get(f"https://api.telegram.org/file/bot{_token()}/{path}", timeout=20)
+        r.raise_for_status()
+    except Exception as exc:  # noqa: BLE001
+        logger.warning("텔레그램 사진 받기 실패: %s", type(exc).__name__)
+        return None
+    return "data:image/jpeg;base64," + base64.b64encode(r.content).decode()
+
+
+def _reply_comment(db: Session, cid: str, reply_mid, msg: dict) -> None:
+    """종목토론 알림에 답장 → 그 글에 댓글(댓글 알림이었으면 그 댓글에 답글). 2026-10-05 "텔레그램에서 바로 답변"."""
+    ref = _get(db, "telegram_msgmap", {}).get(f"{cid}:{reply_mid}")
+    if not ref:
+        send(db, "이 메시지에는 답장으로 댓글을 달 수 없습니다. 종목토론 새 글·댓글 알림에 답장해 주세요.", cid); return
+    author = _get(db, "telegram_authors", {}).get(cid)
+    if not author:
+        send(db, "댓글 이름을 먼저 정해 주세요: /이름 감사하모니카 또는 /이름 우라늄", cid); return
+    text_ = (msg.get("text") or msg.get("caption") or "").strip()
+    images = []
+    if msg.get("photo"):
+        img = _tg_photo(msg["photo"][-1]["file_id"])     # 가장 큰 크기
+        if img:
+            images.append(img)
+    from fastapi import HTTPException  # noqa: PLC0415
+    from backend.api.routes import CommentIn, create_comment  # noqa: PLC0415
+    try:
+        create_comment(int(ref["post"]), CommentIn(author=author, content=text_[:1000], images=images,
+                                                    parent_id=ref.get("comment")), db)
+    except HTTPException as exc:
+        send(db, f"댓글을 못 달았습니다: {exc.detail}", cid); return
+    send(db, f"✅ {'답글' if ref.get('comment') else '댓글'} 달았습니다 ({author}){chr(10)}{SITE}/discussion#{ref['post']}", cid)
 
 
 def is_market_time(now: datetime | None = None) -> bool:

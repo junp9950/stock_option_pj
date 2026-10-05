@@ -268,7 +268,7 @@ def create_discussion(body: DiscussionIn, db: Session = Depends(get_db)):
     from backend.services.telegram import SITE, _cut, notify_async  # noqa: PLC0415
     notify_async(f"💬 종목토론 새 글 — {x.author or '익명'}{chr(10)}[{x.title}]{(' · ' + x.stock_name) if x.stock_name else ''}"
                  f"{(chr(10) + _cut(x.content)) if x.content else ''}{(chr(10) + '🖼 사진 ' + str(len(images)) + '장') if images else ''}"
-                 f"{chr(10)}{SITE}/discussion#{x.id}", author=x.author)
+                 f"{chr(10)}{SITE}/discussion#{x.id}", author=x.author, ref={"post": x.id})
     return _discussion_dict(x)
 
 
@@ -327,7 +327,7 @@ def create_comment(pid: int, body: CommentIn, db: Session = Depends(get_db)):
     post = db.get(DiscussionPost, pid)
     head = f"↪ 답글 — {c.author or '익명'} → {parent.author or '익명'}의 댓글" if parent else f"💬 댓글 — {c.author or '익명'}"
     notify_async(f"{head} → [{post.title or '제목 없음'}]{chr(10)}{_cut(c.content) or '(사진)'}"
-                 f"{(chr(10) + '🖼 사진 ' + str(len(images)) + '장') if images else ''}{chr(10)}{SITE}/discussion#{pid}", author=c.author)
+                 f"{(chr(10) + '🖼 사진 ' + str(len(images)) + '장') if images else ''}{chr(10)}{SITE}/discussion#{pid}", author=c.author, ref={"post": pid, "comment": c.id})
     return _comment_dict(c)
 
 
