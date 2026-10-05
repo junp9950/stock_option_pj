@@ -294,7 +294,7 @@ select{background:#21262d;border:1px solid #30363d;color:#c9d1d9;padding:6px 10p
 
   <div style="margin:4px 0 22px">
     <b style="font-size:15px;color:#e6edf3;margin:4px 0 8px">③ 뜨는 섹터의 좋은 차트 · 며칠~몇 주 들고 갈 종목 (스윙·선취매)</b> <span class="ts" id="jb-ch-info"></span>
-    <p class="lead" style="margin-top:6px"><b style="color:#3fb950">🚀 돌파</b>·<b>돌파 대기</b> = 120일 박스 상단(20일 넘게 묵은 고점) 처음 넘음·-3% 이내 · <b style="color:#3fb950">저가 지킴</b> = 대량거래 봉 저가 안 깸 · <b style="color:#58a6ff">눌림</b> = 20일 고점 -5~-15% · <b style="color:#e3b341">버팀</b> = 섹터 빠진 날 안 빠짐</p>
+    <p class="lead" style="margin-top:6px"><b style="color:#3fb950">🚀 돌파</b>·<b>돌파 대기</b> = 120일 박스 상단(20일 넘게 묵은 고점) 처음 넘음·-3% 이내 (이미 많이 오른 종목·꼬리만 남은 종목 뺌) · <b style="color:#3fb950">저가 지킴</b> = 대량거래 봉 저가 안 깸 · <b style="color:#58a6ff">눌림</b> = 20일 고점 -5~-15% · <b style="color:#e3b341">버팀</b> = 섹터 빠진 날 안 빠짐</p>
     <details class="why"><summary>근거 보기</summary>
       3년(같은 날 시장 대비 20일 뒤): 돌파 +2.9%p, 돌파 대기 +2.4%p, 눌림 +2.2%p, 저가 지킴 +1.3%p (뜨거운 섹터 아무 종목 +1.7%p). 거래 2배 넘게 터지며 돌파(📢)는 +0.8%p로 약함.
       어느 종목이 터질지는 못 맞힘(10일 안 폭발 8~11%) → 여러 개로 나누고 터지면 대부분 챙기기. 박스 안으로 다시 들어오거나 손절선 깨면 정리.

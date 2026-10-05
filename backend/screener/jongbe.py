@@ -156,6 +156,11 @@ def scan(db: Session) -> dict:
     win = H.iloc[-121:-21]
     hi_box = win.max()
     under20 = C.iloc[-21:-1].max() < hi_box
+    # 종가 고점은 이미 넘고 윗꼬리만 남은 경우·20일선 +20%↑·20일 저점 대비 +40%↑는 뺌 (10/5 뉴파워프라즈마: 사용자 "사기엔 늦음").
+    # 3년 120일 박스 처음 넘음: 종가 고점도 처음 +7.22(55%) vs 꼬리만 남음 +3.33 / 붙음 +3.29 vs +0.95(37%),
+    # 20일선 +20%↑ 중간 -5.0·-10%p↓ 36%, 20일 저점 대비 +40%↑ 중간 -6.9·-10%p↓ 42%.
+    fresh = C.iloc[-21:-1].max() < C.iloc[-121:-21].max()
+    run20 = C.iloc[-1] / C.iloc[-21:-1].min() - 1
     hot_members = {c for f in hot for c in fam[f]["members"]}
     swing = []
     for code in hot_members:
@@ -167,7 +172,7 @@ def scan(db: Session) -> dict:
         if not top or top != top or not bool(under20.get(code, False)) or H[code].iloc[-121:-21].isna().sum() > 10:
             continue
         pos = v["close"] / top - 1
-        if not -0.03 <= pos < 0.03:
+        if not -0.03 <= pos < 0.03 or not bool(fresh.get(code, False)) or (v["gap20_pct"] or 0) >= 20 or float(run20.get(code, 0)) >= 0.4:
             continue
         box_day = H[code].iloc[-121:-21].idxmax()
         vr_v = vr_stage.get(code)
