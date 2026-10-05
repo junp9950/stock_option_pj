@@ -30,7 +30,7 @@ def _load(db: Session):
     latest = db.execute(text("select max(trading_date) from spot_daily_prices")).scalar()
     px = pd.read_sql(text(
         "select stock_code, trading_date, open_price o, high_price h, low_price l, close_price c, trading_value tv, change_pct ch "
-        "from spot_daily_prices where trading_date >= :d"), db.connection(), params={"d": latest - timedelta(days=160)})   # 선취매 후보의 60거래일 대량거래 이력까지
+        "from spot_daily_prices where trading_date >= :d"), db.connection(), params={"d": latest - timedelta(days=200)})   # 스윙 후보의 120거래일 박스까지
     P = {k: px.pivot(index="trading_date", columns="stock_code", values=k).sort_index() for k in ("o", "h", "l", "c", "tv", "ch")}
     return latest, P
 
@@ -148,11 +148,14 @@ def scan(db: Session) -> dict:
         (limit if r["change_pct"] >= LIMIT_UP else rows).append(r)
     rows.sort(key=lambda r: (r["grade"], r["upper_pct"]))
 
-    # 스윙 후보: 뜨거운 섹터 안에서 60일 고점(박스 상단)에 -2% 이내로 붙었거나 0~+3% 막 넘은 종목 (10~20일 보유 기준)
-    # 3년 확인(같은 날 전 종목 평균 대비 20일 뒤): 붙음+뜨거운 섹터 +2.39%p, 막 넘음+뜨거운 섹터 +2.87%p,
-    # 거래 2배로 터지며 넘은 경우는 +0.78%p로 약했고, 이미 +3% 넘게 더 간 종목은 +0.72%p.
+    # 스윙 후보: 뜨거운 섹터 안에서 120일 박스 상단(20거래일 넘게 묵은 장중 고점)을 처음 0~+3% 넘었거나 -3% 이내로 붙은 종목.
+    # 그 뒤 20일 동안 종가가 계속 선 아래였어야 함 — 예전 '60일 고가'는 며칠째 오르는 종목의 어제 고가를 선으로 잡았음(10/2 고영·티엘비).
+    # 3년(뜨거운 섹터, 상승·횡보장, 같은 날 전 종목 평균 대비 20일, 기준 아무 종목 +1.92): 120일 박스 처음 넘음 +5.10(이김 51%, n=415)·
+    # 붙음 -3~0% +2.44 / 60일 박스(20일 묵음) 처음 넘음 +2.93 / 250일 박스 +6.39(n=282). 긴 박스는 거래 폭발 돌파도 약하지 않음(+5.39).
     C, H = P["c"], P["h"]
-    hi60 = H.iloc[-61:-1].max()
+    win = H.iloc[-121:-21]
+    hi_box = win.max()
+    under20 = C.iloc[-21:-1].max() < hi_box
     hot_members = {c for f in hot for c in fam[f]["members"]}
     swing = []
     for code in hot_members:
@@ -160,20 +163,22 @@ def scan(db: Session) -> dict:
         nm = names.get(code, code)
         if not v or any(k in nm for k in skip) or v["close"] < 1000 or TV[code].iloc[-5:].mean() < 1e9:
             continue
-        top = float(hi60.get(code, float("nan")))
-        if not top or top != top:
+        top = float(hi_box.get(code, float("nan")))
+        if not top or top != top or not bool(under20.get(code, False)) or H[code].iloc[-121:-21].isna().sum() > 10:
             continue
         pos = v["close"] / top - 1
-        if not -0.02 <= pos < 0.03:
+        if not -0.03 <= pos < 0.03:
             continue
+        box_day = H[code].iloc[-121:-21].idxmax()
         vr_v = vr_stage.get(code)
         swing.append({"code": code, "name": nm, "close": round(v["close"]), "change_pct": v["change_pct"], "box_top": round(top),
                       "pos_pct": round(pos * 100, 1), "state": "막 넘음" if pos >= 0 else "붙음", "tv_x": v["tv_x"],
                       "loud": bool(v["tv_x"] and v["tv_x"] >= VOL_X and pos >= 0), "gap20_pct": v["gap20_pct"],
+                      "box_date": box_day.isoformat(), "box_age": int(len(C.index) - 1 - C.index.get_loc(box_day)),
                       "families": [f for f in hot if code in fam[f]["members"]], "earn_up": code in earn_up,
                       "vr_stage": vr_v["stage"] if vr_v else "",
                       "market_cap": caps.get(code, (0, 0))[0] or caps.get(code, (0, 0))[1] * v["close"] or mc.get(code) or 0})
-    swing.sort(key=lambda x: (x["loud"], -(x["market_cap"] or 0)))
+    swing.sort(key=lambda x: (x["state"] != "막 넘음", -(x["market_cap"] or 0)))
 
     # 선취매 후보 (backend/screener/prebuy.py): 거래 터지기 전 조용한 종목
     from backend.screener.prebuy import frames, pick  # noqa: PLC0415
