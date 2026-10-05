@@ -141,6 +141,7 @@ class CommentIn(BaseModel):
     author: str = Field("", max_length=40)
     content: str = Field("", max_length=1000)
     images: list[str] | None = None
+    parent_id: int | None = None      # 대댓글
 
 
 class CommentEdit(BaseModel):
@@ -184,7 +185,7 @@ def _edited(x) -> bool:
 
 def _comment_dict(c: DiscussionComment) -> dict:
     return {"id": c.id, "post_id": c.post_id, "author": c.author, "content": c.content,
-            "images": _decode_images(c.image_data), "edited": _edited(c),
+            "images": _decode_images(c.image_data), "edited": _edited(c), "parent_id": c.parent_id,
             "created_at": c.created_at.isoformat() + "Z"}
 
 
@@ -311,13 +312,21 @@ def create_comment(pid: int, body: CommentIn, db: Session = Depends(get_db)):
     images = _check_images(body.images or [], MAX_COMMENT_IMAGES)
     if not body.content.strip() and not images:
         raise HTTPException(status_code=400, detail="댓글 내용이나 사진을 입력해 주세요.")
+    parent = None
+    if body.parent_id:
+        parent = db.get(DiscussionComment, body.parent_id)
+        if parent is None or parent.post_id != pid:
+            raise HTTPException(status_code=404, detail="답글을 달 댓글을 찾을 수 없습니다.")
+        if parent.parent_id:          # 대댓글의 대댓글은 같은 원 댓글 밑에 (한 단계만)
+            parent = db.get(DiscussionComment, parent.parent_id) or parent
     c = DiscussionComment(post_id=pid, author=_check_author(body.author), content=body.content.strip(),
-                          image_data=_encode_images(images))
+                          image_data=_encode_images(images), parent_id=parent.id if parent else None)
     db.add(c)
     db.commit()
     from backend.services.telegram import SITE, _cut, notify_async  # noqa: PLC0415
     post = db.get(DiscussionPost, pid)
-    notify_async(f"💬 댓글 — {c.author or '익명'} → [{post.title or '제목 없음'}]{chr(10)}{_cut(c.content) or '(사진)'}"
+    head = f"↪ 답글 — {c.author or '익명'} → {parent.author or '익명'}의 댓글" if parent else f"💬 댓글 — {c.author or '익명'}"
+    notify_async(f"{head} → [{post.title or '제목 없음'}]{chr(10)}{_cut(c.content) or '(사진)'}"
                  f"{(chr(10) + '🖼 사진 ' + str(len(images)) + '장') if images else ''}{chr(10)}{SITE}/discussion#{pid}", author=c.author)
     return _comment_dict(c)
 
@@ -341,6 +350,8 @@ def delete_comment(cid: int, db: Session = Depends(get_db)):
     c = db.get(DiscussionComment, cid)
     if c is None:
         raise HTTPException(status_code=404, detail="댓글을 찾을 수 없습니다.")
+    for r in db.scalars(select(DiscussionComment).where(DiscussionComment.parent_id == c.id)):   # 달린 답글도 같이
+        db.delete(r)
     db.delete(c)
     db.commit()
     return {"ok": True}

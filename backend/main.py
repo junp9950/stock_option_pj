@@ -1880,6 +1880,7 @@ def startup_event() -> None:
         conn.execute(text("ALTER TABLE stocks ADD COLUMN IF NOT EXISTS shares_outstanding FLOAT DEFAULT 0.0"))
         conn.execute(text("ALTER TABLE radar_picks ADD COLUMN IF NOT EXISTS market_cap FLOAT DEFAULT 0.0"))
         conn.execute(text("ALTER TABLE discussion_comments ADD COLUMN IF NOT EXISTS image_data TEXT"))
+        conn.execute(text("ALTER TABLE discussion_comments ADD COLUMN IF NOT EXISTS parent_id INTEGER"))
         conn.execute(text("ALTER TABLE discussion_posts ADD COLUMN IF NOT EXISTS title VARCHAR(100)"))
         conn.execute(text("ALTER TABLE suggestions ADD COLUMN IF NOT EXISTS image_data TEXT"))
         conn.execute(text("ALTER TABLE jongbe_picks ADD COLUMN IF NOT EXISTS ai_pick BOOLEAN DEFAULT FALSE"))

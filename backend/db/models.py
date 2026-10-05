@@ -339,6 +339,7 @@ class DiscussionComment(Base, TimestampMixin):
     author: Mapped[str] = mapped_column(String(40), default="")
     content: Mapped[str] = mapped_column(Text)
     image_data: Mapped[str | None] = mapped_column(Text, nullable=True)   # 사진 한 장 또는 JSON 배열
+    parent_id: Mapped[int | None] = mapped_column(Integer, nullable=True, index=True)   # 대댓글이면 원 댓글 id (한 단계만)
 
 
 class JongbePick(Base, TimestampMixin):
