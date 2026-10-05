@@ -238,7 +238,7 @@ function postBody(text,images){
 function commentHtml(c,isReply){
   return`<div class="comment" data-cid="${c.id}">
       <div class="meta">${c.author?esc(c.author)+' · ':''}${when(c.created_at)}${c.edited?' <span class="edited">(수정됨)</span>':''}
-        ${isReply?'':'<button class="ghost mini" data-act="reply">답글</button>'}<button class="ghost mini" data-act="edit-comment">수정</button><button class="ghost danger mini" data-act="del-comment">✕</button></div>
+        <button class="ghost mini" data-act="reply">답글</button><button class="ghost mini" data-act="edit-comment">수정</button><button class="ghost danger mini" data-act="del-comment">✕</button></div>
       <div class="body">${c.content?`<p class="content">${esc(c.content)}</p>`:''}${shotsHtml(c.images,true)}</div>
     </div>`;
 }
@@ -248,8 +248,10 @@ function commentsHtml(list){
   return list.filter(c=>!(c.parent_id&&ids.has(c.parent_id))).map(c=>`<div class="thread" data-tid="${c.id}">${commentHtml(c,false)}`
     +`${kids[c.id]?`<div class="replies">${kids[c.id].map(r=>commentHtml(r,true)).join('')}</div>`:''}</div>`).join('');
 }
-function openReply(thread){
-  if(thread.querySelector('.reply-form')){thread.querySelector('.reply-form textarea').focus();return}
+// 답글에 다는 답글은 같은 묶음 맨 밑에 '@이름'을 붙여서 이어 쓴다 (펨코처럼 한 단계 들여쓰기 유지)
+function openReply(thread,to){
+  const old=thread.querySelector('.reply-form textarea');
+  if(old){if(to&&!old.value.startsWith('@'))old.value=`@${to} `+old.value;old.focus();return}
   const f=document.createElement('div');f.className='reply-form';
   f.innerHTML=`<div class="comment-form"><div class="cf-top"><span class="who" data-f="r-author"></span><span class="cf-hint">Enter 등록 · Shift+Enter 줄바꿈</span></div>
       <textarea maxlength="1000" placeholder="답글 입력 (사진은 Ctrl+V 또는 📷)" data-f="r-content"></textarea>
@@ -259,7 +261,7 @@ function openReply(thread){
   f._set=photoSet(f.querySelector('[data-f="r-previews"]'),MAX_COMMENT,null);
   pasteInto(f.querySelector('[data-f="r-content"]'),f._set);
   whoToggle(f.querySelector('[data-f="r-author"]'));
-  f.querySelector('textarea').focus();
+  const ta=f.querySelector('textarea');if(to)ta.value=`@${to} `;ta.focus();ta.setSelectionRange(ta.value.length,ta.value.length);
 }
 async function addReply(f){
   const thread=f.closest('.thread'),content=f.querySelector('[data-f="r-content"]').value.trim();
@@ -369,7 +371,8 @@ document.getElementById('list').addEventListener('click',async e=>{
   if(act==='del'){if(!confirm('이 글을 삭제할까요?'))return;try{await call('DELETE',`${API}/${post.id}`);location.hash=''}catch(err){alert(err.message)}}
   if(act==='edit')openEditor(item,{text:post.content,images:post.images,max:MAX_POST,stock:{name:post.stock_name,code:post.stock_code,title:post.title},
     onSave:p=>call('PATCH',`${API}/${post.id}`,p)});
-  if(act==='reply'){openReply(b.closest('.thread'));return}
+  if(act==='reply'){const cm=b.closest('.comment'),c=post.comments.find(v=>String(v.id)===cm.dataset.cid);
+    openReply(b.closest('.thread'),cm.closest('.replies')&&c&&c.author?c.author:'');return}
   if(act==='add-reply'){addReply(b.closest('.reply-form'));return}
   if(act==='r-photo'){pick(b.closest('.reply-form')._set);return}
   if(act==='r-cancel'){b.closest('.reply-form').remove();return}
