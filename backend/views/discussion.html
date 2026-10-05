@@ -20,7 +20,7 @@ button{background:#1f6feb;color:#fff;border:0;border-radius:7px;padding:9px 16px
 .comments{margin-top:10px;padding-left:14px;border-left:2px solid #21262d}
 .comment{padding:6px 0;font-size:13px}.comment .meta{font-size:11px;margin-bottom:2px}.comment .content{margin:0;font-size:13px}
 .comment-form{display:flex;gap:6px;margin-top:8px;align-items:center}.comment-form input{flex:1}.comment-form input.name{flex:0 0 90px}.comment-form button{padding:7px 12px;font-size:13px}.comment-form .cam{background:transparent;border:1px solid #30363d;padding:6px 10px}
-.editor{margin-top:8px;padding:10px;border:1px solid #30363d;border-radius:8px;background:#0f141b}.editor textarea{min-height:70px}
+.editor{margin-top:8px;padding:10px;border:1px solid #30363d;border-radius:8px;background:#0f141b}.editor textarea{min-height:70px}.editor textarea.post-ed{min-height:320px}#content{min-height:220px}
 .board{width:100%;border-collapse:collapse}.board td{padding:10px 8px;border-top:1px solid #21262d;vertical-align:middle}.board tr:first-child td{border-top:0}
 .board tr.post{cursor:pointer}.board tr.post:hover{background:#1c2330}.board .b-tag{width:110px;color:#93c5fd;font-size:12.5px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:110px}
 .board .b-title{color:#e6edf3}.board .b-cnt{color:#58a6ff;font-weight:600;font-size:12.5px;margin-left:5px}.board .b-img{font-size:12px;margin-left:4px;color:#8b949e}
@@ -85,6 +85,9 @@ function resizeImage(file){
   });
 }
 
+// 글 칸은 내용 길이만큼 늘어난다 (스크롤 없이 전체를 보며 [사진N] 자리를 잡게)
+function autoGrow(t){if(!t)return;t.style.height='auto';t.style.height=(t.scrollHeight+4)+'px'}
+document.addEventListener('input',e=>{if(e.target.matches('#content,textarea.post-ed'))autoGrow(e.target)});
 // 사진 묶음: 미리보기 영역 + 목록 + 최대 장수. 새 글·댓글 입력·수정 화면이 모두 이걸 쓴다.
 function photoSet(area,max,msgEl,initial=[],textEl=null){
   const set={images:[...initial],max,
@@ -94,7 +97,7 @@ function photoSet(area,max,msgEl,initial=[],textEl=null){
         set.render()})},
     mark(n){if(!textEl)return;const t=textEl,a=t.selectionStart??t.value.length,b=t.selectionEnd??a;
       const pre=t.value.slice(0,a),ins=(pre&&!pre.endsWith('\n')?'\n':'')+`[사진${n}]\n`;
-      t.value=pre+ins+t.value.slice(b);const c=a+ins.length;try{t.setSelectionRange(c,c)}catch(e){}},
+      t.value=pre+ins+t.value.slice(b);const c=a+ins.length;try{t.setSelectionRange(c,c)}catch(e){};if(t.matches('#content,textarea.post-ed'))autoGrow(t)},
     async add(files){
       const list=[...files].filter(f=>f&&f.type&&f.type.startsWith('image/'));if(!list.length)return;
       const room=max-set.images.length;
@@ -205,12 +208,12 @@ function openEditor(host,{text,images,max,stock,onSave}){
   const body=host.querySelector(':scope > .body');body.style.display='none';
   const ed=document.createElement('div');ed.className='editor';
   ed.innerHTML=`${stock?`<input class="title-in" data-e="title" maxlength="100" placeholder="제목 (필수)" style="margin-bottom:8px">`:''}${stock?`<div class="row" style="margin-top:0"><input class="grow" data-e="sname" maxlength="100" placeholder="종목명"><input style="max-width:120px" data-e="scode" maxlength="20" placeholder="종목코드"></div>`:''}
-    <textarea data-e="text" maxlength="${stock?5000:1000}" style="margin-top:${stock?'8px':'0'}"></textarea>
+    <textarea data-e="text" class="${stock?'post-ed':''}" maxlength="${stock?5000:1000}" style="margin-top:${stock?'8px':'0'}"></textarea>
     <div class="previews small" data-e="previews"></div>
     <div class="row"><button class="ghost" data-e="add">사진 추가</button><button data-e="save">저장</button><button class="ghost" data-e="cancel">취소</button><span class="err" data-e="msg"></span></div>`;
   body.after(ed);
   const q=k=>ed.querySelector(`[data-e="${k}"]`);
-  q('text').value=text||'';
+  q('text').value=text||'';if(stock)requestAnimationFrame(()=>autoGrow(q('text')));
   if(stock){q('sname').value=stock.name||'';q('scode').value=stock.code||'';q('title').value=stock.title||''}
   const set=photoSet(q('previews'),max,q('msg'),images||[],stock?q('text'):null);
   pasteInto(q('text'),set);
