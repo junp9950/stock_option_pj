@@ -196,6 +196,41 @@ def scan(db: Session) -> dict:
                       "market_cap": caps.get(code, (0, 0))[0] or caps.get(code, (0, 0))[1] * v["close"] or mc.get(code) or 0})
     swing.sort(key=lambda x: (x["state"] != "막 넘음", -(x["market_cap"] or 0)))
 
+    # 돌파 임박 (가온전선형, 2026-10-05): 최근 20일 안에 120일 종가 고점은 넘었고, 옛 꼬리 끝(120일 장중 최고가) -10~0% 아래서
+    # 종가 고점을 넘은 날 이후 종가가 -10% 안에서 횡보, 20일선 +20% 미만. 전 종목(섹터 무관) — 꼬리 끝을 종가로 넘는 날이 '물린 사람 0' 매수 자리.
+    # 3년(전 종목, 같은 날 평균 대비 20일): -10~-5% +2.08%p·20일 안 꼬리 돌파 46% / -5~-2% +2.22·63% / -2~0% +1.78·78%,
+    # -10%p 넘게 진 비율 13~16%(전체 26%). 꼬리를 종가로 넘은 날 사면 +4.2~5.4%p.
+    # '넘은 날 이후 횡보' 기준 재확인: 17,548건 +1.92%p·-10%p↓ 17.3%·20일 안 돌파 57%(꼬리 -2~0%면 77%), 뜨는 섹터 +2.31.
+    wick = H.iloc[-121:-1].max()
+    near_pos = C.iloc[-1] / wick - 1
+    broke_c = C.iloc[-20:].max() > C.iloc[-121:-21].max()
+    gap_all = C.iloc[-1] / C.iloc[-20:].mean() - 1
+    tv5 = TV.iloc[-5:].mean()
+    tvx_all = TV.iloc[-1] / TV.iloc[-21:-1].mean()
+    fam_of = {}
+    for f, info in fam.items():
+        for c in info["members"]:
+            fam_of.setdefault(c, []).append(f)
+    near = []
+    m = (near_pos >= -0.10) & (near_pos < 0) & broke_c & (gap_all < 0.20) & (tv5 >= 1e9) & (C.iloc[-1] >= 1000)
+    for code in m[m].index:
+        nm = names.get(code, code)
+        if any(k in nm for k in skip) or H[code].iloc[-121:-1].isna().sum() > 10:
+            continue
+        w = C[code].iloc[-20:]
+        seg = w[w.gt(float(C[code].iloc[-121:-21].max())).cummax()]
+        if seg.empty or seg.min() < seg.max() * 0.9:
+            continue
+        line_day = H[code].iloc[-121:-1].idxmax()
+        fs = fam_of.get(code, [])
+        near.append({"code": code, "name": nm, "close": round(float(C[code].iloc[-1])), "change_pct": round(float(P["ch"][code].iloc[-1]), 1),
+                     "tv_x": round(float(tvx_all[code]), 1), "gap20_pct": round(float(gap_all[code]) * 100, 1),
+                     "box_top": round(float(wick[code])), "box_date": line_day.isoformat(), "pos_pct": round(float(near_pos[code]) * 100, 1),
+                     "families": [f for f in hot if f in fs] + [f for f in fs if f not in hot], "hot": any(f in hot for f in fs),
+                     "earn_up": code in earn_up,
+                     "market_cap": caps.get(code, (0, 0))[0] or caps.get(code, (0, 0))[1] * float(C[code].iloc[-1]) or mc.get(code) or 0})
+    near.sort(key=lambda x: (not x["hot"], -x["pos_pct"]))
+
     # 선취매 후보 (backend/screener/prebuy.py): 거래 터지기 전 조용한 종목
     from backend.screener.prebuy import frames, pick  # noqa: PLC0415
     swing_codes = {x["code"] for x in swing}
@@ -208,8 +243,8 @@ def scan(db: Session) -> dict:
 
     # 투자주의·경고·위험, 단기과열, 관리종목, 신용불가 (KIS, 후보 종목만)
     from backend.services.stock_flags import get as flags_get  # noqa: PLC0415
-    fl = flags_get([x["code"] for x in rows + limit + swing + prebuy])
-    for x in rows + limit + swing + prebuy:
+    fl = flags_get([x["code"] for x in rows + limit + swing + prebuy + near])
+    for x in rows + limit + swing + prebuy + near:
         x["flags"] = fl.get(x["code"], {}).get("flags", [])
     limit.sort(key=lambda r: -(r["market_cap"] or 0))
     out = {
@@ -221,7 +256,7 @@ def scan(db: Session) -> dict:
                       "status": "과열" if fam[f]["stretch"] >= 0.2 else ("주의" if fam[f]["stretch"] >= 0.1 else "")}
                      for f in order[:6]],
         "movers": _movers(fam, order),
-        "hot": hot, "items": rows, "limit_up": limit, "swing": swing, "prebuy": prebuy,
+        "hot": hot, "items": rows, "limit_up": limit, "swing": swing, "prebuy": prebuy, "near": near,
     }
     out["ai_picks"] = [x["code"] for x in ai_picks(out)]
     return out
