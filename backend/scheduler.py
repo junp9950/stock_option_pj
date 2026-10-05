@@ -44,6 +44,44 @@ def start_scheduler() -> BackgroundScheduler:
         finally:
             db.close()
 
+    # ── 텔레그램 (backend/services/telegram.py) ──
+    def _tg(fn_name: str, *args) -> None:
+        from backend.services import telegram  # noqa: PLC0415
+        db = SessionLocal()
+        try:
+            getattr(telegram, fn_name)(db, *args)
+        except Exception as exc:  # noqa: BLE001
+            logger.error("텔레그램 %s 실패: %s", fn_name, type(exc).__name__)
+        finally:
+            db.close()
+
+    def _telegram_poll_job() -> None:
+        _tg("poll")
+
+    def _telegram_alert_job() -> None:
+        from backend.services.telegram import is_market_time  # noqa: PLC0415
+        if is_market_time():
+            _tg("check_alerts")
+
+    def _telegram_close_check_job() -> None:
+        _tg("check_alerts", True)
+
+    def _telegram_summary_job() -> None:
+        from backend.api.routes import warm_caches  # noqa: PLC0415
+        from backend.services.result_cache import refreshing  # noqa: PLC0415
+        from backend.services.telegram import summary_pending  # noqa: PLC0415
+        db = SessionLocal()
+        try:
+            if not summary_pending(db):
+                return
+            with refreshing():
+                warm_caches(db)
+        except Exception as exc:  # noqa: BLE001
+            logger.error("요약 전 캐시 갱신 실패: %s", exc)
+        finally:
+            db.close()
+        _tg("send_summary_once")
+
     def _daily_pipeline_job() -> None:
         if _has_today_data():
             # 이미 오늘 데이터 있으면 스킵 (재시도 중 이미 성공한 경우)
@@ -53,6 +91,7 @@ def start_scheduler() -> BackgroundScheduler:
         try:
             logger.info("Scheduler: running daily pipeline")
             run_daily_pipeline(db)
+            _telegram_summary_job()     # 수집 끝나자마자 텔레그램 종베 요약 (시간외 종가 15:40~16:00 안에 보려고)
             # 성공 후 재시도 잡 제거
             if scheduler.get_job("daily_pipeline_retry"):
                 scheduler.remove_job("daily_pipeline_retry")
@@ -231,6 +270,14 @@ def start_scheduler() -> BackgroundScheduler:
                       id='earnings_screen_daily', replace_existing=True, max_instances=1, coalesce=True)
     scheduler.add_job(refresh_earnings, 'date', run_date=datetime.now(timezone.utc)+timedelta(seconds=90),
                       id='earnings_screen_startup', replace_existing=True)
+    scheduler.add_job(_telegram_poll_job, "interval", seconds=30, id="telegram_poll", replace_existing=True, max_instances=1, coalesce=True)
+    scheduler.add_job(_telegram_alert_job, "interval", minutes=2, id="telegram_alerts", replace_existing=True, max_instances=1, coalesce=True)
+    scheduler.add_job(_telegram_close_check_job, "cron", day_of_week="mon-fri", hour=15, minute=15, id="telegram_close_check",
+                      replace_existing=True, max_instances=1)
+    scheduler.add_job(_telegram_summary_job, "cron", day_of_week="mon-fri", hour=15, minute="50,58", id="telegram_summary_fallback",
+                      replace_existing=True, max_instances=1, coalesce=True)
+    scheduler.add_job(_telegram_summary_job, "cron", day_of_week="mon-fri", hour=16, minute="10,30", id="telegram_summary_fallback2",
+                      replace_existing=True, max_instances=1, coalesce=True)
     scheduler.start()
     logger.info("Scheduler started: daily_pipeline=15:41 + 18:00 KST, nightly_backfill=03:00 KST, universe_refresh=Mon 08:00 KST")
     return scheduler
