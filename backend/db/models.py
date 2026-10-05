@@ -383,6 +383,21 @@ class TradeExecution(Base, TimestampMixin):
     kind: Mapped[str] = mapped_column(String(10), default="")       # 유형을 직접 바꿨을 때만
 
 
+class UserJongbe(Base, TimestampMixin):
+    """사용자가 알려 준 그날 종베 종목·진입가 (텔레그램 /종베). 화면 후보·다음 날 결과와 비교해 채점한다."""
+
+    __tablename__ = "user_jongbe"
+    __table_args__ = (UniqueConstraint("owner", "trading_date", "code", name="uq_user_jongbe"),)
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    owner: Mapped[str] = mapped_column(String(40), default="")
+    trading_date: Mapped[date] = mapped_column(Date, index=True)
+    code: Mapped[str] = mapped_column(String(20), index=True)
+    name: Mapped[str] = mapped_column(String(100), default="")
+    entry_price: Mapped[float] = mapped_column(Float, default=0.0)
+    note: Mapped[str] = mapped_column(String(200), default="")
+
+
 class ChartLabel(Base, TimestampMixin):
     """사용자 차트 판단 기록: 그날 목록을 보고 👍(살 만함)/👎(아님), 또는 나중에 본 '놓친 종목'(hindsight).
     고르는 눈을 배우려는 재료 — 결과를 모르고 누른 것과 나중에 본 것을 따로 쓴다."""

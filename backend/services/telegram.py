@@ -28,6 +28,7 @@ HELP = ("주식 레이더 봇 명령\n"
         "/알림 종목명 가격 — 현재가가 그 가격 이상이면 알림 (예: /알림 PS일렉트로닉스 9420)\n"
         "/알림목록 · /알림삭제 종목명\n"
         "/관심 — 관심 종목 점검 지금 받기 (평일 15:40 자동)\n"
+        "/종베 종목 가격 [메모] — 오늘 종베 기록 (여러 줄 가능) · /종베목록 · /종베삭제 종목 · /채점\n"
         "종목토론 알림에 '답장' — 그 글에 댓글(댓글 알림이면 답글)로 달림 · /이름 우라늄 — 댓글 이름 정하기\n"
         "/stop — 알림 끄기")
 
@@ -169,6 +170,14 @@ def send_summary_once(db: Session) -> bool:
         return False
     send(db, jongbe_summary(db))
     _put(db, "telegram_last_summary", latest.isoformat())
+    try:      # 사용자가 남긴 종베 채점 (backend/services/jongbe_check.py) — 사용자 대화방에만
+        from backend.services import jongbe_check as JC  # noqa: PLC0415
+        msg = JC.daily_text(db, latest)
+        if msg:
+            for c in _get(db, "user_watchlist_chats", []) or list(_get(db, "telegram_chats", {}).keys())[:1]:
+                send(db, msg, c, html=True)
+    except Exception as exc:  # noqa: BLE001
+        logger.warning("종베 채점 실패: %s", type(exc).__name__)
     return True
 
 
@@ -292,6 +301,20 @@ def poll(db: Session) -> None:
                 send(db, f"예: /이름 우라늄 (가능한 이름: {', '.join(AUTHORS)})", cid); continue
             au = _get(db, "telegram_authors", {}); au[cid] = name; _put(db, "telegram_authors", au)
             send(db, f"✅ 이 대화방에서 답장으로 다는 댓글은 '{name}' 이름으로 올라갑니다.", cid)
+        elif txt.startswith("/종베목록"):
+            from backend.services import jongbe_check as JC  # noqa: PLC0415
+            from backend.db.models import UserJongbe  # noqa: PLC0415
+            xs = list(db.scalars(select(UserJongbe).where(UserJongbe.trading_date == JC.today_kst())))
+            send(db, "\n".join(f"· {x.name} {x.entry_price:,.0f}원{(' — ' + x.note) if x.note else ''}" for x in xs) or "오늘 남긴 종베가 없습니다.", cid)
+        elif txt.startswith("/종베삭제"):
+            from backend.services import jongbe_check as JC  # noqa: PLC0415
+            q = txt.split(maxsplit=1)[1].strip() if " " in txt else ""
+            send(db, f"{JC.remove(db, q)}개 지웠습니다." if q else "예: /종베삭제 가온전선", cid)
+        elif txt.startswith("/채점"):
+            from backend.services import jongbe_check as JC  # noqa: PLC0415
+            send(db, JC.daily_text(db) or "아직 남긴 종베가 없습니다. 예: /종베 가온전선 327500", cid, html=True)
+        elif txt.startswith("/종베"):
+            send(db, _jongbe_add(db, txt), cid)
         elif txt.startswith("/관심"):
             from backend.services.watchlist import send_report  # noqa: PLC0415
             send_report(db, force=True, chat_id=cid)
@@ -326,6 +349,33 @@ def poll(db: Session) -> None:
         else:
             send(db, HELP, cid)
     _put(db, "telegram_offset", off)
+
+
+def _jongbe_add(db: Session, txt: str) -> str:
+    """/종베 종목 가격 [메모] — 여러 줄이면 줄마다 한 종목. 오늘(한국 날짜) 종베로 저장."""
+    from backend.services import jongbe_check as JC  # noqa: PLC0415
+    body = txt[len("/종베"):].strip()
+    if not body:
+        return "예: /종베 가온전선 327500 신고가 근처\n여러 종목은 줄을 바꿔서:\n/종베\n가온전선 327500\n월덱스 33100"
+    ok, bad = [], []
+    for line in body.split(chr(10)):
+        parts = line.split()
+        if not parts:
+            continue
+        idx = next((i for i, p in enumerate(parts) if p.replace(",", "").replace("원", "").replace(".", "", 1).isdigit()), None)
+        if idx is None or idx == 0:
+            bad.append(line.strip()); continue
+        try:
+            r = JC.add(db, " ".join(parts[:idx]), float(parts[idx].replace(",", "").replace("원", "")), " ".join(parts[idx + 1:]))
+            ok.append(f"{r['name']} {r['entry']:,.0f}원")
+        except ValueError:
+            bad.append(line.strip())
+    out = []
+    if ok:
+        out.append(f"✅ 오늘 종베로 기록: {', '.join(ok)}{chr(10)}장 마감 데이터가 들어오면(15:45쯤) 화면 후보였는지·빠진 이유를, 다음 날 결과까지 채점해 보내 드립니다.")
+    if bad:
+        out.append(f"못 읽은 줄: {' / '.join(bad)} (형식: 종목명 가격)")
+    return chr(10).join(out)
 
 
 def _tg_photo(file_id: str) -> str | None:
