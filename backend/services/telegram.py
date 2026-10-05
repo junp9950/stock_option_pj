@@ -344,9 +344,29 @@ def _tg_photo(file_id: str) -> str | None:
     return "data:image/jpeg;base64," + base64.b64encode(r.content).decode()
 
 
+def _ref_from_text(db: Session, t: str) -> dict | None:
+    """기록이 없는 알림(답장 기능 전에 보낸 것)은 알림 글에서 찾는다: 링크의 글 번호 + 댓글 알림이면 작성자·내용 앞부분."""
+    import re  # noqa: PLC0415
+    from backend.db.models import DiscussionComment  # noqa: PLC0415
+    m = re.search(r"discussion#(\d+)", t)
+    if not m:
+        return None
+    pid = int(m.group(1))
+    lines = t.split(chr(10))
+    h = re.match(r"^(?:💬 댓글|↪ 답글) — (\S+)", lines[0])
+    if not h or len(lines) < 2:
+        return {"post": pid}
+    body = lines[1].rstrip("…").strip()
+    for c in db.scalars(select(DiscussionComment).where(DiscussionComment.post_id == pid, DiscussionComment.author == h.group(1))
+                        .order_by(DiscussionComment.id.desc())):
+        if body in ("(사진)", "") or _cut(c.content).rstrip("…").startswith(body[:40]):
+            return {"post": pid, "comment": c.id}
+    return {"post": pid}
+
+
 def _reply_comment(db: Session, cid: str, reply_mid, msg: dict) -> None:
     """종목토론 알림에 답장 → 그 글에 댓글(댓글 알림이었으면 그 댓글에 답글). 2026-10-05 "텔레그램에서 바로 답변"."""
-    ref = _get(db, "telegram_msgmap", {}).get(f"{cid}:{reply_mid}")
+    ref = _get(db, "telegram_msgmap", {}).get(f"{cid}:{reply_mid}") or _ref_from_text(db, (msg.get("reply_to_message") or {}).get("text") or "")
     if not ref:
         send(db, "이 메시지에는 답장으로 댓글을 달 수 없습니다. 종목토론 새 글·댓글 알림에 답장해 주세요.", cid); return
     author = _get(db, "telegram_authors", {}).get(cid)
