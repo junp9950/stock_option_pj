@@ -132,7 +132,7 @@ def report(db: Session, force: bool = False) -> str | None:
         if "🔥장대양봉" in s["tags"]:
             g["fire"].append(f"{nm} {pct} · 거래 {s['vx']:.0f}배" + (f" · {_won(lv)} 위 마감 ✅" if it["kind"] == "above" and p >= lv else ""))
         elif it["kind"] == "above" and p >= lv:
-            g["brk"].append(f"{nm} {_won(p)} ({pct}) · {_won(lv)} 위 마감")
+            g["brk"].append(f"{nm} {_won(p)} ({pct}) · {_won(lv)} 위 마감 · 거래 {s['vx']:.1f}배" + (f"\n   └ <i>{escape(it['note'])}</i>" if it.get("note") else ""))
         elif "⚠장대음봉" in s["tags"] or (it["kind"] == "hold" and p < lv):
             g["warn"].append(f"{nm} {pct}" + (f" · {_won(lv)} 이탈" if it["kind"] == "hold" and p < lv else " · 장대음봉"))
         elif it["kind"] == "above" and p >= lv * 0.97:
@@ -150,7 +150,7 @@ def report(db: Session, force: bool = False) -> str | None:
         return None     # 휴장일
     d = last_date[5:].replace("-", "/")
     out = [f"📋 <b>관심 종목 {d} 마감</b>"]
-    blocks = (("✅ 선 위 마감", "brk"), ("🔥 거래 실린 장대양봉", "fire"), ("👀 선 코앞 (3% 안)", "close"),
+    blocks = (("✅ 매수 조건: 선 위 마감 → 종가 매수 검토", "brk"), ("🔥 거래 실린 장대양봉", "fire"), ("👀 선 코앞 (3% 안)", "close"),
               ("🕯 도지", "candle"), ("⚠ 이탈·장대음봉", "warn"))
     for title, k in blocks:
         if g[k]:
