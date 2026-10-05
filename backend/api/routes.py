@@ -105,7 +105,7 @@ def get_earnings_screen():
 
 # ── 종목토론 ──────────────────────────────────────────────
 MAX_IMAGE_CHARS = 3_000_000  # base64 문자열 기준 대략 2.2MB 원본 이미지까지 허용 (한 장당)
-MAX_IMAGES = 10              # 글 하나당 사진 수
+MAX_IMAGES = 20              # 글 하나당 사진 수 (2026-10-05 10→20, 종목 여러 개 정리 글용)
 MAX_COMMENT_IMAGES = 5       # 댓글 하나당 사진 수
 
 
@@ -122,7 +122,7 @@ def _check_author(author: str) -> str:
 class DiscussionIn(BaseModel):
     author: str = Field("", max_length=40)
     title: str = Field("", max_length=100)
-    content: str = Field("", max_length=2000)
+    content: str = Field("", max_length=5000)
     stock_code: str | None = Field(None, max_length=20)
     stock_name: str | None = Field(None, max_length=100)
     image_data: str | None = None          # 예전 화면 호환용 (한 장)
@@ -131,7 +131,7 @@ class DiscussionIn(BaseModel):
 
 class DiscussionEdit(BaseModel):
     title: str | None = Field(None, max_length=100)
-    content: str | None = Field(None, max_length=2000)
+    content: str | None = Field(None, max_length=5000)
     stock_code: str | None = Field(None, max_length=20)
     stock_name: str | None = Field(None, max_length=100)
     images: list[str] | None = None         # 주면 통째로 교체
