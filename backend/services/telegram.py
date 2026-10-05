@@ -27,6 +27,7 @@ HELP = ("주식 레이더 봇 명령\n"
         "/체크 종목명 — 시세·섹터·경고·실적\n"
         "/알림 종목명 가격 — 현재가가 그 가격 이상이면 알림 (예: /알림 PS일렉트로닉스 9420)\n"
         "/알림목록 · /알림삭제 종목명\n"
+        "/관심 — 관심 종목 점검 지금 받기 (평일 15:40 자동)\n"
         "/stop — 알림 끄기")
 
 
@@ -252,6 +253,9 @@ def poll(db: Session) -> None:
         if txt.startswith("/stop"):
             chats.pop(cid, None); _put(db, "telegram_chats", chats)
             send(db, "알림을 껐습니다. 다시 받으려면 /start", cid)
+        elif txt.startswith("/관심"):
+            from backend.services.watchlist import send_report  # noqa: PLC0415
+            send_report(db, force=True, chat_id=cid)
         elif txt.startswith("/후보"):
             send(db, jongbe_summary(db), cid)
         elif txt.startswith("/체크"):

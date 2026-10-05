@@ -55,6 +55,16 @@ def start_scheduler() -> BackgroundScheduler:
         finally:
             db.close()
 
+    def _tg_watch() -> None:
+        from backend.services.watchlist import send_report  # noqa: PLC0415
+        db = SessionLocal()
+        try:
+            send_report(db)
+        except Exception as exc:  # noqa: BLE001
+            logger.error("관심 종목 점검 실패: %s", type(exc).__name__)
+        finally:
+            db.close()
+
     def _telegram_poll_job() -> None:
         _tg("poll")
 
@@ -274,6 +284,9 @@ def start_scheduler() -> BackgroundScheduler:
     scheduler.add_job(_telegram_alert_job, "interval", minutes=2, id="telegram_alerts", replace_existing=True, max_instances=1, coalesce=True)
     scheduler.add_job(_telegram_close_check_job, "cron", day_of_week="mon-fri", hour=15, minute=15, id="telegram_close_check",
                       replace_existing=True, max_instances=1)
+    # 사용자 관심 종목 장 마감 점검 (backend/services/watchlist.py) — 휴장일이면 토스 일봉 날짜로 걸러져 안 보냄
+    scheduler.add_job(lambda: _tg_watch(), "cron", day_of_week="mon-fri", hour=15, minute=40, id="user_watchlist_report",
+                      replace_existing=True, max_instances=1, coalesce=True)
     scheduler.add_job(_telegram_summary_job, "cron", day_of_week="mon-fri", hour=15, minute="50,58", id="telegram_summary_fallback",
                       replace_existing=True, max_instances=1, coalesce=True)
     scheduler.add_job(_telegram_summary_job, "cron", day_of_week="mon-fri", hour=16, minute="10,30", id="telegram_summary_fallback2",
