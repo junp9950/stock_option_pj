@@ -199,13 +199,13 @@ select{background:#21262d;border:1px solid #30363d;color:#c9d1d9;padding:6px 10p
 <div class="err-bar" id="err-bar">백엔드 연결 실패 — 서버가 실행 중인지 확인하세요</div>
 
 <div class="tabs">
-  <div class="tab active" onclick="switchTab('jongbe')">종베 후보</div>
-  <div class="tab" onclick="switchTab('candidates')">차트 후보</div>
+  <div class="tab active" onclick="switchTab('candidates')">차트 후보</div>
   <div class="tab" onclick="switchTab('calendar')">섹터 캘린더</div>
   <div class="tab" onclick="switchTab('sector')">섹터 수급</div>
   <div class="tab" onclick="switchTab('journal')">매매 일지</div>
   <div class="tab" onclick="switchTab('screener')">거래대금 순위</div>
   <div class="tab" onclick="switchTab('heatmap')">시장 히트맵</div>
+  <div class="tab" onclick="switchTab('jongbe')">종베 (검증 중)</div>
   <div class="tab" onclick="switchTab('discussion')">종목토론</div>
   <div class="tab" onclick="switchTab('suggest')">건의사항</div>
 </div>
@@ -250,7 +250,7 @@ select{background:#21262d;border:1px solid #30363d;color:#c9d1d9;padding:6px 10p
 </div>
 
 <!-- 종베 후보 탭 -->
-<div id="panel-jongbe" class="panel active content">
+<div id="panel-jongbe" class="panel content">
   <b style="font-size:15px;color:#e6edf3;display:block;margin:4px 0 8px">① 시장</b>
   <div id="jb-market" style="border-radius:10px;padding:12px 16px;margin-bottom:12px;border:1px solid #30363d">로딩 중…</div>
   <p class="lead">시장 상승·횡보 → 뜨거운 섹터 → 그날 섹터에 돈 몰림 → 거래 실린 양봉, 또는 <b style="color:#e3b341">🕯 큰 양봉 다음 날 밑꼬리 도지</b>. <b>파는 법:</b> 다음 날 +2% 미만이면 전부 정리, +2% 이상이면 30% · 그다음 날도 오르면 30% 더 · 나머지는 최고 종가 -15% 이탈 시 (3년 평균 +0.98%, 이김 43%).</p>
@@ -334,7 +334,7 @@ select{background:#21262d;border:1px solid #30363d;color:#c9d1d9;padding:6px 10p
     <div id="sw-out" style="margin-top:10px"></div>
   </div>
 
-  <div style="border:1px solid #30363d;border-radius:10px;padding:12px 16px;margin-bottom:20px">
+  <div style="display:none;border:1px solid #30363d;border-radius:10px;padding:12px 16px;margin-bottom:20px"><!-- 2026-10-05 숨김: 사용자가 진입 종목을 직접 알려 주기로 -->
     <b style="color:#e6edf3">📝 차트 판단 기록</b> <span class="ts" id="lb-stats"></span>
     <p class="ts" style="margin:4px 0 8px">목록 종목 옆 👍(살 만함) · 👎(아님)를 눌러 주세요 — 결과를 모를 때 누른 판단이 고르는 눈을 배우는 재료입니다. 👎는 이유 한 단어(매물대·꼬리·거래 약함 등)를 적으면 더 빨리 배웁니다.
       나중에 보고 "이거 왜 안 들어갔지" 싶은 종목은 아래에 날짜와 함께 따로 남겨 주세요(결과를 알고 고른 것이라 따로 씁니다).</p>
@@ -517,7 +517,7 @@ select{background:#21262d;border:1px solid #30363d;color:#c9d1d9;padding:6px 10p
 </div>
 
 <!-- 눌림목 레이더 탭 -->
-<div id="panel-candidates" class="panel content">
+<div id="panel-candidates" class="panel active content">
   <div id="pb-market" hidden style="border-radius:10px;padding:12px 16px;margin-bottom:14px;border:1px solid #30363d"></div>
   <p class="ts" style="margin:0 0 6px">제목을 누르면 펼쳐지고 접힙니다 (브라우저가 기억).</p>
   <details class="sec" data-k="ss">
@@ -678,9 +678,10 @@ const tagHtml = tags => (tags||[]).map(t=>{
 
 function switchTab(id) {
   // 실적 개선 탭은 2026-10-04 숨김 (데이터는 📈 실적 표시로 계속 쓴다, /earnings 주소는 그대로)
-  const tabs = ['jongbe','candidates','calendar','sector','journal','screener','heatmap','discussion','suggest'];
+  // 2026-10-05 사용자 "당분간 차트 후보 보고 매매" → 차트 후보를 첫 탭으로, 종베는 검증 중으로 뒤로
+  const tabs = ['candidates','calendar','sector','journal','screener','heatmap','jongbe','discussion','suggest'];
   if(!tabs.includes(id))return;
-  try{ history.replaceState(null,'',id==='jongbe'?location.pathname:'#'+id); }catch(e){}   // 새로고침해도 이 탭에 남게
+  try{ history.replaceState(null,'',id==='candidates'?location.pathname:'#'+id); }catch(e){}   // 새로고침해도 이 탭에 남게
   document.querySelectorAll('.tab').forEach((t,i)=>t.classList.toggle('active',tabs[i]===id));
   document.querySelectorAll('.panel').forEach(p=>p.classList.remove('active'));
   document.getElementById('panel-'+id).classList.add('active');
@@ -827,6 +828,7 @@ async function lbLoad(date){
   }catch(e){}
 }
 function lbBtns(x,src,date){
+  return '';   // 2026-10-05 👍/👎 뺌 ("내가 진입하는 거 적어 줄 테니까") — 기록 데이터와 API는 그대로
   date=date||_lbDate; const v=_lb[date+'|'+x.code]||0;
   const b=(val,ic)=>`<span onclick="event.stopPropagation();lbSet('${x.code}','${x.name}',${val},'${src}','${date}')" title="${val>0?'살 만함':'아님'}" style="cursor:pointer;margin-left:4px;font-size:13px;opacity:${v===val?1:0.35}">${ic}</span>`;
   return ` <span class="lb" data-k="${date}|${x.code}">${b(1,'👍')}${b(-1,'👎')}</span>`;
@@ -1864,7 +1866,7 @@ function showToast(msg,err=false){
 })();
 try{ try{ const v=localStorage.getItem('vr-mincap'); if(v!==null) document.getElementById('vr-mincap').value=v; }catch(e){}
   for(const id of ['jb-noflag','jb-nocred','cd-noflag','cd-nocred']){ const v=localStorage.getItem(id); if(v!==null) document.getElementById(id).checked=v==='1'; } }catch(e){}
-switchTab(location.hash ? location.hash.slice(1) : 'jongbe');
+switchTab(location.hash ? location.hash.slice(1) : 'candidates');
 const chartQuery=new URLSearchParams(location.search);
 if (/^[0-9A-Z]{6}$/.test(chartQuery.get('chart')||'')) openChartModal(chartQuery.get('chart'),chartQuery.get('name')||chartQuery.get('chart'),'');
 </script>
