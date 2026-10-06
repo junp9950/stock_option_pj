@@ -759,10 +759,10 @@ async function renderDashboard(d, stale){
      <div style="position:relative;height:8px;background:#21262d;border-radius:4px;margin:8px 0 4px"><div style="position:absolute;left:0;top:0;height:8px;width:${relW}%;background:${rel>=15?'#f85149':rel>=10?'#d29922':'#3fb950'};border-radius:4px"></div><div style="position:absolute;left:100%;top:-3px;width:2px;height:14px;background:#f85149;transform:translateX(-2px)"></div></div>
      <div class="ts">+15%p 넘으면 흡수 경고 (3년: 뒤 20일 코스닥 -3.8%) · 외국인 삼하 5일 <b style="color:${m.sh_foreign5>0?'#f85149':'#58a6ff'}">${(m.sh_foreign5>0?'+':'')+(m.sh_foreign5||0).toLocaleString()}억</b></div>`));
   const sd=Object.entries(d.sector_day||{});
-  parts.push(card('🔥 섹터 (20일 순위 · 오늘 등락 중간 · 거래 중간)',sd.map(([f,x],i)=>`<div style="display:flex;justify-content:space-between;font-size:13px;padding:3px 0;border-bottom:1px solid #21262d"><span>${i+1}. ${d.b_sectors.includes(f)?'⭐ ':''}<b style="color:#e6edf3">${f}</b></span><span><span style="color:${x.chg>=0?'#f85149':'#58a6ff'}">${sg(x.chg)}%</span> · <span class="ts">${x.tvx}배</span></span></div>`).join('')+'<div class="ts" style="margin-top:6px">⭐ = 오늘 조건 B 섹터 (등락 +1.2%↑ · 거래 1배↑)</div>'));
-  parts.push(card(`1순위 · ⭐ 오늘 종베 후보 — 조건 B 추림 (${d.best.length}/${d.b_count})`,(d.best.map(x=>chip(x,x.retail_only?'#f85149':'#9e6a03',` <span style="color:#f85149">${sg(x.change_pct)}%</span> <span class="ts">${x.tv_x}배</span>${x.retail_only?' <b style="color:#f85149;font-size:11px">⚠개인만</b>':''}`)).join('')||'<span class="ts">없음 — 쉬는 날</span>')
+  parts.push(card('🔥 섹터 (20일 순위 · 오늘 등락 중간 · 거래 중간)',sd.map(([f,x],i)=>`<div style="display:flex;justify-content:space-between;font-size:13px;padding:3px 0;border-bottom:1px solid #21262d"><span>${i+1}. ${d.b_sectors.includes(f)?'⭐ ':''}<b style="color:#e6edf3">${f}</b></span><span><span style="color:${x.chg>=0?'#f85149':'#58a6ff'}">${sg(x.chg)}%</span> · <span class="ts">${x.tvx}배</span></span></div>`).join('')+'<div class="ts" style="margin-top:6px">⭐ = 오늘 돈 몰린 섹터 (종목들 등락 +1.2%↑ · 거래 평소 이상)</div>'));
+  parts.push(card(`1순위 · ⭐ 돈 몰린 섹터의 힘 있는 양봉 <span style="font-weight:400">(오늘 종베 ${d.best.length}종목 · 후보 ${d.b_count}개 중)</span>`,(d.best.map(x=>chip(x,x.retail_only?'#f85149':'#9e6a03',` <span style="color:#f85149">${sg(x.change_pct)}%</span> <span class="ts">${x.tv_x}배</span>${x.retail_only?' <b style="color:#f85149;font-size:11px">⚠개인만</b>':''}`)).join('')||'<span class="ts">없음 — 쉬는 날</span>')
     +(d.best.some(x=>x.retail_only)?'<div class="ts" style="color:#f85149">⚠개인만 = 외인·기관 둘 다 팔았는데 오른 날 (올해 +3%↑ 날 기준 20일 -9.0% vs 평균 -3.2%) — 빼는 게 좋음</div>':'')
-    +`<div class="ts" style="margin-top:4px">거래 1.5~6배 · 윗꼬리 10%↓로 한 번 더 추림 · 3년 검증 +1.9% (날짜 단위 +0.9%) · <a href="#" onclick="switchTab('jongbe');return false" style="color:#58a6ff">전체 보기 →</a></div>`));
+    +`<div class="ts" style="margin-top:4px">거래 평소 1.5~6배 · 고가 근처 마감한 것만 골랐음 · 3년 검증 +1.9% (날짜 단위 +0.9%) · <a href="#" onclick="switchTab('jongbe');return false" style="color:#58a6ff">전체 보기 →</a></div>`));
   parts.push(card('2순위 · 🕯 추세 도지 — 상승 추세 종목의 장대양봉 다음 날 쉼 (5일 안쪽 정리)',
     `<div class="ts" style="margin-bottom:4px">오늘이 그 자리 (이격 20%↓ · 5일까지 좋고 10일 넘기면 효과 없음)</div>`+((d.trend_doji||[]).map(x=>chip(x,'#bc8cff',` <span class="ts">어제 ${sg(x.big_pct)}% · 이격 ${x.gap20_pct}%</span>`)).join('')||'<span class="ts">오늘은 없음</span>')
     +`<div class="ts" style="margin:8px 0 4px">내일 도지면 그 자리 (오늘 장대양봉)</div>`+((d.trend_big||[]).map(x=>chip(x,'#6e40c9',` <span class="ts">${sg(x.change_pct)}%</span>`)).join('')||'<span class="ts">없음</span>')
@@ -783,7 +783,7 @@ async function renderDashboard(d, stale){
   parts.push(card('📌 데이터로 확인된 내 원칙',`<ol style="margin:0;padding-left:18px;font-size:13px;line-height:1.7">
     <li><b>하락장은 쉰다</b> — 특히 들고 가기 금지 (하락 구간 스윙 평균 -4.8%)</li>
     <li><b>빠지는 종목 줍지 않기</b> — 20일선 아래·고점 -8%↓ 매수 평균 -1.4%</li>
-    <li><b>종베는 섹터에 돈 들어온 날의 거래 붙은 양봉</b> (조건 B) — 혼자 튄 종목 X</li>
+    <li><b>종베는 섹터에 돈 들어온 날의 거래 붙은 양봉</b> — 혼자 튄 종목 X</li>
     <li>B로 산 건 <b>분할 매도</b> (다음 날 +2%↓ 전량, ↑면 30%씩), 쉬는 봉은 <b>3~5일</b> 손절선만</li>
     <li><b>추격 금지</b> — 이격 30%↑ · 윗꼬리 긴 날 · 거래 6배↑ 피하기</li></ol>`));
   g.innerHTML=parts.join('');
@@ -798,12 +798,12 @@ async function loadMyPattern(){
   const chip=(x,c)=>`<span style="display:inline-block;margin:0 6px 6px 0;padding:5px 9px;border:1px solid ${c};border-radius:8px;cursor:pointer;font-size:12.5px" onclick="openChartModal('${x.code}','${x.name}','')"><b style="color:#e6edf3">${x.name}</b> <span style="color:${x.change_pct>=0?'#f85149':'#58a6ff'}">${x.change_pct>0?'+':''}${x.change_pct}%</span> <span class="ts">거래 ${x.tv_x}배 · 이격 ${x.gap20_pct}%${x.upper_pct!=null?' · 윗꼬리 '+x.upper_pct+'%':''}</span>${x.retail_only?' <b style="color:#f85149;font-size:11px" title="외인·기관 둘 다 순매도인데 오른 날 — 그 뒤 약했음">⚠개인만</b>':''}</span>`;
   const B=r.items.filter(x=>x.b), A=r.items.filter(x=>x.a&&!x.b), N=r.next.slice(0,20);
   const sd=Object.entries(r.sector_day||{}).map(([f,v])=>`${f} ${v.chg>0?'+':''}${v.chg}%·${v.tvx}배`).join(' · ');
-  el.innerHTML=`<b style="font-size:15px;color:#e3b341">🎯 오늘 종베 — 최적 조건 B · 내 패턴 A</b> <span class="ts">${r.trading_date} 종가 기준 · 시장 ${r.market||'-'}</span>
+  el.innerHTML=`<b style="font-size:15px;color:#e3b341">🎯 오늘 종베 — 돈 몰린 섹터의 힘 있는 양봉 · 내가 잘 먹던 자리</b> <span class="ts">${r.trading_date} 종가 기준 · 시장 ${r.market||'-'}</span>
    <div class="ts" style="margin:4px 0 8px">섹터 오늘(등락 중간·거래 중간): ${sd}</div>
    ${r.market==='하락'?'<div style="color:#f85149;margin-bottom:6px">하락장 — 쉬는 날</div>':''}
-   <div style="margin-bottom:4px"><b style="color:#e3b341">⭐ 조건 B</b> <span class="ts">${r.b_sectors.length?'섹터: '+r.b_sectors.join(', '):'오늘은 조건 B 쉬는 날 (섹터 등락 중간 +1.2%·거래 중간 1배 넘는 섹터 없음)'} · 3년 검증 1년 +1.91%·이김 81% (날짜 단위 +0.91%)</span></div>
+   <div style="margin-bottom:4px"><b style="color:#e3b341">⭐ 돈 몰린 섹터의 힘 있는 양봉</b> <span class="ts">${r.b_sectors.length?'섹터: '+r.b_sectors.join(', '):'오늘은 쉬는 날 (돈 몰린 섹터 없음)'} · 3년 검증 1년 +1.91%·이김 81% (날짜 단위 +0.91%)</span></div>
    <div>${B.map(x=>chip(x,'#9e6a03')).join('')||''}</div>
-   <div style="margin:6px 0 4px"><b style="color:#3fb950">🎯 내 패턴 A</b> <span class="ts">뜨는 섹터 1~3위 · 양봉 · 20일 고점 -8% 안 · 20일선 위 · 거래 1배↑ (사용자 매수 501건 중 +2.04%, 종베로 +3.73%·이김 80% / 3년 +0.5~0.7%)</span></div>
+   <div style="margin:6px 0 4px"><b style="color:#3fb950">🎯 내가 잘 먹던 자리 (고점 근처 양봉)</b> <span class="ts">뜨는 섹터 1~3위 · 양봉 · 20일 고점 -8% 안 · 20일선 위 · 거래 1배↑ (사용자 매수 501건 중 +2.04%, 종베로 +3.73%·이김 80% / 3년 +0.5~0.7%)</span></div>
    <div>${A.slice(0,30).map(x=>chip(x,'#238636')).join('')||'<span class="ts">없음</span>'}${A.length>30?`<span class="ts">외 ${A.length-30}개</span>`:''}</div>
    <div style="margin:6px 0 4px"><b style="color:#58a6ff">👀 내일 후보</b> <span class="ts">뜨는 섹터 · 20일선 위 · 고점 -5% 안에서 오늘 조용히 쉰 종목 — 내일 거래 붙은 양봉이면 A</span></div>
    <div>${N.map(x=>chip(x,'#1f6feb')).join('')||'<span class="ts">없음</span>'}</div>

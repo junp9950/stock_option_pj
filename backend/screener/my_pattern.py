@@ -143,10 +143,10 @@ def text_summary(db: Session, k: int = 5) -> str:
     lines.append(f"\n🎯 <b>오늘 종베</b> ({r['trading_date'][5:]})")
     if r["market"] == "하락":
         lines.append("🔴 하락장 — 쉬는 날")
-    lines.append("조건 B 섹터: " + (", ".join(r["b_sectors"]) if r["b_sectors"] else "없음 (오늘은 쉬는 날)"))
+    lines.append("돈 몰린 섹터: " + (", ".join(r["b_sectors"]) if r["b_sectors"] else "없음 (오늘은 쉬는 날)"))
     b = [x for x in r["items"] if x["b"] and 1.5 <= x["tv_x"] <= 6 and x["upper_pct"] <= 10][:k] or [x for x in r["items"] if x["b"]][:k]
     if b:
-        lines.append("\n1️⃣ ⭐ <b>B 후보</b> (거래 1.5~6배·윗꼬리 10%↓ 추림)")
+        lines.append("\n1️⃣ ⭐ <b>돈 몰린 섹터의 힘 있는 양봉</b> (오늘 종베)")
         lines += [f"• {x['name']}  {x['change_pct']:+.1f}% · 거래 {x['tv_x']:.1f}배" + ("  ⚠개인만" if x.get("retail_only") else "") for x in b]
         if any(x.get("retail_only") for x in b):
             lines.append("⚠개인만 = 외인·기관 둘 다 팔았는데 오른 날 (그 뒤 약했음)")
