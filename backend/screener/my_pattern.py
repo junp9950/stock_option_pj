@@ -155,7 +155,7 @@ def text_summary(db: Session, k: int = 5) -> str:
         lines.append("\n1️⃣ ⭐ <b>주도 섹터의 힘 있는 양봉</b> → <b>종베</b> (다음 날 분할 매도)")
         lines += [fmt(x) for x in lead]
     if swing:
-        lines.append("\n1️⃣ ⭐ <b>막 도는 섹터의 힘 있는 양봉</b> → <b>5~10일 스윙</b>")
+        lines.append("\n1️⃣ ⭐ <b>올라오는 섹터의 힘 있는 양봉</b> → <b>5~10일 스윙</b>")
         lines += [fmt(x) for x in swing]
     if b:
         if any(x.get("retail_only") for x in b):

@@ -787,8 +787,8 @@ async function renderDashboard(d, stale){
   rank.push(rcard('1','#e3b341','⭐ 주도 섹터의 힘 있는 양봉 → 종베',
     '돈 몰린 섹터가 20일 1~3위 · 거래 평소 1.5~6배 · 고가 근처 마감 · <b>다음 날 분할 매도</b> · 3년 다음 날 +1.3~1.6% (이김 73~78%)',
     ((d.best_lead||[]).map(bchip).join('')||'<span class="ts">오늘은 없음</span>')+anyRetail));
-  rank.push(rcard('1','#e3b341','⭐ 막 도는 섹터의 힘 있는 양봉 → 5~10일 스윙',
-    '돈 몰린 섹터가 20일 4~8위 (막 돌기 시작) · <b>5~10일 보유</b> · 3년 10일 +2.6% · 최근 1년 +8.2% · AI 랠리 +6.1%',
+  rank.push(rcard('1','#e3b341','⭐ 올라오는 섹터의 힘 있는 양봉 → 5~10일 스윙',
+    '돈 몰린 섹터가 20일 4~8위 (아직 주도 전 · 올라오는 중) · <b>5~10일 보유</b> · 3년 10일 +2.6% · 최근 1년 +8.2% · AI 랠리 +6.1%',
     ((d.best_swing||[]).map(bchip).join('')||'<span class="ts">오늘은 없음</span>')+`<div class="ts" style="margin-top:4px"><a href="#" onclick="switchTab('jongbe');return false" style="color:#58a6ff">후보 전체 보기 →</a></div>`));
   rank.push(rcard('2','#bc8cff','🕯 추세 도지 → 5일 안쪽',
     '상승 추세 종목의 장대양봉 다음 날 도지 · 이격 20%↓ · 5일 +3.7% (10일 넘기면 효과 없음)',((d.trend_doji||[]).map(x=>chip(x,'#bc8cff',` <span class="ts">어제 ${sg(x.big_pct)}% · 이격 ${x.gap20_pct}%</span>`)).join('')||'<span class="ts">오늘은 없음</span>')
