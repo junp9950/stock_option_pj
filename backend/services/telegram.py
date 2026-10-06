@@ -208,8 +208,14 @@ def _st(x: dict) -> str:
 
 def status_line(st: dict) -> str:
     """매일 요약 맨 위 한 줄."""
-    rel = f" · 삼하−코스닥 20일 {st['rel']:+.1f}%p" if "rel" in st else ""
-    return f"📊 <b>시장</b> 전체 {_st(st['전체'])} · 코스피 {_st(st['코스피'])} · 코스닥 {_st(st['코스닥'])}{rel}"
+    out = (f"📊 <b>시장</b> (괄호 = 종목 평균 지수의 20일선 대비)\n"
+           f"전체 {_st(st['전체'])} · 코스피 {_st(st['코스피'])} · 코스닥 {_st(st['코스닥'])}")
+    if "rel" in st:
+        r = st["rel"]
+        who = ("🧲 삼하 독주 — 코스닥 비중 줄이기" if r >= 15 else "삼하 쪽으로 기우는 중" if r >= 10
+               else "코스닥 우세" if r <= -3 else "비슷")
+        out += f"\n최근 20일 삼전·하닉 {st['sh20']:+.1f}% vs 코스닥 종목 평균 {st['kq20']:+.1f}% → {who}"
+    return out
 
 
 def regime_alert(db: Session) -> str | None:
