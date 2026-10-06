@@ -357,9 +357,9 @@ select{background:#21262d;border:1px solid #30363d;color:#c9d1d9;padding:6px 10p
   <div id="jr-login" style="border:1px solid #30363d;border-radius:10px;padding:16px;max-width:420px">
     <b style="color:#e6edf3">🔒 매매 일지</b> <span class="ts">사람마다 따로 기록됩니다. 금액이 보이는 화면이라 비밀번호로 잠급니다.</span>
     <div style="display:flex;flex-direction:column;gap:8px;margin-top:12px">
-      <input id="jr-owner" list="jr-owners" placeholder="이름 (예: 우라늄)" style="background:#0d1117;border:1px solid #30363d;color:#c9d1d9;padding:8px 10px;border-radius:6px">
+      <input id="jr-owner" list="jr-owners" autocomplete="username" placeholder="이름 (예: 우라늄)" style="background:#0d1117;border:1px solid #30363d;color:#c9d1d9;padding:8px 10px;border-radius:6px">
       <datalist id="jr-owners"></datalist>
-      <input id="jr-pin" type="password" placeholder="비밀번호 (4자 이상)" onkeydown="if(event.key==='Enter')jrLogin()" style="background:#0d1117;border:1px solid #30363d;color:#c9d1d9;padding:8px 10px;border-radius:6px">
+      <input id="jr-pin" type="password" autocomplete="current-password" placeholder="비밀번호 (4자 이상)" onkeydown="if(event.key==='Enter')jrLogin()" style="background:#0d1117;border:1px solid #30363d;color:#c9d1d9;padding:8px 10px;border-radius:6px">
       <button class="btn" id="jr-open" onclick="jrLogin()">열기</button>
       <div id="jr-login-msg" class="ts"></div>
     </div>
@@ -662,6 +662,15 @@ select{background:#21262d;border:1px solid #30363d;color:#c9d1d9;padding:6px 10p
 
 <div class="toast" id="toast"></div>
 
+<script>
+// 비밀번호 관리자(Bitwarden 등) 자동완성 창이 검색·숫자 칸마다 뜨지 않게 — 매매 일지 로그인 칸(jr-owner, jr-pin)만 남긴다 (2026-10-06)
+(function(){
+  const mark=el=>{ if(el.tagName==='INPUT'&&el.id!=='jr-owner'&&el.id!=='jr-pin'){ el.setAttribute('data-bwignore','true'); el.setAttribute('data-lpignore','true'); el.setAttribute('data-1p-ignore','true'); if(!el.getAttribute('autocomplete')) el.setAttribute('autocomplete','off'); } };
+  const scan=root=>{ if(root.querySelectorAll) root.querySelectorAll('input').forEach(mark); if(root.tagName==='INPUT') mark(root); };
+  document.addEventListener('DOMContentLoaded',()=>{ scan(document);
+    new MutationObserver(ms=>ms.forEach(m=>m.addedNodes.forEach(n=>n.nodeType===1&&scan(n)))).observe(document.body,{childList:true,subtree:true}); });
+})();
+</script>
 <script>
 const API = window.location.origin + '/api';
 
