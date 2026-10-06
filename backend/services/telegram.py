@@ -567,10 +567,12 @@ def _reply_comment(db: Session, cid: str, reply_mid, msg: dict) -> None:
     """종목토론 알림에 답장 → 그 글에 댓글(댓글 알림이었으면 그 댓글에 답글). 2026-10-05 "텔레그램에서 바로 답변"."""
     ref = _get(db, "telegram_msgmap", {}).get(f"{cid}:{reply_mid}") or _ref_from_text(db, (msg.get("reply_to_message") or {}).get("text") or "")
     if not ref:
+        logger.info("텔레그램 답장 댓글: 연결된 글 없음 (chat=%s, reply_to=%s)", cid, reply_mid)
         send(db, "이 메시지에는 답장으로 댓글을 달 수 없습니다. 종목토론 새 글·댓글 알림에 답장해 주세요.", cid); return
     author = _get(db, "telegram_authors", {}).get(cid)
     if not author:
-        send(db, "댓글 이름을 먼저 정해 주세요: /이름 감사하모니카 또는 /이름 우라늄", cid); return
+        logger.info("텔레그램 답장 댓글: 이름 없음 (chat=%s)", cid)
+        send(db, "댓글 이름을 먼저 정해 주세요: /name 우라늄 또는 /name 감사하모니카", cid); return
     text_ = (msg.get("text") or msg.get("caption") or "").strip()
     images = []
     if msg.get("photo"):
@@ -583,7 +585,9 @@ def _reply_comment(db: Session, cid: str, reply_mid, msg: dict) -> None:
         create_comment(int(ref["post"]), CommentIn(author=author, content=text_[:1000], images=images,
                                                     parent_id=ref.get("comment")), db)
     except HTTPException as exc:
+        logger.info("텔레그램 답장 댓글 실패 (chat=%s): %s", cid, exc.detail)
         send(db, f"댓글을 못 달았습니다: {exc.detail}", cid); return
+    logger.info("텔레그램 답장 댓글 등록 (chat=%s, %s, 글 %s)", cid, author, ref["post"])
     send(db, f"✅ {'답글' if ref.get('comment') else '댓글'} 달았습니다 ({author}){chr(10)}{SITE}/discussion#{ref['post']}", cid)
 
 
