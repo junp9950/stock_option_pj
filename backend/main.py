@@ -722,9 +722,16 @@ function switchTab(id) {
 let _jbData=null;
 // ── 오늘 (대시보드) ─────────────────────────────────────────
 async function loadDashboard(){
-  const v=document.getElementById('db-verdict'), g=document.getElementById('db-grid');
+  // 지난번 결과를 먼저 바로 그리고(브라우저에 저장), 새 결과가 오면 다시 그린다
+  let old=null; try{ old=JSON.parse(localStorage.getItem('db-last')||'null'); }catch(e){}
+  if(old) renderDashboard(old, true);
   const d=await fetch(`${API}/dashboard`).then(r=>r.ok?r.json():null).catch(()=>null);
-  if(!d){ v.textContent='불러오지 못했습니다'; return; }
+  if(!d){ if(!old) document.getElementById('db-verdict').textContent='불러오지 못했습니다'; return; }
+  try{ localStorage.setItem('db-last',JSON.stringify(d)); }catch(e){}
+  renderDashboard(d, false);
+}
+async function renderDashboard(d, stale){
+  const v=document.getElementById('db-verdict'), g=document.getElementById('db-grid');
   const m=d.market||{}, all=m['전체']||{}, al=d.alert||{};
   const col={상승:'#3fb950',횡보:'#d29922',하락:'#f85149'}, ico={상승:'🟢',횡보:'🟡',하락:'🔴'};
   const sg=x=>(x>0?'+':'')+x;
@@ -759,7 +766,6 @@ async function loadDashboard(){
   parts.push(card(`📋 관심 종목 — 선에 닿은 것 (${d.watch.length})`,d.watch.map(w=>`<div style="display:flex;justify-content:space-between;gap:8px;font-size:13px;padding:3px 0;border-bottom:1px solid #21262d;cursor:pointer" onclick="openChartModal('${w.code}','${w.name}','')"><span><b style="color:${wc[w.tag]||'#e6edf3'}">${w.tag}</b> ${w.name}</span><span class="ts">${w.close.toLocaleString()} / 선 ${w.level.toLocaleString()} (${sg(w.gap_pct)}%)</span></div>`).join('')||'<span class="ts">없음</span>'));
   const vr=d.volume||{};
   parts.push(card('🔥 대량거래 관심종목',[['🎯 진입 신호',vr.signal,'#e3b341'],['🚀 꼬리 돌파',vr.tail_break,'#3fb950'],['🆕 신규(최근 터짐)',vr.new,'#58a6ff']].map(([t,l,c])=>`<div style="margin-bottom:4px"><span class="ts">${t}</span><br>${(l||[]).map(x=>chip(x,c,x.days!=null?` <span class="ts">${x.days}일 전</span>`:'')).join('')||'<span class="ts">없음</span>'}</div>`).join('')));
-  parts.push(card('💼 내 계좌 (매매 일지)','<div id="db-acct" class="ts">매매 일지에 로그인하면 보입니다</div>'));
   parts.push(card('📌 데이터로 확인된 내 원칙',`<ol style="margin:0;padding-left:18px;font-size:13px;line-height:1.7">
     <li><b>하락장은 쉰다</b> — 특히 들고 가기 금지 (하락 구간 스윙 -1,958만)</li>
     <li><b>빠지는 종목 줍지 않기</b> — 20일선 아래·고점 -8%↓ 매수 288건 -2,007만</li>
@@ -767,25 +773,7 @@ async function loadDashboard(){
     <li>B로 산 건 <b>분할 매도</b> (다음 날 +2%↓ 전량, ↑면 30%씩), 쉬는 봉은 <b>3~5일</b> 손절선만</li>
     <li><b>추격 금지</b> — 이격 30%↑ · 윗꼬리 긴 날 · 거래 6배↑ 피하기</li></ol>`));
   g.innerHTML=parts.join('');
-  // 내 계좌 (로그인돼 있을 때만)
-  const a=jrAuth();
-  if(a.o&&a.p){
-    const r=await fetch(`${API}/journal`,{headers:jrH()}).then(x=>x.ok?x.json():null).catch(()=>null);
-    const el=document.getElementById('db-acct');
-    if(r&&el){
-      const h=(r.holding||[]).map(x=>({...x,val:x.qty*(x.close||x.price),cost:x.qty*x.price}));
-      const cash=+(r.cfg.cash||0), tv=h.reduce((s,x)=>s+x.val,0), tc=h.reduce((s,x)=>s+x.cost,0), tot=tv+cash;
-      const today=(r.summary.by_day||{})[d.as_of]; const mon=(r.summary.by_month||{})[(d.as_of||'').slice(0,7)];
-      const top=[...h].sort((x,y)=>y.val-x.val).slice(0,4);
-      el.innerHTML=`<div style="display:flex;gap:14px;flex-wrap:wrap;font-size:13px;color:#c9d1d9">
-        <div><span class="ts">총자산</span><br><b style="font-size:16px;color:#e6edf3">${Math.round(tot/10000).toLocaleString()}만</b></div>
-        <div><span class="ts">평가손익</span><br><b style="font-size:16px">${jrWon(tv-tc)}</b></div>
-        <div><span class="ts">오늘 실현</span><br><b style="font-size:16px">${today?jrWon(today.pnl):'-'}</b></div>
-        <div><span class="ts">이번 달 실현</span><br><b style="font-size:16px">${mon?jrWon(mon.pnl):'-'}</b></div></div>
-        <div class="ts" style="margin-top:8px">비중 상위: ${top.map(x=>`${x.name} ${(x.val/tot*100).toFixed(1)}% ${jrPct(x.eval_pct)}`).join(' · ')}</div>
-        <div class="ts">${h.length}종목 · 예수금 ${(cash/tot*100||0).toFixed(1)}% · <a href="#" onclick="switchTab('journal');return false" style="color:#58a6ff">매매 일지 →</a></div>`;
-    }
-  }
+  // 내 계좌 카드는 뺐음 (2026-10-06 사용자: 첫 화면에 계좌 금액이 보이는 건 원치 않음 — 매매 일지 탭에서만)
 }
 
 // 최적 조건 B · 내 패턴 A · 내일 후보 (2026-10-06)
@@ -2080,6 +2068,8 @@ def startup_event() -> None:
     def _warm_journal() -> None:
         _db = SessionLocal()
         try:
+            from backend.api.routes import warm_caches  # noqa: PLC0415
+            warm_caches(_db)                 # 첫 화면(오늘)·차트 후보를 재시작 직후 바로 데움
             from backend.services import trade_journal  # noqa: PLC0415
             trade_journal.warm(_db)
         except Exception as exc:  # noqa: BLE001

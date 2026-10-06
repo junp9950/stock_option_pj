@@ -1595,9 +1595,9 @@ def get_dashboard(db: Session = Depends(get_db)):
     from backend.screener.my_pattern import scan as mp_scan  # noqa: PLC0415
     from backend.services.telegram import _get as tg_get, market_status  # noqa: PLC0415
     from backend.services.result_cache import cached  # noqa: PLC0415
-    st = market_status(db) or {}
+    # 무거운 부분(시장 상태·후보 스캔)은 데이터 버전이 같으면 디스크 캐시 — 재시작 직후에도 바로 뜨게 (2026-10-06 "오늘 탭 느리다")
+    st, mp = cached("dashboard_core", (), db, lambda: (market_status(db) or {}, mp_scan(db)))
     alert = tg_get(db, "market_alert_state", {}) or {}
-    mp = mp_scan(db)
     b = [x for x in mp["items"] if x["b"]]
     best = [x for x in b if 1.5 <= x["tv_x"] <= 6 and x["upper_pct"] <= 10]
     latest = mp["trading_date"]
@@ -1641,7 +1641,8 @@ def get_dashboard(db: Session = Depends(get_db)):
 def get_my_pattern(db: Session = Depends(get_db)):
     """종베: 최적 조건 B · 내 패턴 A(사용자 매수 501건에서 번 자리) · 내일 후보 (2026-10-06)."""
     from backend.screener.my_pattern import scan  # noqa: PLC0415
-    return scan(db)
+    from backend.services.result_cache import cached  # noqa: PLC0415
+    return cached("my_pattern", (), db, lambda: scan(db))
 
 
 @router.get("/screener/volume-records")
