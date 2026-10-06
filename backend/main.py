@@ -359,7 +359,7 @@ select{background:#21262d;border:1px solid #30363d;color:#c9d1d9;padding:6px 10p
       <input id="jr-owner" list="jr-owners" placeholder="이름 (예: 우라늄)" style="background:#0d1117;border:1px solid #30363d;color:#c9d1d9;padding:8px 10px;border-radius:6px">
       <datalist id="jr-owners"></datalist>
       <input id="jr-pin" type="password" placeholder="비밀번호 (4자 이상)" onkeydown="if(event.key==='Enter')jrLogin()" style="background:#0d1117;border:1px solid #30363d;color:#c9d1d9;padding:8px 10px;border-radius:6px">
-      <button class="btn" onclick="jrLogin()">열기</button>
+      <button class="btn" id="jr-open" onclick="jrLogin()">열기</button>
       <div id="jr-login-msg" class="ts"></div>
     </div>
   </div>
@@ -925,7 +925,9 @@ async function loadJournal(){
     if(a.o) document.getElementById('jr-owner').value=a.o;
     return;
   }
+  jrBusy('일지 불러오는 중… (몇 초 걸립니다)');
   const r=await fetch(`${API}/journal`,{headers:jrH()}).catch(()=>null);
+  jrBusy('');
   if(!r||!r.ok){ if(r&&(r.status===401||r.status===429)){ try{localStorage.removeItem('jr-pin');}catch(e){} } document.getElementById('jr-login-msg').textContent=r?'다시 입력해 주세요':'불러오지 못했습니다'; jrShowLogin(); return; }
   _jr=await r.json();
   document.getElementById('jr-login').style.display='none'; document.getElementById('jr-main').style.display='block';
@@ -934,17 +936,24 @@ async function loadJournal(){
   if(!document.getElementById('jr-date').value) document.getElementById('jr-date').value=_jr.as_of||'';
   jrRender();
 }
+function jrBusy(t){   // 로그인·불러오기 중인지 보이게 (2026-10-06 "로딩일 때 됐는지 안 됐는지 알 수가 없다")
+  const b=document.getElementById('jr-open'), m=document.getElementById('jr-login-msg');
+  if(b){ b.disabled=!!t; b.textContent=t?'⏳ 여는 중…':'열기'; b.style.opacity=t?'0.6':''; }
+  if(t){ m.innerHTML=`<span style="color:#58a6ff">⏳ ${t}</span>`; document.getElementById('jr-login').style.display='block'; document.getElementById('jr-main').style.display='none'; }
+}
 function jrShowLogin(){ document.getElementById('jr-login').style.display='block'; document.getElementById('jr-main').style.display='none'; }
 async function jrLogin(create){
   const o=document.getElementById('jr-owner').value.trim(), p=document.getElementById('jr-pin').value;
   const msg=document.getElementById('jr-login-msg');
   if(!o||p.length<4){ msg.textContent='이름과 4자 이상 비밀번호를 넣어 주세요'; return; }
+  jrBusy('비밀번호 확인 중…');
   const r=await fetch(`${API}/journal/login`,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({owner:o,pin:p,create:!!create})}).catch(()=>null);
+  jrBusy('');
   if(r&&r.status===404){
     msg.innerHTML=`처음 쓰는 이름입니다. 이 비밀번호로 <b style="color:#3fb950;cursor:pointer;text-decoration:underline" onclick="jrLogin(true)">새로 만들기</b> (잊으면 되찾을 수 없으니 기억해 두세요)`;
     return;
   }
-  if(!r||!r.ok){ const e=r?await r.json().catch(()=>({})):{}; msg.textContent=e.detail||'실패'; return; }
+  if(!r||!r.ok){ const e=r?await r.json().catch(()=>({})):{}; msg.innerHTML=`<span style="color:#f85149">❌ ${e.detail||(r?'비밀번호가 맞지 않습니다':'서버에 연결하지 못했습니다')}</span>`; return; }
   try{ localStorage.setItem('jr-owner',o); localStorage.setItem('jr-pin',p); }catch(e){}
   document.getElementById('jr-pin').value=''; msg.textContent='';
   loadJournal();
