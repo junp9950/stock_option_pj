@@ -83,13 +83,6 @@ def cached(name: str, args: tuple, db: Session, compute: Callable[[], Any]) -> A
     key = (name, args)
     version = data_version(db)
     with _lock:
-        kl = _inflight.setdefault(key, threading.Lock())
-    with kl:   # 같은 계산을 여러 요청이 동시에 하지 않게 — 먼저 온 요청이 계산하고 나머지는 그 결과를 쓴다 (2026-10-06 오늘 탭 멈춤)
-        return _cached(key, args, version, compute)
-
-
-def _cached(key: tuple, args: tuple, version: tuple, compute: Callable[[], Any]) -> Any:
-    with _lock:
         hit = _cache.get(key)
         if hit is None and not args:
             hit = _disk_load(key)
@@ -98,7 +91,17 @@ def _cached(key: tuple, args: tuple, version: tuple, compute: Callable[[], Any])
         if hit and hit[1] == version and time.time() - hit[0] < _TTL_SEC:
             return hit[2]
         if hit and not getattr(_force, "on", False):
-            return hit[2]          # 낡았어도 우선 보여 주고, 2분 안에 warm_caches가 새로 계산
+            return hit[2]          # 낡았어도 우선 보여 주고, 2분 안에 warm_caches가 새로 계산 (계산 중이어도 기다리지 않음)
+        kl = _inflight.setdefault(key, threading.Lock())
+    with kl:   # 결과가 아예 없을 때만: 같은 계산을 여러 요청이 동시에 하지 않게 (2026-10-06)
+        with _lock:
+            hit = _cache.get(key)
+            if hit and hit[1] == version:
+                return hit[2]
+        return _compute(key, args, version, compute)
+
+
+def _compute(key: tuple, args: tuple, version: tuple, compute: Callable[[], Any]) -> Any:
     value = compute()
     entry = (time.time(), version, value)
     with _lock:
