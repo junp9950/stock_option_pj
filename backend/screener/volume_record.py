@@ -1,6 +1,9 @@
 """대량거래 관심종목: 최근 약 4개월 안에 몇 년 만의 최대 거래대금이 터진 종목과 지금 단계.
 
 신기록일 = 그날 거래대금이 그 종목 데이터 전체(약 3년)에서 최대 + 직전 120일 중간값의 10배 이상 + 양봉 + 전날 대비 +5% 이상 + 30억 이상.
+  2026-10-06부터 '윗꼬리' 신기록도 넣는다: 장중 고가가 전날 대비 +5% 이상이었는데 음봉이거나 +5% 아래로 마감한 날
+  (대한제강 10/1 시가 +28% → 종가 +12.7%, 거래 120배). 사용자: "설거지든 뭐든 대량 거래는 일단 주시해야지".
+  이런 종목은 단계 '설거지'로 보여 주기만 하고, 🎯 진입 신호는 3년 검증한 양봉 신기록에만 붙인다.
 2023-09~2026-09 전종목 확인(1,113건): 신기록일 종가에 바로 사면 20일 뒤 중간값 -7.1%(플러스 34%)라 추격 매수 신호가 아니다.
 대신 20일 안에 95%가 신기록일 종가보다 높은 가격을 찍어(중간값 +15%) 크게 움직이는 종목을 고르는 '관심 등록' 용도다.
 진입은 그 뒤 숨고르기(거래가 마르면서 상승분을 지킴) 후 돌려세울 때 본다. 한양디지텍 9/17, 금호타이어 6~8월이 예.
@@ -99,13 +102,16 @@ def scan(db: Session) -> dict:
                 if tv[i] >= X_MIN * med:
                     last_big = i
                     big_max = max(big_max, tv[i])
-                    if (first is None and tv[i] > run_max and p[5] > p[2] and tv[i] >= MIN_VALUE
-                            and float(p[5]) >= float(pl[i - 1][5]) * (1 + MIN_EVENT_CHG / 100)):
-                        first = (i, tv[i] / med)
+                    pc = float(pl[i - 1][5])
+                    if first is None and tv[i] > run_max and tv[i] >= MIN_VALUE:
+                        if p[5] > p[2] and float(p[5]) >= pc * (1 + MIN_EVENT_CHG / 100):
+                            first = (i, tv[i] / med, "양봉")
+                        elif float(p[3]) >= pc * (1 + MIN_EVENT_CHG / 100):
+                            first = (i, tv[i] / med, "윗꼬리")   # 장중 +5% 넘게 쐈다가 밀림 (갭하락·블록딜은 여전히 뺌)
             run_max = max(run_max, tv[i])
         if first is None:
             continue
-        i, x = first
+        i, x, kind = first
         ev = pl[i]
         base = float(pl[i - 1][5])                      # 신기록 전날 종가
         i_peak = max(range(i, len(pl)), key=lambda k: pl[k][3])
@@ -124,7 +130,9 @@ def scan(db: Session) -> dict:
         # 오늘 돌려세우는 봉: +3% 이상 양봉 + 거래대금이 직전 20일 평균의 2배 이상
         avg20 = sum(tv[-21:-1]) / 20 if len(tv) > 21 else 0
         turn = (float(pl[-1][5]) > float(pl[-1][2]) and close >= float(pl[-2][5]) * 1.03 and avg20 > 0 and tv[-1] >= 2 * avg20)
-        if dist:
+        if kind == "윗꼬리" and not broke and close >= float(ev[3]):
+            stage = "꼬리 돌파"      # 신기록일 윗꼬리 끝(고가)을 종가로 넘음 = 그날 물린 사람 0
+        elif dist or kind == "윗꼬리":
             stage = "설거지"
         elif broke:
             stage = "무너짐"
@@ -137,7 +145,8 @@ def scan(db: Session) -> dict:
         items.append({
             "code": code, "name": names.get(code, code),
             "event_date": ev[1].isoformat(), "event_change_pct": round((float(ev[5]) / base - 1) * 100, 1),
-            "event_value": round(tv[i]), "event_x": round(x),
+            "event_value": round(tv[i]), "event_x": round(x), "event_kind": kind,
+            "event_high_pct": round((float(ev[3]) / base - 1) * 100, 1),
             "peak_date": pl[i_peak][1].isoformat(), "rise_pct": round((peak / base - 1) * 100, 1),
             "close_price": round(close),
             "gap20_pct": round((close / (sum(float(p[5]) for p in pl[-20:]) / 20) - 1) * 100, 1),
@@ -146,7 +155,7 @@ def scan(db: Session) -> dict:
             "dry_pct": round(dry * 100), "rest_days": rest, "days_since": len(pl) - 1 - i,
             "stage": stage, "stop_price": round(base), "stop_gap_pct": round((base / close - 1) * 100, 1),
             "turn_today": turn, "earn_up": code in earn_up,
-            "entry_signal": stage == "숨고르기" and turn and market_ok,
+            "entry_signal": stage == "숨고르기" and turn and market_ok and kind == "양봉",
         })
     # 섹터 (16개) — 화면에서 어느 섹터 종목인지 보이게
     from backend.screener.rotation import family_members  # noqa: PLC0415
@@ -163,7 +172,7 @@ def scan(db: Session) -> dict:
         x["flags"] = fl.get(x["code"], {}).get("flags", [])
     # 신기록 뒤 경과일로 자르지 않는 이유 (2026-10-04, 진입 신호 130건 40일 시장 대비): 61~80일 뒤 신호 43건 평균 +9.6%p·중간 +2.4%p로
     # 21~40일(48건 +4.0%p)보다 나빴던 게 아니다. 대신 화면에 '며칠 전 신기록'을 크게 보여 준다.
-    order = {"숨고르기": 0, "신규": 1, "진행 중": 2, "설거지": 3, "무너짐": 4}
+    order = {"꼬리 돌파": 0, "숨고르기": 1, "신규": 2, "진행 중": 3, "설거지": 4, "무너짐": 5}
     items.sort(key=lambda x: x["market_cap"] or 0, reverse=True)   # 단계 안에서는 시총 큰 종목부터
     items.sort(key=lambda x: (order[x["stage"]], not x["entry_signal"]))
     limit_up.sort(key=lambda x: -(x["market_cap"] or 0))

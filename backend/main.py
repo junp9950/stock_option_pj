@@ -575,11 +575,12 @@ select{background:#21262d;border:1px solid #30363d;color:#c9d1d9;padding:6px 10p
 
     <div style="display:flex;flex-wrap:wrap;align-items:center;gap:10px;margin-bottom:8px">
       <select id="vr-stage" onchange="renderVolumeRecords()">
-        <option value="live">숨고르기 · 신규 · 진행 중</option>
+        <option value="live">무너짐 빼고 전체 (설거지 포함)</option>
+        <option value="꼬리 돌파">꼬리 돌파만</option>
         <option value="숨고르기">숨고르기만</option>
         <option value="신규">신규만</option>
         <option value="설거지">설거지만</option>
-        <option value="">설거지·무너짐 포함 전체</option>
+        <option value="">무너짐 포함 전체</option>
       </select>
       <label style="font-size:13px;color:#c9d1d9">시총
         <select id="vr-mincap" onchange="try{localStorage.setItem('vr-mincap',this.value)}catch(e){};renderVolumeRecords()">
@@ -592,6 +593,8 @@ select{background:#21262d;border:1px solid #30363d;color:#c9d1d9;padding:6px 10p
     <p class="lead">몇 년 만의 최대 거래대금이 터진 종목. <b>터진 날 사지 말고</b> 숨고르기 뒤 🎯 돌려세우는 봉에서 보세요. 손절선 = 신기록 전날 종가.</p>
     <details class="why"><summary>근거 · 단계 설명 · 파는 법</summary>
       <b>신기록</b> = 최근 4개월 안에 평소 10배↑ 거래대금 + 전날 대비 +5% 양봉(리츠·스팩·ETF 제외).
+      <b>윗꼬리 신기록</b> = 장중 +5% 넘게 쐈다가 밀린 대량거래(대한제강 10/1형) — 설거지든 뭐든 주시용, 🎯 진입 신호는 안 붙임.
+      <b style="color:#3fb950">꼬리 돌파</b> = 그 윗꼬리 끝(신기록일 고가)을 종가로 넘음 = 그날 물린 사람 0.
       3년: 터진 날 사면 20일 뒤 중간 <b style="color:#f85149">-7%</b>, 대신 95%가 20일 안에 더 높은 가격을 찍음(중간 +15%).<br>
       <b style="color:#3fb950">숨고르기</b> = 거래가 마르며 기준선 지킴 · <b>무너짐</b> = 기준선 아래이거나 한 번이라도 -15% 아래 마감 · <b style="color:#f85149">설거지</b> = 다음 1~2일 더 큰 거래의 윗꼬리 음봉(20일 뒤 중간 -12%).<br>
       <b style="color:#e3b341">🎯 진입 신호</b> = 숨고르기 중 +3% 양봉·거래 2배 + 시장 상승·횡보 → 40일 뒤 시장 대비 +1.9%p(하락장은 -5.8%p), 📈 실적까지 겹치면 +7.8%p(31건).<br>
@@ -1472,18 +1475,18 @@ function renderVolumeRecords(){
   const sel = document.getElementById('vr-stage').value;
   const sigOnly = document.getElementById('vr-signal').checked;
   const vmin = parseFloat(document.getElementById('vr-mincap').value)*1e8||0;
-  const items = _vrData.items.filter(x=> (sel==='live' ? !['무너짐','설거지'].includes(x.stage) : (!sel || x.stage===sel)) && (!sigOnly || x.entry_signal) && (!vmin || !x.market_cap || x.market_cap>=vmin));
+  const items = _vrData.items.filter(x=> (sel==='live' ? x.stage!=='무너짐' : (!sel || x.stage===sel)) && (!sigOnly || x.entry_signal) && (!vmin || !x.market_cap || x.market_cap>=vmin));
   const cnt = s=>_vrData.items.filter(x=>x.stage===s).length;
   const nsig = _vrData.items.filter(x=>x.entry_signal).length;
-  document.getElementById('vr-sum').textContent = `${_vrData.items.filter(x=>!['무너짐','설거지'].includes(x.stage)).length}개 · 🎯 진입 신호 ${nsig}`;
-  document.getElementById('vr-info').textContent = `기준일 ${_vrData.trading_date} · 시장 ${_vrData.market_state||'-'} · 🎯 ${nsig} · 숨고르기 ${cnt('숨고르기')} · 신규 ${cnt('신규')} · 진행 중 ${cnt('진행 중')} · 설거지 ${cnt('설거지')} · 무너짐 ${cnt('무너짐')}`;
+  document.getElementById('vr-sum').textContent = `${_vrData.items.filter(x=>x.stage!=='무너짐').length}개 · 🎯 진입 신호 ${nsig}`;
+  document.getElementById('vr-info').textContent = `기준일 ${_vrData.trading_date} · 시장 ${_vrData.market_state||'-'} · 🎯 ${nsig} · 꼬리 돌파 ${cnt('꼬리 돌파')} · 숨고르기 ${cnt('숨고르기')} · 신규 ${cnt('신규')} · 진행 중 ${cnt('진행 중')} · 설거지 ${cnt('설거지')} · 무너짐 ${cnt('무너짐')}`;
   if(!items.length){ body.innerHTML = '<tr><td colspan="5" style="color:#8b949e;text-align:center;padding:20px">해당 종목이 없습니다</td></tr>'; return; }
-  const color = {'숨고르기':'#3fb950','신규':'#58a6ff','진행 중':'#d29922','설거지':'#f85149','무너짐':'#8b949e'};
+  const color = {'꼬리 돌파':'#3fb950','숨고르기':'#3fb950','신규':'#58a6ff','진행 중':'#d29922','설거지':'#f85149','무너짐':'#8b949e'};
   const sg = n=>(n>=0?'+':'')+n;
   body.innerHTML = items.map(x=>`<tr style="cursor:pointer" onclick="openChartModal('${x.code}','${x.name}','${x.event_date}')">
     <td>${x.entry_signal?'<b style="color:#e3b341">🎯 진입 신호</b><br>':''}<b>${x.name}</b> <span style="color:#8b949e;font-size:11px">${x.code}</span>${flagTag(x)}${x.earn_up?' <span style="color:#3fb950;font-size:11px;border:1px solid #238636;border-radius:8px;padding:0 5px">📈 실적</span>':''}${x.market_cap?`<br><span class="ts">시총 ${cdWon(x.market_cap)}</span>`:''}${(x.families||[]).length?`<br><span class="ts" style="color:#c9d1d9">${x.families.join(', ')}</span>`:''}</td>
     <td data-label="단계"><b style="color:${color[x.stage]}">${x.stage}</b><br><span class="ts">마지막 대량거래 뒤 ${x.rest_days}일</span></td>
-    <td data-label="신기록일">${x.event_date.slice(5)} <span style="color:#f85149">${sg(x.event_change_pct)}%</span> <span style="font-size:11px;color:${x.days_since>40?'#d29922':'#8b949e'}">(${x.days_since}거래일 전)</span><br><span class="ts">${cdWon(x.event_value)} · 평소 ${x.event_x}배</span></td>
+    <td data-label="신기록일">${x.event_date.slice(5)} <span style="color:#f85149">${sg(x.event_change_pct)}%</span>${x.event_kind==='윗꼬리'?` <span style="font-size:11px;color:#d29922" title="장중 고가까지 올랐다가 밀린 대량거래">윗꼬리(고가 ${sg(x.event_high_pct)}%)</span>`:''} <span style="font-size:11px;color:${x.days_since>40?'#d29922':'#8b949e'}">(${x.days_since}거래일 전)</span><br><span class="ts">${cdWon(x.event_value)} · 평소 ${x.event_x}배</span></td>
     <td data-label="그 뒤 최고" style="color:#f85149">${sg(x.rise_pct)}%<br><span class="ts">${x.peak_date.slice(5)}</span></td>
     <td data-label="지금" style="text-align:right">${x.close_price.toLocaleString()}원${gapTag(x.gap20_pct)} <span style="color:${x.change_pct>=0?'#f85149':'#3b82f6'};font-size:11px">${sg(x.change_pct.toFixed(2))}%</span><br><span class="ts">고점 ${x.off_peak_pct}% · 상승분 ${x.kept_pct}% 유지 · 거래 ${x.dry_pct}%로 마름</span><br><span class="ts" style="color:#f85149">기준선(손절) ${x.stop_price.toLocaleString()}원 · ${x.stop_gap_pct}%</span>${x.entry_signal?`<br><span class="ts" style="color:#e3b341">매도: 시초가 +5% 이상 갭이면 덜어내기 · ${Math.round(x.close_price*1.1).toLocaleString()}원(+10%)에 절반 · 나머지는 보유 중 최고 종가 -8% 이탈 시</span>`:''}</td>
   </tr>`).join('');
