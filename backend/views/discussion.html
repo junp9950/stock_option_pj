@@ -41,7 +41,7 @@ button.ghost.fav{font-size:13px;padding:6px 10px;border:1px solid #30363d;border
 .lightbox.show{display:flex}.lightbox img{max-width:92vw;max-height:92vh;border-radius:6px}
 </style></head><body><main>
 <h1>종목토론</h1><div class="sub">종목 얘기, 차트 스크린샷 자유롭게 남겨 보세요. 사진은 입력창에 <b>Ctrl+V</b>로 붙여넣거나 골라서 올릴 수 있습니다 (글 최대 20장, 댓글 최대 5장).</div>
-<div class="topbar"><button class="ghost" id="back" style="display:none">← 목록</button><span class="muted" id="board-info"></span><button class="ghost" id="fav-only" title="내 이름(작성자 버튼에서 고른 이름)으로 별 표시한 글만">☆ 즐겨찾기만</button><button id="write-btn">✎ 글쓰기</button></div>
+<div class="topbar"><button class="ghost" id="back" style="display:none">← 목록</button><span class="muted" id="board-info"></span><span id="me-box" style="display:inline-flex;align-items:center;gap:6px"><span class="muted" style="font-size:12.5px">나는</span><span class="who" data-who="me"></span></span><button class="ghost" id="fav-only" title="위에서 고른 내 이름으로 별 표시한 글만">☆ 즐겨찾기만</button><button id="write-btn">✎ 글쓰기</button></div>
 <section class="box" id="write-box" style="display:none">
   <div class="row">
     <input id="stock-name" class="grow" maxlength="100" placeholder="종목명 (선택)">
@@ -361,7 +361,7 @@ async function route(){
   const box=document.getElementById('list');
   try{
     await loadFavs();
-    document.getElementById('fav-only').style.display=m?'none':'';
+    document.getElementById('fav-only').style.display=m?'none':'';document.getElementById('me-box').style.display=m?'none':'inline-flex';
     if(m){current=await call('GET',`${API}/${m[1]}`);renderPost()}
     else{current=null;all=await call('GET',`${API}/board`);renderBoard()}
   }catch(e){box.innerHTML=`<div class="empty">${m?'글을 불러오지 못했습니다.':'목록을 불러오지 못했습니다.'}</div>`}
@@ -409,5 +409,6 @@ document.getElementById('list').addEventListener('keydown',e=>{
   if(e.target.matches('[data-f="r-content"]')){e.preventDefault();addReply(e.target.closest('.reply-form'))}
 });
 whoToggle(document.querySelector('[data-who="post"]'));
+whoToggle(document.querySelector('[data-who="me"]'));   // 목록 위 '나는' — 즐겨찾기·글쓰기·댓글 이름이 모두 이걸 따라감
 route();
 </script></body></html>
