@@ -1954,6 +1954,14 @@ def startup_event() -> None:
         from backend.utils.dates import is_trading_day  # noqa: PLC0415
         from datetime import date as _date  # noqa: PLC0415
         today = _date.today()
+        from datetime import datetime as _dtm  # noqa: PLC0415
+        from zoneinfo import ZoneInfo as _ZI  # noqa: PLC0415
+        _now = _dtm.now(_ZI("Asia/Seoul"))
+        if is_trading_day(today) and (_now.hour, _now.minute) < (15, 41):
+            # 장중 재시작(배포)이면 수집하지 않는다 — 장중 시세가 오늘 종가 행으로 들어가 15:41 수집을 막았다 (2026-10-06)
+            import logging  # noqa: PLC0415
+            logging.getLogger(__name__).info("장중 재시작 — startup 파이프라인 스킵 (15:41 정규 수집에 맡김)")
+            return
         if not is_trading_day(today):
             import logging  # noqa: PLC0415
             logging.getLogger(__name__).info("오늘(%s)은 거래일이 아니므로 startup 파이프라인 스킵", today)

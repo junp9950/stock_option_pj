@@ -6,7 +6,7 @@ from typing import Optional
 
 import FinanceDataReader as fdr
 import pandas as pd
-from sqlalchemy import select
+from sqlalchemy import delete, select
 from sqlalchemy.orm import Session
 
 from backend.collector.universe import get_universe
@@ -363,6 +363,22 @@ def collect_sector_supplement(db: Session, trading_date: date) -> int:
     }
     if not sector_codes:
         return 0
+
+    # 장중(15:30 전)에 미리 들어간 오늘 행은 장중 시세라 다시 받는다 (2026-10-06 발견: 서버 재시작 때 장중 시세가 오늘 행으로
+    # 들어가면 15:41 수집이 '이미 수집됨'으로 건너뛰어 섹터 종목 2천여 개가 다음 날 아침까지 장중 값으로 남았다)
+    from datetime import datetime as _dt, timezone as _tz  # noqa: PLC0415
+    from zoneinfo import ZoneInfo as _Z  # noqa: PLC0415
+    close_utc = _dt(trading_date.year, trading_date.month, trading_date.day, 15, 30, tzinfo=_Z("Asia/Seoul")).astimezone(_tz.utc).replace(tzinfo=None)
+    if _dt.now(_tz.utc).replace(tzinfo=None) >= close_utc:
+        stale = db.execute(
+            delete(SpotInvestorFlow).where(SpotInvestorFlow.trading_date == trading_date,
+                                           SpotInvestorFlow.created_at < close_utc,
+                                           SpotInvestorFlow.stock_code.in_(sector_codes),
+                                           SpotInvestorFlow.stock_code.not_in(select(Stock.code).where(Stock.is_active)))
+        ).rowcount
+        db.commit()
+        if stale:
+            logger.info("Sector supplement: 장중에 들어간 오늘 행 %d개를 종가로 다시 받습니다", stale)
 
     # 이미 수집된 종목 코드
     existing_flow = {
