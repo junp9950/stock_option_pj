@@ -190,7 +190,8 @@ function pasteInto(el,set){el.addEventListener('paste',e=>{
 const formMsg=document.getElementById('form-msg');
 const newPost=richEditor(document.getElementById('content'),MAX_POST,formMsg);
 document.getElementById('paste-zone').onclick=()=>pick(newPost);
-document.getElementById('submit').onclick=async()=>{
+document.getElementById('submit').onclick=async()=>{ await busy(document.getElementById('submit'),submitPost) };
+async function submitPost(){
   const v=newPost.value(),content=v.content,title=document.getElementById('title').value.trim();
   if(!title){formMsg.textContent='제목을 입력해 주세요.';document.getElementById('title').focus();return}
   if(!content&&!v.images.length){formMsg.textContent='내용이나 이미지를 입력해 주세요.';return}
@@ -281,8 +282,9 @@ function openReply(thread,to){
 async function addReply(f){
   const thread=f.closest('.thread'),content=f.querySelector('[data-f="r-content"]').value.trim();
   if(!content&&!f._set.images.length)return;
-  try{await call('POST',`${API}/${current.id}/comments`,{content,images:f._set.images,parent_id:Number(thread.dataset.tid),
-    author:f.querySelector('[data-f="r-author"]').dataset.value});await load()}catch(err){alert(err.message)}
+  await busy(f.querySelector('[data-act="add-reply"]'),async()=>{
+    try{await call('POST',`${API}/${current.id}/comments`,{content,images:f._set.images,parent_id:Number(thread.dataset.tid),
+      author:f.querySelector('[data-f="r-author"]').dataset.value});await load()}catch(err){alert(err.message)}});
 }
 function renderPost(){const box=document.getElementById('list');const x=current;
 box.innerHTML=`<div class="item" data-id="${x.id}">
@@ -372,12 +374,19 @@ const load=route;   // 저장·삭제 뒤 지금 화면을 다시 불러온다
 window.addEventListener('hashchange',route);
 document.getElementById('back').onclick=()=>{location.hash=''};
 document.getElementById('write-btn').onclick=()=>{const w=document.getElementById('write-box');w.style.display=w.style.display==='none'?'':'none';if(w.style.display==='')document.getElementById('content').focus()};
+// 등록 중엔 버튼을 잠그고 '등록 중…'을 보여 준다 — 느려서 두 번 눌러 댓글이 두 개 달리던 것 (2026-10-06)
+let posting=false;
+async function busy(btn,fn){
+  if(posting)return;posting=true;const t=btn&&btn.textContent;if(btn){btn.disabled=true;btn.textContent='등록 중…'}
+  try{await fn()}finally{posting=false;if(btn&&btn.isConnected){btn.disabled=false;btn.textContent=t}}
+}
 async function addComment(item){
   const contentEl=item.querySelector('[data-f="c-content"]'),set=commentSets[item.dataset.id];
   const content=contentEl.value.trim();
   if(!content&&!set.images.length)return;
-  try{await call('POST',`${API}/${item.dataset.id}/comments`,{content,images:set.images,author:item.querySelector('[data-f="c-author"]').dataset.value});await load()}
-  catch(err){alert(err.message)}
+  await busy(item.querySelector('[data-act="add-comment"]'),async()=>{
+    try{await call('POST',`${API}/${item.dataset.id}/comments`,{content,images:set.images,author:item.querySelector('[data-f="c-author"]').dataset.value});await load()}
+    catch(err){alert(err.message)}});
 }
 document.getElementById('fav-only').onclick=async()=>{favOnly=!favOnly;await loadFavs();if(!current)renderBoard()};
 document.getElementById('list').addEventListener('click',async e=>{

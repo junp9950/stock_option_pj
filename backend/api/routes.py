@@ -290,6 +290,12 @@ def create_discussion(body: DiscussionIn, db: Session = Depends(get_db)):
         raise HTTPException(status_code=400, detail="제목을 입력해 주세요.")
     if not body.content.strip() and not images:
         raise HTTPException(status_code=400, detail="내용이나 이미지를 입력해 주세요.")
+    from datetime import datetime as _dt, timedelta as _td  # noqa: PLC0415
+    dup = db.scalar(select(DiscussionPost).where(DiscussionPost.author == author, DiscussionPost.title == body.title.strip(),
+                                                 DiscussionPost.content == body.content.strip(),
+                                                 DiscussionPost.created_at >= _dt.utcnow() - _td(seconds=30)).limit(1))
+    if dup is not None:      # 두 번 눌러 같은 글이 또 오면 앞의 글을 돌려줌
+        return _discussion_dict(dup)
     x = DiscussionPost(
         author=author, title=body.title.strip(), content=body.content.strip(),
         stock_code=(body.stock_code or "").strip().upper() or None,
@@ -352,6 +358,14 @@ def create_comment(pid: int, body: CommentIn, db: Session = Depends(get_db)):
             raise HTTPException(status_code=404, detail="답글을 달 댓글을 찾을 수 없습니다.")
         if parent.parent_id:          # 대댓글의 대댓글은 같은 원 댓글 밑에 (한 단계만)
             parent = db.get(DiscussionComment, parent.parent_id) or parent
+    # 같은 사람이 같은 댓글을 20초 안에 또 보내면(느려서 두 번 누름) 새로 만들지 않는다 (2026-10-06)
+    from datetime import datetime as _dt, timedelta as _td  # noqa: PLC0415
+    dup = db.scalar(select(DiscussionComment).where(
+        DiscussionComment.post_id == pid, DiscussionComment.author == _check_author(body.author),
+        DiscussionComment.content == body.content.strip(), DiscussionComment.created_at >= _dt.utcnow() - _td(seconds=20))
+        .order_by(DiscussionComment.id.desc()).limit(1))
+    if dup is not None and not images:
+        return _comment_dict(dup)
     c = DiscussionComment(post_id=pid, author=_check_author(body.author), content=body.content.strip(),
                           image_data=_encode_images(images), parent_id=parent.id if parent else None)
     db.add(c)
