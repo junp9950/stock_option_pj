@@ -251,6 +251,7 @@ select{background:#21262d;border:1px solid #30363d;color:#c9d1d9;padding:6px 10p
 
 <!-- 종베 후보 탭 -->
 <div id="panel-jongbe" class="panel content">
+  <div id="mp-box" style="border:1px solid #9e6a03;border-radius:10px;padding:12px 16px;margin-bottom:14px;background:rgba(210,153,34,.06)">로딩 중…</div>
   <b style="font-size:15px;color:#e6edf3;display:block;margin:4px 0 8px">① 시장</b>
   <div id="jb-market" style="border-radius:10px;padding:12px 16px;margin-bottom:12px;border:1px solid #30363d">로딩 중…</div>
   <p class="lead">시장 상승·횡보 → 뜨거운 섹터 → 그날 섹터에 돈 몰림 → 거래 실린 양봉, 또는 <b style="color:#e3b341">🕯 큰 양봉 다음 날 밑꼬리 도지</b>. <b>파는 법:</b> 다음 날 +2% 미만이면 전부 정리, +2% 이상이면 30% · 그다음 날도 오르면 30% 더 · 나머지는 최고 종가 -15% 이탈 시 (3년 평균 +0.98%, 이김 43%).</p>
@@ -702,7 +703,27 @@ function switchTab(id) {
 // ── 오늘 강한 테마 (실시간) ──────────────────────────────────
 // ── 종베 후보 ─────────────────────────────────────────────────
 let _jbData=null;
+// 최적 조건 B · 내 패턴 A · 내일 후보 (2026-10-06)
+async function loadMyPattern(){
+  const el=document.getElementById('mp-box');
+  const r=await fetch(`${API}/screener/my-pattern`).then(x=>x.ok?x.json():null).catch(()=>null);
+  if(!r||!r.trading_date){ el.innerHTML='<span class="ts">불러오지 못했습니다</span>'; return; }
+  const chip=(x,c)=>`<span style="display:inline-block;margin:0 6px 6px 0;padding:5px 9px;border:1px solid ${c};border-radius:8px;cursor:pointer;font-size:12.5px" onclick="openChartModal('${x.code}','${x.name}','')"><b style="color:#e6edf3">${x.name}</b> <span style="color:${x.change_pct>=0?'#f85149':'#58a6ff'}">${x.change_pct>0?'+':''}${x.change_pct}%</span> <span class="ts">거래 ${x.tv_x}배 · 이격 ${x.gap20_pct}%${x.upper_pct!=null?' · 윗꼬리 '+x.upper_pct+'%':''}</span></span>`;
+  const B=r.items.filter(x=>x.b), A=r.items.filter(x=>x.a&&!x.b), N=r.next.slice(0,20);
+  const sd=Object.entries(r.sector_day||{}).map(([f,v])=>`${f} ${v.chg>0?'+':''}${v.chg}%·${v.tvx}배`).join(' · ');
+  el.innerHTML=`<b style="font-size:15px;color:#e3b341">🎯 오늘 종베 — 최적 조건 B · 내 패턴 A</b> <span class="ts">${r.trading_date} 종가 기준 · 시장 ${r.market||'-'}</span>
+   <div class="ts" style="margin:4px 0 8px">섹터 오늘(등락 중간·거래 중간): ${sd}</div>
+   ${r.market==='하락'?'<div style="color:#f85149;margin-bottom:6px">하락장 — 쉬는 날</div>':''}
+   <div style="margin-bottom:4px"><b style="color:#e3b341">⭐ 조건 B</b> <span class="ts">${r.b_sectors.length?'섹터: '+r.b_sectors.join(', '):'오늘은 조건 B 쉬는 날 (섹터 등락 중간 +1.2%·거래 중간 1배 넘는 섹터 없음)'} · 3년 검증 1년 +1.91%·이김 81% (날짜 단위 +0.91%)</span></div>
+   <div>${B.map(x=>chip(x,'#9e6a03')).join('')||''}</div>
+   <div style="margin:6px 0 4px"><b style="color:#3fb950">🎯 내 패턴 A</b> <span class="ts">뜨는 섹터 1~3위 · 양봉 · 20일 고점 -8% 안 · 20일선 위 · 거래 1배↑ (사용자 매수 501건 중 +2.04%, 종베로 +3.73%·이김 80% / 3년 +0.5~0.7%)</span></div>
+   <div>${A.slice(0,30).map(x=>chip(x,'#238636')).join('')||'<span class="ts">없음</span>'}${A.length>30?`<span class="ts">외 ${A.length-30}개</span>`:''}</div>
+   <div style="margin:6px 0 4px"><b style="color:#58a6ff">👀 내일 후보</b> <span class="ts">뜨는 섹터 · 20일선 위 · 고점 -5% 안에서 오늘 조용히 쉰 종목 — 내일 거래 붙은 양봉이면 A</span></div>
+   <div>${N.map(x=>chip(x,'#1f6feb')).join('')||'<span class="ts">없음</span>'}</div>
+   <div class="ts" style="margin-top:6px">⚠ 사용자 기록에서 손실이 난 자리: 20일선 아래·20일 고점 -8%↓에서 산 것 288건 -1.43%(-2,007만), 거래 0.5배↓ 날 매수 -1.51%.</div>`;
+}
 async function loadJongbe(){
+  loadMyPattern();
   let d=null;
   try{ d=await fetch(`${API}/screener/jongbe`).then(r=>r.ok?r.json():null); }catch(e){}
   _jbData=d;

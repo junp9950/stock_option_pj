@@ -238,6 +238,7 @@ def _context(db: Session, start: date):
             code_fams[c].append(f)
     ctx = {"P": P, "fam_rank": fam_rank, "fam_tvx": pd.DataFrame(fam_tvx), "regime": regime, "code_fams": code_fams,
            "tv20": TV.shift(1).rolling(20).mean(), "ma20": C.rolling(20).mean(), "hi60": P["h"].shift(1).rolling(60).max(),
+           "hi20": P["h"].rolling(20).max(),
            "dates": list(C.index)}
     while len(_ctx_cache) >= 3:          # 사람마다 시작일이 달라 몇 개는 같이 들고 있는다
         _ctx_cache.pop(next(iter(_ctx_cache)))
@@ -258,7 +259,7 @@ def _state(ctx, code: str, d: date, buy_px: float) -> dict | None:
     if code not in C.columns or d not in C.index or pd.isna(C.at[d, code]):
         return None
     o, h, l, c, tv, ch = (float(P[k].at[d, code]) for k in ("o", "h", "l", "c", "tv", "ch"))
-    tv20, ma20, hi60 = (float(ctx[k].at[d, code]) for k in ("tv20", "ma20", "hi60"))
+    tv20, ma20, hi60, hi20 = (float(ctx[k].at[d, code]) for k in ("tv20", "ma20", "hi60", "hi20"))
     tv_x = tv / tv20 if tv20 == tv20 and tv20 > 0 else None
     upper = (h - c) / (h - l) * 100 if h > l else 0.0
     gap = (c / ma20 - 1) * 100 if ma20 == ma20 and ma20 else None
@@ -269,6 +270,13 @@ def _state(ctx, code: str, d: date, buy_px: float) -> dict | None:
     money = any(float(ctx["fam_tvx"].at[d, f]) >= 1.0 for f in hot)
     reg = ctx["regime"].get(d, {}).get("state", "")
     tags = []
+    # 사용자 매수 501건 분석(2026-10-06): 고점 근처·20일선 위 양봉(거래 1배↑) = 패턴 A(+2.04%, 종베 +3.73%),
+    # 20일선 아래이거나 20일 고점 -8%↓ = 빠지는 자리(-1.43%, -2,007만)
+    near_hi = hi20 == hi20 and c >= hi20 * 0.92
+    if c > o and ch > 0 and near_hi and gap is not None and gap > 0 and tv_x and tv_x >= 1:
+        tags.append("🎯 패턴 A")
+    if (gap is not None and gap < 0) or (hi20 == hi20 and not near_hi):
+        tags.append("⚠ 빠지는 자리")
     if c > o and ch >= 3 and tv_x and tv_x >= 2:
         tags.append("거래 실린 양봉")
     if tv_x is not None and tv_x <= 0.6:

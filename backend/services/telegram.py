@@ -168,11 +168,24 @@ def send_summary_once(db: Session) -> bool:
         return False
     if not _get(db, "telegram_chats", {}):
         return False
+    # 섹터 종목(2천여 개) 종가 수집이 끝나기 전이면 기다린다 (15:41 수집이 15~16분 걸림, 16:40 넘으면 그냥 보냄)
+    now = datetime.now(ZoneInfo("Asia/Seoul"))
+    if (now.hour, now.minute) < (16, 40):
+        done = db.execute(text("select count(*) from spot_investor_flows where trading_date = :d"), {"d": latest}).scalar() or 0
+        need = db.execute(text("select count(distinct stock_code) from sector_stocks")).scalar() or 0
+        if done < need * 0.9:
+            return False
     send(db, jongbe_summary(db))
     _put(db, "telegram_last_summary", latest.isoformat())
     try:      # 사용자가 남긴 종베 채점 (backend/services/jongbe_check.py) — 사용자 대화방에만
         from backend.services import jongbe_check as JC  # noqa: PLC0415
         msg = JC.daily_text(db, latest)
+        try:     # 최적 조건 B·내 패턴 A·내일 후보 (backend/screener/my_pattern.py)
+            from backend.screener.my_pattern import text_summary  # noqa: PLC0415
+            mp = text_summary(db)
+            msg = (mp + "\n\n" + msg) if (mp and msg) else (mp or msg)
+        except Exception as exc:  # noqa: BLE001
+            logger.warning("내 패턴 요약 실패: %s", type(exc).__name__)
         if msg:
             for c in _get(db, "user_watchlist_chats", []) or list(_get(db, "telegram_chats", {}).keys())[:1]:
                 send(db, msg, c, html=True)

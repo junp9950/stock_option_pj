@@ -1589,6 +1589,13 @@ def get_value_records(db: Session = Depends(get_db)):
     return cached("value_records", (), db, lambda: scan(db))
 
 
+@router.get("/screener/my-pattern")
+def get_my_pattern(db: Session = Depends(get_db)):
+    """종베: 최적 조건 B · 내 패턴 A(사용자 매수 501건에서 번 자리) · 내일 후보 (2026-10-06)."""
+    from backend.screener.my_pattern import scan  # noqa: PLC0415
+    return scan(db)
+
+
 @router.get("/screener/volume-records")
 def get_volume_records(db: Session = Depends(get_db)):
     """대량거래 관심종목: 최근 약 4개월 안 몇 년 만의 최대 거래대금이 터진 종목과 지금 단계 (신규·숨고르기·진행 중·무너짐)."""
