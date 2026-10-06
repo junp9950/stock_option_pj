@@ -101,6 +101,11 @@ def start_scheduler() -> BackgroundScheduler:
         try:
             logger.info("Scheduler: running daily pipeline")
             run_daily_pipeline(db)
+            try:
+                from backend.services import trade_journal  # noqa: PLC0415
+                trade_journal.warm(db)      # 새 시세로 매매 일지 미리 계산
+            except Exception as exc:  # noqa: BLE001
+                logger.warning("매매 일지 미리 계산 실패: %s", exc)
             _telegram_summary_job()     # 수집 끝나자마자 텔레그램 종베 요약 (시간외 종가 15:40~16:00 안에 보려고)
             # 성공 후 재시도 잡 제거
             if scheduler.get_job("daily_pipeline_retry"):

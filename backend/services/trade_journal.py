@@ -239,9 +239,17 @@ def _context(db: Session, start: date):
     ctx = {"P": P, "fam_rank": fam_rank, "fam_tvx": pd.DataFrame(fam_tvx), "regime": regime, "code_fams": code_fams,
            "tv20": TV.shift(1).rolling(20).mean(), "ma20": C.rolling(20).mean(), "hi60": P["h"].shift(1).rolling(60).max(),
            "dates": list(C.index)}
-    _ctx_cache.clear()
+    while len(_ctx_cache) >= 3:          # 사람마다 시작일이 달라 몇 개는 같이 들고 있는다
+        _ctx_cache.pop(next(iter(_ctx_cache)))
     _ctx_cache[key] = ctx
     return ctx
+
+
+def warm(db: Session) -> None:
+    """서버 시작·장 마감 수집 뒤 미리 계산해 둔다. 처음 여는 사람이 오래 기다리지 않게 (2026-10-06 "불러오는데 너무 오래 걸린다").
+    시세 표·같은 날 후보 풀은 한 번 계산하면 캐시에 남는다."""
+    for (owner,) in db.execute(text("select distinct owner from trade_executions")).all():
+        analyze(db, owner)
 
 
 def _state(ctx, code: str, d: date, buy_px: float) -> dict | None:
@@ -392,12 +400,17 @@ def analyze(db: Session, owner: str) -> dict:
     _attach_pool(ctx, trips)
 
     # 아직 들고 있는 물량
+    # 같은 종목을 여러 번 산 것은 한 줄로 합친다 (수량 합계·가중 평균가 = 증권사 잔고 평균가와 같음, 2026-10-06 "삼전우는 왜 합쳐서 안 나오노")
     holding = []
     for code, ls in lots.items():
-        for d, q, px, b in ls:
-            if q > 0:
-                holding.append({"code": code, "name": b.name, "buy_date": d.isoformat(), "qty": q, "price": px, "tag": b.tag,
-                                "state": _state(ctx, code, d, px)})
+        ls = [x for x in ls if x[1] > 0]
+        if not ls:
+            continue
+        q = sum(x[1] for x in ls)
+        px = sum(x[1] * x[2] for x in ls) / q
+        d0, b0 = ls[0][0], ls[0][3]
+        holding.append({"code": code, "name": b0.name, "buy_date": d0.isoformat(), "last_buy": ls[-1][0].isoformat(), "buys": len(ls),
+                        "qty": q, "price": round(px, 1), "tag": b0.tag, "state": _state(ctx, code, d0, px)})
     last = ctx["dates"][-1]
     for h in holding:
         c = ctx["P"]["c"]

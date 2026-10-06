@@ -976,7 +976,7 @@ function jrRender(){
     :'<tr><td colspan="6" class="ts" style="text-align:center;padding:14px">없음</td></tr>';
   const h=_jr.holding||[];
   document.getElementById('jr-holding').innerHTML=h.length?`<div style="font-size:12px;color:#8b949e;margin:6px 0">📦 아직 들고 있는 것 (일지에 산 기록이 있는 물량만)</div><div style="display:flex;flex-wrap:wrap;gap:8px;margin-bottom:16px">`+
-    h.map(x=>`<span style="border:1px solid #30363d;border-radius:8px;padding:6px 10px;font-size:12.5px;cursor:pointer" onclick="openChartModal('${x.code}','${x.name}','')"><b style="color:#e6edf3">${x.name}</b> <span class="ts">${x.buy_date.slice(5)} ${x.qty}주 @${Math.round(x.price).toLocaleString()}</span> ${jrPct(x.eval_pct)}</span>`).join('')+'</div>':'';
+    h.map(x=>`<span style="border:1px solid #30363d;border-radius:8px;padding:6px 10px;font-size:12.5px;cursor:pointer" onclick="openChartModal('${x.code}','${x.name}','')"><b style="color:#e6edf3">${x.name}</b> <span class="ts">${x.buy_date.slice(5)}${x.buys>1?` 외 ${x.buys-1}번(마지막 ${x.last_buy.slice(5)})`:''} ${x.qty}주 @${Math.round(x.price).toLocaleString()}</span> ${jrPct(x.eval_pct)}</span>`).join('')+'</div>':'';
   const kf=document.getElementById('jr-kindf'), kinds=[...new Set(_jr.trips.map(t=>t.kind))];
   const cur=kf.value; kf.innerHTML='<option value="">전체</option>'+kinds.map(k=>`<option ${k===cur?'selected':''}>${k}</option>`).join('');
   jrRenderTrips();
@@ -1917,5 +1917,16 @@ def startup_event() -> None:
             run_daily_pipeline(_db)
         finally:
             _db.close()
+    def _warm_journal() -> None:
+        _db = SessionLocal()
+        try:
+            from backend.services import trade_journal  # noqa: PLC0415
+            trade_journal.warm(_db)
+        except Exception as exc:  # noqa: BLE001
+            import logging  # noqa: PLC0415
+            logging.getLogger(__name__).warning("매매 일지 미리 계산 실패: %s", exc)
+        finally:
+            _db.close()
+    threading.Thread(target=_warm_journal, daemon=True).start()
     threading.Thread(target=_bg, daemon=True).start()
     start_scheduler()
