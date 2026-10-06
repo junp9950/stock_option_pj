@@ -100,17 +100,16 @@ def text_summary(db: Session, k: int = 5) -> str:
             lines.append(status_line(st))
     except Exception:  # noqa: BLE001
         pass
-    lines.append(f"🎯 <b>최적 조건·내 패턴</b> ({r['trading_date'][5:]}, 시장 {r['market'] or '-'})")
+    lines.append(f"\n🎯 <b>오늘 종베</b> ({r['trading_date'][5:]})")
     if r["market"] == "하락":
-        lines.append("하락장 — 쉬는 날")
-    lines.append("조건 B 섹터: " + (", ".join(r["b_sectors"]) if r["b_sectors"] else "없음 (오늘은 B 쉬는 날)"))
-    b = [x for x in r["items"] if x["b"]][:k]
+        lines.append("🔴 하락장 — 쉬는 날")
+    lines.append("조건 B 섹터: " + (", ".join(r["b_sectors"]) if r["b_sectors"] else "없음 (오늘은 쉬는 날)"))
+    b = [x for x in r["items"] if x["b"] and 1.5 <= x["tv_x"] <= 6 and x["upper_pct"] <= 10][:k] or [x for x in r["items"] if x["b"]][:k]
     if b:
-        lines.append("⭐ B: " + ", ".join(f"{x['name']} {x['change_pct']:+.1f}%" for x in b))
-    a = [x for x in r["items"] if x["a"] and not x["b"]][:k]
-    if a:
-        lines.append("🎯 A(뜨는 섹터): " + ", ".join(f"{x['name']} {x['change_pct']:+.1f}%" for x in a))
+        lines.append("\n⭐ <b>B 후보</b> (거래 1.5~6배·윗꼬리 10%↓ 추림)")
+        lines += [f"• {x['name']}  {x['change_pct']:+.1f}% · 거래 {x['tv_x']:.1f}배" for x in b]
     n = r["next"][:k]
     if n:
-        lines.append("👀 내일 후보(쉬는 중): " + ", ".join(f"{x['name']}" for x in n))
+        lines.append("\n👀 <b>내일 후보</b> (고점 근처 쉬는 중)")
+        lines.append(" · ".join(x["name"] for x in n))
     return "\n".join(lines)

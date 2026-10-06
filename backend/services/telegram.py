@@ -203,18 +203,19 @@ def market_status(db: Session) -> dict | None:
 
 def _st(x: dict) -> str:
     icon = {"상승": "🟢", "횡보": "🟡", "하락": "🔴"}.get(x["state"], "⚪")
-    return f"{icon} {x['state']} ({x['vs_ma20_pct']:+.1f}%)"
+    return f"{icon} {x['state']} {x['vs_ma20_pct']:+.1f}%"
 
 
 def status_line(st: dict) -> str:
-    """매일 요약 맨 위 한 줄."""
-    out = (f"📊 <b>시장</b> (괄호 = 종목 평균 지수의 20일선 대비)\n"
-           f"전체 {_st(st['전체'])} · 코스피 {_st(st['코스피'])} · 코스닥 {_st(st['코스닥'])}")
+    """매일 요약 맨 위 시장 칸 — 폰에서 줄이 중간에 잘리지 않게 한 항목에 한 줄 (2026-10-06)."""
+    out = ("📊 <b>시장</b> (20일선 대비)\n"
+           f"• 전체  {_st(st['전체'])}\n• 코스피  {_st(st['코스피'])}\n• 코스닥  {_st(st['코스닥'])}")
     if "rel" in st:
         r = st["rel"]
         who = ("🧲 삼하 독주 — 코스닥 비중 줄이기" if r >= 15 else "삼하 쪽으로 기우는 중" if r >= 10
                else "코스닥 우세" if r <= -3 else "비슷")
-        out += f"\n최근 20일 삼전·하닉 {st['sh20']:+.1f}% vs 코스닥 종목 평균 {st['kq20']:+.1f}% → {who}"
+        out += (f"\n\n⚖️ <b>최근 20일</b>\n• 삼전·하닉  {st['sh20']:+.1f}%\n• 코스닥 평균  {st['kq20']:+.1f}%"
+                f"\n→ <b>{who}</b>")
     return out
 
 
