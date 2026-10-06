@@ -199,7 +199,8 @@ select{background:#21262d;border:1px solid #30363d;color:#c9d1d9;padding:6px 10p
 <div class="err-bar" id="err-bar">백엔드 연결 실패 — 서버가 실행 중인지 확인하세요</div>
 
 <div class="tabs">
-  <div class="tab active" onclick="switchTab('candidates')">차트 후보</div>
+  <div class="tab active" onclick="switchTab('home')">오늘</div>
+  <div class="tab" onclick="switchTab('candidates')">차트 후보</div>
   <div class="tab" onclick="switchTab('calendar')">섹터 캘린더</div>
   <div class="tab" onclick="switchTab('sector')">섹터 수급</div>
   <div class="tab" onclick="switchTab('journal')">매매 일지</div>
@@ -518,7 +519,13 @@ select{background:#21262d;border:1px solid #30363d;color:#c9d1d9;padding:6px 10p
 </div>
 
 <!-- 눌림목 레이더 탭 -->
-<div id="panel-candidates" class="panel active content">
+<!-- 오늘 (대시보드, 2026-10-06) -->
+<div id="panel-home" class="panel active content">
+  <div id="db-verdict" style="border-radius:12px;padding:14px 18px;margin-bottom:14px;border:1px solid #30363d;font-size:15px">로딩 중…</div>
+  <div id="db-grid" style="display:grid;grid-template-columns:repeat(auto-fill,minmax(300px,1fr));gap:12px"></div>
+</div>
+
+<div id="panel-candidates" class="panel content">
   <div id="pb-market" hidden style="border-radius:10px;padding:12px 16px;margin-bottom:14px;border:1px solid #30363d"></div>
   <p class="ts" style="margin:0 0 6px">제목을 누르면 펼쳐지고 접힙니다 (브라우저가 기억).</p>
   <details class="sec" data-k="ss">
@@ -692,9 +699,9 @@ const tagHtml = tags => (tags||[]).map(t=>{
 function switchTab(id) {
   // 실적 개선 탭은 2026-10-04 숨김 (데이터는 📈 실적 표시로 계속 쓴다, /earnings 주소는 그대로)
   // 2026-10-05 사용자 "당분간 차트 후보 보고 매매" → 차트 후보를 첫 탭으로, 종베는 검증 중으로 뒤로
-  const tabs = ['candidates','calendar','sector','journal','screener','heatmap','jongbe','discussion','suggest'];
+  const tabs = ['home','candidates','calendar','sector','journal','screener','heatmap','jongbe','discussion','suggest'];
   if(!tabs.includes(id))return;
-  try{ history.replaceState(null,'',id==='candidates'?location.pathname:'#'+id); }catch(e){}   // 새로고침해도 이 탭에 남게
+  try{ history.replaceState(null,'',id==='home'?location.pathname:'#'+id); }catch(e){}   // 새로고침해도 이 탭에 남게
   document.querySelectorAll('.tab').forEach((t,i)=>t.classList.toggle('active',tabs[i]===id));
   document.querySelectorAll('.panel').forEach(p=>p.classList.remove('active'));
   document.getElementById('panel-'+id).classList.add('active');
@@ -705,6 +712,7 @@ function switchTab(id) {
   if(id==='calendar')loadSectorCal();
   if(id==='heatmap')loadHeatmap();
   if(id==='candidates')loadCandidates();
+  if(id==='home')loadDashboard();
   if(id==='suggest')document.getElementById('suggest-frame').src='/suggestions';
   if(id==='discussion'&&!document.getElementById('discussion-frame').src)document.getElementById('discussion-frame').src='/discussion';
 }
@@ -712,6 +720,73 @@ function switchTab(id) {
 // ── 오늘 강한 테마 (실시간) ──────────────────────────────────
 // ── 종베 후보 ─────────────────────────────────────────────────
 let _jbData=null;
+// ── 오늘 (대시보드) ─────────────────────────────────────────
+async function loadDashboard(){
+  const v=document.getElementById('db-verdict'), g=document.getElementById('db-grid');
+  const d=await fetch(`${API}/dashboard`).then(r=>r.ok?r.json():null).catch(()=>null);
+  if(!d){ v.textContent='불러오지 못했습니다'; return; }
+  const m=d.market||{}, all=m['전체']||{}, al=d.alert||{};
+  const col={상승:'#3fb950',횡보:'#d29922',하락:'#f85149'}, ico={상승:'🟢',횡보:'🟡',하락:'🔴'};
+  const sg=x=>(x>0?'+':'')+x;
+  const card=(t,body)=>`<div style="border:1px solid #30363d;border-radius:12px;padding:12px 14px;background:#0d1117"><div style="font-size:13px;color:#8b949e;margin-bottom:8px;font-weight:600">${t}</div>${body}</div>`;
+  const chip=(x,c,extra)=>`<span style="display:inline-block;margin:0 6px 6px 0;padding:4px 9px;border:1px solid ${c||'#30363d'};border-radius:8px;cursor:pointer;font-size:12.5px" onclick="openChartModal('${x.code}','${x.name}','')"><b style="color:#e6edf3">${x.name}</b>${extra||''}</span>`;
+  // 오늘 판단
+  let vt,vc;
+  if(all.state==='하락'){ vt='🔴 <b>쉬는 날</b> — 시장 하락. 새 진입 멈춤 · 스윙·장기 들고 가기 금지'; vc='#f85149'; }
+  else if(d.b_sectors.length){ vt=`🟢 <b>조건 B 날</b> — ${d.b_sectors.join(', ')} · 후보 ${d.b_count}개 중 추린 ${d.best.length}개를 2~3개로 나눠서`; vc='#3fb950'; }
+  else if(all.state==='횡보'){ vt='🟡 <b>횡보</b> — 종베 줄이고 스윙 종목(손절 짧은 자리) 모으기'; vc='#d29922'; }
+  else { vt='⚪ <b>조건 B 없음</b> — 억지로 들어가지 말고 내일 후보 지켜보기'; vc='#8b949e'; }
+  const warn=[];
+  if(al.suck) warn.push('🧲 삼하가 수급 흡수 중 — 코스닥 비중 줄이기');
+  if(all.state!=='하락'&&all.vs_ma20_pct!=null&&all.vs_ma20_pct<=1) warn.push('⚠️ 하락 전환 가까움 — 빠지는 종목 줍기 금지');
+  v.style.borderColor=vc; v.style.background=vc+'14';
+  v.innerHTML=`<div>${vt}</div>${warn.map(w=>`<div style="margin-top:6px;color:#e3b341">${w}</div>`).join('')}<div class="ts" style="margin-top:6px">${d.as_of||''} 종가 기준 · 장 마감 수집 뒤(16시쯤) 갱신</div>`;
+  const mk=k=>{ const x=m[k]||{}; return `<div style="flex:1;min-width:84px;border:1px solid ${col[x.state]||'#30363d'};border-radius:10px;padding:8px 10px"><div class="ts">${k}</div><div style="font-size:16px;font-weight:700;color:${col[x.state]||'#c9d1d9'}">${ico[x.state]||''} ${x.state||'-'}</div><div class="ts">20일선 ${x.vs_ma20_pct!=null?sg(x.vs_ma20_pct)+'%':'-'} · 20일 ${x.cum20_pct!=null?sg(x.cum20_pct)+'%':'-'}</div></div>`; };
+  const rel=m.rel, relW=rel==null?0:Math.max(0,Math.min(100,(rel+15)/30*100));
+  const parts=[];
+  parts.push(card('📊 시장 (전종목 평균)',`<div style="display:flex;gap:8px;flex-wrap:wrap">${mk('전체')}${mk('코스피')}${mk('코스닥')}</div>`));
+  parts.push(card('🧲 삼전·하닉 vs 코스닥 (20일)',rel==null?'<span class="ts">-</span>':
+    `<div style="font-size:13px">삼하 <b>${sg(m.sh20)}%</b> · 코스닥 종목 평균 <b>${sg(m.kq20)}%</b> → 차이 <b style="color:${rel>=15?'#f85149':rel>=10?'#d29922':'#3fb950'}">${sg(rel)}%p</b></div>
+     <div style="position:relative;height:8px;background:#21262d;border-radius:4px;margin:8px 0 4px"><div style="position:absolute;left:0;top:0;height:8px;width:${relW}%;background:${rel>=15?'#f85149':rel>=10?'#d29922':'#3fb950'};border-radius:4px"></div><div style="position:absolute;left:100%;top:-3px;width:2px;height:14px;background:#f85149;transform:translateX(-2px)"></div></div>
+     <div class="ts">+15%p 넘으면 흡수 경고 (3년: 뒤 20일 코스닥 -3.8%) · 외국인 삼하 5일 <b style="color:${m.sh_foreign5>0?'#f85149':'#58a6ff'}">${(m.sh_foreign5>0?'+':'')+(m.sh_foreign5||0).toLocaleString()}억</b></div>`));
+  const sd=Object.entries(d.sector_day||{});
+  parts.push(card('🔥 섹터 (20일 순위 · 오늘 등락 중간 · 거래 중간)',sd.map(([f,x],i)=>`<div style="display:flex;justify-content:space-between;font-size:13px;padding:3px 0;border-bottom:1px solid #21262d"><span>${i+1}. ${d.b_sectors.includes(f)?'⭐ ':''}<b style="color:#e6edf3">${f}</b></span><span><span style="color:${x.chg>=0?'#f85149':'#58a6ff'}">${sg(x.chg)}%</span> · <span class="ts">${x.tvx}배</span></span></div>`).join('')+'<div class="ts" style="margin-top:6px">⭐ = 오늘 조건 B 섹터 (등락 +1.2%↑ · 거래 1배↑)</div>'));
+  parts.push(card(`⭐ 오늘 종베 후보 — 조건 B 추림 (${d.best.length}/${d.b_count})`,(d.best.map(x=>chip(x,'#9e6a03',` <span style="color:#f85149">${sg(x.change_pct)}%</span> <span class="ts">${x.tv_x}배</span>`)).join('')||'<span class="ts">없음 — 쉬는 날</span>')
+    +`<div class="ts" style="margin-top:4px">거래 1.5~6배 · 윗꼬리 10%↓로 한 번 더 추림 · 3년 검증 +1.9% (날짜 단위 +0.9%) · <a href="#" onclick="switchTab('jongbe');return false" style="color:#58a6ff">전체 보기 →</a></div>`));
+  parts.push(card('👀 내일 후보 — 뜨는 섹터에서 고점 근처 쉬는 중',(d.next.map(x=>chip(x,'#1f6feb',` <span class="ts">고점 ${x.off_hi20_pct}%</span>`)).join('')||'<span class="ts">없음</span>')+'<div class="ts" style="margin-top:4px">내일 거래 붙은 양봉으로 고점 넘으면 종베 자리</div>'));
+  const wc={'⚠ 이탈':'#f85149','✅ 선 위 마감':'#3fb950'};
+  parts.push(card(`📋 관심 종목 — 선에 닿은 것 (${d.watch.length})`,d.watch.map(w=>`<div style="display:flex;justify-content:space-between;gap:8px;font-size:13px;padding:3px 0;border-bottom:1px solid #21262d;cursor:pointer" onclick="openChartModal('${w.code}','${w.name}','')"><span><b style="color:${wc[w.tag]||'#e6edf3'}">${w.tag}</b> ${w.name}</span><span class="ts">${w.close.toLocaleString()} / 선 ${w.level.toLocaleString()} (${sg(w.gap_pct)}%)</span></div>`).join('')||'<span class="ts">없음</span>'));
+  const vr=d.volume||{};
+  parts.push(card('🔥 대량거래 관심종목',[['🎯 진입 신호',vr.signal,'#e3b341'],['🚀 꼬리 돌파',vr.tail_break,'#3fb950'],['🆕 신규(최근 터짐)',vr.new,'#58a6ff']].map(([t,l,c])=>`<div style="margin-bottom:4px"><span class="ts">${t}</span><br>${(l||[]).map(x=>chip(x,c,x.days!=null?` <span class="ts">${x.days}일 전</span>`:'')).join('')||'<span class="ts">없음</span>'}</div>`).join('')));
+  parts.push(card('💼 내 계좌 (매매 일지)','<div id="db-acct" class="ts">매매 일지에 로그인하면 보입니다</div>'));
+  parts.push(card('📌 데이터로 확인된 내 원칙',`<ol style="margin:0;padding-left:18px;font-size:13px;line-height:1.7">
+    <li><b>하락장은 쉰다</b> — 특히 들고 가기 금지 (하락 구간 스윙 -1,958만)</li>
+    <li><b>빠지는 종목 줍지 않기</b> — 20일선 아래·고점 -8%↓ 매수 288건 -2,007만</li>
+    <li><b>종베는 섹터에 돈 들어온 날의 거래 붙은 양봉</b> (조건 B) — 혼자 튄 종목 X</li>
+    <li>B로 산 건 <b>분할 매도</b> (다음 날 +2%↓ 전량, ↑면 30%씩), 쉬는 봉은 <b>3~5일</b> 손절선만</li>
+    <li><b>추격 금지</b> — 이격 30%↑ · 윗꼬리 긴 날 · 거래 6배↑ 피하기</li></ol>`));
+  g.innerHTML=parts.join('');
+  // 내 계좌 (로그인돼 있을 때만)
+  const a=jrAuth();
+  if(a.o&&a.p){
+    const r=await fetch(`${API}/journal`,{headers:jrH()}).then(x=>x.ok?x.json():null).catch(()=>null);
+    const el=document.getElementById('db-acct');
+    if(r&&el){
+      const h=(r.holding||[]).map(x=>({...x,val:x.qty*(x.close||x.price),cost:x.qty*x.price}));
+      const cash=+(r.cfg.cash||0), tv=h.reduce((s,x)=>s+x.val,0), tc=h.reduce((s,x)=>s+x.cost,0), tot=tv+cash;
+      const today=(r.summary.by_day||{})[d.as_of]; const mon=(r.summary.by_month||{})[(d.as_of||'').slice(0,7)];
+      const top=[...h].sort((x,y)=>y.val-x.val).slice(0,4);
+      el.innerHTML=`<div style="display:flex;gap:14px;flex-wrap:wrap;font-size:13px;color:#c9d1d9">
+        <div><span class="ts">총자산</span><br><b style="font-size:16px;color:#e6edf3">${Math.round(tot/10000).toLocaleString()}만</b></div>
+        <div><span class="ts">평가손익</span><br><b style="font-size:16px">${jrWon(tv-tc)}</b></div>
+        <div><span class="ts">오늘 실현</span><br><b style="font-size:16px">${today?jrWon(today.pnl):'-'}</b></div>
+        <div><span class="ts">이번 달 실현</span><br><b style="font-size:16px">${mon?jrWon(mon.pnl):'-'}</b></div></div>
+        <div class="ts" style="margin-top:8px">비중 상위: ${top.map(x=>`${x.name} ${(x.val/tot*100).toFixed(1)}% ${jrPct(x.eval_pct)}`).join(' · ')}</div>
+        <div class="ts">${h.length}종목 · 예수금 ${(cash/tot*100||0).toFixed(1)}% · <a href="#" onclick="switchTab('journal');return false" style="color:#58a6ff">매매 일지 →</a></div>`;
+    }
+  }
+}
+
 // 최적 조건 B · 내 패턴 A · 내일 후보 (2026-10-06)
 async function loadMyPattern(){
   const el=document.getElementById('mp-box');
@@ -1954,7 +2029,7 @@ function showToast(msg,err=false){
 })();
 try{ try{ const v=localStorage.getItem('vr-mincap'); if(v!==null) document.getElementById('vr-mincap').value=v; }catch(e){}
   for(const id of ['jb-noflag','jb-nocred','cd-noflag','cd-nocred']){ const v=localStorage.getItem(id); if(v!==null) document.getElementById(id).checked=v==='1'; } }catch(e){}
-switchTab(location.hash ? location.hash.slice(1) : 'candidates');
+switchTab(location.hash ? location.hash.slice(1) : 'home');
 const chartQuery=new URLSearchParams(location.search);
 if (/^[0-9A-Z]{6}$/.test(chartQuery.get('chart')||'')) openChartModal(chartQuery.get('chart'),chartQuery.get('name')||chartQuery.get('chart'),'');
 </script>

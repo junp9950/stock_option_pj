@@ -6,7 +6,7 @@ import json
 
 from fastapi import APIRouter, Depends, HTTPException, Request
 from pydantic import BaseModel, Field
-from sqlalchemy import desc, func, select
+from sqlalchemy import desc, func, select, text
 from sqlalchemy.orm import Session
 
 from backend.api.schemas import HealthResponse, JobResponse, MarketSignalResponse, RecommendationItem, RecommendationResponse, SectorFlowItem, SectorItem, SectorStockItem
@@ -1587,6 +1587,54 @@ def get_value_records(db: Session = Depends(get_db)):
     from backend.screener.value_records import scan  # noqa: PLC0415
     from backend.services.result_cache import cached  # noqa: PLC0415
     return cached("value_records", (), db, lambda: scan(db))
+
+
+@router.get("/dashboard")
+def get_dashboard(db: Session = Depends(get_db)):
+    """첫 화면 대시보드: 시장(전체·코스피·코스닥·삼하 수급) · 오늘 판단 · 조건 B 추린 후보 · 내일 후보 · 관심 종목 선 · 대량거래 (2026-10-06)."""
+    from backend.screener.my_pattern import scan as mp_scan  # noqa: PLC0415
+    from backend.services.telegram import _get as tg_get, market_status  # noqa: PLC0415
+    from backend.services.result_cache import cached  # noqa: PLC0415
+    st = market_status(db) or {}
+    alert = tg_get(db, "market_alert_state", {}) or {}
+    mp = mp_scan(db)
+    b = [x for x in mp["items"] if x["b"]]
+    best = [x for x in b if 1.5 <= x["tv_x"] <= 6 and x["upper_pct"] <= 10]
+    latest = mp["trading_date"]
+    watch = []
+    items = tg_get(db, "user_watchlist", []) or []
+    if items and latest:
+        px = dict(db.execute(text("select stock_code, close_price from spot_daily_prices where trading_date = :d and stock_code = any(:c)"),
+                             {"d": latest, "c": [x["code"] for x in items]}).all())
+        for x in items:
+            c, lv, kind = px.get(x["code"]), x.get("level") or 0, x.get("kind")
+            if not c or not lv:
+                continue
+            gap = (c / lv - 1) * 100
+            tag = None
+            if kind == "above":
+                tag = "✅ 선 위 마감" if c >= lv else ("👀 코앞" if gap >= -3 else None)
+            elif kind == "hold":
+                tag = "⚠ 이탈" if c < lv else ("👀 선 근처" if gap <= 2 else None)
+            elif kind == "near":
+                tag = "👀 기준 근처" if abs(gap) <= 3 else None
+            if tag:
+                watch.append({"code": x["code"], "name": x["name"], "tag": tag, "close": round(c), "level": lv, "gap_pct": round(gap, 1), "note": x.get("note", "")})
+    order = {"⚠ 이탈": 0, "✅ 선 위 마감": 1, "👀 코앞": 2, "👀 선 근처": 3, "👀 기준 근처": 4}
+    watch.sort(key=lambda w: order.get(w["tag"], 9))
+    vr = {}
+    try:
+        from backend.screener.volume_record import scan as vr_scan  # noqa: PLC0415
+        v = cached("volume_records", (), db, lambda: vr_scan(db))
+        its = v.get("items", [])
+        vr = {"tail_break": [{"code": x["code"], "name": x["name"]} for x in its if x["stage"] == "꼬리 돌파"][:8],
+              "signal": [{"code": x["code"], "name": x["name"]} for x in its if x.get("entry_signal")][:8],
+              "new": sorted([{"code": x["code"], "name": x["name"], "days": x["days_since"]} for x in its if x["stage"] == "신규"], key=lambda x: x["days"])[:10]}
+    except Exception:  # noqa: BLE001
+        pass
+    return {"as_of": latest, "market": st, "alert": alert, "b_sectors": mp["b_sectors"], "hot": mp["hot"], "sector_day": mp["sector_day"],
+            "b_count": len(b), "a_count": sum(1 for x in mp["items"] if x["a"] and not x["b"]), "best": best[:8], "next": mp["next"][:10],
+            "watch": watch, "volume": vr}
 
 
 @router.get("/screener/my-pattern")
