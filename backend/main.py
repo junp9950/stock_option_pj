@@ -767,8 +767,8 @@ async function renderDashboard(d, stale){
   const vr=d.volume||{};
   parts.push(card('🔥 대량거래 관심종목',[['🎯 진입 신호',vr.signal,'#e3b341'],['🚀 꼬리 돌파',vr.tail_break,'#3fb950'],['🆕 신규(최근 터짐)',vr.new,'#58a6ff']].map(([t,l,c])=>`<div style="margin-bottom:4px"><span class="ts">${t}</span><br>${(l||[]).map(x=>chip(x,c,x.days!=null?` <span class="ts">${x.days}일 전</span>`:'')).join('')||'<span class="ts">없음</span>'}</div>`).join('')));
   parts.push(card('📌 데이터로 확인된 내 원칙',`<ol style="margin:0;padding-left:18px;font-size:13px;line-height:1.7">
-    <li><b>하락장은 쉰다</b> — 특히 들고 가기 금지 (하락 구간 스윙 -1,958만)</li>
-    <li><b>빠지는 종목 줍지 않기</b> — 20일선 아래·고점 -8%↓ 매수 288건 -2,007만</li>
+    <li><b>하락장은 쉰다</b> — 특히 들고 가기 금지 (하락 구간 스윙 평균 -4.8%)</li>
+    <li><b>빠지는 종목 줍지 않기</b> — 20일선 아래·고점 -8%↓ 매수 평균 -1.4%</li>
     <li><b>종베는 섹터에 돈 들어온 날의 거래 붙은 양봉</b> (조건 B) — 혼자 튄 종목 X</li>
     <li>B로 산 건 <b>분할 매도</b> (다음 날 +2%↓ 전량, ↑면 30%씩), 쉬는 봉은 <b>3~5일</b> 손절선만</li>
     <li><b>추격 금지</b> — 이격 30%↑ · 윗꼬리 긴 날 · 거래 6배↑ 피하기</li></ol>`));
@@ -793,7 +793,7 @@ async function loadMyPattern(){
    <div>${A.slice(0,30).map(x=>chip(x,'#238636')).join('')||'<span class="ts">없음</span>'}${A.length>30?`<span class="ts">외 ${A.length-30}개</span>`:''}</div>
    <div style="margin:6px 0 4px"><b style="color:#58a6ff">👀 내일 후보</b> <span class="ts">뜨는 섹터 · 20일선 위 · 고점 -5% 안에서 오늘 조용히 쉰 종목 — 내일 거래 붙은 양봉이면 A</span></div>
    <div>${N.map(x=>chip(x,'#1f6feb')).join('')||'<span class="ts">없음</span>'}</div>
-   <div class="ts" style="margin-top:6px">⚠ 사용자 기록에서 손실이 난 자리: 20일선 아래·20일 고점 -8%↓에서 산 것 288건 -1.43%(-2,007만), 거래 0.5배↓ 날 매수 -1.51%.</div>`;
+   <div class="ts" style="margin-top:6px">⚠ 매매 기록에서 손실이 난 자리: 20일선 아래·20일 고점 -8%↓에서 산 것 평균 -1.43%, 거래 0.5배↓ 날 매수 -1.51%.</div>`;
 }
 async function loadJongbe(){
   loadMyPattern();
