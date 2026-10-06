@@ -303,6 +303,54 @@ def us_overnight_text() -> str | None:
     return "\n".join(lines)
 
 
+def _yahoo_last(sym: str) -> tuple[float, float] | None:
+    """야후 차트(프리·애프터 포함)에서 (마지막 가격, 전일 정규장 종가)."""
+    try:
+        r = requests.get(f"https://query1.finance.yahoo.com/v8/finance/chart/{sym}",
+                         params={"interval": "5m", "range": "1d", "includePrePost": "true"},
+                         headers={"User-Agent": "Mozilla/5.0"}, timeout=15).json()["chart"]["result"][0]
+        closes = [x for x in r["indicators"]["quote"][0]["close"] if x]
+        prev = r["meta"].get("chartPreviousClose") or r["meta"].get("previousClose")
+        return (float(closes[-1]), float(prev)) if closes and prev else None
+    except Exception:  # noqa: BLE001
+        return None
+
+
+def send_us_premarket(db: Session) -> None:
+    """평일 19:00 — 오늘 소부장·기판 종베를 샀으면 미국 장비주 프리마켓을 알려 준다. 크게 빠지면 20:00 넥스트레이드 애프터마켓 전에 정리 판단 (2026-10-06)."""
+    from backend.utils.dates import is_trading_day  # noqa: PLC0415
+    from backend.screener.rotation import family_members  # noqa: PLC0415
+    today = datetime.now(ZoneInfo("Asia/Seoul")).date()
+    if not is_trading_day(today):
+        return
+    fam = family_members(db)
+    semi = {c for f in ("반도체 장비·재료", "AI메모리·기판") for c in fam.get(f, [])}
+    held = [n for c, n in db.execute(text("select code, name from user_jongbe where trading_date = :d"), {"d": today}).all() if c in semi]
+    if not held:
+        return
+    ch = {}
+    for t in ("AMAT", "KLAC", "LRCX", "SOXX", "NVDA", "NQ=F"):
+        v = _yahoo_last(t)
+        if v:
+            ch[t] = (v[0] / v[1] - 1) * 100
+    eq = [ch[t] for t in ("AMAT", "KLAC", "LRCX") if t in ch]
+    if not eq:
+        return
+    e = sum(eq) / len(eq)
+    lines = ["🌆 <b>미국 반도체 장비 프리마켓</b> (지금, 전일 종가 대비)",
+             f"• 장비 3종 평균 <b>{e:+.1f}%</b> (AMAT {ch.get('AMAT', 0):+.1f} · KLAC {ch.get('KLAC', 0):+.1f} · LRCX {ch.get('LRCX', 0):+.1f})",
+             f"• SOXX {ch.get('SOXX', 0):+.1f}% · NVDA {ch.get('NVDA', 0):+.1f}% · 나스닥 선물 {ch.get('NQ=F', 0):+.1f}%",
+             f"• 오늘 종베 소부장·기판: {', '.join(held)}"]
+    if e <= -2:
+        lines.append("\n⚠️ <b>프리마켓부터 약함</b> — 이대로 마감하면 내일 갭 하락 가능 (장비 -3%↓ 밤 다음 날 소부장 시초 -1.7%)"
+                     "\n→ <b>20:00 넥스트레이드 애프터마켓 전</b>에 일부라도 정리 검토")
+    elif e >= 1:
+        lines.append("\n🟢 프리마켓 무난 — 그대로 들고 내일 규칙대로")
+    else:
+        lines.append("\n· 프리마켓 보합 — 아직 방향 없음 (프리마켓은 거래가 적어 정규장에서 바뀔 수 있음)")
+    send(db, "\n".join(lines), html=True)
+
+
 def send_us_overnight(db: Session) -> None:
     from backend.utils.dates import is_trading_day  # noqa: PLC0415
     if not is_trading_day(datetime.now(ZoneInfo("Asia/Seoul")).date()):
