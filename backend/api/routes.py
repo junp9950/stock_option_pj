@@ -1604,8 +1604,10 @@ def get_dashboard(db: Session = Depends(get_db)):
     watch = []
     items = tg_get(db, "user_watchlist", []) or []
     if items and latest:
-        px = dict(db.execute(text("select stock_code, close_price from spot_daily_prices where trading_date = :d and stock_code = any(:c)"),
-                             {"d": latest, "c": [x["code"] for x in items]}).all())
+        rows_ = db.execute(text("select stock_code, close_price, change_pct from spot_daily_prices where trading_date = :d and stock_code = any(:c)"),
+                           {"d": latest, "c": [x["code"] for x in items]}).all()
+        px = {r[0]: r[1] for r in rows_}
+        chg_today = {r[0]: float(r[2] or 0) for r in rows_}
         for x in items:
             c, lv, kind = px.get(x["code"]), x.get("level") or 0, x.get("kind")
             if not c or not lv:
@@ -1617,10 +1619,10 @@ def get_dashboard(db: Session = Depends(get_db)):
             elif kind == "hold":
                 tag = "⚠ 이탈" if c < lv else ("👀 선 근처" if gap <= 2 else None)
             elif kind == "near":
-                tag = "👀 기준 근처" if abs(gap) <= 3 else None
+                tag = "🚀 수렴 위로 돌파" if gap > 3 and (chg_today.get(x["code"]) or 0) >= 3 else ("👀 기준 근처" if abs(gap) <= 3 else None)
             if tag:
                 watch.append({"code": x["code"], "name": x["name"], "tag": tag, "close": round(c), "level": lv, "gap_pct": round(gap, 1), "note": x.get("note", "")})
-    order = {"⚠ 이탈": 0, "✅ 선 위 마감": 1, "👀 코앞": 2, "👀 선 근처": 3, "👀 기준 근처": 4}
+    order = {"⚠ 이탈": 0, "✅ 선 위 마감": 1, "🚀 수렴 위로 돌파": 1, "👀 코앞": 2, "👀 선 근처": 3, "👀 기준 근처": 4}
     watch.sort(key=lambda w: order.get(w["tag"], 9))
     vr = {}
     try:

@@ -766,7 +766,7 @@ async function renderDashboard(d, stale){
     +`<div class="ts" style="margin:8px 0 4px">내일 도지면 그 자리 (오늘 장대양봉)</div>`+((d.trend_big||[]).map(x=>chip(x,'#6e40c9',` <span class="ts">${sg(x.change_pct)}%</span>`)).join('')||'<span class="ts">없음</span>')
     +'<div class="ts" style="margin-top:4px">이 자리는 다음 날 매도보다 3~5일 보유가 나았음</div>'));
   parts.push(card('👀 내일 후보 — 뜨는 섹터에서 고점 근처 쉬는 중',(d.next.map(x=>chip(x,'#1f6feb',` <span class="ts">고점 ${x.off_hi20_pct}%</span>`)).join('')||'<span class="ts">없음</span>')+'<div class="ts" style="margin-top:4px">내일 거래 붙은 양봉으로 고점 넘으면 종베 자리</div>'));
-  const wc={'⚠ 이탈':'#f85149','✅ 선 위 마감':'#3fb950'};
+  const wc={'⚠ 이탈':'#f85149','✅ 선 위 마감':'#3fb950','🚀 수렴 위로 돌파':'#3fb950'};
   parts.push(card(`📋 관심 종목 — 선에 닿은 것 (${d.watch.length})`,d.watch.map(w=>`<div style="display:flex;justify-content:space-between;gap:8px;font-size:13px;padding:3px 0;border-bottom:1px solid #21262d;cursor:pointer" onclick="openChartModal('${w.code}','${w.name}','')"><span><b style="color:${wc[w.tag]||'#e6edf3'}">${w.tag}</b> ${w.name}</span><span class="ts">${w.close.toLocaleString()} / 선 ${w.level.toLocaleString()} (${sg(w.gap_pct)}%)</span></div>`).join('')||'<span class="ts">없음</span>'));
   const vr=d.volume||{};
   parts.push(card('🔥 대량거래 관심종목',[['🎯 진입 신호',vr.signal,'#e3b341'],['🚀 꼬리 돌파',vr.tail_break,'#3fb950'],['🆕 신규(최근 터짐)',vr.new,'#58a6ff']].map(([t,l,c])=>`<div style="margin-bottom:4px"><span class="ts">${t}</span><br>${(l||[]).map(x=>chip(x,c,x.days!=null?` <span class="ts">${x.days}일 전</span>`:'')).join('')||'<span class="ts">없음</span>'}</div>`).join('')));

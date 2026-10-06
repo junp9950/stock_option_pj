@@ -144,6 +144,9 @@ def report(db: Session, force: bool = False) -> str | None:
             g["warn"].append(f"{nm} {pct}" + (f" · {_won(lv)} 이탈" if it["kind"] == "hold" and p < lv else " · 장대음봉"))
         elif it["kind"] == "above" and p >= lv * 0.97:
             g["close"].append(f"{nm} {_won(p)} → {_won(lv)}  <i>{(lv / p - 1) * 100:.1f}% 남음</i>")
+        elif it["kind"] == "near" and p > lv * 1.03 and s["chg"] >= 3 and s["vx"] >= 1.5:
+            # 수렴 자리에서 거래 붙은 양봉으로 위로 뚫고 나감 — 근처(±3%) 조건만 보다가 놓쳤다 (2026-10-06 SK가스 +7.7%·거래대금 4배)
+            g["brk"].append(f"{nm} {_won(p)} ({pct}) · 수렴 자리({_won(lv)}) 위로 돌파 · 거래 {s['vx']:.1f}배" + (f"\n   └ <i>{escape(it['note'])}</i>" if it.get("note") else ""))
         elif it["kind"] == "near" and abs(p / lv - 1) <= 0.03:
             g["close"].append(f"{nm} {_won(p)} · 기준 {_won(lv)} 근처 ({(p / lv - 1) * 100:+.1f}%)")
         elif candle:
