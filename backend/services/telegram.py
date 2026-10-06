@@ -30,6 +30,7 @@ HELP = ("주식 레이더 봇 명령\n"
         "/관심 — 관심 종목 점검 지금 받기 (평일 15:40 자동)\n"
         "/종베 종목 가격 [메모] — 오늘 종베 기록 (여러 줄 가능) · /종베목록 · /종베삭제 종목 · /채점\n"
         "종목토론 알림에 '답장' — 그 글에 댓글(댓글 알림이면 답글)로 달림 · /이름 우라늄 — 댓글 이름 정하기\n"
+        "/board — (그룹에서) 이 방을 종목토론·건의사항 알림 전용으로 · /board_off — 해제\n"
         "/stop — 알림 끄기")
 
 
@@ -103,7 +104,13 @@ def notify_async(msg: str, author: str = "", ref: dict | None = None) -> None:
         from backend.db.database import SessionLocal  # noqa: PLC0415
         db = SessionLocal()
         try:
-            sent = send(db, msg)
+            board = _get(db, "telegram_board_chats", [])     # 게시판 알림 전용 방이 있으면 거기로만 (2026-10-06 매일 알림과 분리)
+            if board:
+                sent = {}
+                for c in board:
+                    sent.update(send(db, msg, c))
+            else:
+                sent = send(db, msg)
             if ref and sent:
                 mm = _get(db, "telegram_msgmap", {})
                 for c, mid in sent.items():
@@ -379,7 +386,24 @@ def poll(db: Session) -> None:
             txt = (msg.get("caption") or "").strip()
         if not cid or (not txt and not msg.get("photo")):
             continue
-        who = chat.get("first_name") or chat.get("username") or cid
+        who = chat.get("first_name") or chat.get("title") or chat.get("username") or cid
+        if txt.split()[0].split("@")[0] in ("/board", "/board_off") if txt else False:
+            # 게시판(종목토론·건의사항) 알림 전용 방 — 그룹을 만들어 봇을 넣고 /board (그룹에선 영문 명령만 봇에 전달됨)
+            board = _get(db, "telegram_board_chats", [])
+            if txt.split()[0].split("@")[0] == "/board":
+                if cid not in board:
+                    board.append(cid)
+                _put(db, "telegram_board_chats", board)
+                send(db, "✅ 이 방을 게시판 알림 전용으로 정했습니다. 종목토론·건의사항 새 글·댓글은 이제 여기로만 옵니다.\n"
+                         "알림에 답장하면 댓글로 달립니다 (/이름 대신 /name 우라늄 처럼 쓸 수 있음).", cid)
+                for other in chats:
+                    if other != cid:
+                        send(db, f"ℹ️ 게시판 알림은 이제 '{who}' 방으로 갑니다. 이 방에는 매일 시장·종베 알림만 옵니다.", other)
+            else:
+                board = [b for b in board if b != cid]
+                _put(db, "telegram_board_chats", board)
+                send(db, "게시판 알림 전용을 해제했습니다." + ("" if board else " 게시판 알림은 다시 기본 대화방으로 갑니다."), cid)
+            continue
         if txt.startswith("/start"):
             if cid not in chats and len(chats) >= MAX_CHATS:
                 send(db, "등록 인원이 꽉 찼습니다.", cid); continue
@@ -392,7 +416,7 @@ def poll(db: Session) -> None:
                     if other != cid:
                         send(db, f"ℹ️ 새 대화방이 알림에 등록됐습니다: {who}", other)
             continue
-        if cid not in chats:
+        if cid not in chats and cid not in _get(db, "telegram_board_chats", []):
             send(db, "먼저 /start 를 보내 주세요.", cid); continue
         rep = msg.get("reply_to_message") or {}
         if rep and not txt.startswith("/"):
@@ -407,7 +431,7 @@ def poll(db: Session) -> None:
         if txt.startswith("/stop"):
             chats.pop(cid, None); _put(db, "telegram_chats", chats)
             send(db, "알림을 껐습니다. 다시 받으려면 /start", cid)
-        elif txt.startswith("/이름"):
+        elif txt.startswith("/이름") or txt.split()[0].split("@")[0] == "/name":
             name = txt.split(maxsplit=1)[1].strip() if " " in txt else ""
             if name not in AUTHORS:
                 send(db, f"예: /이름 우라늄 (가능한 이름: {', '.join(AUTHORS)})", cid); continue
