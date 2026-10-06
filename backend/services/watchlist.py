@@ -109,6 +109,11 @@ def _shape(c: list[dict]) -> dict | None:
             "width": (max(closes) / min(closes) - 1) * 100 if closes else 0, "tags": tags}
 
 
+def _when() -> str:
+    now = datetime.now(ZoneInfo("Asia/Seoul"))
+    return "마감" if (now.hour, now.minute) >= (15, 30) or now.weekday() >= 5 else f"장중 {now:%H:%M} (봉 모양 확정 전)"
+
+
 def _won(x: float) -> str:
     return f"{x:,.0f}"
 
@@ -151,7 +156,7 @@ def report(db: Session, force: bool = False) -> str | None:
     if not force and last_date != today:
         return None     # 휴장일
     d = last_date[5:].replace("-", "/")
-    out = [f"📋 <b>관심 종목 {d} 마감</b>"]
+    out = [f"📋 <b>관심 종목 {d} {_when()}</b>"]
     blocks = (("✅ 매수 조건: 선 위 마감 → 종가 매수 검토", "brk"), ("🔥 거래 실린 장대양봉", "fire"), ("👀 선 코앞 (3% 안)", "close"),
               ("🕯 도지", "candle"), ("⚠ 이탈·장대음봉", "warn"))
     for title, k in blocks:
@@ -199,8 +204,12 @@ _DOJI_ENTRY = re.compile(r"도지[^.\n]{0,10}?(뜨면|나오면|주면|나올까
 
 def _day(code: str, fetch) -> dict | None:
     if code not in _CANDLES:
-        c = fetch(code, "1d", 25)
-        time.sleep(0.15)
+        c = None
+        for wait in (0.15, 1.0, 2.5):     # 토스 429(요청 과다) 나면 잠깐 쉬고 다시
+            c = fetch(code, "1d", 25)
+            time.sleep(wait)
+            if c:
+                break
         _CANDLES[code] = _shape(c) if c and len(c) >= 3 else None
     return _CANDLES[code]
 
@@ -307,7 +316,7 @@ def post_report(db: Session, force: bool = False) -> str | None:
             rest.append(f"{escape(it['name'])} {s['chg']:+.1f}% {_candle_word(s)}" + (f" · {cond}" if cond else ""))
     if not force and last_date != datetime.now(ZoneInfo("Asia/Seoul")).date().isoformat():
         return None
-    out = [f"📝 <b>정리 글 조건 체크 {last_date[5:].replace('-', '/')} 마감</b> ({len(items)}종목)"]
+    out = [f"📝 <b>정리 글 조건 체크 {last_date[5:].replace('-', '/')} {_when()}</b> ({len(items)}종목)"]
     if ok:
         out += ["", "✅ <b>적어 두신 조건이 맞은 종목</b>"] + ok
     if bad:
