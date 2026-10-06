@@ -30,6 +30,11 @@ MIN_EVENT_CHG = 5.0  # 신기록일 전날 종가 대비 +5% 이상 (우리금�
                      # 주가는 안 움직인 대량 체결(블록딜·지수 편입 등)은 시세가 아니라 뺀다)
 TAIL_MIN_HIGH = 8.0  # 윗꼬리 신기록은 장중 고가가 전날 대비 +8% 이상일 때만. 포스코인터내셔널 9/3(블록딜, 고가 +5.8%·종가 +4.3%)을
                      # 사용자와 확인해 빼기로 했다 (2026-10-06 "블록딜 있었잖아"). 블록딜은 주가가 거의 안 움직인다.
+# 뉴스로 확인한 블록딜(시간외 대량매매) 날 — 시세가 아니라 지분 매각이라 신기록에서 뺀다 (2026-10-06 웹 검색 확인)
+BLOCK_DEALS = {
+    ("047050", "2026-09-03"),   # 포스코인터내셔널 (사용자 확인)
+    ("058470", "2026-06-12"),   # 리노공업 최대주주 700만주 시간외매매, 주당 9만원 (한국경제 2026-06-15)
+}
 NEW_DAYS = 10        # 마지막 대량거래일 뒤 10거래일까지는 '신규'
 DRY_MAX = 0.25       # 최근 5일 거래대금이 대량거래 최대일의 25% 이하면 말랐다고 본다
 # 무너짐 = 지금 종가가 기준선(신기록 전날 종가) 아래이거나, 신기록 뒤 한 번이라도 기준선의 -15% 아래로 마감한 경우.
@@ -101,7 +106,7 @@ def scan(db: Session) -> dict:
         for i, p in enumerate(pl):
             if p[1] >= win_start and n_prior + i >= MIN_HISTORY and i >= PRE_MED_DAYS // 2:
                 med = statistics.median(tv[max(0, i - PRE_MED_DAYS):i]) or 1
-                if tv[i] >= X_MIN * med:
+                if tv[i] >= X_MIN * med and (code, p[1].isoformat()) not in BLOCK_DEALS:
                     last_big = i
                     big_max = max(big_max, tv[i])
                     pc = float(pl[i - 1][5])
