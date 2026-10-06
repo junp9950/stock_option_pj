@@ -364,11 +364,15 @@ def analyze(db: Session, owner: str) -> dict:
     for b, s, q, bpx in raw_trips:
         k = (s.code, b.trade_date if b else None, s.trade_date, b.id if b and b.kind else None)
         g = groups.setdefault(k, {"code": s.code, "name": s.name, "buy_date": b.trade_date if b else None, "sell_date": s.trade_date,
-                                  "qty": 0, "buy_amount": 0.0, "sell_amount": 0.0, "fee": 0.0, "buys": [], "kind_set": ""})
+                                  "qty": 0, "buy_amount": 0.0, "sell_amount": 0.0, "fee": 0.0, "buys": [], "kind_set": "",
+                                  "pnl": 0.0})
         g["qty"] += q
         g["buy_amount"] += q * bpx
         g["sell_amount"] += q * s.price
-        g["fee"] += (s.fee or 0) * q / s.qty if s.qty else 0
+        fee = (s.fee or 0) * q / s.qty if s.qty else 0
+        g["fee"] += fee
+        # 증권사 실현손익(세금·신용이자 포함)이 있으면 수량 비율로 나눠 그대로 쓰고, 없으면 직접 계산
+        g["pnl"] += s.broker_pnl * q / s.qty if s.broker_pnl is not None and s.qty else q * (s.price - bpx) - fee
         if b is not None:
             g["buys"].append(b)
             g["kind_set"] = g["kind_set"] or b.kind
@@ -376,7 +380,7 @@ def analyze(db: Session, owner: str) -> dict:
     for g in groups.values():
         days = ndays(g["buy_date"], g["sell_date"]) if g["buy_date"] else None
         buy_px = g["buy_amount"] / g["qty"]
-        pnl = g["sell_amount"] - g["buy_amount"] - g["fee"]
+        pnl = g["pnl"]
         user_tags = sorted({b.tag for b in g["buys"] if b.tag})
         st = _state(ctx, g["code"], g["buy_date"], buy_px) if g["buy_date"] else None
         trips.append({"code": g["code"], "name": g["name"], "buy_date": g["buy_date"].isoformat() if g["buy_date"] else None,
@@ -402,10 +406,11 @@ def analyze(db: Session, owner: str) -> dict:
 
     use = [t for t in trips if not t["excluded"]]
     by = lambda key: {k: _stats(v) for k, v in key.items()}  # noqa: E731
-    g_kind, g_tag, g_user, g_month, g_fam = (defaultdict(list) for _ in range(5))
+    g_kind, g_tag, g_user, g_month, g_fam, g_day = (defaultdict(list) for _ in range(6))
     for t in use:
         g_kind[t["kind"]].append(t)
         g_month[t["sell_date"][:7]].append(t)
+        g_day[t["sell_date"]].append(t)
         for u in t["user_tags"] or ["(근거 안 적음)"]:
             g_user[u].append(t)
         if t["state"]:
@@ -421,7 +426,7 @@ def analyze(db: Session, owner: str) -> dict:
                     "beat_pct": round(sum(t["pct"] > t["pool"]["avg_pct"] for t in pooled) / len(pooled) * 100),
                     "in_pool": sum(t["pool"]["in_pool"] for t in pooled)}
     summary = {"pool_cmp": pool_cmp, "all": _stats(use), "by_kind": by(g_kind), "by_state": by(g_tag), "by_user_tag": by(g_user),
-               "by_month": by(g_month), "by_family": by(g_fam)}
+               "by_month": by(g_month), "by_day": by(g_day), "by_family": by(g_fam)}
     return {"executions": list(reversed(execs)), "trips": trips, "holding": holding, "summary": summary,
             "insights": ([f"⚠️ 체결가가 그날 시세 범위 밖인 기록 {len(warn)}건 — 날짜나 가격을 확인해 주세요 (체결 내역 보기에 표시)"] if warn else []) + _insights(use, g_tag, g_kind), "cfg": cfg, "user_tags": USER_TAGS, "kinds": KINDS,
             "as_of": last.isoformat()}
