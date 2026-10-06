@@ -324,7 +324,10 @@ _PRE_GROUPS = [
     ("소부장·기판", ("AMAT", "KLAC", "LRCX"), -2.0),
     ("광통신", ("COHR", "LITE", "CIEN", "AAOI", "GLW"), -3.0),
     ("전력·전선", ("GEV", "BE"), -3.0),
+    ("2차전지", ("ALB", "SQM", "TSLA"), -3.0),
 ]
+#  2차전지 ← 리튬(ALB·SQM) 0.29(0.17) · TSLA 0.31(0.11), TSLA -4%↓ 밤 → -1.4%(오른 날 33%)
+#  로봇은 미국 쪽 짝이 없다 — TSLA 0.26(0.06), SYM·TER·ROK 0.24(0.04): 나스닥 선물만 보면 된다
 
 
 def _premarket_held(db: Session, today: date) -> dict[str, list[str]]:
@@ -334,7 +337,8 @@ def _premarket_held(db: Session, today: date) -> dict[str, list[str]]:
     optic = {r[0] for r in db.execute(text("select distinct ss.stock_code from sector_stocks ss join sectors s on s.id = ss.sector_id "
                                             "where s.sector_name like '%광통신%'")).all()}
     sets = {"소부장·기판": {c for f in ("반도체 장비·재료", "AI메모리·기판") for c in fam.get(f, [])},
-            "광통신": optic, "전력·전선": set(fam.get("전력·전선", []))}
+            "광통신": optic, "전력·전선": set(fam.get("전력·전선", [])),
+            "2차전지": set(fam.get("2차전지", []))}
     out: dict[str, list[str]] = {}
     for c, n in db.execute(text("select code, name from user_jongbe where trading_date = :d"), {"d": today}).all():
         for g, cs in sets.items():
