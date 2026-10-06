@@ -403,6 +403,10 @@ def poll(db: Session) -> None:
                 if cid not in board:
                     board.append(cid)
                 _put(db, "telegram_board_chats", board)
+                if chat.get("type") == "private" and cid in chats:
+                    # 1:1 방에서 /board = 게시판 알림만 원함 → 매일 시장·종베 알림 목록에선 뺌 (2026-10-06 우라늄이 /start 후 /board)
+                    chats.pop(cid, None)
+                    _put(db, "telegram_chats", chats)
                 send(db, "✅ 이 방에서 종목토론·건의사항 새 글·댓글 알림을 받습니다 (매일 시장 알림은 안 옴).\n"
                          "이름을 정해 주세요: /name 우라늄 또는 /name 감사하모니카 — 본인 글은 알림에서 빠지고, 알림에 답장하면 그 이름으로 댓글이 달립니다.", cid)
                 for other in chats:
