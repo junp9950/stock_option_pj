@@ -28,6 +28,8 @@ X_MIN = 10           # 평소의 10배 이상
 MIN_VALUE = 3e9      # 신기록일 거래대금 30억 이상
 MIN_EVENT_CHG = 5.0  # 신기록일 전날 종가 대비 +5% 이상 (우리금융지주 10/1처럼 갭하락 뒤 대량 매도, 포스코인터 9/3처럼
                      # 주가는 안 움직인 대량 체결(블록딜·지수 편입 등)은 시세가 아니라 뺀다)
+TAIL_MIN_HIGH = 8.0  # 윗꼬리 신기록은 장중 고가가 전날 대비 +8% 이상일 때만. 포스코인터내셔널 9/3(블록딜, 고가 +5.8%·종가 +4.3%)을
+                     # 사용자와 확인해 빼기로 했다 (2026-10-06 "블록딜 있었잖아"). 블록딜은 주가가 거의 안 움직인다.
 NEW_DAYS = 10        # 마지막 대량거래일 뒤 10거래일까지는 '신규'
 DRY_MAX = 0.25       # 최근 5일 거래대금이 대량거래 최대일의 25% 이하면 말랐다고 본다
 # 무너짐 = 지금 종가가 기준선(신기록 전날 종가) 아래이거나, 신기록 뒤 한 번이라도 기준선의 -15% 아래로 마감한 경우.
@@ -106,8 +108,8 @@ def scan(db: Session) -> dict:
                     if first is None and tv[i] > run_max and tv[i] >= MIN_VALUE:
                         if p[5] > p[2] and float(p[5]) >= pc * (1 + MIN_EVENT_CHG / 100):
                             first = (i, tv[i] / med, "양봉")
-                        elif float(p[3]) >= pc * (1 + MIN_EVENT_CHG / 100):
-                            first = (i, tv[i] / med, "윗꼬리")   # 장중 +5% 넘게 쐈다가 밀림 (갭하락·블록딜은 여전히 뺌)
+                        elif float(p[3]) >= pc * (1 + TAIL_MIN_HIGH / 100):
+                            first = (i, tv[i] / med, "윗꼬리")   # 장중 크게 쐈다가 밀림 (갭하락·블록딜은 여전히 뺌)
             run_max = max(run_max, tv[i])
         if first is None:
             continue
