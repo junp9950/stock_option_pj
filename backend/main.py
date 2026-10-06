@@ -522,7 +522,7 @@ select{background:#21262d;border:1px solid #30363d;color:#c9d1d9;padding:6px 10p
 <!-- 오늘 (대시보드, 2026-10-06) -->
 <div id="panel-home" class="panel active content">
   <div id="db-verdict" style="border-radius:12px;padding:14px 18px;margin-bottom:14px;border:1px solid #30363d;font-size:15px">로딩 중…</div>
-  <div id="db-grid" style="display:grid;grid-template-columns:repeat(auto-fill,minmax(300px,1fr));gap:12px"></div>
+  <div id="db-grid" style="columns:400px;column-gap:12px"></div>
 </div>
 
 <div id="panel-candidates" class="panel content">
@@ -735,7 +735,9 @@ async function renderDashboard(d, stale){
   const m=d.market||{}, all=m['전체']||{}, al=d.alert||{};
   const col={상승:'#3fb950',횡보:'#d29922',하락:'#f85149'}, ico={상승:'🟢',횡보:'🟡',하락:'🔴'};
   const sg=x=>(x>0?'+':'')+x;
-  const card=(t,body)=>`<div style="border:1px solid #30363d;border-radius:12px;padding:12px 14px;background:#0d1117"><div style="font-size:13px;color:#8b949e;margin-bottom:8px;font-weight:600">${t}</div>${body}</div>`;
+  // 카드를 위에서 아래로 흘려 채움(PC에서 좁은 기둥 8개로 쪼개지지 않게, 폰은 한 줄) — 2026-10-06
+  const card=(t,body)=>`<div style="break-inside:avoid;display:inline-block;width:100%;margin-bottom:12px;border:1px solid #30363d;border-radius:12px;padding:12px 14px;background:#0d1117;box-sizing:border-box"><div style="font-size:13px;color:#8b949e;margin-bottom:8px;font-weight:600">${t}</div>${body}</div>`;
+  const more=(arr,n,f)=>arr.length<=n?arr.map(f).join(''):arr.slice(0,n).map(f).join('')+`<details style="display:inline"><summary class="ts" style="cursor:pointer;display:inline">외 ${arr.length-n}개 더 보기</summary>${arr.slice(n).map(f).join('')}</details>`;
   const chip=(x,c,extra)=>`<span style="display:inline-block;margin:0 6px 6px 0;padding:4px 9px;border:1px solid ${c||'#30363d'};border-radius:8px;cursor:pointer;font-size:12.5px" onclick="openChartModal('${x.code}','${x.name}','')"><b style="color:#e6edf3">${x.name}</b>${extra||''}</span>`;
   // 오늘 판단
   let vt,vc;
@@ -763,7 +765,7 @@ async function renderDashboard(d, stale){
     +`<div class="ts" style="margin-top:4px">거래 1.5~6배 · 윗꼬리 10%↓로 한 번 더 추림 · 3년 검증 +1.9% (날짜 단위 +0.9%) · <a href="#" onclick="switchTab('jongbe');return false" style="color:#58a6ff">전체 보기 →</a></div>`));
   parts.push(card('🔄 바닥 돌려세움 — 빠진 뒤 바닥 횡보 → 양봉 3연속·20일선 회복 (20일 보유)',
     (all.state==='하락'?'<div style="color:#f85149;font-size:12.5px;margin-bottom:4px">하락장에선 이 자리도 마이너스였음 — 오늘은 보기만</div>':'')
-    +((d.turn3||[]).map(x=>chip(x,x.ai?'#3fb950':'#30363d',`${x.ai?' <b style="color:#3fb950;font-size:11px">AI</b>':''} <span class="ts">고점 ${x.off120_pct}% · 손절 ${x.box_low.toLocaleString()}</span>`)).join('')||'<span class="ts">오늘은 없음</span>')
+    +(more(d.turn3||[],10,x=>chip(x,x.ai?'#3fb950':'#30363d',`${x.ai?' <b style="color:#3fb950;font-size:11px">AI</b>':''} <span class="ts">고점 ${x.off120_pct}% · 손절 ${x.box_low.toLocaleString()}</span>`))||'<span class="ts">오늘은 없음</span>')
     +((d.turn2||[]).length?`<div class="ts" style="margin:6px 0 4px">2연속 — 내일도 양봉이면 3연속</div>`+(d.turn2||[]).map(x=>chip(x,'#30363d','')).join(''):'')
     +'<div class="ts" style="margin-top:4px">AI 랠리 중 AI 종목 20일 +11.3% (아무 AI 종목 +4.9%), 전 종목 +3.3% (+2.0%) · 랠리 전 약세장에선 마이너스 · 손절 = 바닥 박스 하단</div>'));
   parts.push(card('🛌 장대양봉 이틀 쉼 + 장대양봉 종가 지킴 — 5~10일 보유',
