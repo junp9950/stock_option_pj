@@ -522,7 +522,8 @@ select{background:#21262d;border:1px solid #30363d;color:#c9d1d9;padding:6px 10p
 <!-- 오늘 (대시보드, 2026-10-06) -->
 <div id="panel-home" class="panel active content">
   <div id="db-verdict" style="border-radius:12px;padding:14px 18px;margin-bottom:14px;border:1px solid #30363d;font-size:15px">로딩 중…</div>
-  <div id="db-top" style="display:grid;grid-template-columns:repeat(auto-fit,minmax(280px,1fr));gap:12px;margin-bottom:6px"></div>
+  <div id="db-market" style="margin-bottom:12px"></div>
+  <div id="db-top" style="display:grid;grid-template-columns:repeat(auto-fit,minmax(320px,1fr));gap:12px;margin-bottom:6px;align-items:start"></div>
   <div style="font-size:15px;font-weight:700;color:#e6edf3;margin:14px 0 8px">🎯 오늘 살 자리 — 검증 순위대로</div>
   <div id="db-rank"></div>
   <div style="font-size:15px;font-weight:700;color:#e6edf3;margin:14px 0 8px">📎 참고</div>
@@ -772,10 +773,13 @@ async function renderDashboard(d, stale){
   if(all.state!=='하락'&&all.vs_ma20_pct!=null&&all.vs_ma20_pct<=1) warn.push('⚠️ 하락 전환 가까움 — 빠지는 종목 줍기 금지');
   v.style.borderColor=vc; v.style.background=vc+'14';
   v.innerHTML=`<div>${vt}</div>${warn.map(w=>`<div style="margin-top:6px;color:#e3b341">${w}</div>`).join('')}<div class="ts" style="margin-top:6px">${d.as_of||''} 종가 기준 · 장 마감 수집 뒤(16시쯤) 갱신</div>`;
-  const mk=k=>{ const x=m[k]||{}; return `<div style="flex:1;min-width:84px;border:1px solid ${col[x.state]||'#30363d'};border-radius:10px;padding:8px 10px"><div class="ts">${k}</div><div style="font-size:16px;font-weight:700;color:${col[x.state]||'#c9d1d9'}">${ico[x.state]||''} ${x.state||'-'}</div><div class="ts">20일선 ${x.vs_ma20_pct!=null?sg(x.vs_ma20_pct)+'%':'-'} · 20일 ${x.cum20_pct!=null?sg(x.cum20_pct)+'%':'-'}</div></div>`; };
+  const mk=k=>{ const x=m[k]||{}; return `<div style="flex:1;min-width:150px;border:2px solid ${col[x.state]||'#30363d'};border-radius:14px;padding:14px 18px;background:${(col[x.state]||'#30363d')}14">
+    <div style="font-size:15px;color:#c9d1d9;font-weight:600">${k}</div>
+    <div style="font-size:30px;font-weight:800;color:${col[x.state]||'#c9d1d9'};margin:4px 0">${ico[x.state]||''} ${x.state||'-'}</div>
+    <div style="font-size:14px;color:#c9d1d9">20일선보다 <b>${x.vs_ma20_pct!=null?sg(x.vs_ma20_pct)+'%':'-'}</b> · 최근 20일 <b>${x.cum20_pct!=null?sg(x.cum20_pct)+'%':'-'}</b></div></div>`; };
   const rel=m.rel, relW=rel==null?0:Math.max(0,Math.min(100,(rel+15)/30*100));
   const top=[],rank=[],ref=[];
-  top.push(card('📊 시장 (전종목 평균)',`<div style="display:flex;gap:8px;flex-wrap:wrap">${mk('전체')}${mk('코스피')}${mk('코스닥')}</div>`));
+  document.getElementById('db-market').innerHTML=card('📊 시장 (종목 평균 지수 · 20일선 아래면 하락)',`<div style="display:flex;gap:12px;flex-wrap:wrap">${mk('전체')}${mk('코스피')}${mk('코스닥')}</div>`);
   // 막대 하나(-15~+15%p)는 0이 어딘지 안 보여 '늘어나는' 것처럼 읽혔음 → 두 막대를 나란히 비교 (2026-10-06)
   const mx=Math.max(Math.abs(m.sh20||0),Math.abs(m.kq20||0),1);
   const bar=(lab,v,c)=>`<div style="display:flex;align-items:center;gap:8px;font-size:13px;margin:4px 0"><span style="width:72px;flex:none">${lab}</span><div style="flex:1;height:10px;background:#21262d;border-radius:5px;overflow:hidden"><div style="height:10px;width:${Math.abs(v)/mx*100}%;background:${v>=0?c:'#58a6ff'}"></div></div><b style="width:58px;text-align:right">${sg(v)}%</b></div>`;
