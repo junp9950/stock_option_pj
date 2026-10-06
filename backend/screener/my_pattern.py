@@ -50,6 +50,9 @@ def scan(db: Session) -> dict:
         for c in m:
             code_f.setdefault(c, []).append(f)
     last = C.index[-1]
+    # 그날 외인·기관 순매수 — 둘 다 팔았는데 오른 날(개인만 산 날)은 그 뒤가 약했다 (2026-01~10: +3%↑ 날 20일 -9.0% vs -3.2%)
+    flows = {c: (float(fo or 0), float(ins or 0)) for c, fo, ins in db.execute(text(
+        "select stock_code, foreign_net_buy, institution_net_buy from spot_investor_flows where trading_date = :d"), {"d": latest})}
     ma20 = C.rolling(20).mean().iloc[-1]
     hi20 = H.rolling(20).max().iloc[-1]
     items, nxt = [], []
@@ -68,6 +71,8 @@ def scan(db: Session) -> dict:
         row = {"code": c, "name": names.get(c, c), "close": round(float(cl)), "change_pct": round(ch * 100, 2), "tv_x": round(vx, 2),
                "gap20_pct": round(g20 * 100, 1), "off_hi20_pct": round(off * 100, 1), "upper_pct": round(up * 100),
                "ret20_pct": round(r20 * 100, 1), "family": f0, "rank": frank[f0], "value": round(float(TV.at[last, c]))}
+        fo, ins = flows.get(c, (0.0, 0.0))
+        row.update(fo_eok=round(fo / 1e8, 1), ins_eok=round(ins / 1e8, 1), retail_only=bool(c in flows and fo < 0 and ins < 0))
         if ch != ch or vx != vx:
             continue
         is_a = cl > o and ch > 0 and off >= -0.08 and g20 > 0 and vx >= 1
@@ -107,7 +112,9 @@ def text_summary(db: Session, k: int = 5) -> str:
     b = [x for x in r["items"] if x["b"] and 1.5 <= x["tv_x"] <= 6 and x["upper_pct"] <= 10][:k] or [x for x in r["items"] if x["b"]][:k]
     if b:
         lines.append("\n⭐ <b>B 후보</b> (거래 1.5~6배·윗꼬리 10%↓ 추림)")
-        lines += [f"• {x['name']}  {x['change_pct']:+.1f}% · 거래 {x['tv_x']:.1f}배" for x in b]
+        lines += [f"• {x['name']}  {x['change_pct']:+.1f}% · 거래 {x['tv_x']:.1f}배" + ("  ⚠개인만" if x.get("retail_only") else "") for x in b]
+        if any(x.get("retail_only") for x in b):
+            lines.append("⚠개인만 = 외인·기관 둘 다 팔았는데 오른 날 (그 뒤 약했음)")
     n = r["next"][:k]
     if n:
         lines.append("\n👀 <b>내일 후보</b> (고점 근처 쉬는 중)")

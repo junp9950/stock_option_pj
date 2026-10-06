@@ -751,7 +751,8 @@ async function loadDashboard(){
      <div class="ts">+15%p 넘으면 흡수 경고 (3년: 뒤 20일 코스닥 -3.8%) · 외국인 삼하 5일 <b style="color:${m.sh_foreign5>0?'#f85149':'#58a6ff'}">${(m.sh_foreign5>0?'+':'')+(m.sh_foreign5||0).toLocaleString()}억</b></div>`));
   const sd=Object.entries(d.sector_day||{});
   parts.push(card('🔥 섹터 (20일 순위 · 오늘 등락 중간 · 거래 중간)',sd.map(([f,x],i)=>`<div style="display:flex;justify-content:space-between;font-size:13px;padding:3px 0;border-bottom:1px solid #21262d"><span>${i+1}. ${d.b_sectors.includes(f)?'⭐ ':''}<b style="color:#e6edf3">${f}</b></span><span><span style="color:${x.chg>=0?'#f85149':'#58a6ff'}">${sg(x.chg)}%</span> · <span class="ts">${x.tvx}배</span></span></div>`).join('')+'<div class="ts" style="margin-top:6px">⭐ = 오늘 조건 B 섹터 (등락 +1.2%↑ · 거래 1배↑)</div>'));
-  parts.push(card(`⭐ 오늘 종베 후보 — 조건 B 추림 (${d.best.length}/${d.b_count})`,(d.best.map(x=>chip(x,'#9e6a03',` <span style="color:#f85149">${sg(x.change_pct)}%</span> <span class="ts">${x.tv_x}배</span>`)).join('')||'<span class="ts">없음 — 쉬는 날</span>')
+  parts.push(card(`⭐ 오늘 종베 후보 — 조건 B 추림 (${d.best.length}/${d.b_count})`,(d.best.map(x=>chip(x,x.retail_only?'#f85149':'#9e6a03',` <span style="color:#f85149">${sg(x.change_pct)}%</span> <span class="ts">${x.tv_x}배</span>${x.retail_only?' <b style="color:#f85149;font-size:11px">⚠개인만</b>':''}`)).join('')||'<span class="ts">없음 — 쉬는 날</span>')
+    +(d.best.some(x=>x.retail_only)?'<div class="ts" style="color:#f85149">⚠개인만 = 외인·기관 둘 다 팔았는데 오른 날 (올해 +3%↑ 날 기준 20일 -9.0% vs 평균 -3.2%) — 빼는 게 좋음</div>':'')
     +`<div class="ts" style="margin-top:4px">거래 1.5~6배 · 윗꼬리 10%↓로 한 번 더 추림 · 3년 검증 +1.9% (날짜 단위 +0.9%) · <a href="#" onclick="switchTab('jongbe');return false" style="color:#58a6ff">전체 보기 →</a></div>`));
   parts.push(card('👀 내일 후보 — 뜨는 섹터에서 고점 근처 쉬는 중',(d.next.map(x=>chip(x,'#1f6feb',` <span class="ts">고점 ${x.off_hi20_pct}%</span>`)).join('')||'<span class="ts">없음</span>')+'<div class="ts" style="margin-top:4px">내일 거래 붙은 양봉으로 고점 넘으면 종베 자리</div>'));
   const wc={'⚠ 이탈':'#f85149','✅ 선 위 마감':'#3fb950'};
@@ -792,7 +793,7 @@ async function loadMyPattern(){
   const el=document.getElementById('mp-box');
   const r=await fetch(`${API}/screener/my-pattern`).then(x=>x.ok?x.json():null).catch(()=>null);
   if(!r||!r.trading_date){ el.innerHTML='<span class="ts">불러오지 못했습니다</span>'; return; }
-  const chip=(x,c)=>`<span style="display:inline-block;margin:0 6px 6px 0;padding:5px 9px;border:1px solid ${c};border-radius:8px;cursor:pointer;font-size:12.5px" onclick="openChartModal('${x.code}','${x.name}','')"><b style="color:#e6edf3">${x.name}</b> <span style="color:${x.change_pct>=0?'#f85149':'#58a6ff'}">${x.change_pct>0?'+':''}${x.change_pct}%</span> <span class="ts">거래 ${x.tv_x}배 · 이격 ${x.gap20_pct}%${x.upper_pct!=null?' · 윗꼬리 '+x.upper_pct+'%':''}</span></span>`;
+  const chip=(x,c)=>`<span style="display:inline-block;margin:0 6px 6px 0;padding:5px 9px;border:1px solid ${c};border-radius:8px;cursor:pointer;font-size:12.5px" onclick="openChartModal('${x.code}','${x.name}','')"><b style="color:#e6edf3">${x.name}</b> <span style="color:${x.change_pct>=0?'#f85149':'#58a6ff'}">${x.change_pct>0?'+':''}${x.change_pct}%</span> <span class="ts">거래 ${x.tv_x}배 · 이격 ${x.gap20_pct}%${x.upper_pct!=null?' · 윗꼬리 '+x.upper_pct+'%':''}</span>${x.retail_only?' <b style="color:#f85149;font-size:11px" title="외인·기관 둘 다 순매도인데 오른 날 — 그 뒤 약했음">⚠개인만</b>':''}</span>`;
   const B=r.items.filter(x=>x.b), A=r.items.filter(x=>x.a&&!x.b), N=r.next.slice(0,20);
   const sd=Object.entries(r.sector_day||{}).map(([f,v])=>`${f} ${v.chg>0?'+':''}${v.chg}%·${v.tvx}배`).join(' · ');
   el.innerHTML=`<b style="font-size:15px;color:#e3b341">🎯 오늘 종베 — 최적 조건 B · 내 패턴 A</b> <span class="ts">${r.trading_date} 종가 기준 · 시장 ${r.market||'-'}</span>
