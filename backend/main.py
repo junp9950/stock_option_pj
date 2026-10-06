@@ -523,7 +523,7 @@ select{background:#21262d;border:1px solid #30363d;color:#c9d1d9;padding:6px 10p
 <div id="panel-home" class="panel active content">
   <div id="db-verdict" style="border-radius:12px;padding:14px 18px;margin-bottom:14px;border:1px solid #30363d;font-size:15px">로딩 중…</div>
   <div id="db-market" style="margin-bottom:12px"></div>
-  <div id="db-top" style="display:grid;grid-template-columns:repeat(auto-fit,minmax(320px,1fr));gap:12px;margin-bottom:6px;align-items:start"></div>
+  <div id="db-top" style="display:grid;grid-template-columns:repeat(auto-fit,minmax(320px,1fr));gap:12px;margin-bottom:6px;align-items:stretch"></div>
   <div style="font-size:15px;font-weight:700;color:#e6edf3;margin:14px 0 8px">🎯 오늘 살 자리 — 검증 순위대로</div>
   <div id="db-rank"></div>
   <div style="font-size:15px;font-weight:700;color:#e6edf3;margin:14px 0 8px">📎 참고</div>
@@ -759,7 +759,7 @@ async function renderDashboard(d, stale){
   const rcard=(no,c,title,how,body)=>`<div style="display:flex;gap:12px;border:1px solid #30363d;border-left:5px solid ${c};border-radius:12px;padding:12px 14px;margin-bottom:10px;background:#0d1117">
     <div style="flex:none;width:34px;height:34px;border-radius:50%;background:${c};color:#0d1117;font-weight:800;display:flex;align-items:center;justify-content:center;font-size:15px">${no}</div>
     <div style="flex:1;min-width:0"><div style="font-size:14.5px;font-weight:700;color:#e6edf3">${title}</div><div class="ts" style="margin:2px 0 8px">${how}</div>${body}</div></div>`;
-  const card=(t,body)=>`<div style="width:100%;border:1px solid #30363d;border-radius:12px;padding:12px 14px;background:#0d1117;box-sizing:border-box"><div style="font-size:13px;color:#8b949e;margin-bottom:8px;font-weight:600">${t}</div>${body}</div>`;
+  const card=(t,body)=>`<div style="width:100%;height:100%;border:1px solid #30363d;border-radius:12px;padding:12px 14px;background:#0d1117;box-sizing:border-box"><div style="font-size:13px;color:#8b949e;margin-bottom:8px;font-weight:600">${t}</div>${body}</div>`;
   const more=(arr,n,f)=>arr.length<=n?arr.map(f).join(''):arr.slice(0,n).map(f).join('')+`<details style="display:inline"><summary class="ts" style="cursor:pointer;display:inline">외 ${arr.length-n}개 더 보기</summary>${arr.slice(n).map(f).join('')}</details>`;
   const chip=(x,c,extra)=>`<span style="display:inline-block;margin:0 6px 6px 0;padding:4px 9px;border:1px solid ${c||'#30363d'};border-radius:8px;cursor:pointer;font-size:12.5px" onclick="openChartModal('${x.code}','${x.name}','')"><b style="color:#e6edf3">${x.name}</b>${extra||''}</span>`;
   // 오늘 판단
