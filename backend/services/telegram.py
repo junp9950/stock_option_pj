@@ -95,8 +95,7 @@ def notify_async(msg: str, author: str = "", ref: dict | None = None) -> None:
     """요청 처리를 늦추지 않게 별도 스레드로 보낸다 (종목토론·건의사항 새 글·댓글). 본인이 쓴 건 보내지 않는다.
     ref = {"post": 글 id, "comment": 댓글 id} 이면 그 알림에 텔레그램 '답장'으로 댓글을 달 수 있게 기억해 둔다."""
     import threading  # noqa: PLC0415
-    if (author or "").strip() == ME:
-        return
+    author = (author or "").strip()
     if ref:
         msg += f"{chr(10)}↩ 이 메시지에 답장하면 {'답글' if ref.get('comment') else '댓글'}로 달립니다"
 
@@ -105,12 +104,14 @@ def notify_async(msg: str, author: str = "", ref: dict | None = None) -> None:
         db = SessionLocal()
         try:
             board = _get(db, "telegram_board_chats", [])     # 게시판 알림 전용 방이 있으면 거기로만 (2026-10-06 매일 알림과 분리)
-            if board:
-                sent = {}
-                for c in board:
-                    sent.update(send(db, msg, c))
-            else:
-                sent = send(db, msg)
+            targets = board or list(_get(db, "telegram_chats", {}).keys())
+            names = _get(db, "telegram_authors", {})
+            sent = {}
+            for c in targets:
+                # 방마다 그 방 사람이 쓴 글·댓글은 빼고 보냄 (/name 으로 정한 이름, 없으면 사용자 본인 방으로 봄) — 우라늄도 받게 (2026-10-06)
+                if author and author == names.get(c, ME):
+                    continue
+                sent.update(send(db, msg, c))
             if ref and sent:
                 mm = _get(db, "telegram_msgmap", {})
                 for c, mid in sent.items():
@@ -401,11 +402,11 @@ def poll(db: Session) -> None:
                 if cid not in board:
                     board.append(cid)
                 _put(db, "telegram_board_chats", board)
-                send(db, "✅ 이 방을 게시판 알림 전용으로 정했습니다. 종목토론·건의사항 새 글·댓글은 이제 여기로만 옵니다.\n"
-                         "알림에 답장하면 댓글로 달립니다 (/이름 대신 /name 우라늄 처럼 쓸 수 있음).", cid)
+                send(db, "✅ 이 방에서 종목토론·건의사항 새 글·댓글 알림을 받습니다 (매일 시장 알림은 안 옴).\n"
+                         "이름을 정해 주세요: /name 우라늄 또는 /name 감사하모니카 — 본인 글은 알림에서 빠지고, 알림에 답장하면 그 이름으로 댓글이 달립니다.", cid)
                 for other in chats:
                     if other != cid:
-                        send(db, f"ℹ️ 게시판 알림은 이제 '{who}' 방으로 갑니다. 이 방에는 매일 시장·종베 알림만 옵니다.", other)
+                        send(db, f"ℹ️ '{who}' 방이 게시판 알림을 받습니다. 이 방에는 매일 시장·종베 알림만 옵니다.", other)
             else:
                 board = [b for b in board if b != cid]
                 _put(db, "telegram_board_chats", board)
