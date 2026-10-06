@@ -316,38 +316,70 @@ def _yahoo_last(sym: str) -> tuple[float, float] | None:
         return None
 
 
-def send_us_premarket(db: Session) -> None:
-    """평일 19:00 — 오늘 소부장·기판 종베를 샀으면 미국 장비주 프리마켓을 알려 준다. 크게 빠지면 20:00 넥스트레이드 애프터마켓 전에 정리 판단 (2026-10-06)."""
-    from backend.utils.dates import is_trading_day  # noqa: PLC0415
+# 섹터별로 같이 보는 미국 종목과 경고선 (랠리 기간 검증, 전날 밤 미국 → 다음 날 한국 섹터 평균)
+#  소부장·기판 ← 장비3: 상관 0.42(나스닥 영향 빼고 0.24), -3%↓ 밤 → 다음 날 -2.3%
+#  광통신 ← COHR·LITE·CIEN·AAOI·GLW: 0.38(0.27, 최근 60일 0.48), -4%↓ 밤 → -1.8%, +4%↑ 밤 → +3.6%
+#  전력·전선 ← GEV·BE: 0.33(0.16 — 대부분 미국 시장 전체 영향), -4%↓ 밤 → -1.5%
+_PRE_GROUPS = [
+    ("소부장·기판", ("AMAT", "KLAC", "LRCX"), -2.0),
+    ("광통신", ("COHR", "LITE", "CIEN", "AAOI", "GLW"), -3.0),
+    ("전력·전선", ("GEV", "BE"), -3.0),
+]
+
+
+def _premarket_held(db: Session, today: date) -> dict[str, list[str]]:
+    """오늘 종베 종목을 위 섹터별로 나눈다."""
     from backend.screener.rotation import family_members  # noqa: PLC0415
+    fam = family_members(db)
+    optic = {r[0] for r in db.execute(text("select distinct ss.stock_code from sector_stocks ss join sectors s on s.id = ss.sector_id "
+                                            "where s.sector_name like '%광통신%'")).all()}
+    sets = {"소부장·기판": {c for f in ("반도체 장비·재료", "AI메모리·기판") for c in fam.get(f, [])},
+            "광통신": optic, "전력·전선": set(fam.get("전력·전선", []))}
+    out: dict[str, list[str]] = {}
+    for c, n in db.execute(text("select code, name from user_jongbe where trading_date = :d"), {"d": today}).all():
+        for g, cs in sets.items():
+            if c in cs:
+                out.setdefault(g, []).append(n)
+                break
+    return out
+
+
+def send_us_premarket(db: Session) -> None:
+    """평일 19:00 — 오늘 산 종베가 소부장·기판/광통신/전력이면 같이 움직이는 미국 종목 프리마켓을 알려 준다.
+    크게 빠지면 20:00 넥스트레이드 애프터마켓 전에 정리 판단 (2026-10-06)."""
+    from backend.utils.dates import is_trading_day  # noqa: PLC0415
     today = datetime.now(ZoneInfo("Asia/Seoul")).date()
     if not is_trading_day(today):
         return
-    fam = family_members(db)
-    semi = {c for f in ("반도체 장비·재료", "AI메모리·기판") for c in fam.get(f, [])}
-    held = [n for c, n in db.execute(text("select code, name from user_jongbe where trading_date = :d"), {"d": today}).all() if c in semi]
+    held = _premarket_held(db, today)
     if not held:
         return
     ch = {}
-    for t in ("AMAT", "KLAC", "LRCX", "SOXX", "NVDA", "NQ=F"):
+    for t in {t for g, ts, _ in _PRE_GROUPS if g in held for t in ts} | {"SOXX", "NVDA", "NQ=F"}:
         v = _yahoo_last(t)
         if v:
             ch[t] = (v[0] / v[1] - 1) * 100
-    eq = [ch[t] for t in ("AMAT", "KLAC", "LRCX") if t in ch]
-    if not eq:
-        return
-    e = sum(eq) / len(eq)
-    lines = ["🌆 <b>미국 반도체 장비 프리마켓</b> (지금, 전일 종가 대비)",
-             f"• 장비 3종 평균 <b>{e:+.1f}%</b> (AMAT {ch.get('AMAT', 0):+.1f} · KLAC {ch.get('KLAC', 0):+.1f} · LRCX {ch.get('LRCX', 0):+.1f})",
-             f"• SOXX {ch.get('SOXX', 0):+.1f}% · NVDA {ch.get('NVDA', 0):+.1f}% · 나스닥 선물 {ch.get('NQ=F', 0):+.1f}%",
-             f"• 오늘 종베 소부장·기판: {', '.join(held)}"]
-    if e <= -2:
-        lines.append("\n⚠️ <b>프리마켓부터 약함</b> — 이대로 마감하면 내일 갭 하락 가능 (장비 -3%↓ 밤 다음 날 소부장 시초 -1.7%)"
+    lines = ["🌆 <b>미국 프리마켓</b> (지금, 전일 종가 대비)",
+             f"• 나스닥 선물 {ch.get('NQ=F', 0):+.1f}% · SOXX {ch.get('SOXX', 0):+.1f}% · NVDA {ch.get('NVDA', 0):+.1f}%"]
+    warn = []
+    for g, ts, th in _PRE_GROUPS:
+        if g not in held:
+            continue
+        got = [t for t in ts if t in ch]
+        if not got:
+            continue
+        e = sum(ch[t] for t in got) / len(got)
+        mark = "⚠️" if e <= th else "🟢" if e >= 1 else "·"
+        lines.append(f"\n{mark} <b>{g}</b> 미국 평균 <b>{e:+.1f}%</b>")
+        lines.append("  " + " · ".join(f"{t} {ch[t]:+.1f}" for t in got))
+        lines.append(f"  오늘 종베: {', '.join(held[g])}")
+        if e <= th:
+            warn.append(g)
+    if warn:
+        lines.append(f"\n⚠️ <b>{', '.join(warn)}</b> 프리마켓부터 약함 — 이대로 마감하면 내일 갭 하락 가능"
                      "\n→ <b>20:00 넥스트레이드 애프터마켓 전</b>에 일부라도 정리 검토")
-    elif e >= 1:
-        lines.append("\n🟢 프리마켓 무난 — 그대로 들고 내일 규칙대로")
     else:
-        lines.append("\n· 프리마켓 보합 — 아직 방향 없음 (프리마켓은 거래가 적어 정규장에서 바뀔 수 있음)")
+        lines.append("\n· 크게 빠진 곳 없음 — 들고 내일 규칙대로 (프리마켓은 거래가 적어 정규장에서 바뀔 수 있음)")
     send(db, "\n".join(lines), html=True)
 
 
