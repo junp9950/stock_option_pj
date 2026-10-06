@@ -2023,11 +2023,18 @@ def delete_journal(ex_id: int, request: Request, db: Session = Depends(get_db)):
 
 
 class JournalCfgIn(BaseModel):
-    exclude: list[str] = Field(default_factory=list, max_length=100)
+    exclude: list[str] | None = Field(default=None, max_length=100)
+    cash: float | None = Field(default=None, ge=0, le=1e13)   # 예수금 — 보유 비중 계산용
 
 
 @router.post("/journal/config")
 def post_journal_config(body: JournalCfgIn, request: Request, db: Session = Depends(get_db)):
-    """분석에서 뺄 종목 코드 (장투 종목 등)."""
-    from backend.services.trade_journal import set_cfg  # noqa: PLC0415
-    return set_cfg(db, _journal_owner(request, db), {"exclude": [x.strip()[:20] for x in body.exclude if x.strip()]})
+    """분석에서 뺄 종목 코드(장투 종목 등)·예수금. 보낸 항목만 바꾼다."""
+    from backend.services.trade_journal import get_cfg, set_cfg  # noqa: PLC0415
+    owner = _journal_owner(request, db)
+    cfg = get_cfg(db, owner)
+    if body.exclude is not None:
+        cfg["exclude"] = [x.strip()[:20] for x in body.exclude if x.strip()]
+    if body.cash is not None:
+        cfg["cash"] = round(body.cash)
+    return set_cfg(db, owner, cfg)
