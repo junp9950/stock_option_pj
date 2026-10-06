@@ -270,6 +270,48 @@ def regime_alert(db: Session) -> str | None:
     return "\n\n".join(blocks) + "\n\n" + status_line(st)
 
 
+def us_overnight_text() -> str | None:
+    """어젯밤 미국 반도체(장비 3종·SOXX·NVDA) — 한국 소부장 다음 날과 상관 0.40 (usk.py·usgap.py, 2026-10-06).
+    AI 랠리 중 장비 3종 -3%↓ 밤 다음 날 한국 소부장·기판: 시초 -1.7%, 시가→종가 -0.7% 더, 종가 -2.5%(오른 날 31%)."""
+    import FinanceDataReader as fdr  # noqa: PLC0415
+    from datetime import timedelta  # noqa: PLC0415
+    start = (datetime.now(ZoneInfo("Asia/Seoul")) - timedelta(days=10)).strftime("%Y-%m-%d")
+    ch, last = {}, None
+    for t in ("AMAT", "KLAC", "LRCX", "SOXX", "NVDA"):
+        try:
+            c = fdr.DataReader(t, start)["Close"].dropna()
+            ch[t] = (float(c.iloc[-1]) / float(c.iloc[-2]) - 1) * 100
+            last = c.index[-1].date()
+        except Exception:  # noqa: BLE001
+            continue
+    eq = [ch[t] for t in ("AMAT", "KLAC", "LRCX") if t in ch]
+    if not eq:
+        return None
+    e = sum(eq) / len(eq)
+    lines = [f"🌙 <b>어젯밤 미국 반도체</b> ({last:%m/%d} 마감)" if last else "🌙 <b>어젯밤 미국 반도체</b>",
+             f"• 장비 3종 평균 <b>{e:+.1f}%</b> (AMAT {ch.get('AMAT', 0):+.1f} · KLAC {ch.get('KLAC', 0):+.1f} · LRCX {ch.get('LRCX', 0):+.1f})",
+             f"• SOXX {ch.get('SOXX', 0):+.1f}% · NVDA {ch.get('NVDA', 0):+.1f}%"]
+    if e <= -3:
+        lines.append("\n⚠️ <b>소부장·기판 시초 대응</b>\n이런 밤 다음 날(1.5년 43번): 시초 평균 <b>-1.7%</b>, 종가 -2.5%, 오른 날 31%"
+                     "\n시초 반등을 기다리면 평균 -0.7% 더 빠졌음 → 종베 물량은 시초에 정리 쪽")
+    elif e <= -1:
+        lines.append("\n🟡 소부장 약세 출발 가능 (장비 -1~-3% 밤 다음 날 소부장 평균 -0.1~-1%)")
+    elif e >= 3:
+        lines.append("\n🟢 소부장 강세 출발 가능 (장비 +3%↑ 밤 다음 날 소부장 평균 +1.8%, 오른 날 72%) → 시초 갭이면 일부 덜기")
+    elif e >= 1:
+        lines.append("\n🟢 소부장 무난 (장비 +1~3% 밤 다음 날 소부장 평균 +1.2%, 오른 날 73%)")
+    return "\n".join(lines)
+
+
+def send_us_overnight(db: Session) -> None:
+    from backend.utils.dates import is_trading_day  # noqa: PLC0415
+    if not is_trading_day(datetime.now(ZoneInfo("Asia/Seoul")).date()):
+        return
+    msg = us_overnight_text()
+    if msg:
+        send(db, msg, html=True)     # 매일 알림 방(사용자)에만
+
+
 def send_summary_once(db: Session) -> bool:
     """오늘 데이터가 들어왔고 아직 안 보냈으면 요약을 보낸다."""
     latest = db.execute(text("select max(trading_date) from spot_daily_prices")).scalar()

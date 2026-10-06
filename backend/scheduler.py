@@ -285,6 +285,9 @@ def start_scheduler() -> BackgroundScheduler:
         finally:
             db.close()
     scheduler.add_job(_sync_names_job, 'cron', hour=7, minute=10, id='sync_stock_names', replace_existing=True, max_instances=1)
+    # 08:30 어젯밤 미국 반도체 장비 → 소부장 시초 대응 알림 (2026-10-06)
+    scheduler.add_job(lambda: _tg("send_us_overnight"), 'cron', day_of_week='mon-fri', hour=8, minute=30, id='us_overnight',
+                      replace_existing=True, max_instances=1)
     scheduler.add_job(refresh_marcap, 'date', run_date=datetime.now(timezone.utc)+timedelta(seconds=30),
                       id='marcap_caps_startup', replace_existing=True)
     from backend.services.industry_map import refresh as refresh_industry
