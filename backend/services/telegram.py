@@ -106,10 +106,11 @@ def notify_async(msg: str, author: str = "", ref: dict | None = None) -> None:
             board = _get(db, "telegram_board_chats", [])     # 게시판 알림 전용 방이 있으면 거기로만 (2026-10-06 매일 알림과 분리)
             targets = board or list(_get(db, "telegram_chats", {}).keys())
             names = _get(db, "telegram_authors", {})
+            mine = set(_get(db, "telegram_chats", {}).keys())
             sent = {}
             for c in targets:
-                # 방마다 그 방 사람이 쓴 글·댓글은 빼고 보냄 (/name 으로 정한 이름, 없으면 사용자 본인 방으로 봄) — 우라늄도 받게 (2026-10-06)
-                if author and author == names.get(c, ME):
+                # 방마다 그 방 사람이 쓴 글·댓글은 빼고 보냄 (/name 으로 정한 이름. 이름이 없으면 사용자 본인 방만 본인 글을 뺌) — 우라늄도 받게 (2026-10-06)
+                if author and author == names.get(c, ME if c in mine else None):
                     continue
                 sent.update(send(db, msg, c))
             if ref and sent:
