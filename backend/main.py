@@ -739,10 +739,10 @@ async function renderDashboard(d, stale){
   const chip=(x,c,extra)=>`<span style="display:inline-block;margin:0 6px 6px 0;padding:4px 9px;border:1px solid ${c||'#30363d'};border-radius:8px;cursor:pointer;font-size:12.5px" onclick="openChartModal('${x.code}','${x.name}','')"><b style="color:#e6edf3">${x.name}</b>${extra||''}</span>`;
   // 오늘 판단
   let vt,vc;
-  if(all.state==='하락'){ vt='🔴 <b>쉬는 날</b> — 시장 하락. 새 진입 멈춤 · 스윙·장기 들고 가기 금지'; vc='#f85149'; }
-  else if(d.b_sectors.length){ vt=`🟢 <b>조건 B 날</b> — ${d.b_sectors.join(', ')} · 후보 ${d.b_count}개 중 추린 ${d.best.length}개를 2~3개로 나눠서`; vc='#3fb950'; }
-  else if(all.state==='횡보'){ vt='🟡 <b>횡보</b> — 종베 줄이고 스윙 종목(손절 짧은 자리) 모으기'; vc='#d29922'; }
-  else { vt='⚪ <b>조건 B 없음</b> — 억지로 들어가지 말고 내일 후보 지켜보기'; vc='#8b949e'; }
+  if(all.state==='하락'){ vt='🔴 <b>오늘은 쉬는 날</b><div style="margin-top:4px;font-size:14px">시장이 하락 중입니다. 새로 사지 말고, 들고 있는 종목은 손절선만 확인하세요.</div>'; vc='#f85149'; }
+  else if(d.b_sectors.length){ vt=`🟢 <b>오늘은 종베 하는 날</b><div style="margin-top:4px;font-size:14px">돈이 몰린 섹터: <b>${d.b_sectors.join(' · ')}</b><br>아래 <b>⭐ 오늘 종베 후보</b> ${d.best.length}개 중 <b>2~3개를 골라 나눠서</b> 사면 됩니다 (한 종목에 몰지 않기).</div>`; vc='#3fb950'; }
+  else if(all.state==='횡보'){ vt='🟡 <b>시장이 옆으로 기는 날</b><div style="margin-top:4px;font-size:14px">종베는 줄이고, 손절선이 짧은 스윙 종목을 조금씩 모으세요.</div>'; vc='#d29922'; }
+  else { vt='⚪ <b>오늘은 살 자리가 없는 날</b><div style="margin-top:4px;font-size:14px">돈이 몰린 섹터가 없습니다. 억지로 사지 말고 <b>👀 내일 후보</b>만 봐 두세요.</div>'; vc='#8b949e'; }
   const warn=[];
   if(al.suck) warn.push('🧲 삼하가 수급 흡수 중 — 코스닥 비중 줄이기');
   if(all.state!=='하락'&&all.vs_ma20_pct!=null&&all.vs_ma20_pct<=1) warn.push('⚠️ 하락 전환 가까움 — 빠지는 종목 줍기 금지');
