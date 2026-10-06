@@ -1673,6 +1673,7 @@ def warm_caches(db: Session) -> None:
     get_value_records(db=db)
     get_bottom_box(db=db)
     get_support_setups(db=db)
+    get_dashboard(db=db)        # 첫 화면 '오늘' (my_pattern도 같이 데워짐)
 
 
 @router.get("/screener/picks/performance")
