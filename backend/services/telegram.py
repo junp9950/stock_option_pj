@@ -161,6 +161,30 @@ def summary_pending(db: Session) -> bool:
             and _get(db, "telegram_last_summary", "") != latest.isoformat())
 
 
+def regime_alert(db: Session) -> str | None:
+    """시장 국면(전종목 평균 지수 vs 20일선)이 바뀐 날·하락 전환이 가까운 날 알림 문구. 바뀐 게 없으면 None (2026-10-06 "무조건 알려줘야").
+    7월처럼 손실은 상승→하락으로 넘어가는 며칠에 몰렸다."""
+    from backend.screener.market_regime import current_regime  # noqa: PLC0415
+    r = current_regime(db)
+    if not r:
+        return None
+    st, gap, cum = r["state"], r.get("vs_ma20_pct", 0.0), r.get("cum20_pct", 0.0)
+    prev = _get(db, "market_regime_last", {})
+    _put(db, "market_regime_last", {"state": st, "as_of": r["as_of"], "gap": gap,
+                                    "warned": prev.get("warned") if prev.get("state") == st else None})
+    head = f"(전종목 평균 지수 · 20일선 대비 {gap:+.1f}% · 최근 20일 {cum:+.1f}%, {r['as_of'][5:]} 종가)"
+    if prev and prev.get("state") and prev["state"] != st:
+        if st == "하락":
+            return f"🚨 <b>시장 하락 전환</b> {head}\n원칙대로 매매 쉬기 — 새 종베·스윙 진입 멈춤, 들고 있는 것은 손절선 점검."
+        if prev["state"] == "하락":
+            return f"✅ <b>시장 하락 끝 → {st}</b> {head}\n다시 매매 가능. 첫 며칠은 뜨는 섹터의 거래 붙은 양봉만, 비중 작게."
+        return f"ℹ️ 시장 {prev['state']} → {st} {head}"
+    if st != "하락" and gap <= 1.0 and prev.get("warned") != r["as_of"][:7] + st:
+        _put(db, "market_regime_last", {"state": st, "as_of": r["as_of"], "gap": gap, "warned": r["as_of"][:7] + st})
+        return f"⚠️ <b>하락 전환 가까움</b> {head}\n지수가 20일선에 1% 안으로 붙었습니다. 빠지는 종목 줍기 금지, 새 진입은 조건 B만."
+    return None
+
+
 def send_summary_once(db: Session) -> bool:
     """오늘 데이터가 들어왔고 아직 안 보냈으면 요약을 보낸다."""
     latest = db.execute(text("select max(trading_date) from spot_daily_prices")).scalar()
@@ -175,6 +199,12 @@ def send_summary_once(db: Session) -> bool:
         need = db.execute(text("select count(distinct stock_code) from sector_stocks")).scalar() or 0
         if done < need * 0.9:
             return False
+    try:     # 시장 국면 바뀐 날 알림 — 모든 대화방에 먼저
+        ra = regime_alert(db)
+        if ra:
+            send(db, ra, html=True)
+    except Exception as exc:  # noqa: BLE001
+        logger.warning("시장 국면 알림 실패: %s", type(exc).__name__)
     send(db, jongbe_summary(db))
     _put(db, "telegram_last_summary", latest.isoformat())
     try:      # 사용자가 남긴 종베 채점 (backend/services/jongbe_check.py) — 사용자 대화방에만
