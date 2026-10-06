@@ -761,6 +761,10 @@ async function renderDashboard(d, stale){
   parts.push(card(`⭐ 오늘 종베 후보 — 조건 B 추림 (${d.best.length}/${d.b_count})`,(d.best.map(x=>chip(x,x.retail_only?'#f85149':'#9e6a03',` <span style="color:#f85149">${sg(x.change_pct)}%</span> <span class="ts">${x.tv_x}배</span>${x.retail_only?' <b style="color:#f85149;font-size:11px">⚠개인만</b>':''}`)).join('')||'<span class="ts">없음 — 쉬는 날</span>')
     +(d.best.some(x=>x.retail_only)?'<div class="ts" style="color:#f85149">⚠개인만 = 외인·기관 둘 다 팔았는데 오른 날 (올해 +3%↑ 날 기준 20일 -9.0% vs 평균 -3.2%) — 빼는 게 좋음</div>':'')
     +`<div class="ts" style="margin-top:4px">거래 1.5~6배 · 윗꼬리 10%↓로 한 번 더 추림 · 3년 검증 +1.9% (날짜 단위 +0.9%) · <a href="#" onclick="switchTab('jongbe');return false" style="color:#58a6ff">전체 보기 →</a></div>`));
+  parts.push(card('🕯 추세 도지 — 상승 추세 종목의 장대양봉 다음 날 쉼',
+    `<div class="ts" style="margin-bottom:4px">오늘이 그 자리 (이격 20%↓ · 3년 5일 보유 +1.1%/+3.1%, 분할 +1.0%/+1.7%)</div>`+((d.trend_doji||[]).map(x=>chip(x,'#bc8cff',` <span class="ts">어제 ${sg(x.big_pct)}% · 이격 ${x.gap20_pct}%</span>`)).join('')||'<span class="ts">오늘은 없음</span>')
+    +`<div class="ts" style="margin:8px 0 4px">내일 도지면 그 자리 (오늘 장대양봉)</div>`+((d.trend_big||[]).map(x=>chip(x,'#6e40c9',` <span class="ts">${sg(x.change_pct)}%</span>`)).join('')||'<span class="ts">없음</span>')
+    +'<div class="ts" style="margin-top:4px">이 자리는 다음 날 매도보다 3~5일 보유가 나았음</div>'));
   parts.push(card('👀 내일 후보 — 뜨는 섹터에서 고점 근처 쉬는 중',(d.next.map(x=>chip(x,'#1f6feb',` <span class="ts">고점 ${x.off_hi20_pct}%</span>`)).join('')||'<span class="ts">없음</span>')+'<div class="ts" style="margin-top:4px">내일 거래 붙은 양봉으로 고점 넘으면 종베 자리</div>'));
   const wc={'⚠ 이탈':'#f85149','✅ 선 위 마감':'#3fb950'};
   parts.push(card(`📋 관심 종목 — 선에 닿은 것 (${d.watch.length})`,d.watch.map(w=>`<div style="display:flex;justify-content:space-between;gap:8px;font-size:13px;padding:3px 0;border-bottom:1px solid #21262d;cursor:pointer" onclick="openChartModal('${w.code}','${w.name}','')"><span><b style="color:${wc[w.tag]||'#e6edf3'}">${w.tag}</b> ${w.name}</span><span class="ts">${w.close.toLocaleString()} / 선 ${w.level.toLocaleString()} (${sg(w.gap_pct)}%)</span></div>`).join('')||'<span class="ts">없음</span>'));

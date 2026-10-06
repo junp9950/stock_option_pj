@@ -22,11 +22,15 @@ def scan(db: Session) -> dict:
     if _cache.get("key") == latest:
         return _cache["val"]
     days = [d for (d,) in db.execute(text(
-        "select distinct trading_date from spot_daily_prices where trading_date <= :d order by 1 desc limit 45"), {"d": latest})][::-1]
+        "select distinct trading_date from spot_daily_prices where trading_date <= :d order by 1 desc limit 90"), {"d": latest})][::-1]
     px = pd.read_sql(text("select stock_code s, trading_date d, open_price o, high_price h, low_price l, close_price c, trading_value tv "
                           "from spot_daily_prices where trading_date >= :a"), db.connection(), params={"a": days[0]})
     P = {k: px.pivot(index="d", columns="s", values=k).sort_index() for k in ("o", "h", "l", "c", "tv")}
     O, H, L, C, TV = (P[k] for k in ("o", "h", "l", "c", "tv"))
+    # 추세 도지 (2026-10-06 upd.py): 상승 추세 종목의 장대양봉(+8%↑·거래 3배↑) 다음 날 도지 + 이격 20%↓
+    #   3년 분할 매도 +1.05%(학습)/+1.68%(검증), 5일 보유 +1.12%/+3.06%. 이격 20%↑면 효과 없음.
+    ma20s, ma60s = C.rolling(20).mean(), C.rolling(60).mean()
+    trend = (C > ma20s) & (ma20s > ma60s) & (ma20s > ma20s.shift(5)) & (C / L.rolling(60).min() >= 1.2)
     chg = C / C.shift(1) - 1
     tvx = TV / TV.shift(1).rolling(20).mean()
     ret20 = C / C.shift(20) - 1
@@ -55,7 +59,11 @@ def scan(db: Session) -> dict:
         "select stock_code, foreign_net_buy, institution_net_buy from spot_investor_flows where trading_date = :d"), {"d": latest})}
     ma20 = C.rolling(20).mean().iloc[-1]
     hi20 = H.rolling(20).max().iloc[-1]
-    items, nxt = [], []
+    items, nxt, tdoji, tbig = [], [], [], []
+    tvx_s = TV / TV.shift(1).rolling(20).mean()
+    big = (chg >= 0.08) & (tvx_s >= 3) & (C > O) & (chg < 0.29)
+    prev = C.index[-2] if len(C.index) >= 3 else None
+    prev2 = C.index[-3] if len(C.index) >= 3 else None
     for c in C.columns:
         cl, o, h, l = C.at[last, c], O.at[last, c], H.at[last, c], L.at[last, c]
         if not (cl == cl and cl >= 1000) or c not in code_f or (TV[c].iloc[-5:].mean() or 0) < 1e9:
@@ -75,6 +83,11 @@ def scan(db: Session) -> dict:
         row.update(fo_eok=round(fo / 1e8, 1), ins_eok=round(ins / 1e8, 1), retail_only=bool(c in flows and fo < 0 and ins < 0))
         if ch != ch or vx != vx:
             continue
+        if prev2 is not None and bool(big.at[prev, c]) and bool(trend.at[prev2, c]) and abs(ch) <= 0.03 \
+                and abs(float((cl - o) / o)) <= 0.015 and g20 <= 0.20:
+            tdoji.append({**row, "big_pct": round(float(chg.at[prev, c]) * 100, 1)})      # 오늘이 그 자리
+        if prev is not None and bool(big.at[last, c]) and bool(trend.at[prev, c]) and g20 <= 0.20:
+            tbig.append(row)                                                                # 내일 도지면 그 자리
         is_a = cl > o and ch > 0 and off >= -0.08 and g20 > 0 and vx >= 1
         is_b = (any(f in b_secs for f in fs) and 0.03 <= ch < 0.29 and r20 >= 0.12 and g20 <= 0.30 and up <= 0.20)
         is_a = is_a and g20 <= 0.30 and up <= 0.35     # 화면엔 과열(이격 30%↑)·윗꼬리 긴 것 뺌 — 3년: 이격 38%↑ 늘 마이너스
@@ -85,7 +98,9 @@ def scan(db: Session) -> dict:
     items.sort(key=lambda x: (not x["b"], -x["change_pct"]))
     nxt.sort(key=lambda x: (x["rank"], -x["off_hi20_pct"]))
     reg = current_regime(db) or {}
-    val = {"trading_date": str(latest), "market": reg.get("state"), "b_sectors": b_secs,
+    tdoji.sort(key=lambda x: (x["rank"], x["gap20_pct"]))
+    tbig.sort(key=lambda x: (x["rank"], -x["change_pct"]))
+    val = {"trading_date": str(latest), "market": reg.get("state"), "b_sectors": b_secs, "trend_doji": tdoji, "trend_big": tbig,
            "hot": order[:3], "sector_day": {f: {"chg": round(schg[f] * 100, 2), "tvx": round(svx[f], 2)} for f in order[:6]},
            "items": items, "next": nxt}
     _cache.update(key=latest, val=val)
@@ -115,6 +130,14 @@ def text_summary(db: Session, k: int = 5) -> str:
         lines += [f"• {x['name']}  {x['change_pct']:+.1f}% · 거래 {x['tv_x']:.1f}배" + ("  ⚠개인만" if x.get("retail_only") else "") for x in b]
         if any(x.get("retail_only") for x in b):
             lines.append("⚠개인만 = 외인·기관 둘 다 팔았는데 오른 날 (그 뒤 약했음)")
+    td = r.get("trend_doji", [])[:k]
+    if td:
+        lines.append("\n🕯 <b>추세 도지</b> (상승 추세 종목, 어제 장대양봉 → 오늘 도지, 이격 20%↓)")
+        lines += [f"• {x['name']}  어제 {x['big_pct']:+.1f}% → 오늘 {x['change_pct']:+.1f}% · 이격 {x['gap20_pct']:.0f}%" for x in td]
+    tb = r.get("trend_big", [])[:k]
+    if tb:
+        lines.append("\n🕯 <b>내일 추세 도지 후보</b> (오늘 장대양봉, 내일 도지면 그 자리)")
+        lines.append(" · ".join(x["name"] for x in tb))
     n = r["next"][:k]
     if n:
         lines.append("\n👀 <b>내일 후보</b> (고점 근처 쉬는 중)")
