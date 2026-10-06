@@ -1694,7 +1694,7 @@ def get_dashboard(db: Session = Depends(get_db)):
         pass
     return {"as_of": latest, "market": st, "alert": alert, "b_sectors": mp["b_sectors"], "hot": mp["hot"], "sector_day": mp["sector_day"],
             "b_count": len(b), "a_count": sum(1 for x in mp["items"] if x["a"] and not x["b"]), "best": best[:8], "best_lead": best_lead[:8], "best_swing": best_swing[:8], "heat": mp.get("heat", {}), "next": mp["next"][:10],
-            "trend_doji": mp.get("trend_doji", [])[:8], "trend_big": mp.get("trend_big", [])[:10], "rest2": mp.get("rest2", [])[:10], "turn3": mp.get("turn3", [])[:30], "turn2": mp.get("turn2", [])[:12],
+            "trend_doji": mp.get("trend_doji", [])[:8], "trend_big": mp.get("trend_big", [])[:10], "rest2": mp.get("rest2", [])[:10], "turn3": mp.get("turn3", [])[:30], "turn2": mp.get("turn2", [])[:12], "box_break": mp.get("box_break", [])[:10], "box_near": mp.get("box_near", [])[:10],
             "watch": watch, "volume": vr}
 
 

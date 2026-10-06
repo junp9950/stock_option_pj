@@ -794,7 +794,16 @@ async function renderDashboard(d, stale){
   const bchip=x=>chip(x,x.retail_only?'#f85149':'#9e6a03',` <span style="color:#f85149">${sg(x.change_pct)}%</span> <span class="ts">${x.tv_x}배 · ${x.family}</span>${x.retail_only?' <b style="color:#f85149;font-size:11px">⚠개인만</b>':''}${isHot(x)?' <b style="color:#ff7b72;font-size:11px" title="섹터 종목 중 20일선보다 20% 넘게 뜬 비율 '+H[x.family]+'%">🔥과열·다음 날 정리만</b>':''}`);
   const hotNote=[...(d.best_lead||[]),...(d.best_swing||[])].some(isHot)?'<div class="ts" style="color:#ff7b72;margin-top:4px">🔥과열 섹터 = 섹터 종목 25% 넘게 20일선보다 20%↑ 뜸 → 다음 날은 좋았지만 5~10일 들고 가면 나빴음(5일 -5%↓ 26~31%)</div>':'';
   const anyRetail=(d.best||[]).some(x=>x.retail_only)?'<div class="ts" style="color:#f85149;margin-top:4px">⚠개인만 = 외인·기관 둘 다 팔았는데 오른 날 — 빼는 게 좋음</div>':'';
-  rank.push(rcard('1','#e3b341','⭐ 주도 섹터의 힘 있는 양봉 → 종베',
+  // 박스 돌파 = 스윙 1순위 (2026-10-06 rank2.py: 10일 +5.9/+6.8/+6.5% 세 기간 고르게) · 뚫기 직전은 보조
+  const boxchip=x=>chip(x,'#f0883e',` <span style="color:#f85149">${sg(x.change_pct)}%</span> <span class="ts">손절 ${x.line.toLocaleString()} · ${x.family}</span>${x.is_b?' <b style="color:#e3b341;font-size:11px">⭐종베도 OK</b>':''}${isHot(x)?' <b style="color:#ff7b72;font-size:11px">🔥과열 섹터</b>':''}`);
+  rank.push(rcard('1','#f0883e','📦 박스 돌파 → 5~10일 스윙 (스윙 1순위)',
+    '20일 동안 눌려 있던 고점을 <b>종가로</b> 뚫음 · 섹터에 돈 몰린 날 · 200일선 위 · 거래 2배↑ · <b>손절 = 뚫은 고점 아래로 마감</b> · 3년 10일 +5.9~6.8% (세 기간 고르게) · ⭐종베도 OK = 다음 날도 가장 좋았음',
+    (all.state==='하락'?'<div style="color:#f85149;font-size:12.5px;margin-bottom:4px">하락장 — 보기만</div>':'')
+    +((d.box_break||[]).map(boxchip).join('')||'<span class="ts">오늘은 없음</span>')
+    +`<div class="ts" style="margin:8px 0 4px">뚫기 직전 — 고점 -3% 안까지 붙여 마감 (10일 +6~8% · 표본 적어 보조)</div>`
+    +((d.box_near||[]).map(x=>chip(x,'#9e6a03',` <span class="ts">고점 ${x.line.toLocaleString()} (${sg(x.line_pct)}%)</span>`)).join('')||'<span class="ts">없음</span>')
+    +'<div class="ts" style="margin-top:4px">같은 섹터에서 여러 개 나오면 한두 개만 — 섹터가 꺾이면 같이 꺾임</div>'));
+  rank.push(rcard('1','#e3b341','⭐ 주도 섹터의 힘 있는 양봉 → 종베 (종베 1순위)',
     '돈 몰린 섹터가 20일 1~3위 · 거래 평소 1.5~6배 · 고가 근처 마감 · <b>다음 날 분할 매도</b> · 3년 다음 날 +1.3~1.6% (이김 73~78%)',
     ((d.best_lead||[]).map(bchip).join('')||'<span class="ts">오늘은 없음</span>')+anyRetail+hotNote));
   rank.push(rcard('1','#e3b341','⭐ 올라오는 섹터의 힘 있는 양봉 → 5~10일 스윙',

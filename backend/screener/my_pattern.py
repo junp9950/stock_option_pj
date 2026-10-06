@@ -22,7 +22,7 @@ def scan(db: Session) -> dict:
     if _cache.get("key") == latest:
         return _cache["val"]
     days = [d for (d,) in db.execute(text(
-        "select distinct trading_date from spot_daily_prices where trading_date <= :d order by 1 desc limit 140"), {"d": latest})][::-1]
+        "select distinct trading_date from spot_daily_prices where trading_date <= :d order by 1 desc limit 220"), {"d": latest})][::-1]   # 200일선 때문에 220일
     px = pd.read_sql(text("select stock_code s, trading_date d, open_price o, high_price h, low_price l, close_price c, trading_value tv "
                           "from spot_daily_prices where trading_date >= :a"), db.connection(), params={"a": days[0]})
     P = {k: px.pivot(index="d", columns="s", values=k).sort_index() for k in ("o", "h", "l", "c", "tv")}
@@ -63,7 +63,15 @@ def scan(db: Session) -> dict:
         "select stock_code, foreign_net_buy, institution_net_buy from spot_investor_flows where trading_date = :d"), {"d": latest})}
     ma20 = C.rolling(20).mean().iloc[-1]
     hi20 = H.rolling(20).max().iloc[-1]
-    items, nxt, tdoji, tbig, rest2, turn3, turn2 = [], [], [], [], [], [], []
+    items, nxt, tdoji, tbig, rest2, turn3, turn2, bbrk, bnear = [], [], [], [], [], [], [], [], []
+    # 박스 돌파 / 뚫기 직전 (2026-10-06 boxbreak.py·rank2.py, 사용자 포스코퓨처엠 10/6 차트):
+    #   직전 20일 종가 폭 20%↓ 박스 + 200일선 위 + 섹터 돈 몰린 날 + 상승·횡보장, 거래대금 20일 평균 30억↑
+    #   돌파 = 종가 > 직전 20일 최고가 · +5%↑ · 거래 2배↑ · 윗꼬리 30%↓ → 10일 +5.9/+6.8/+6.5% (앞 2년/최근 1년/AI 랠리), 다음 날 +1.2~2.3%
+    #   직전 = 종가가 그 고점 -3%~0% · +3%↑ · 거래 1배↑ → 10일 +6.0/+8.0/+7.9% (표본 37/96/126건 — 보조)
+    ma200 = C.rolling(200, min_periods=180).mean().iloc[-1]
+    hi20p = H.rolling(20).max().shift(1).iloc[-1]
+    cmx, cmn = C.rolling(20).max().shift(1).iloc[-1], C.rolling(20).min().shift(1).iloc[-1]
+    liq3 = TV.shift(1).rolling(20).mean().iloc[-1]
     # 바닥 돌려세움 (2026-10-06 turnup.py): 120일 고점 -25%↓ 빠진 뒤 15일 폭 15% 안 횡보 → 작은 양봉 3연속 + 20일선 되찾음
     #   AI 랠리 중 AI 종목 20일 +11.3%(기준 +4.9%), 전 종목 +3.3%(+2.0%). 랠리 전(약세)엔 마이너스 → 상승장에서만.
     hi120 = H.rolling(120, min_periods=100).max()
@@ -109,6 +117,15 @@ def scan(db: Session) -> dict:
         if prev2 is not None and bool(big.at[prev2, c]) and abs(ch) <= 0.03 and abs(float(chg.at[prev, c])) <= 0.03 \
                 and cl >= float(C.at[prev2, c]) and frank[f0] <= 3 and g20 <= 0.30:
             rest2.append({**row, "big_close": round(float(C.at[prev2, c])), "big_pct": round(float(chg.at[prev2, c]) * 100, 1)})
+        if (any(f in b_secs for f in fs) and cl > float(ma200[c] or 0) > 0 and float(liq3[c] or 0) >= 3e9
+                and cmn[c] > 0 and cmx[c] / cmn[c] - 1 <= 0.20 and up <= 0.30 and ch < 0.29):
+            line = float(hi20p[c])
+            fb = next(f for f in fs if f in b_secs)
+            bx = {**row, "family": fb, "line": round(line), "line_pct": round((cl / line - 1) * 100, 1), "b_rank": frank.get(fb, 99)}
+            if cl > line and ch >= 0.05 and vx >= 2:
+                bbrk.append(bx)
+            elif line * 0.97 <= cl <= line and ch >= 0.03 and vx >= 1:
+                bnear.append(bx)
         is_a = cl > o and ch > 0 and off >= -0.08 and g20 > 0 and vx >= 1
         is_b = (any(f in b_secs for f in fs) and 0.03 <= ch < 0.29 and r20 >= 0.12 and g20 <= 0.30 and up <= 0.20)
         is_a = is_a and g20 <= 0.30 and up <= 0.35     # 화면엔 과열(이격 30%↑)·윗꼬리 긴 것 뺌 — 3년: 이격 38%↑ 늘 마이너스
@@ -119,6 +136,11 @@ def scan(db: Session) -> dict:
         elif frank[f0] <= 3 and g20 > 0 and off >= -0.05 and abs(ch) <= 0.02 and vx <= 1.0 and g20 <= 0.30:
             nxt.append(row)
     items.sort(key=lambda x: (not x["b"], -x["change_pct"]))
+    bset = {x["code"] for x in items if x["b"]}
+    for x in bbrk + bnear:
+        x["is_b"] = x["code"] in bset
+    bbrk.sort(key=lambda x: (not x["is_b"], -x["change_pct"]))
+    bnear.sort(key=lambda x: -x["line_pct"])
     nxt.sort(key=lambda x: (x["rank"], -x["off_hi20_pct"]))
     reg = current_regime(db) or {}
     tdoji.sort(key=lambda x: (x["rank"], x["gap20_pct"]))
@@ -129,9 +151,21 @@ def scan(db: Session) -> dict:
     val = {"trading_date": str(latest), "market": reg.get("state"), "b_sectors": b_secs, "trend_doji": tdoji, "trend_big": tbig, "rest2": rest2, "turn3": turn3, "turn2": turn2,
            "hot": order[:3], "sector_day": {f: {"chg": round(schg[f] * 100, 2), "tvx": round(svx[f], 2), "heat": heat.get(f)} for f in order[:6]},
            "heat": heat,
-           "items": items, "next": nxt}
+           "items": items, "next": nxt, "box_break": bbrk, "box_near": bnear}
     _cache.update(key=latest, val=val)
     return val
+
+
+def _log_box(db: Session, r: dict) -> None:
+    """박스 돌파·뚫기 직전 나온 종목을 날짜별로 남겨 둔다 — 한 달 뒤 실제 결과를 백테스트와 비교 (settings 'box_picks_log')."""
+    try:
+        from backend.services.telegram import _get, _put  # noqa: PLC0415
+        log = _get(db, "box_picks_log", {}) or {}
+        log[r["trading_date"]] = {"break": [[x["code"], x["name"], x["close"], x["line"], x["is_b"]] for x in r.get("box_break", [])],
+                                  "near": [[x["code"], x["name"], x["close"], x["line"], x["is_b"]] for x in r.get("box_near", [])]}
+        _put(db, "box_picks_log", log)
+    except Exception:  # noqa: BLE001
+        pass
 
 
 def text_summary(db: Session, k: int = 5) -> str:
@@ -151,6 +185,14 @@ def text_summary(db: Session, k: int = 5) -> str:
     if r["market"] == "하락":
         lines.append("🔴 하락장 — 쉬는 날")
     lines.append("돈 몰린 섹터: " + (", ".join(r["b_sectors"]) if r["b_sectors"] else "없음 (오늘은 쉬는 날)"))
+    bb, bn = r.get("box_break", []), r.get("box_near", [])
+    if (bb or bn) and r["market"] != "하락":
+        _log_box(db, r)
+        lines.append("\n🥇 <b>스윙 1순위: 박스 돌파</b> (눌려 있던 20일 고점을 종가로 뚫음 · <b>5~10일</b>, 손절 = 뚫은 고점 아래 마감)")
+        lines += [f"• {x['name']}  {x['change_pct']:+.1f}% · 손절 {x['line']:,} · {x['family']}" + ("  ⭐종베도 OK" if x["is_b"] else "")
+                  + ("  🔥과열 섹터(짧게)" if (r.get("heat", {}).get(x["family"]) or 0) >= 25 else "") for x in bb[:k]] or ["• 오늘은 없음"]
+        if bn:
+            lines.append("  └ 뚫기 직전 (고점 -3% 안 마감 · 10일 · 보조): " + " · ".join(f"{x['name']}({x['line_pct']:+.1f}%)" for x in bn[:k]))
     good = [x for x in r["items"] if x["b"] and 1.5 <= x["tv_x"] <= 6 and x["upper_pct"] <= 10]
     lead = [x for x in good if (x.get("b_rank") or 99) <= 3][:k]
     swing = [x for x in good if 4 <= (x.get("b_rank") or 99) <= 8][:k]
