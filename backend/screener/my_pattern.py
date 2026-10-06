@@ -109,7 +109,9 @@ def scan(db: Session) -> dict:
         is_b = (any(f in b_secs for f in fs) and 0.03 <= ch < 0.29 and r20 >= 0.12 and g20 <= 0.30 and up <= 0.20)
         is_a = is_a and g20 <= 0.30 and up <= 0.35     # 화면엔 과열(이격 30%↑)·윗꼬리 긴 것 뺌 — 3년: 이격 38%↑ 늘 마이너스
         if (is_a and frank[f0] <= 3) or is_b:
-            items.append({**row, "a": is_a, "b": is_b, "family": next((f for f in fs if f in b_secs), f0) if is_b else f0})
+            fb = next((f for f in fs if f in b_secs), f0) if is_b else f0
+            # b_rank = 돈 몰린 그 섹터의 20일 순위: 1~3위 주도(종베 다음 날이 가장 좋음), 4~8위 막 도는 중(5~10일 스윙이 가장 좋음) — bonly.py
+            items.append({**row, "a": is_a, "b": is_b, "family": fb, "b_rank": frank.get(fb, 99) if is_b else None})
         elif frank[f0] <= 3 and g20 > 0 and off >= -0.05 and abs(ch) <= 0.02 and vx <= 1.0 and g20 <= 0.30:
             nxt.append(row)
     items.sort(key=lambda x: (not x["b"], -x["change_pct"]))
@@ -144,10 +146,18 @@ def text_summary(db: Session, k: int = 5) -> str:
     if r["market"] == "하락":
         lines.append("🔴 하락장 — 쉬는 날")
     lines.append("돈 몰린 섹터: " + (", ".join(r["b_sectors"]) if r["b_sectors"] else "없음 (오늘은 쉬는 날)"))
-    b = [x for x in r["items"] if x["b"] and 1.5 <= x["tv_x"] <= 6 and x["upper_pct"] <= 10][:k] or [x for x in r["items"] if x["b"]][:k]
+    good = [x for x in r["items"] if x["b"] and 1.5 <= x["tv_x"] <= 6 and x["upper_pct"] <= 10]
+    lead = [x for x in good if (x.get("b_rank") or 99) <= 3][:k]
+    swing = [x for x in good if 4 <= (x.get("b_rank") or 99) <= 8][:k]
+    b = lead + swing
+    fmt = lambda x: f"• {x['name']}  {x['change_pct']:+.1f}% · 거래 {x['tv_x']:.1f}배 · {x['family']}" + ("  ⚠개인만" if x.get("retail_only") else "")  # noqa: E731
+    if lead:
+        lines.append("\n1️⃣ ⭐ <b>주도 섹터의 힘 있는 양봉</b> → <b>종베</b> (다음 날 분할 매도)")
+        lines += [fmt(x) for x in lead]
+    if swing:
+        lines.append("\n1️⃣ ⭐ <b>막 도는 섹터의 힘 있는 양봉</b> → <b>5~10일 스윙</b>")
+        lines += [fmt(x) for x in swing]
     if b:
-        lines.append("\n1️⃣ ⭐ <b>돈 몰린 섹터의 힘 있는 양봉</b> (오늘 종베)")
-        lines += [f"• {x['name']}  {x['change_pct']:+.1f}% · 거래 {x['tv_x']:.1f}배" + ("  ⚠개인만" if x.get("retail_only") else "") for x in b]
         if any(x.get("retail_only") for x in b):
             lines.append("⚠개인만 = 외인·기관 둘 다 팔았는데 오른 날 (그 뒤 약했음)")
     td = r.get("trend_doji", [])[:k]
