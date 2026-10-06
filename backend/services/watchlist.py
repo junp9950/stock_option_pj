@@ -83,6 +83,29 @@ def _items(db: Session) -> list[dict]:
     return items
 
 
+def box_info(highs: list[float], lows: list[float], close: float, max_width: float = 0.08) -> dict:
+    """최근 며칠이 좁은 박스(고가·저가 폭 8% 안)였나 — 손절 짧은 자리 판단용 (2026-10-06 SK가스: 13일 폭 5%, 손절 -2%).
+    오늘 봉은 빼고 센다(오늘 뚫었으면 박스 밖이라서)."""
+    hs, ls = highs[:-1], lows[:-1]
+    k, hi, lo = 0, 0.0, 0.0
+    for n in range(2, min(len(hs), 40) + 1):
+        h_, l_ = max(hs[-n:]), min(ls[-n:])
+        if l_ <= 0 or h_ / l_ - 1 > max_width:
+            break
+        k, hi, lo = n, h_, l_
+    if k < 5:
+        return {"box_days": 0}
+    stop = lo * 0.995
+    return {"box_days": k, "box_width": round((hi / lo - 1) * 100, 1), "box_low": round(lo), "box_high": round(hi),
+            "stop_pct": round((stop / close - 1) * 100, 1) if close else None}
+
+
+def box_text(b: dict) -> str:
+    if not b.get("box_days"):
+        return ""
+    return f" · {b['box_days']}일 수렴 폭 {b['box_width']}% · 손절 {b['box_low']:,} ({b['stop_pct']:+.1f}%)"
+
+
 def _shape(c: list[dict]) -> dict | None:
     """토스 일봉(오래된→최신) 25개로 오늘 봉 요약."""
     try:
@@ -105,7 +128,8 @@ def _shape(c: list[dict]) -> dict | None:
         tags.append("⚠장대음봉")
     if vx and vx <= 0.5:
         tags.append("거래 마름")
-    return {"date": c[-1]["timestamp"][:10], "close": cl, "chg": chg, "vx": vx, "open": o, "low": l, "high": h,
+    bx = box_info([float(x["highPrice"]) for x in c], [float(x["lowPrice"]) for x in c], cl)
+    return {**bx, "date": c[-1]["timestamp"][:10], "close": cl, "chg": chg, "vx": vx, "open": o, "low": l, "high": h,
             "width": (max(closes) / min(closes) - 1) * 100 if closes else 0, "tags": tags}
 
 
@@ -148,7 +172,7 @@ def report(db: Session, force: bool = False) -> str | None:
             # 수렴 자리에서 거래 붙은 양봉으로 위로 뚫고 나감 — 근처(±3%) 조건만 보다가 놓쳤다 (2026-10-06 SK가스 +7.7%·거래대금 4배)
             g["brk"].append(f"{nm} {_won(p)} ({pct}) · 수렴 자리({_won(lv)}) 위로 돌파 · 거래 {s['vx']:.1f}배" + (f"\n   └ <i>{escape(it['note'])}</i>" if it.get("note") else ""))
         elif it["kind"] == "near" and abs(p / lv - 1) <= 0.03:
-            g["close"].append(f"{nm} {_won(p)} · 기준 {_won(lv)} 근처 ({(p / lv - 1) * 100:+.1f}%)")
+            g["close"].append(f"{nm} {_won(p)} · 기준 {_won(lv)} 근처 ({(p / lv - 1) * 100:+.1f}%)" + box_text(s))
         elif candle:
             g["candle"].append(f"{nm} {candle.replace('🕯', '')} ({pct})")
         elif "거래 마름" in s["tags"]:

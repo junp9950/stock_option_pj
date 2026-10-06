@@ -1608,6 +1608,13 @@ def get_dashboard(db: Session = Depends(get_db)):
                            {"d": latest, "c": [x["code"] for x in items]}).all()
         px = {r[0]: r[1] for r in rows_}
         chg_today = {r[0]: float(r[2] or 0) for r in rows_}
+        from backend.services.watchlist import box_info  # noqa: PLC0415
+        hl = {}
+        for code_, d_, h_, l_ in db.execute(text("select stock_code, trading_date, high_price, low_price from spot_daily_prices "
+                                                 "where stock_code = any(:c) and trading_date > cast(:d as date) - 70 and trading_date <= cast(:d as date) order by 2"),
+                                            {"d": latest, "c": [x["code"] for x in items]}).all():
+            hl.setdefault(code_, ([], []))
+            hl[code_][0].append(float(h_)); hl[code_][1].append(float(l_))
         for x in items:
             c, lv, kind = px.get(x["code"]), x.get("level") or 0, x.get("kind")
             if not c or not lv:
@@ -1621,7 +1628,9 @@ def get_dashboard(db: Session = Depends(get_db)):
             elif kind == "near":
                 tag = "🚀 수렴 위로 돌파" if gap > 3 and (chg_today.get(x["code"]) or 0) >= 3 else ("👀 기준 근처" if abs(gap) <= 3 else None)
             if tag:
-                watch.append({"code": x["code"], "name": x["name"], "tag": tag, "close": round(c), "level": lv, "gap_pct": round(gap, 1), "note": x.get("note", "")})
+                bx = box_info(*hl[x["code"]], c) if x["code"] in hl else {}
+                watch.append({"code": x["code"], "name": x["name"], "tag": tag, "close": round(c), "level": lv, "gap_pct": round(gap, 1),
+                              "note": x.get("note", ""), **{k: v for k, v in bx.items() if k != "box_high"}})
     order = {"⚠ 이탈": 0, "✅ 선 위 마감": 1, "🚀 수렴 위로 돌파": 1, "👀 코앞": 2, "👀 선 근처": 3, "👀 기준 근처": 4}
     watch.sort(key=lambda w: order.get(w["tag"], 9))
     vr = {}
