@@ -34,11 +34,14 @@ button{background:#1f6feb;color:#fff;border:0;border-radius:7px;padding:9px 16px
 .post-title{font-size:18px;font-weight:700;color:#e6edf3;margin:6px 0 2px}
 .topbar{display:flex;justify-content:space-between;align-items:center;margin-top:18px;gap:10px}
 @media(max-width:640px){main{padding:14px}.comment-form textarea{font-size:16px}.board .b-tag{display:none}.board .b-author{width:auto;max-width:70px;font-size:12px}.board .b-time{width:auto}}
+button.fav{background:none;border:0;color:#8b949e;font-size:17px;cursor:pointer;padding:0 4px;line-height:1}button.fav.on{color:#e3b341}
+button.ghost.fav{font-size:13px;padding:6px 10px;border:1px solid #30363d;border-radius:8px}.board .b-fav{width:28px;text-align:center}
+#fav-only.on{border-color:#e3b341;color:#e3b341}
 .lightbox{display:none;position:fixed;inset:0;background:rgba(0,0,0,.85);z-index:50;align-items:center;justify-content:center;cursor:zoom-out}
 .lightbox.show{display:flex}.lightbox img{max-width:92vw;max-height:92vh;border-radius:6px}
 </style></head><body><main>
 <h1>종목토론</h1><div class="sub">종목 얘기, 차트 스크린샷 자유롭게 남겨 보세요. 사진은 입력창에 <b>Ctrl+V</b>로 붙여넣거나 골라서 올릴 수 있습니다 (글 최대 20장, 댓글 최대 5장).</div>
-<div class="topbar"><button class="ghost" id="back" style="display:none">← 목록</button><span class="muted" id="board-info"></span><button id="write-btn">✎ 글쓰기</button></div>
+<div class="topbar"><button class="ghost" id="back" style="display:none">← 목록</button><span class="muted" id="board-info"></span><button class="ghost" id="fav-only" title="내 이름(작성자 버튼에서 고른 이름)으로 별 표시한 글만">☆ 즐겨찾기만</button><button id="write-btn">✎ 글쓰기</button></div>
 <section class="box" id="write-box" style="display:none">
   <div class="row">
     <input id="stock-name" class="grow" maxlength="100" placeholder="종목명 (선택)">
@@ -60,7 +63,10 @@ button{background:#1f6feb;color:#fff;border:0;border-radius:7px;padding:9px 16px
 const API='__API_PREFIX__/discussion';const MAX_POST=20,MAX_COMMENT=5;
 const AUTHORS=['우라늄','감사하모니카'];
 function getAuthor(){try{const v=localStorage.getItem('disc-author');if(AUTHORS.includes(v))return v}catch(e){}return AUTHORS[0]}
-function setAuthor(v){try{localStorage.setItem('disc-author',v)}catch(e){}}
+function setAuthor(v){try{localStorage.setItem('disc-author',v)}catch(e){}
+  if(typeof loadFavs==='function')loadFavs().then(()=>{   // 이름을 바꾸면 그 이름의 즐겨찾기로 별만 다시 칠함 (입력 중인 글은 그대로)
+    document.querySelectorAll('[data-fav]').forEach(b=>{const on=favIds.has(+b.dataset.fav);b.classList.toggle('on',on);b.textContent=on?'★':'☆';b.title=v+' 즐겨찾기'});
+    if(!current&&favOnly)renderBoard()})}
 // .who 칸에 두 이름 토글 버튼을 그린다. 고른 이름은 data-value에 둔다.
 function whoToggle(el){
   const v=getAuthor();el.dataset.value=v;
@@ -206,11 +212,20 @@ function shotsHtml(images,small){
   if(images.length===1)return`<img class="shot" src="${images[0]}" data-zoom="1" alt="">`;
   return`<div class="shots">${images.map(u=>`<img src="${u}" data-zoom="1" loading="lazy" alt="">`).join('')}</div>`;
 }
+// 즐겨찾기: 작성자 버튼에서 고른 이름별로 서버에 저장 (2026-10-06)
+let favIds=new Set(),favOnly=false;
+async function loadFavs(){try{const r=await call('GET',`${API}/favs?who=${encodeURIComponent(getAuthor())}`);favIds=new Set(r.ids)}catch(e){}}
+async function toggleFav(pid){const on=!favIds.has(pid);try{const r=await call('POST',`${API}/${pid}/fav`,{who:getAuthor(),on});favIds=new Set(r.ids)}catch(err){alert(err.message);return}
+  if(current)renderPost();else renderBoard()}
+const star=pid=>`<button class="fav${favIds.has(pid)?' on':''}" data-fav="${pid}" title="${getAuthor()} 즐겨찾기">${favIds.has(pid)?'★':'☆'}</button>`;
 function renderBoard(){
   const box=document.getElementById('list');
-  document.getElementById('board-info').textContent=all.length?`글 ${all.length}개`:'';
-  if(!all.length){box.innerHTML='<div class="empty">아직 글이 없습니다. 첫 글을 남겨 주세요.</div>';return}
-  box.innerHTML='<table class="board"><tbody>'+all.map(x=>`<tr class="post" data-open="${x.id}">
+  const fb=document.getElementById('fav-only');fb.textContent=favOnly?`★ 즐겨찾기만 (${getAuthor()})`:'☆ 즐겨찾기만';fb.classList.toggle('on',favOnly);
+  const rows=favOnly?all.filter(x=>favIds.has(x.id)):all;
+  document.getElementById('board-info').textContent=all.length?(favOnly?`즐겨찾기 ${rows.length}개`:`글 ${all.length}개`):'';
+  if(!rows.length){box.innerHTML=`<div class="empty">${favOnly?'즐겨찾기한 글이 없습니다. 글 옆 ☆를 누르면 여기 모입니다.':'아직 글이 없습니다. 첫 글을 남겨 주세요.'}</div>`;return}
+  box.innerHTML='<table class="board"><tbody>'+rows.map(x=>`<tr class="post" data-open="${x.id}">
+    <td class="b-fav">${star(x.id)}</td>
     <td class="b-tag">${x.stock_name||x.stock_code?esc(x.stock_name||x.stock_code):'자유'}</td>
     <td><span class="b-title">${esc(x.title)}</span>${x.comments?`<span class="b-cnt">${x.comments}</span>`:''}${x.images?`<span class="b-img" title="사진 ${x.images}장">🖼</span>`:''}${x.edited?' <span class="edited">(수정됨)</span>':''}</td>
     <td class="b-author">${x.author?esc(x.author):'익명'}</td>
@@ -274,7 +289,7 @@ box.innerHTML=`<div class="item" data-id="${x.id}">
   ${x.title?`<div class="post-title">${esc(x.title)}</div>`:''}
   <div class="meta">${x.stock_name||x.stock_code?`<span class="tag">${esc(x.stock_name||'')}${x.stock_code?' ('+esc(x.stock_code)+')':''}</span>`:''}<span>${x.author?esc(x.author)+' · ':''}${when(x.created_at)}</span>${x.edited?'<span class="edited">(수정됨)</span>':''}</div>
   <div class="body post-body">${postBody(x.content,x.images)}</div>
-  <div class="row"><button class="ghost" data-act="edit">수정</button><button class="ghost danger" data-act="del">삭제</button></div>
+  <div class="row">${star(x.id).replace('class="fav','class="ghost fav')}<button class="ghost" data-act="edit">수정</button><button class="ghost danger" data-act="del">삭제</button></div>
   <div class="comments">
     ${commentsHtml(x.comments||[])}
     <div class="comment-form">
@@ -345,6 +360,8 @@ async function route(){
   if(m)document.getElementById('write-box').style.display='none';
   const box=document.getElementById('list');
   try{
+    await loadFavs();
+    document.getElementById('fav-only').style.display=m?'none':'';
     if(m){current=await call('GET',`${API}/${m[1]}`);renderPost()}
     else{current=null;all=await call('GET',`${API}/board`);renderBoard()}
   }catch(e){box.innerHTML=`<div class="empty">${m?'글을 불러오지 못했습니다.':'목록을 불러오지 못했습니다.'}</div>`}
@@ -362,7 +379,9 @@ async function addComment(item){
   try{await call('POST',`${API}/${item.dataset.id}/comments`,{content,images:set.images,author:item.querySelector('[data-f="c-author"]').dataset.value});await load()}
   catch(err){alert(err.message)}
 }
+document.getElementById('fav-only').onclick=async()=>{favOnly=!favOnly;await loadFavs();if(!current)renderBoard()};
 document.getElementById('list').addEventListener('click',async e=>{
+  const fv=e.target.closest('[data-fav]');if(fv){e.stopPropagation();toggleFav(+fv.dataset.fav);return}
   if(e.target.matches('img[data-zoom]')){openLightbox(e.target.src);return}
   const row=e.target.closest('tr[data-open]');if(row){location.hash=row.dataset.open;return}
   const b=e.target.closest('button');if(!b||!b.dataset.act)return;

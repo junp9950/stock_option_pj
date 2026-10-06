@@ -240,6 +240,42 @@ def discussion_board(db: Session = Depends(get_db)):
     return out
 
 
+# 글 즐겨찾기 — 로그인이 없어서 글쓴이 이름(우라늄·감사하모니카)별로 서버에 저장, 폰·PC 같이 보임 (2026-10-06 우라늄 건의)
+_FAV_NAMES = ("우라늄", "감사하모니카")
+
+
+def _favs(db: Session) -> dict:
+    row = db.get(Setting, "discussion_favs")
+    try:
+        return json.loads(row.value) if row else {}
+    except ValueError:
+        return {}
+
+
+@router.get('/discussion/favs')
+def discussion_favs(who: str, db: Session = Depends(get_db)):
+    return {"who": who, "ids": _favs(db).get(who, [])}
+
+
+class FavIn(BaseModel):
+    who: str = Field(max_length=20)
+    on: bool
+
+
+@router.post('/discussion/{pid}/fav')
+def discussion_fav(pid: int, body: FavIn, db: Session = Depends(get_db)):
+    if body.who not in _FAV_NAMES:
+        raise HTTPException(status_code=400, detail="이름을 고르세요.")
+    favs = _favs(db)
+    ids = [i for i in favs.get(body.who, []) if i != pid]
+    if body.on:
+        ids.insert(0, pid)
+    favs[body.who] = ids[:300]
+    db.merge(Setting(key="discussion_favs", value=json.dumps(favs, ensure_ascii=False)))
+    db.commit()
+    return {"who": body.who, "ids": favs[body.who]}
+
+
 @router.get('/discussion/{pid}')
 def get_discussion(pid: int, db: Session = Depends(get_db)):
     x = db.get(DiscussionPost, pid)
