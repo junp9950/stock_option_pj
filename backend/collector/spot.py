@@ -580,3 +580,18 @@ def refresh_spot_prices(db: Session, start: date, end: date) -> dict:
     db.commit()
     logger.info("시세 확정치 재수집 %s~%s: 확인 %d건, 수정 %d건, 실패 종목 %d", start, end, checked, fixed, failed)
     return {"checked": checked, "fixed": fixed, "failed": failed}
+
+
+def sync_stock_names(db: Session) -> int:
+    """종목 이름 바뀐 것 맞추기 (KRX 상장 목록 기준, 매일 아침). 2026-10-06: 세아메카닉스→HT로보틱스 등 18개가 옛 이름으로 남아 있었다."""
+    listing = _load_listing_snapshot()
+    names = listing["Name"].astype(str).to_dict()
+    n = 0
+    for st in db.scalars(select(Stock)):
+        new = names.get(st.code)
+        if new and new != "nan" and new != st.name:
+            logger.info("종목 이름 변경: %s %s → %s", st.code, st.name, new)
+            st.name = new
+            n += 1
+    db.commit()
+    return n

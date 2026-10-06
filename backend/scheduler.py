@@ -274,6 +274,17 @@ def start_scheduler() -> BackgroundScheduler:
                       id='spot_price_fix', replace_existing=True, max_instances=1, coalesce=True)
     from backend.services.marcap_caps import refresh as refresh_marcap
     scheduler.add_job(refresh_marcap, 'cron', hour=7, minute=0, id='marcap_caps_daily', replace_existing=True, max_instances=1)
+
+    def _sync_names_job() -> None:
+        from backend.collector.spot import sync_stock_names  # noqa: PLC0415
+        db = SessionLocal()
+        try:
+            sync_stock_names(db)
+        except Exception as exc:  # noqa: BLE001
+            logger.warning("종목 이름 맞추기 실패: %s", exc)
+        finally:
+            db.close()
+    scheduler.add_job(_sync_names_job, 'cron', hour=7, minute=10, id='sync_stock_names', replace_existing=True, max_instances=1)
     scheduler.add_job(refresh_marcap, 'date', run_date=datetime.now(timezone.utc)+timedelta(seconds=30),
                       id='marcap_caps_startup', replace_existing=True)
     from backend.services.industry_map import refresh as refresh_industry
