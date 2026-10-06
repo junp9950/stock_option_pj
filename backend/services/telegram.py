@@ -284,12 +284,12 @@ def us_overnight_text() -> str | None:
             last = c.index[-1].date()
         except Exception:  # noqa: BLE001
             continue
-    eq = [ch[t] for t in ("AMAT", "KLAC", "LRCX") if t in ch]
+    eq = [ch[t] for t in ("AMAT", "LRCX") if t in ch]  # KLA는 한국 소부장과 덜 맞아 평균에서 뺌 (최근 60일 0.44 vs LRCX 0.60)
     if not eq:
         return None
     e = sum(eq) / len(eq)
     lines = [f"🌙 <b>어젯밤 미국 반도체</b> ({last:%m/%d} 마감)" if last else "🌙 <b>어젯밤 미국 반도체</b>",
-             f"• 장비 3종 평균 <b>{e:+.1f}%</b> (AMAT {ch.get('AMAT', 0):+.1f} · KLAC {ch.get('KLAC', 0):+.1f} · LRCX {ch.get('LRCX', 0):+.1f})",
+             f"• 장비(AMAT·램리서치) 평균 <b>{e:+.1f}%</b> (AMAT {ch.get('AMAT', 0):+.1f} · LRCX {ch.get('LRCX', 0):+.1f} · 참고 KLAC {ch.get('KLAC', 0):+.1f})",
              f"• SOXX {ch.get('SOXX', 0):+.1f}% · NVDA {ch.get('NVDA', 0):+.1f}%"]
     if e <= -3:
         lines.append("\n⚠️ <b>소부장·기판 시초 대응</b>\n이런 밤 다음 날(1.5년 43번): 시초 평균 <b>-1.7%</b>, 종가 -2.5%, 오른 날 31%"
@@ -321,7 +321,7 @@ def _yahoo_last(sym: str) -> tuple[float, float] | None:
 #  광통신 ← COHR·LITE·CIEN·AAOI·GLW: 0.38(0.27, 최근 60일 0.48), -4%↓ 밤 → -1.8%, +4%↑ 밤 → +3.6%
 #  전력·전선 ← GEV·BE: 0.33(0.16 — 대부분 미국 시장 전체 영향), -4%↓ 밤 → -1.5%
 _PRE_GROUPS = [
-    ("소부장·기판", ("AMAT", "KLAC", "LRCX"), -2.0),
+    ("소부장·기판", ("AMAT", "LRCX"), -2.0),  # KLA는 덜 맞아 뺌
     ("광통신", ("COHR", "LITE", "CIEN", "AAOI", "GLW"), -3.0),
     ("전력·전선", ("GEV", "BE"), -3.0),
     ("2차전지", ("ALB", "SQM", "TSLA"), -3.0),
