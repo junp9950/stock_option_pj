@@ -245,11 +245,8 @@ _FAV_NAMES = ("우라늄", "감사하모니카")
 
 
 def _favs(db: Session) -> dict:
-    row = db.get(Setting, "discussion_favs")
-    try:
-        return json.loads(row.value) if row else {}
-    except ValueError:
-        return {}
+    from backend.services.telegram import _get  # noqa: PLC0415   settings 표 읽기·쓰기는 이 도우미로 (key가 기본키가 아님)
+    return _get(db, "discussion_favs", {}) or {}
 
 
 @router.get('/discussion/favs')
@@ -271,8 +268,8 @@ def discussion_fav(pid: int, body: FavIn, db: Session = Depends(get_db)):
     if body.on:
         ids.insert(0, pid)
     favs[body.who] = ids[:300]
-    db.merge(Setting(key="discussion_favs", value=json.dumps(favs, ensure_ascii=False)))
-    db.commit()
+    from backend.services.telegram import _put  # noqa: PLC0415
+    _put(db, "discussion_favs", favs)
     return {"who": body.who, "ids": favs[body.who]}
 
 
