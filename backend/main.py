@@ -789,12 +789,14 @@ async function renderDashboard(d, stale){
     +`<div style="margin-top:6px;font-size:13px">→ ${who} <span class="ts">(차이 ${sg(rel)}%p)</span></div>
      <div class="ts" style="margin-top:4px">삼하가 코스닥보다 +15%p 넘게 앞서면 경고 (3년: 그 뒤 20일 코스닥 -3.8%) · 외국인 삼하 5일 <b style="color:${m.sh_foreign5>0?'#f85149':'#58a6ff'}">${(m.sh_foreign5>0?'+':'')+(m.sh_foreign5||0).toLocaleString()}억</b></div>`));
   const sd=Object.entries(d.sector_day||{});
-  top.push(card('🔥 섹터 (20일 순위 · 오늘 등락 중간 · 거래 중간)',sd.map(([f,x],i)=>`<div style="display:flex;justify-content:space-between;font-size:13px;padding:3px 0;border-bottom:1px solid #21262d"><span>${i+1}. ${d.b_sectors.includes(f)?'⭐ ':''}<b style="color:#e6edf3">${f}</b></span><span><span style="color:${x.chg>=0?'#f85149':'#58a6ff'}">${sg(x.chg)}%</span> · <span class="ts">${x.tvx}배</span></span></div>`).join('')+'<div class="ts" style="margin-top:6px">⭐ = 오늘 돈 몰린 섹터 (종목들 등락 +1.2%↑ · 거래 평소 이상)</div>'));
-  const bchip=x=>chip(x,x.retail_only?'#f85149':'#9e6a03',` <span style="color:#f85149">${sg(x.change_pct)}%</span> <span class="ts">${x.tv_x}배 · ${x.family}</span>${x.retail_only?' <b style="color:#f85149;font-size:11px">⚠개인만</b>':''}`);
+  top.push(card('🔥 섹터 (20일 순위 · 오늘 등락 중간 · 거래 중간)',sd.map(([f,x],i)=>`<div style="display:flex;justify-content:space-between;font-size:13px;padding:3px 0;border-bottom:1px solid #21262d"><span>${i+1}. ${d.b_sectors.includes(f)?'⭐ ':''}<b style="color:#e6edf3">${f}</b></span><span><span style="color:${x.chg>=0?'#f85149':'#58a6ff'}">${sg(x.chg)}%</span> · <span class="ts">${x.tvx}배</span>${x.heat!=null?` · <span style="color:${x.heat>=25?'#ff7b72':x.heat>=10?'#d29922':'#8b949e'}" title="섹터 종목 중 20일선보다 20% 넘게 뜬 비율">과열 ${x.heat}%</span>`:''}</span></div>`).join('')+'<div class="ts" style="margin-top:6px">⭐ = 오늘 돈 몰린 섹터 · 과열 = 섹터 종목 중 20일선보다 20%↑ 뜬 비율 (25%↑ 🔥 들고 가지 말 것)</div>'));
+  const H=d.heat||{}, isHot=x=>(H[x.family]||0)>=25;
+  const bchip=x=>chip(x,x.retail_only?'#f85149':'#9e6a03',` <span style="color:#f85149">${sg(x.change_pct)}%</span> <span class="ts">${x.tv_x}배 · ${x.family}</span>${x.retail_only?' <b style="color:#f85149;font-size:11px">⚠개인만</b>':''}${isHot(x)?' <b style="color:#ff7b72;font-size:11px" title="섹터 종목 중 20일선보다 20% 넘게 뜬 비율 '+H[x.family]+'%">🔥과열·다음 날 정리만</b>':''}`);
+  const hotNote=[...(d.best_lead||[]),...(d.best_swing||[])].some(isHot)?'<div class="ts" style="color:#ff7b72;margin-top:4px">🔥과열 섹터 = 섹터 종목 25% 넘게 20일선보다 20%↑ 뜸 → 다음 날은 좋았지만 5~10일 들고 가면 나빴음(5일 -5%↓ 26~31%)</div>':'';
   const anyRetail=(d.best||[]).some(x=>x.retail_only)?'<div class="ts" style="color:#f85149;margin-top:4px">⚠개인만 = 외인·기관 둘 다 팔았는데 오른 날 — 빼는 게 좋음</div>':'';
   rank.push(rcard('1','#e3b341','⭐ 주도 섹터의 힘 있는 양봉 → 종베',
     '돈 몰린 섹터가 20일 1~3위 · 거래 평소 1.5~6배 · 고가 근처 마감 · <b>다음 날 분할 매도</b> · 3년 다음 날 +1.3~1.6% (이김 73~78%)',
-    ((d.best_lead||[]).map(bchip).join('')||'<span class="ts">오늘은 없음</span>')+anyRetail));
+    ((d.best_lead||[]).map(bchip).join('')||'<span class="ts">오늘은 없음</span>')+anyRetail+hotNote));
   rank.push(rcard('1','#e3b341','⭐ 올라오는 섹터의 힘 있는 양봉 → 5~10일 스윙',
     '돈 몰린 섹터가 20일 4~8위 (아직 주도 전 · 올라오는 중) · <b>5~10일 보유</b> · 3년 10일 +2.6% · 최근 1년 +8.2% · AI 랠리 +6.1%',
     ((d.best_swing||[]).map(bchip).join('')||'<span class="ts">오늘은 없음</span>')+`<div class="ts" style="margin-top:4px"><a href="#" onclick="switchTab('jongbe');return false" style="color:#58a6ff">후보 전체 보기 →</a></div>`));
@@ -804,7 +806,7 @@ async function renderDashboard(d, stale){
     ));
   rank.push(rcard('3','#3fb950','🛌 장대양봉 이틀 쉼 + 종가 지킴 → 5~10일',
     '뜨는 섹터 · 장대양봉 종가 아래로 끝나면 정리 · AI 랠리 5일 +3.4% · 10일 +4.9%',
-    ((d.rest2||[]).map(x=>chip(x,'#3fb950',` <span class="ts">손절 ${x.big_close.toLocaleString()} · 이격 ${x.gap20_pct}%</span>`)).join('')||'<span class="ts">오늘은 없음</span>')
+    ((d.rest2||[]).map(x=>chip(x,isHot(x)?'#ff7b72':'#3fb950',` <span class="ts">손절 ${x.big_close.toLocaleString()} · 이격 ${x.gap20_pct}%</span>${isHot(x)?' <b style="color:#ff7b72;font-size:11px">🔥과열 섹터·짧게</b>':''}`)).join('')||'<span class="ts">오늘은 없음</span>')
     ));
   rank.push(rcard('4','#58a6ff','🔄 바닥 돌려세움 → 20일 (상승장 전용)',
     '빠진 뒤 바닥 횡보 → 양봉 3연속 · 20일선 회복 · 손절 = 바닥 박스 하단 · AI 랠리 AI 종목 20일 +11.3%',

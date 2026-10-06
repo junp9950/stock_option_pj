@@ -46,6 +46,10 @@ def scan(db: Session) -> dict:
         schg[f] = float(chg[cc].iloc[-1].median())
         svx[f] = float(tvx[cc].iloc[-1].median())
     order = sorted(rank, key=lambda f: -rank[f])
+    # 섹터 과열 = 그 섹터 종목 중 20일선보다 20% 넘게 뜬 비율. 25%↑면 B도 다음 날만 좋고 들고 가면 나빠짐 (hotsec.py, 2026-10-06)
+    gap_last = C.iloc[-1] / C.rolling(20).mean().iloc[-1] - 1
+    heat = {f: round(float((gap_last[[c for c in m if c in C.columns]] > 0.2).mean()) * 100) for f, m in fam.items()
+            if len([c for c in m if c in C.columns]) >= 5}
     frank = {f: i + 1 for i, f in enumerate(order)}
     b_secs = [f for f in order if schg[f] >= 0.012 and svx[f] >= 1.0]
     names = dict(db.execute(text("select code, name from stocks")).all())
@@ -123,7 +127,8 @@ def scan(db: Session) -> dict:
     turn2.sort(key=lambda x: (not x["ai"], x["rank"]))
     tbig.sort(key=lambda x: (x["rank"], -x["change_pct"]))
     val = {"trading_date": str(latest), "market": reg.get("state"), "b_sectors": b_secs, "trend_doji": tdoji, "trend_big": tbig, "rest2": rest2, "turn3": turn3, "turn2": turn2,
-           "hot": order[:3], "sector_day": {f: {"chg": round(schg[f] * 100, 2), "tvx": round(svx[f], 2)} for f in order[:6]},
+           "hot": order[:3], "sector_day": {f: {"chg": round(schg[f] * 100, 2), "tvx": round(svx[f], 2), "heat": heat.get(f)} for f in order[:6]},
+           "heat": heat,
            "items": items, "next": nxt}
     _cache.update(key=latest, val=val)
     return val
@@ -150,7 +155,9 @@ def text_summary(db: Session, k: int = 5) -> str:
     lead = [x for x in good if (x.get("b_rank") or 99) <= 3][:k]
     swing = [x for x in good if 4 <= (x.get("b_rank") or 99) <= 8][:k]
     b = lead + swing
-    fmt = lambda x: f"• {x['name']}  {x['change_pct']:+.1f}% · 거래 {x['tv_x']:.1f}배 · {x['family']}" + ("  ⚠개인만" if x.get("retail_only") else "")  # noqa: E731
+    hot_ = r.get("heat", {})
+    fmt = lambda x: (f"• {x['name']}  {x['change_pct']:+.1f}% · 거래 {x['tv_x']:.1f}배 · {x['family']}" + ("  ⚠개인만" if x.get("retail_only") else "")  # noqa: E731
+                     + ("  🔥과열 섹터(다음 날 정리만)" if (hot_.get(x["family"]) or 0) >= 25 else ""))
     if lead:
         lines.append("\n1️⃣ ⭐ <b>주도 섹터의 힘 있는 양봉</b> → <b>종베</b> (다음 날 분할 매도)")
         lines += [fmt(x) for x in lead]
