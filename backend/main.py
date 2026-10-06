@@ -776,10 +776,14 @@ async function renderDashboard(d, stale){
   const rel=m.rel, relW=rel==null?0:Math.max(0,Math.min(100,(rel+15)/30*100));
   const top=[],rank=[],ref=[];
   top.push(card('📊 시장 (전종목 평균)',`<div style="display:flex;gap:8px;flex-wrap:wrap">${mk('전체')}${mk('코스피')}${mk('코스닥')}</div>`));
-  top.push(card('🧲 삼전·하닉 vs 코스닥 (20일)',rel==null?'<span class="ts">-</span>':
-    `<div style="font-size:13px">삼하 <b>${sg(m.sh20)}%</b> · 코스닥 종목 평균 <b>${sg(m.kq20)}%</b> → 차이 <b style="color:${rel>=15?'#f85149':rel>=10?'#d29922':'#3fb950'}">${sg(rel)}%p</b></div>
-     <div style="position:relative;height:8px;background:#21262d;border-radius:4px;margin:8px 0 4px"><div style="position:absolute;left:0;top:0;height:8px;width:${relW}%;background:${rel>=15?'#f85149':rel>=10?'#d29922':'#3fb950'};border-radius:4px"></div><div style="position:absolute;left:100%;top:-3px;width:2px;height:14px;background:#f85149;transform:translateX(-2px)"></div></div>
-     <div class="ts">+15%p 넘으면 흡수 경고 (3년: 뒤 20일 코스닥 -3.8%) · 외국인 삼하 5일 <b style="color:${m.sh_foreign5>0?'#f85149':'#58a6ff'}">${(m.sh_foreign5>0?'+':'')+(m.sh_foreign5||0).toLocaleString()}억</b></div>`));
+  // 막대 하나(-15~+15%p)는 0이 어딘지 안 보여 '늘어나는' 것처럼 읽혔음 → 두 막대를 나란히 비교 (2026-10-06)
+  const mx=Math.max(Math.abs(m.sh20||0),Math.abs(m.kq20||0),1);
+  const bar=(lab,v,c)=>`<div style="display:flex;align-items:center;gap:8px;font-size:13px;margin:4px 0"><span style="width:72px;flex:none">${lab}</span><div style="flex:1;height:10px;background:#21262d;border-radius:5px;overflow:hidden"><div style="height:10px;width:${Math.abs(v)/mx*100}%;background:${v>=0?c:'#58a6ff'}"></div></div><b style="width:58px;text-align:right">${sg(v)}%</b></div>`;
+  const who=rel==null?'':rel>=15?'<b style="color:#f85149">🧲 삼하 독주 — 코스닥 비중 줄이기</b>':rel>=10?'<b style="color:#d29922">삼하 쪽으로 기우는 중</b>':rel<=-3?'<b style="color:#3fb950">코스닥 우세</b>':'<b>비슷</b>';
+  top.push(card('🧲 최근 20일 — 삼전·하닉 vs 코스닥',rel==null?'<span class="ts">-</span>':
+    bar('삼전·하닉',m.sh20,'#f778ba')+bar('코스닥 평균',m.kq20,'#3fb950')
+    +`<div style="margin-top:6px;font-size:13px">→ ${who} <span class="ts">(차이 ${sg(rel)}%p)</span></div>
+     <div class="ts" style="margin-top:4px">삼하가 코스닥보다 +15%p 넘게 앞서면 경고 (3년: 그 뒤 20일 코스닥 -3.8%) · 외국인 삼하 5일 <b style="color:${m.sh_foreign5>0?'#f85149':'#58a6ff'}">${(m.sh_foreign5>0?'+':'')+(m.sh_foreign5||0).toLocaleString()}억</b></div>`));
   const sd=Object.entries(d.sector_day||{});
   top.push(card('🔥 섹터 (20일 순위 · 오늘 등락 중간 · 거래 중간)',sd.map(([f,x],i)=>`<div style="display:flex;justify-content:space-between;font-size:13px;padding:3px 0;border-bottom:1px solid #21262d"><span>${i+1}. ${d.b_sectors.includes(f)?'⭐ ':''}<b style="color:#e6edf3">${f}</b></span><span><span style="color:${x.chg>=0?'#f85149':'#58a6ff'}">${sg(x.chg)}%</span> · <span class="ts">${x.tvx}배</span></span></div>`).join('')+'<div class="ts" style="margin-top:6px">⭐ = 오늘 돈 몰린 섹터 (종목들 등락 +1.2%↑ · 거래 평소 이상)</div>'));
   const bchip=x=>chip(x,x.retail_only?'#f85149':'#9e6a03',` <span style="color:#f85149">${sg(x.change_pct)}%</span> <span class="ts">${x.tv_x}배 · ${x.family}</span>${x.retail_only?' <b style="color:#f85149;font-size:11px">⚠개인만</b>':''}`);
