@@ -1596,7 +1596,7 @@ def get_dashboard(db: Session = Depends(get_db)):
     from backend.services.telegram import _get as tg_get, market_status  # noqa: PLC0415
     from backend.services.result_cache import cached  # noqa: PLC0415
     # 무거운 부분(시장 상태·후보 스캔)은 데이터 버전이 같으면 디스크 캐시 — 재시작 직후에도 바로 뜨게 (2026-10-06 "오늘 탭 느리다")
-    st, mp = cached("dashboard_core_v3", (), db, lambda: (market_status(db) or {}, mp_scan(db)))
+    st, mp = cached("dashboard_core_v4", (), db, lambda: (market_status(db) or {}, mp_scan(db)))
     alert = tg_get(db, "market_alert_state", {}) or {}
     b = [x for x in mp["items"] if x["b"]]
     best = [x for x in b if 1.5 <= x["tv_x"] <= 6 and x["upper_pct"] <= 10]
@@ -1645,7 +1645,7 @@ def get_dashboard(db: Session = Depends(get_db)):
         pass
     return {"as_of": latest, "market": st, "alert": alert, "b_sectors": mp["b_sectors"], "hot": mp["hot"], "sector_day": mp["sector_day"],
             "b_count": len(b), "a_count": sum(1 for x in mp["items"] if x["a"] and not x["b"]), "best": best[:8], "next": mp["next"][:10],
-            "trend_doji": mp.get("trend_doji", [])[:8], "trend_big": mp.get("trend_big", [])[:10], "rest2": mp.get("rest2", [])[:10],
+            "trend_doji": mp.get("trend_doji", [])[:8], "trend_big": mp.get("trend_big", [])[:10], "rest2": mp.get("rest2", [])[:10], "turn3": mp.get("turn3", [])[:30], "turn2": mp.get("turn2", [])[:12],
             "watch": watch, "volume": vr}
 
 
@@ -1654,7 +1654,7 @@ def get_my_pattern(db: Session = Depends(get_db)):
     """종베: 최적 조건 B · 내 패턴 A(사용자 매수 501건에서 번 자리) · 내일 후보 (2026-10-06)."""
     from backend.screener.my_pattern import scan  # noqa: PLC0415
     from backend.services.result_cache import cached  # noqa: PLC0415
-    return cached("my_pattern_v3", (), db, lambda: scan(db))
+    return cached("my_pattern_v4", (), db, lambda: scan(db))
 
 
 @router.get("/screener/volume-records")

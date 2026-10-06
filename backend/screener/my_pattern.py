@@ -22,7 +22,7 @@ def scan(db: Session) -> dict:
     if _cache.get("key") == latest:
         return _cache["val"]
     days = [d for (d,) in db.execute(text(
-        "select distinct trading_date from spot_daily_prices where trading_date <= :d order by 1 desc limit 90"), {"d": latest})][::-1]
+        "select distinct trading_date from spot_daily_prices where trading_date <= :d order by 1 desc limit 140"), {"d": latest})][::-1]
     px = pd.read_sql(text("select stock_code s, trading_date d, open_price o, high_price h, low_price l, close_price c, trading_value tv "
                           "from spot_daily_prices where trading_date >= :a"), db.connection(), params={"a": days[0]})
     P = {k: px.pivot(index="d", columns="s", values=k).sort_index() for k in ("o", "h", "l", "c", "tv")}
@@ -59,7 +59,14 @@ def scan(db: Session) -> dict:
         "select stock_code, foreign_net_buy, institution_net_buy from spot_investor_flows where trading_date = :d"), {"d": latest})}
     ma20 = C.rolling(20).mean().iloc[-1]
     hi20 = H.rolling(20).max().iloc[-1]
-    items, nxt, tdoji, tbig, rest2 = [], [], [], [], []
+    items, nxt, tdoji, tbig, rest2, turn3, turn2 = [], [], [], [], [], [], []
+    # 바닥 돌려세움 (2026-10-06 turnup.py): 120일 고점 -25%↓ 빠진 뒤 15일 폭 15% 안 횡보 → 작은 양봉 3연속 + 20일선 되찾음
+    #   AI 랠리 중 AI 종목 20일 +11.3%(기준 +4.9%), 전 종목 +3.3%(+2.0%). 랠리 전(약세)엔 마이너스 → 상승장에서만.
+    hi120 = H.rolling(120, min_periods=100).max()
+    bh, bl = H.shift(3).rolling(15).max(), L.shift(3).rolling(15).min()
+    bottom = (C.shift(3) / hi120.shift(3) <= 0.75) & (bh / bl - 1 <= 0.15)
+    upc = (C > O) & (chg > 0)
+    AI_SET = {c for f in ("AI메모리·기판", "반도체 장비·재료", "AI SW·플랫폼") for c in fam.get(f, [])}
     tvx_s = TV / TV.shift(1).rolling(20).mean()
     big = (chg >= 0.08) & (tvx_s >= 3) & (C > O) & (chg < 0.29)
     prev = C.index[-2] if len(C.index) >= 3 else None
@@ -88,6 +95,12 @@ def scan(db: Session) -> dict:
             tdoji.append({**row, "big_pct": round(float(chg.at[prev, c]) * 100, 1)})      # 오늘이 그 자리
         if prev is not None and bool(big.at[last, c]) and bool(trend.at[prev, c]) and g20 <= 0.20:
             tbig.append(row)                                                                # 내일 도지면 그 자리
+        if len(C.index) > 25 and bool(bottom.at[last, c]) and bool(upc.at[last, c]) and bool(upc.at[prev, c]):
+            r3 = {**row, "box_low": round(float(bl.at[last, c])), "off120_pct": round((cl / float(hi120.at[last, c]) - 1) * 100), "ai": c in AI_SET}
+            if bool(upc.at[prev2, c]) and cl > float(ma20[c]) and float(C.at[C.index[-4], c]) <= float(C.rolling(20).mean().at[C.index[-4], c]):
+                turn3.append(r3)          # 오늘 3연속째 + 20일선 되찾음
+            elif not bool(upc.at[prev2, c]):
+                turn2.append(r3)          # 2연속 — 내일 양봉이면 3연속
         # 장대양봉 이틀 뒤 쉼 + 장대양봉 종가 지킴 (AI 랠리 2025-04~: 5일 +3.36% · 10일 +4.92%, 기준 +1.61/+3.18) — 5~10일 보유
         if prev2 is not None and bool(big.at[prev2, c]) and abs(ch) <= 0.03 and abs(float(chg.at[prev, c])) <= 0.03 \
                 and cl >= float(C.at[prev2, c]) and frank[f0] <= 3 and g20 <= 0.30:
@@ -104,8 +117,10 @@ def scan(db: Session) -> dict:
     reg = current_regime(db) or {}
     tdoji.sort(key=lambda x: (x["rank"], x["gap20_pct"]))
     rest2.sort(key=lambda x: (x["rank"], x["gap20_pct"]))
+    turn3.sort(key=lambda x: (not x["ai"], x["rank"]))
+    turn2.sort(key=lambda x: (not x["ai"], x["rank"]))
     tbig.sort(key=lambda x: (x["rank"], -x["change_pct"]))
-    val = {"trading_date": str(latest), "market": reg.get("state"), "b_sectors": b_secs, "trend_doji": tdoji, "trend_big": tbig, "rest2": rest2,
+    val = {"trading_date": str(latest), "market": reg.get("state"), "b_sectors": b_secs, "trend_doji": tdoji, "trend_big": tbig, "rest2": rest2, "turn3": turn3, "turn2": turn2,
            "hot": order[:3], "sector_day": {f: {"chg": round(schg[f] * 100, 2), "tvx": round(svx[f], 2)} for f in order[:6]},
            "items": items, "next": nxt}
     _cache.update(key=latest, val=val)
@@ -143,6 +158,10 @@ def text_summary(db: Session, k: int = 5) -> str:
     if r2:
         lines.append("\n🛌 <b>장대양봉 이틀 쉼 + 종가 지킴</b> (뜨는 섹터 · <b>5~10일 보유</b>, 손절 = 장대양봉 종가 아래)")
         lines += [f"• {x['name']}  손절 {x['big_close']:,} · 이격 {x['gap20_pct']:.0f}%" for x in r2]
+    t3 = r.get("turn3", [])[:k]
+    if t3 and r["market"] != "하락":
+        lines.append("\n🔄 <b>바닥 돌려세움</b> (빠진 뒤 바닥 횡보 → 양봉 3연속·20일선 회복 · <b>20일 보유</b>, 상승장에서만)")
+        lines += [f"• {x['name']}{' (AI)' if x['ai'] else ''}  손절 {x['box_low']:,} · 고점 대비 {x['off120_pct']}%" for x in t3]
     tb = r.get("trend_big", [])[:k]
     if tb:
         lines.append("\n🕯 <b>내일 추세 도지 후보</b> (오늘 장대양봉, 내일 도지면 그 자리)")

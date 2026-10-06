@@ -761,6 +761,11 @@ async function renderDashboard(d, stale){
   parts.push(card(`⭐ 오늘 종베 후보 — 조건 B 추림 (${d.best.length}/${d.b_count})`,(d.best.map(x=>chip(x,x.retail_only?'#f85149':'#9e6a03',` <span style="color:#f85149">${sg(x.change_pct)}%</span> <span class="ts">${x.tv_x}배</span>${x.retail_only?' <b style="color:#f85149;font-size:11px">⚠개인만</b>':''}`)).join('')||'<span class="ts">없음 — 쉬는 날</span>')
     +(d.best.some(x=>x.retail_only)?'<div class="ts" style="color:#f85149">⚠개인만 = 외인·기관 둘 다 팔았는데 오른 날 (올해 +3%↑ 날 기준 20일 -9.0% vs 평균 -3.2%) — 빼는 게 좋음</div>':'')
     +`<div class="ts" style="margin-top:4px">거래 1.5~6배 · 윗꼬리 10%↓로 한 번 더 추림 · 3년 검증 +1.9% (날짜 단위 +0.9%) · <a href="#" onclick="switchTab('jongbe');return false" style="color:#58a6ff">전체 보기 →</a></div>`));
+  parts.push(card('🔄 바닥 돌려세움 — 빠진 뒤 바닥 횡보 → 양봉 3연속·20일선 회복 (20일 보유)',
+    (all.state==='하락'?'<div style="color:#f85149;font-size:12.5px;margin-bottom:4px">하락장에선 이 자리도 마이너스였음 — 오늘은 보기만</div>':'')
+    +((d.turn3||[]).map(x=>chip(x,x.ai?'#3fb950':'#30363d',`${x.ai?' <b style="color:#3fb950;font-size:11px">AI</b>':''} <span class="ts">고점 ${x.off120_pct}% · 손절 ${x.box_low.toLocaleString()}</span>`)).join('')||'<span class="ts">오늘은 없음</span>')
+    +((d.turn2||[]).length?`<div class="ts" style="margin:6px 0 4px">2연속 — 내일도 양봉이면 3연속</div>`+(d.turn2||[]).map(x=>chip(x,'#30363d','')).join(''):'')
+    +'<div class="ts" style="margin-top:4px">AI 랠리 중 AI 종목 20일 +11.3% (아무 AI 종목 +4.9%), 전 종목 +3.3% (+2.0%) · 랠리 전 약세장에선 마이너스 · 손절 = 바닥 박스 하단</div>'));
   parts.push(card('🛌 장대양봉 이틀 쉼 + 장대양봉 종가 지킴 — 5~10일 보유',
     ((d.rest2||[]).map(x=>chip(x,'#3fb950',` <span class="ts">손절 ${x.big_close.toLocaleString()} · 이격 ${x.gap20_pct}%</span>`)).join('')||'<span class="ts">오늘은 없음</span>')
     +'<div class="ts" style="margin-top:4px">뜨는 섹터 · AI 랠리(2025-04~) 5일 +3.4% · 10일 +4.9% (아무 종목 +1.6% / +3.2%) · 다음 날 +2% 규칙 말고 장대양봉 종가 아래로 끝나면 정리</div>'));
