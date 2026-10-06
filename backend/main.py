@@ -602,15 +602,29 @@ select{background:#21262d;border:1px solid #30363d;color:#c9d1d9;padding:6px 10p
       <span class="ts" id="vr-info"></span>
       <label style="display:flex;align-items:center;gap:5px;font-size:13px;color:#c9d1d9;cursor:pointer"><input type="checkbox" id="vr-signal" onchange="renderVolumeRecords()"> 🎯 진입 신호만</label>
     </div>
-    <p class="lead">몇 년 만의 최대 거래대금이 터진 종목. <b>터진 날 사지 말고</b> 숨고르기 뒤 🎯 돌려세우는 봉에서 보세요. 손절선 = 신기록 전날 종가.</p>
-    <details class="why"><summary>근거 · 단계 설명 · 파는 법</summary>
-      <b>신기록</b> = 최근 4개월 안에 평소 10배↑ 거래대금 + 전날 대비 +5% 양봉(리츠·스팩·ETF 제외).
-      <b>윗꼬리 신기록</b> = 장중 +8% 넘게 쐈다가 밀린 대량거래(블록딜 제외)(대한제강 10/1형) — 설거지든 뭐든 주시용, 🎯 진입 신호는 안 붙임.
-      <b style="color:#3fb950">꼬리 돌파</b> = 그 윗꼬리 끝(신기록일 고가)을 종가로 넘음 = 그날 물린 사람 0.
-      3년: 터진 날 사면 20일 뒤 중간 <b style="color:#f85149">-7%</b>, 대신 95%가 20일 안에 더 높은 가격을 찍음(중간 +15%).<br>
-      <b style="color:#3fb950">숨고르기</b> = 거래가 마르며 기준선 지킴 · <b>무너짐</b> = 기준선 아래이거나 한 번이라도 -15% 아래 마감 · <b style="color:#f85149">설거지</b> = 다음 1~2일 더 큰 거래의 윗꼬리 음봉(20일 뒤 중간 -12%).<br>
-      <b style="color:#e3b341">🎯 진입 신호</b> = 숨고르기 중 +3% 양봉·거래 2배 + 시장 상승·횡보 → 40일 뒤 시장 대비 +1.9%p(하락장은 -5.8%p), 📈 실적까지 겹치면 +7.8%p(31건).<br>
-      <b>파는 법</b>: 그냥 40일 보유(중간 -2.0%)보다 <b>+10%에 절반 + 나머지 고점 대비 -8% 이탈</b>(중간 +3.8%, 수익 69%)이 안정적, 시초 +5% 갭엔 덜어내기(+7.3%).
+    <p class="lead">🔥 <b>몇 년 만에 거래대금이 가장 크게 터진 종목</b>들입니다. 크게 움직일 힘이 생긴 종목이지만, <b>터진 날 바로 사면 손해가 많았습니다</b>.
+      쉬는 걸 지켜보다가 <b style="color:#e3b341">🎯 다시 힘이 붙는 날</b> 들어가세요. 손절선 = 터지기 전날 종가.</p>
+    <details class="why"><summary>📖 이 목록 보는 법 (단계 뜻 · 언제 사나 · 파는 법)</summary>
+      <div style="line-height:1.75;font-size:13px">
+      <b>무엇을 모으나</b><br>
+      최근 4개월 안에 <b>평소 10배 넘는 거래대금</b>이 터진 종목 (리츠·스팩·ETF 제외). 두 가지입니다.<br>
+      ① 그날 <b>+5% 넘는 양봉</b>으로 크게 오른 경우 ② 장중 <b>+8% 넘게 쐈다가 밀린</b> 경우(윗꼬리, 대한제강 10/1형 — 블록딜은 뺌, 지켜보기용)<br><br>
+      <b>단계 뜻</b><br>
+      😮‍💨 <b>쉬는 중</b> — 거래가 말라 가면서 기준선(터지기 전날 종가)을 지키는 중 → <b>진입 대기</b><br>
+      🚀 <b>윗꼬리 뚫음</b> — 터진 날 윗꼬리 끝(그날 고가)을 종가로 넘음 → 그날 산 사람이 전부 수익이라 위에 팔 물량이 없음<br>
+      🆕 <b>최근 터짐</b> — 터진 지 10일 안<br>
+      📈 <b>오르는 중</b> — 아직 거래가 안 말랐음 (쉬기 전)<br>
+      ⚠ <b>위에서 팔림</b> — 터진 다음 1~2일 더 큰 거래로 윗꼬리 음봉 → 20일 뒤 중간 <b style="color:#f85149">-12%</b>, 조심<br>
+      <span class="ts">무너짐</span> — 기준선 아래로 내려갔거나 한 번이라도 -15% 아래로 마감 → 끝난 종목 (기본 화면에서 뺌)<br><br>
+      <b style="color:#e3b341">🎯 언제 사나</b><br>
+      '쉬는 중'에 <b>+3% 양봉 · 거래 2배</b>로 다시 고개를 드는 날 (돌려세우는 봉) + 시장이 상승·횡보일 때<br>
+      → 40일 뒤 시장보다 <b>+1.9%p</b>, 실적까지 좋아진 종목(📈 실적)이면 <b>+7.8%p</b>(31건). 하락장에선 -5.8%p라 쉬기.<br><br>
+      <b>왜 터진 날 안 사나</b><br>
+      3년 동안 터진 날 종가에 사면 20일 뒤 중간 <b style="color:#f85149">-7%</b>였습니다. 대신 95%가 20일 안에 그보다 높은 값을 한 번은 찍었습니다(중간 +15%). 크게 흔들리는 종목이라는 뜻입니다.<br><br>
+      <b>파는 법</b><br>
+      +10%에서 절반 팔고, 나머지는 보유 중 최고 종가에서 -8% 내려오면 정리 → 중간 <b>+3.8%</b>, 69% 수익 (그냥 40일 들고 있기는 중간 -2.0%).<br>
+      다음 날 시초가가 +5% 넘게 뜨면 일부 덜기 (+7.3%).
+      </div>
     </details>
     <table class="pb-table">
       <thead><tr><th>종목</th><th>단계</th><th>신기록일</th><th>그 뒤 최고</th><th>지금</th></tr></thead>
@@ -1659,13 +1673,14 @@ function renderVolumeRecords(){
   const cnt = s=>_vrData.items.filter(x=>x.stage===s).length;
   const nsig = _vrData.items.filter(x=>x.entry_signal).length;
   document.getElementById('vr-sum').textContent = `${_vrData.items.filter(x=>x.stage!=='무너짐').length}개 · 🎯 진입 신호 ${nsig}`;
-  document.getElementById('vr-info').textContent = `기준일 ${_vrData.trading_date} · 시장 ${_vrData.market_state||'-'} · 🎯 ${nsig} · 꼬리 돌파 ${cnt('꼬리 돌파')} · 숨고르기 ${cnt('숨고르기')} · 신규 ${cnt('신규')} · 진행 중 ${cnt('진행 중')} · 설거지 ${cnt('설거지')} · 무너짐 ${cnt('무너짐')}`;
+  document.getElementById('vr-info').textContent = `기준일 ${_vrData.trading_date} · 시장 ${_vrData.market_state||'-'} · 🎯 진입 신호 ${nsig} · 쉬는 중 ${cnt('숨고르기')} · 윗꼬리 뚫음 ${cnt('꼬리 돌파')} · 최근 터짐 ${cnt('신규')} · 오르는 중 ${cnt('진행 중')} · 위에서 팔림 ${cnt('설거지')} · 무너짐 ${cnt('무너짐')}`;
   if(!items.length){ body.innerHTML = '<tr><td colspan="5" style="color:#8b949e;text-align:center;padding:20px">해당 종목이 없습니다</td></tr>'; return; }
+  const SN = {'숨고르기':'😮‍💨 쉬는 중','꼬리 돌파':'🚀 윗꼬리 뚫음','신규':'🆕 최근 터짐','진행 중':'📈 오르는 중','설거지':'⚠ 위에서 팔림','무너짐':'무너짐'};
   const color = {'꼬리 돌파':'#3fb950','숨고르기':'#3fb950','신규':'#58a6ff','진행 중':'#d29922','설거지':'#f85149','무너짐':'#8b949e'};
   const sg = n=>(n>=0?'+':'')+n;
   body.innerHTML = items.map(x=>`<tr style="cursor:pointer" onclick="openChartModal('${x.code}','${x.name}','${x.event_date}')">
     <td>${x.entry_signal?'<b style="color:#e3b341">🎯 진입 신호</b><br>':''}<b>${x.name}</b> <span style="color:#8b949e;font-size:11px">${x.code}</span>${flagTag(x)}${x.earn_up?' <span style="color:#3fb950;font-size:11px;border:1px solid #238636;border-radius:8px;padding:0 5px">📈 실적</span>':''}${x.market_cap?`<br><span class="ts">시총 ${cdWon(x.market_cap)}</span>`:''}${(x.families||[]).length?`<br><span class="ts" style="color:#c9d1d9">${x.families.join(', ')}</span>`:''}</td>
-    <td data-label="단계"><b style="color:${color[x.stage]}">${x.stage}</b><br><span class="ts">마지막 대량거래 뒤 ${x.rest_days}일</span></td>
+    <td data-label="단계"><b style="color:${color[x.stage]}">${SN[x.stage]||x.stage}</b><br><span class="ts">마지막 대량거래 뒤 ${x.rest_days}일</span></td>
     <td data-label="신기록일">${x.event_date.slice(5)} <span style="color:#f85149">${sg(x.event_change_pct)}%</span>${x.event_kind==='윗꼬리'?` <span style="font-size:11px;color:#d29922" title="장중 고가까지 올랐다가 밀린 대량거래">윗꼬리(고가 ${sg(x.event_high_pct)}%)</span>`:''} <span style="font-size:11px;color:${x.days_since>40?'#d29922':'#8b949e'}">(${x.days_since}거래일 전)</span><br><span class="ts">${cdWon(x.event_value)} · 평소 ${x.event_x}배</span></td>
     <td data-label="그 뒤 최고" style="color:#f85149">${sg(x.rise_pct)}%<br><span class="ts">${x.peak_date.slice(5)}</span></td>
     <td data-label="지금" style="text-align:right">${x.close_price.toLocaleString()}원${gapTag(x.gap20_pct)} <span style="color:${x.change_pct>=0?'#f85149':'#3b82f6'};font-size:11px">${sg(x.change_pct.toFixed(2))}%</span><br><span class="ts">고점 ${x.off_peak_pct}% · 상승분 ${x.kept_pct}% 유지 · 거래 ${x.dry_pct}%로 마름</span><br><span class="ts" style="color:#f85149">기준선(손절) ${x.stop_price.toLocaleString()}원 · ${x.stop_gap_pct}%</span>${x.entry_signal?`<br><span class="ts" style="color:#e3b341">매도: 시초가 +5% 이상 갭이면 덜어내기 · ${Math.round(x.close_price*1.1).toLocaleString()}원(+10%)에 절반 · 나머지는 보유 중 최고 종가 -8% 이탈 시</span>`:''}</td>
