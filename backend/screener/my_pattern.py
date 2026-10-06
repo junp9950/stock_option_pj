@@ -92,7 +92,15 @@ def text_summary(db: Session, k: int = 5) -> str:
     r = scan(db)
     if not r["trading_date"]:
         return ""
-    lines = [f"🎯 <b>최적 조건·내 패턴</b> ({r['trading_date'][5:]}, 시장 {r['market'] or '-'})"]
+    lines = []
+    try:
+        from backend.services.telegram import market_status, status_line  # noqa: PLC0415
+        st = market_status(db)
+        if st:
+            lines.append(status_line(st))
+    except Exception:  # noqa: BLE001
+        pass
+    lines.append(f"🎯 <b>최적 조건·내 패턴</b> ({r['trading_date'][5:]}, 시장 {r['market'] or '-'})")
     if r["market"] == "하락":
         lines.append("하락장 — 쉬는 날")
     lines.append("조건 B 섹터: " + (", ".join(r["b_sectors"]) if r["b_sectors"] else "없음 (오늘은 B 쉬는 날)"))

@@ -161,28 +161,97 @@ def summary_pending(db: Session) -> bool:
             and _get(db, "telegram_last_summary", "") != latest.isoformat())
 
 
-def regime_alert(db: Session) -> str | None:
-    """시장 국면(전종목 평균 지수 vs 20일선)이 바뀐 날·하락 전환이 가까운 날 알림 문구. 바뀐 게 없으면 None (2026-10-06 "무조건 알려줘야").
-    7월처럼 손실은 상승→하락으로 넘어가는 며칠에 몰렸다."""
-    from backend.screener.market_regime import current_regime  # noqa: PLC0415
-    r = current_regime(db)
-    if not r:
+def market_status(db: Session) -> dict | None:
+    """시장 상태 숫자 — 전체·코스피·코스닥 전종목 평균 국면, 삼전·하닉 vs 코스닥 20일 차이, 삼하 외국인 5일 순매수 (2026-10-06)."""
+    from backend.screener.market_regime import regime_series  # noqa: PLC0415
+    rows = db.execute(text(
+        "select p.trading_date, s.market, avg(coalesce(p.change_pct, 0)), count(*) from spot_daily_prices p join stocks s on s.code = p.stock_code "
+        "where p.trading_date >= current_date - 120 and p.change_pct <> 'NaN' group by 1, 2")).all()
+    if not rows:
         return None
-    st, gap, cum = r["state"], r.get("vs_ma20_pct", 0.0), r.get("cum20_pct", 0.0)
-    prev = _get(db, "market_regime_last", {})
-    _put(db, "market_regime_last", {"state": st, "as_of": r["as_of"], "gap": gap,
-                                    "warned": prev.get("warned") if prev.get("state") == st else None})
-    head = f"(전종목 평균 지수 · 20일선 대비 {gap:+.1f}% · 최근 20일 {cum:+.1f}%, {r['as_of'][5:]} 종가)"
-    if prev and prev.get("state") and prev["state"] != st:
-        if st == "하락":
-            return f"🚨 <b>시장 하락 전환</b> {head}\n원칙대로 매매 쉬기 — 새 종베·스윙 진입 멈춤, 들고 있는 것은 손절선 점검."
-        if prev["state"] == "하락":
-            return f"✅ <b>시장 하락 끝 → {st}</b> {head}\n다시 매매 가능. 첫 며칠은 뜨는 섹터의 거래 붙은 양봉만, 비중 작게."
-        return f"ℹ️ 시장 {prev['state']} → {st} {head}"
-    if st != "하락" and gap <= 1.0 and prev.get("warned") != r["as_of"][:7] + st:
-        _put(db, "market_regime_last", {"state": st, "as_of": r["as_of"], "gap": gap, "warned": r["as_of"][:7] + st})
-        return f"⚠️ <b>하락 전환 가까움</b> {head}\n지수가 20일선에 1% 안으로 붙었습니다. 빠지는 종목 줍기 금지, 새 진입은 조건 B만."
-    return None
+    agg: dict = {"전체": {}, "코스피": {}, "코스닥": {}}
+    for d, m, a, n in rows:
+        k = "코스피" if m == "KOSPI" else "코스닥"
+        agg[k][d] = float(a)
+        t = agg["전체"].setdefault(d, [0.0, 0])
+        t[0] += float(a) * n
+        t[1] += n
+    agg["전체"] = {d: v[0] / v[1] for d, v in agg["전체"].items()}
+    reg = {k: regime_series(v) for k, v in agg.items()}
+    last = max(reg["전체"])
+    out = {"as_of": last.isoformat(), **{k: reg[k][max(reg[k])] for k in reg}}
+    sh = db.execute(text("select trading_date, avg(change_pct) from spot_daily_prices where stock_code in ('005930','000660') "
+                         "and trading_date >= current_date - 60 group by 1 order by 1")).all()
+    q = sorted(agg["코스닥"].items())
+    if len(sh) >= 21 and len(q) >= 21:
+        import math  # noqa: PLC0415
+        r_sh = math.prod(1 + float(v or 0) / 100 for _, v in sh[-20:]) - 1
+        r_q = math.prod(1 + v / 100 for _, v in q[-20:]) - 1
+        out["sh20"], out["kq20"], out["rel"] = round(r_sh * 100, 1), round(r_q * 100, 1), round((r_sh - r_q) * 100, 1)
+    f = db.execute(text("select coalesce(sum(foreign_net_buy), 0) from spot_investor_flows where stock_code in ('005930','000660') and trading_date in "
+                        "(select distinct trading_date from spot_investor_flows order by 1 desc limit 5)")).scalar()
+    out["sh_foreign5"] = round(float(f or 0) / 1e8)
+    return out
+
+
+def _st(x: dict) -> str:
+    icon = {"상승": "🟢", "횡보": "🟡", "하락": "🔴"}.get(x["state"], "⚪")
+    return f"{icon} {x['state']} ({x['vs_ma20_pct']:+.1f}%)"
+
+
+def status_line(st: dict) -> str:
+    """매일 요약 맨 위 한 줄."""
+    rel = f" · 삼하−코스닥 20일 {st['rel']:+.1f}%p" if "rel" in st else ""
+    return f"📊 <b>시장</b> 전체 {_st(st['전체'])} · 코스피 {_st(st['코스피'])} · 코스닥 {_st(st['코스닥'])}{rel}"
+
+
+def regime_alert(db: Session) -> str | None:
+    """시장 경고 — 바뀐 날만 보낸다 (2026-10-06 "무조건 알려줘야", "가시성 좋게").
+    ① 전체·코스피·코스닥 국면 전환(하락 진입·하락 끝) ② 하락 전환 가까움(20일선 1% 안)
+    ③ 삼하 흡수: 삼전·하닉 20일 수익이 코스닥 평균보다 +15%p↑ → 3년: 다음 20일 코스닥 평균 -3.81% (해제는 +10%p 아래)
+    ④ 외국인이 삼하를 5일 순매수로 돌아섬(그 반대도)."""
+    st = market_status(db)
+    if not st:
+        return None
+    prev = _get(db, "market_alert_state", {}) or {}
+    first = not prev
+    cur = {"전체": st["전체"]["state"], "코스피": st["코스피"]["state"], "코스닥": st["코스닥"]["state"],
+           "suck": prev.get("suck", False), "fsign": (st["sh_foreign5"] > 0) - (st["sh_foreign5"] < 0),
+           "near": prev.get("near") if prev.get("전체") == st["전체"]["state"] else None}
+    blocks = []
+    LINE = "━━━━━━━━━━━━"
+    for k in ("전체", "코스피", "코스닥"):
+        a, b = prev.get(k), cur[k]
+        if first or not a or a == b:
+            continue
+        x = st[k]
+        if b == "하락":
+            blocks.append(f"🚨🚨 <b>[시장 경고] {k} 하락 전환</b>\n{LINE}\n• {k} 전종목 평균 지수: 20일선 대비 <b>{x['vs_ma20_pct']:+.1f}%</b> · 최근 20일 {x['cum20_pct']:+.1f}%"
+                          f"\n👉 <b>할 일</b>: " + ("새 진입 멈춤 · 스윙·장기 보유 정리 · 손절선 점검" if k == "전체" else f"{k} 종목 새 진입 멈춤 · {k} 스윙 정리"))
+        elif a == "하락":
+            blocks.append(f"✅✅ <b>[시장] {k} 하락 끝 → {b}</b>\n{LINE}\n• 20일선 대비 <b>{x['vs_ma20_pct']:+.1f}%</b>"
+                          f"\n👉 <b>할 일</b>: 첫 2~3일은 뜨는 섹터의 거래 붙은 양봉만, 비중 작게 (7/23처럼 하루 만에 다시 하락한 적 있음)")
+    x = st["전체"]
+    if not first and x["state"] != "하락" and x["vs_ma20_pct"] <= 1.0 and not cur["near"]:
+        cur["near"] = st["as_of"]
+        blocks.append(f"⚠️ <b>[주의] 하락 전환 가까움</b>\n{LINE}\n• 전종목 평균 지수가 20일선 <b>{x['vs_ma20_pct']:+.1f}%</b>까지 붙음"
+                      f"\n👉 <b>할 일</b>: 빠지는 종목 줍기 금지 · 새 진입은 조건 B만")
+    if "rel" in st:
+        if not cur["suck"] and st["rel"] >= 15:
+            cur["suck"] = True
+            blocks.append(f"🧲 <b>[수급 경고] 삼전·하닉이 수급 흡수 중</b>\n{LINE}\n• 20일 수익: 삼하 <b>{st['sh20']:+.1f}%</b> vs 코스닥 평균 {st['kq20']:+.1f}% (차이 <b>{st['rel']:+.1f}%p</b>)"
+                          f"\n• 3년: 이 구간 뒤 20일 코스닥 평균 <b>-3.8%</b>, 삼하는 +9.5% 더 감\n👉 <b>할 일</b>: 한 달간 코스닥 종베·스윙 비중 줄이기")
+        elif cur["suck"] and st["rel"] < 10:
+            cur["suck"] = False
+            blocks.append(f"🧲 <b>[수급] 삼하 흡수 경고 해제</b> — 차이 {st['rel']:+.1f}%p로 줄어듦")
+    if not first and prev.get("fsign") is not None and cur["fsign"] != prev.get("fsign") and cur["fsign"] != 0:
+        blocks.append(("💰 <b>[수급] 외국인, 삼전·하닉 5일 순매수로 전환</b>" if cur["fsign"] > 0 else "💸 <b>[수급] 외국인, 삼전·하닉 5일 순매도로 전환</b>")
+                      + f"\n{LINE}\n• 최근 5일 외국인 {st['sh_foreign5']:+,}억"
+                      + ("\n👉 삼하로 돈이 돌아오는 신호일 수 있음 — 코스닥 비중 점검" if cur["fsign"] > 0 else ""))
+    _put(db, "market_alert_state", {**cur, "as_of": st["as_of"]})
+    if not blocks:
+        return None
+    return "\n\n".join(blocks) + "\n\n" + status_line(st)
 
 
 def send_summary_once(db: Session) -> bool:
