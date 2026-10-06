@@ -2072,6 +2072,17 @@ def startup_event() -> None:
             import logging  # noqa: PLC0415
             logging.getLogger(__name__).info("오늘(%s)은 거래일이 아니므로 startup 파이프라인 스킵", today)
             return
+        from sqlalchemy import text as _t  # noqa: PLC0415
+        _db0 = SessionLocal()
+        try:      # 오늘 수집이 이미 끝났으면(장 마감 뒤 배포) 다시 돌리지 않는다 — 재시작마다 3분 넘게 무거웠다 (2026-10-06)
+            done = _db0.execute(_t("select count(*) from spot_investor_flows where trading_date = :d and "
+                                   "(foreign_net_buy <> 0 or institution_net_buy <> 0)"), {"d": today}).scalar() or 0
+        finally:
+            _db0.close()
+        if done:
+            import logging  # noqa: PLC0415
+            logging.getLogger(__name__).info("오늘 수집 이미 끝남 — startup 파이프라인 스킵")
+            return
         _db = SessionLocal()
         try:
             run_daily_pipeline(_db)

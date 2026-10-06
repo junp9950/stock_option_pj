@@ -76,9 +76,19 @@ def data_version(db: Session) -> tuple:
     return (*tuple(row), _CODE)
 
 
+_inflight: dict[tuple, threading.Lock] = {}
+
+
 def cached(name: str, args: tuple, db: Session, compute: Callable[[], Any]) -> Any:
     key = (name, args)
     version = data_version(db)
+    with _lock:
+        kl = _inflight.setdefault(key, threading.Lock())
+    with kl:   # 같은 계산을 여러 요청이 동시에 하지 않게 — 먼저 온 요청이 계산하고 나머지는 그 결과를 쓴다 (2026-10-06 오늘 탭 멈춤)
+        return _cached(key, args, version, compute)
+
+
+def _cached(key: tuple, args: tuple, version: tuple, compute: Callable[[], Any]) -> Any:
     with _lock:
         hit = _cache.get(key)
         if hit is None and not args:
