@@ -122,6 +122,14 @@ def _shape(c: list[dict]) -> dict | None:
     vx = v / avg if avg else 0
     if rng > 0 and abs(cl - o) / o <= 0.01 and abs(cl - o) / rng <= 0.35:   # 몸통 1% 이하·변동폭의 35% 이하 (작은 도지도 포함)
         tags.append("🕯밑꼬리 도지" if (min(o, cl) - l) / rng >= 0.5 else "🕯도지")
+    # 거래 터진 꽉 찬 음봉 (사용자 원칙 2026-10-07 "진짜 위험") — fullbear.py: 오르던 종목이면 5일 -1.5%·20일 안 -10% 58%, 약하던 종목은 오히려 반등
+    full_bear = rng > 0 and chg <= -4 and (o - cl) / rng >= 0.8 and (cl - l) / rng <= 0.1 and vx >= 2
+    try:
+        r20 = (float(c[-2]["closePrice"]) / float(c[-22]["closePrice"]) - 1) * 100 if len(c) >= 22 else None
+    except (KeyError, ValueError, TypeError, ZeroDivisionError):
+        r20 = None
+    if full_bear:
+        tags.append("⚠꽉찬음봉")
     if chg >= 5 and vx >= 2:
         tags.append("🔥장대양봉")
     elif chg <= -5 and vx >= 2:
@@ -130,7 +138,7 @@ def _shape(c: list[dict]) -> dict | None:
         tags.append("거래 마름")
     bx = box_info([float(x["highPrice"]) for x in c], [float(x["lowPrice"]) for x in c], cl)
     return {**bx, "date": c[-1]["timestamp"][:10], "close": cl, "chg": chg, "vx": vx, "open": o, "low": l, "high": h,
-            "width": (max(closes) / min(closes) - 1) * 100 if closes else 0, "tags": tags}
+            "width": (max(closes) / min(closes) - 1) * 100 if closes else 0, "tags": tags, "r20": r20}
 
 
 def _when() -> str:
@@ -140,6 +148,28 @@ def _when() -> str:
 
 def _won(x: float) -> str:
     return f"{x:,.0f}"
+
+
+def _full_bear_line(nm: str, s: dict) -> str:
+    r20 = s.get("r20")
+    if r20 is not None and r20 >= 15:
+        how = "오르던 종목 → <b>정리 검토</b> (3년: 5일 -1.5%, 20일 안 -10% 58%)"
+    elif r20 is not None and r20 < 0:
+        how = "약하던 종목 → 투매일 수 있음, 내일 저가 지키는지 확인 (3년: 5일 +2.3%)"
+    else:
+        how = "내일 저가 깨면 정리"
+    return f"{nm} {s['chg']:+.1f}% · <b>거래 {s['vx']:.1f}배 꽉 찬 음봉</b> (밑꼬리 없음)\n   └ {how}"
+
+
+def _held(db: Session) -> list[tuple[str, str]]:
+    """매매 일지(owner junp) 기준 지금 들고 있는 종목."""
+    from sqlalchemy import text  # noqa: PLC0415
+    try:
+        return [(c, n) for c, n in db.execute(text(
+            "select code, max(name) from trade_executions where owner = 'junp' "
+            "group by code having sum(case when side = '매수' then qty else -qty end) > 0")).all()]
+    except Exception:  # noqa: BLE001
+        return []
 
 
 def report(db: Session, force: bool = False) -> str | None:
@@ -160,7 +190,9 @@ def report(db: Session, force: bool = False) -> str | None:
         lv, p, nm = it["level"], s["close"], f"<b>{escape(it['name'])}</b>"
         pct = f"{s['chg']:+.1f}%"
         candle = next((t for t in s["tags"] if "도지" in t), "")
-        if "🔥장대양봉" in s["tags"]:
+        if "⚠꽉찬음봉" in s["tags"]:
+            g["warn"].append(_full_bear_line(nm, s))
+        elif "🔥장대양봉" in s["tags"]:
             g["fire"].append(f"{nm} {pct} · 거래 {s['vx']:.0f}배" + (f" · {_won(lv)} 위 마감 ✅" if it["kind"] == "above" and p >= lv else ""))
         elif it["kind"] == "above" and p >= lv:
             g["brk"].append(f"{nm} {_won(p)} ({pct}) · {_won(lv)} 위 마감 · 거래 {s['vx']:.1f}배" + (f"\n   └ <i>{escape(it['note'])}</i>" if it.get("note") else ""))
@@ -180,12 +212,20 @@ def report(db: Session, force: bool = False) -> str | None:
         else:
             far = f"(선까지 {(lv / p - 1) * 100:.0f}%)" if it["kind"] == "above" else ""
             g["far"].append(escape(it["name"]) + far)
+    # 보유 종목(매매 일지)도 꽉 찬 음봉만 따로 본다 — 관심 목록에 없어도 (2026-10-07)
+    have = {it["code"] for it in _items(db)}
+    for code, name in _held(db):
+        if code in have:
+            continue
+        s = _day(code, fetch_candles)
+        if s and "⚠꽉찬음봉" in s["tags"]:
+            g["warn"].append(_full_bear_line(f"<b>{escape(name)}</b>(보유)", s))
     if not force and last_date != today:
         return None     # 휴장일
     d = last_date[5:].replace("-", "/")
     out = [f"📋 <b>관심 종목 {d} {_when()}</b>"]
     blocks = (("✅ 매수 조건: 선 위 마감 → 종가 매수 검토", "brk"), ("🔥 거래 실린 장대양봉", "fire"), ("👀 선 코앞 (3% 안)", "close"),
-              ("🕯 도지", "candle"), ("⚠ 이탈·장대음봉", "warn"))
+              ("🕯 도지", "candle"), ("⚠ 이탈·장대음봉·꽉 찬 음봉", "warn"))
     for title, k in blocks:
         if g[k]:
             out.append(f"\n{title}")
