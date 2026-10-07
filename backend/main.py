@@ -1929,14 +1929,20 @@ function drawCandleChart(allCandles, spikeDate, show){
     const c=allCandles[i], p=+allCandles[i-1].closePrice, avg=volsAll.slice(i-20,i).reduce((a,b)=>a+b,0)/20;
     if(+c.closePrice>=p*1.08 && +c.closePrice>+c.openPrice && avg>0 && +c.volume>=avg*3){ ai=i; break; }
   }
+  let anchorLab='기준봉 VWAP';
+  if(ai<0){   // 기준봉(+8%·거래 3배)이 없으면 보이는 구간에서 거래가 가장 많았던 양봉에서 시작 (2026-10-07 SK이노베이션처럼 선이 안 뜨던 것)
+    let best=-1;
+    for(let i=Math.max(off,1);i<allCandles.length;i++){ const c=allCandles[i]; if(+c.closePrice>+c.openPrice && +c.closePrice>+allCandles[i-1].closePrice && (best<0||+c.volume>+allCandles[best].volume)) best=i; }
+    if(best>=0){ ai=best; anchorLab='최대거래 양봉 VWAP'; }
+  }
   if(ai>=0){
     let pv=0, vv=0; const av=[];
     for(let i=ai;i<allCandles.length;i++){ const c=allCandles[i], tp=(+c.highPrice + +c.lowPrice + +c.closePrice)/3; pv+=tp*(+c.volume); vv+=+c.volume; av.push(vv?pv/vv:tp); }
     ctxC.strokeStyle='#f0883e'; ctxC.lineWidth=2; ctxC.setLineDash([6,4]); ctxC.beginPath();
     av.forEach((v,k)=>{ const x=(ai-off+k)*cw+cw/2, y=yP(v); k?ctxC.lineTo(x,y):ctxC.moveTo(x,y); }); ctxC.stroke(); ctxC.setLineDash([]); ctxC.lineWidth=1;
-    ctxC.fillStyle='#f0883e'; ctxC.fillText('기준봉 VWAP', 8+4*62, 16);
+    ctxC.fillStyle='#f0883e'; ctxC.fillText(anchorLab, 8+4*62, 16);
     const lv=av[av.length-1], lc=+allCandles[allCandles.length-1].closePrice;
-    _avwapNote=` · 기준봉 ${(allCandles[ai].timestamp||'').slice(5,10)} VWAP ${Math.round(lv).toLocaleString()} ${lc>=lv?'위 ✓':'아래 ⚠'}`;
+    _avwapNote=` · ${anchorLab==='기준봉 VWAP'?'기준봉':'최대거래 양봉'} ${(allCandles[ai].timestamp||'').slice(5,10)} VWAP ${Math.round(lv).toLocaleString()} ${lc>=lv?'위 ✓':'아래 ⚠'}`;
   }
   const last=ES.slice(0,3).map(a=>a[a.length-1]), cl=+candles[n-1].closePrice;   // 간격은 5·10·20만
   return cl ? (Math.max(...last)-Math.min(...last))/cl*100 : null;
