@@ -632,6 +632,15 @@ select{background:#21262d;border:1px solid #30363d;color:#c9d1d9;padding:6px 10p
       <tbody id="vr-body"><tr><td colspan="5" style="color:#8b949e;text-align:center;padding:20px">로딩 중…</td></tr></tbody>
     </table>
   </details>
+  <details class="sec" data-k="lp">
+    <summary>🏦 대형주 눌림 박스 <span class="ts" id="lp-info"></span></summary>
+    <p class="lead" style="margin-top:6px">하루 거래대금 <b>500억↑ 대형주</b>가 60일 고점에서 <b>-5~-20%</b> 눌려 120일선 근처 위에서 쉬고, 거래가 평소(60일) 이하. 대형주는 바닥(-40%)까지 잘 안 빠져서 바닥 박스 감시에는 안 잡히는 자리(에이피알형). <b>손절 = 최근 15일 박스 하단 아래 마감</b> · 20일 보유.</p>
+    <details class="why"><summary>근거 보기</summary>
+      3년 상승·횡보장(5거래일 간격 표본): 대형주 936건 <b>20일 뒤 평균 +7.0%</b>(오른 경우 57%), 5일 +1.8% · 10일 +3.1%. 같은 조건 전 종목은 20일 +3.0%.
+      긴 상승 추세선에 닿은 경우만 골라도 더 좋아지지 않았음(+4.2%, 오른 경우 65%). 하락장에선 보기만. 화면은 15일 박스 폭 20% 이하만 보여 줌(막 무너진 종목 제외, 검증 밖 조건).
+    </details>
+    <div id="lp-body" style="display:flex;flex-wrap:wrap;gap:6px" class="ts">로딩 중…</div>
+  </details>
   <details class="sec" data-k="bb">
     <summary>👀 바닥 박스 감시 <span class="ts" id="bb-info"></span></summary>
 
@@ -1582,6 +1591,7 @@ async function loadCandidates(){
   loadVolumeRecords();   // 아래 대량거래 관심종목은 따로 동시에 불러온다
   loadBottomBox();
   loadSupportSetups();
+  loadLargePullback();
   const body = document.getElementById('cd-body');
   body.innerHTML = '<tr><td colspan="5" style="color:#8b949e;text-align:center;padding:20px">로딩 중…</td></tr>';
   try{
@@ -1678,6 +1688,17 @@ async function loadSupportSetups(){
 }
 
 // ── 바닥 박스 감시 ────────────────────────────────────────────
+// 대형주 눌림 박스 (2026-10-07)
+async function loadLargePullback(){
+  const d=await fetch(`${API}/screener/large-pullback`).then(r=>r.ok?r.json():null).catch(()=>null);
+  const el=document.getElementById('lp-body'); if(!el) return;
+  if(!d){ el.textContent='불러오지 못했습니다'; return; }
+  document.getElementById('lp-info').textContent=`${d.trading_date} · ${d.items.length}개${d.market==='하락'?' · 🔴 하락장 — 보기만':''}`;
+  el.innerHTML=d.items.length?d.items.map(x=>`<span onclick="openChartModal('${x.code}','${x.name}','')" style="cursor:pointer;border:1px solid #1f6feb;border-radius:8px;padding:6px 10px;font-size:12.5px;line-height:1.55">
+    <b style="color:#e6edf3">${x.name}</b> <span style="color:${x.change_pct>=0?'#f85149':'#58a6ff'}">${x.change_pct>0?'+':''}${x.change_pct}%</span><br>
+    <span class="ts">고점 ${x.off_hi60_pct}% · 15일 박스 폭 ${x.box_pct}% · 거래 ${x.vol_ratio}배 · 하루 ${x.liq_eok.toLocaleString()}억${x.families.length?' · '+x.families[0]:''}</span><br>
+    <span style="color:#58a6ff">손절 ${x.stop.toLocaleString()}원 (${x.stop_pct}%)</span></span>`).join(''):'지금은 없습니다';
+}
 async function loadBottomBox(){
   const d=await fetch(`${API}/screener/bottom-box`).then(r=>r.ok?r.json():null).catch(()=>null);
   const el=document.getElementById('bb-body'); if(!el) return;

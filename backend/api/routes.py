@@ -1628,6 +1628,14 @@ def get_bottom_box(db: Session = Depends(get_db)):
     return cached("bottom_box", (), db, lambda: scan(db))
 
 
+@router.get("/screener/large-pullback")
+def get_large_pullback(db: Session = Depends(get_db)):
+    """대형주 눌림 박스 (에이피알형) — 하루 500억↑ · 60일 고점 -5~-20% · 120일선 근처 위 · 거래 마름."""
+    from backend.screener.large_pullback import scan  # noqa: PLC0415
+    from backend.services.result_cache import cached  # noqa: PLC0415
+    return cached("large_pullback", (), db, lambda: scan(db))
+
+
 @router.get("/screener/value-records")
 def get_value_records(db: Session = Depends(get_db)):
     """오늘 거래대금이 6개월 넘게 만의 최고인 종목 ('25년 3월 이후 최고')."""
@@ -1743,6 +1751,7 @@ def warm_caches(db: Session) -> None:
     get_value_records(db=db)
     get_bottom_box(db=db)
     get_support_setups(db=db)
+    get_large_pullback(db=db)
     get_dashboard(db=db)        # 첫 화면 '오늘'
     get_my_pattern(db=db)       # 종베 탭 — dashboard와 캐시 이름이 달라 따로 데워야 함 (2026-10-07 종베 탭이 하루 전 데이터로 남아 있었음)
 
