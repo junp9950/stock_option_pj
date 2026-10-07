@@ -1781,13 +1781,14 @@ async function openChartModal(code, name, spikeDate){
   document.getElementById('chart-modal-note').textContent = '로딩 중…';
   document.getElementById('chart-modal-bg').classList.add('show');
   try{
-    const data = await fetch(`${API}/toss/candles/${code}?interval=1d&count=90`).then(r=>r.ok?r.json():null);
+    const data = await fetch(`${API}/toss/candles/${code}?interval=1d&count=150`).then(r=>r.ok?r.json():null);   // EMA 계산용으로 더 받아 오고 그림은 90개
     if(!data || !data.candles || !data.candles.length){
       document.getElementById('chart-modal-note').textContent = '토스 API에서 차트 데이터를 가져오지 못했습니다.';
       return;
     }
-    document.getElementById('chart-modal-note').textContent = spikeDate ? `스파이크일: ${spikeDate}` : `최근 90거래일 일봉`;
-    drawCandleChart(data.candles, spikeDate);
+    const g = drawCandleChart(data.candles, spikeDate);
+    document.getElementById('chart-modal-note').textContent = (spikeDate ? `스파이크일: ${spikeDate}` : `최근 90거래일 일봉`)
+      + (g!=null ? ` · EMA 5·10·20 간격 ${g.toFixed(1)}% ${g<=4?'(모임 ✓)':g>=7?'(벌어짐 ⚠)':''}` : '');
   }catch(e){
     console.error(e);
     document.getElementById('chart-modal-note').textContent = '차트 로딩 실패';
@@ -1796,7 +1797,14 @@ async function openChartModal(code, name, spikeDate){
 function closeChartModal(){ document.getElementById('chart-modal-bg').classList.remove('show'); }
 
 // 외부 라이브러리 없이 순수 canvas로 캔들차트 + 거래량 + 눌림목 지지선 그리기
-function drawCandleChart(candles, spikeDate){
+function drawCandleChart(allCandles, spikeDate){
+  // 단기 EMA 5·10·20 (2026-10-07 사용자 "EMA를 내 눈으로 확인할 수 없나") — 앞쪽 캔들로 미리 계산하고 최근 90개만 그림
+  const emaOf=(arr,n)=>{ const k=2/(n+1); let e=arr[0]; return arr.map(v=>(e=v*k+e*(1-k))); };
+  const closesAll=allCandles.map(c=>+c.closePrice);
+  const EMA=[5,10,20].map(n=>emaOf(closesAll,n));
+  const off=Math.max(0,allCandles.length-90);
+  const candles=allCandles.slice(off);
+  const ES=EMA.map(a=>a.slice(off));
   const cvCandle = document.getElementById('pb-candle-canvas');
   const cvVol = document.getElementById('pb-volume-canvas');
   const dpr = window.devicePixelRatio || 1;
@@ -1813,7 +1821,7 @@ function drawCandleChart(candles, spikeDate){
   const n = candles.length;
   const cw = W/n, bw = Math.max(1, cw*0.6);
   const lows = candles.map(c=>+c.lowPrice), highs = candles.map(c=>+c.highPrice);
-  const minP = Math.min(...lows), maxP = Math.max(...highs);
+  const minP = Math.min(...lows, ...ES.flat()), maxP = Math.max(...highs, ...ES.flat());
   const pad = (maxP-minP)*0.06 || 1;
   const yP = p => H - 10 - (p-(minP-pad))/((maxP+pad)-(minP-pad))*(H-20);
   const maxV = Math.max(...candles.map(c=>+c.volume), 1);
@@ -1855,6 +1863,14 @@ function drawCandleChart(candles, spikeDate){
     ctxC.beginPath(); ctxC.moveTo(x1,y1); ctxC.lineTo(x2, Math.min(y1,y2)); ctxC.stroke();
     ctxC.setLineDash([]);
   }
+  // EMA 선 + 범례
+  const EC=['#f778ba','#e3b341','#56d4dd'], EN=['EMA5','EMA10','EMA20'];
+  ctxC.lineWidth=1.4;
+  ES.forEach((a,k)=>{ ctxC.strokeStyle=EC[k]; ctxC.beginPath(); a.forEach((v,i)=>{ const x=i*cw+cw/2, y=yP(v); i?ctxC.lineTo(x,y):ctxC.moveTo(x,y); }); ctxC.stroke(); });
+  ctxC.lineWidth=1; ctxC.font='12px sans-serif';
+  EN.forEach((t,k)=>{ ctxC.fillStyle=EC[k]; ctxC.fillText(t, 8+k*62, 16); });
+  const last=ES.map(a=>a[a.length-1]), cl=+candles[n-1].closePrice;
+  return cl ? (Math.max(...last)-Math.min(...last))/cl*100 : null;
 }
 
 async function runPipeline(){
