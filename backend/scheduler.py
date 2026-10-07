@@ -301,6 +301,12 @@ def start_scheduler() -> BackgroundScheduler:
             db.close()
     scheduler.add_job(_warm_dip, 'cron', day_of_week='mon-fri', hour='9-15', minute='*/4', id='dip_warm',
                       replace_existing=True, max_instances=1)
+    # 배포·재시작 직후에도 카드가 바로 뜨게 장중이면 한 번 바로 계산
+    from datetime import datetime as _dt, timedelta as _td  # noqa: PLC0415
+    from zoneinfo import ZoneInfo as _Z  # noqa: PLC0415
+    _now = _dt.now(_Z("Asia/Seoul"))
+    if _now.weekday() < 5 and 900 <= _now.hour * 100 + _now.minute <= 1540:
+        scheduler.add_job(_warm_dip, 'date', run_date=_now + _td(seconds=20), id='dip_warm_boot', replace_existing=True)
     # 14:50 과매도 줍기 점검 — 오른 섹터가 오늘 -2%↓면 종가 매수 후보
     scheduler.add_job(lambda: _tg("send_dip_live"), 'cron', day_of_week='mon-fri', hour=14, minute=50, id='dip_live',
                       replace_existing=True, max_instances=1)
