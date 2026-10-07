@@ -42,6 +42,11 @@ button.ghost.fav{font-size:13px;padding:6px 10px;border:1px solid #30363d;border
 </style></head><body><main>
 <h1>종목토론</h1><div class="sub">종목 얘기, 차트 스크린샷 자유롭게 남겨 보세요. 사진은 입력창에 <b>Ctrl+V</b>로 붙여넣거나 골라서 올릴 수 있습니다 (글 최대 20장, 댓글 최대 5장).</div>
 <div class="topbar"><button class="ghost" id="back" style="display:none">← 목록</button><span class="muted" id="board-info"></span><span id="me-box" style="display:inline-flex;align-items:center;gap:6px"><span class="muted" style="font-size:12.5px">나는</span><span class="who" data-who="me"></span></span><button class="ghost" id="fav-only" title="위에서 고른 내 이름으로 별 표시한 글만">☆ 즐겨찾기만</button><button id="write-btn">✎ 글쓰기</button></div>
+<div id="search-box" style="display:flex;gap:6px;align-items:center;margin:8px 0;flex-wrap:wrap">
+  <select id="s-scope" style="background:#0d1117;border:1px solid #30363d;color:#c9d1d9;padding:6px 8px;border-radius:6px"><option value="all">전체</option><option value="title">제목·종목</option><option value="content">본문</option><option value="comment">댓글</option></select>
+  <input id="s-q" placeholder="검색어 (제목·본문·댓글)" style="flex:1;min-width:140px;background:#0d1117;border:1px solid #30363d;color:#c9d1d9;padding:6px 10px;border-radius:6px">
+  <button class="ghost" id="s-go">🔍 검색</button><button class="ghost" id="s-clear" style="display:none">✕ 검색 지우기</button>
+</div>
 <section class="box" id="write-box" style="display:none">
   <div class="row">
     <input id="stock-name" class="grow" maxlength="100" placeholder="종목명 (선택)">
@@ -219,16 +224,27 @@ async function loadFavs(){try{const r=await call('GET',`${API}/favs?who=${encode
 async function toggleFav(pid){const on=!favIds.has(pid);try{const r=await call('POST',`${API}/${pid}/fav`,{who:getAuthor(),on});favIds=new Set(r.ids)}catch(err){alert(err.message);return}
   if(current)renderPost();else renderBoard()}
 const star=pid=>`<button class="fav${favIds.has(pid)?' on':''}" data-fav="${pid}" title="${getAuthor()} 즐겨찾기">${favIds.has(pid)?'★':'☆'}</button>`;
+// 검색 (2026-10-07): 결과가 있으면 목록 대신 결과를 보여 준다
+let searchRows=null, searchQ='';
+async function doSearch(){
+  const q=document.getElementById('s-q').value.trim(), sc=document.getElementById('s-scope').value;
+  if(!q){clearSearch();return}
+  try{searchRows=await call('GET',`${API}/search?q=${encodeURIComponent(q)}&scope=${sc}`);searchQ=q}catch(e){alert(e.message);return}
+  document.getElementById('s-clear').style.display='';if(location.hash){location.hash=''}else renderBoard();
+}
+function clearSearch(){searchRows=null;searchQ='';document.getElementById('s-q').value='';document.getElementById('s-clear').style.display='none';renderBoard()}
+const hl=t=>searchQ?esc(t).replace(new RegExp(searchQ.replace(/[.*+?^${}()|[\]\\]/g,'\\$&'),'gi'),m=>`<mark style="background:#9e6a03;color:#fff">${m}</mark>`):esc(t);
 function renderBoard(){
   const box=document.getElementById('list');
   const fb=document.getElementById('fav-only');fb.textContent=favOnly?`★ 즐겨찾기만 (${getAuthor()})`:'☆ 즐겨찾기만';fb.classList.toggle('on',favOnly);
-  const rows=favOnly?all.filter(x=>favIds.has(x.id)):all;
-  document.getElementById('board-info').textContent=all.length?(favOnly?`즐겨찾기 ${rows.length}개`:`글 ${all.length}개`):'';
-  if(!rows.length){box.innerHTML=`<div class="empty">${favOnly?'즐겨찾기한 글이 없습니다. 글 옆 ☆를 누르면 여기 모입니다.':'아직 글이 없습니다. 첫 글을 남겨 주세요.'}</div>`;return}
+  const base=searchRows||all;
+  const rows=favOnly?base.filter(x=>favIds.has(x.id)):base;
+  document.getElementById('board-info').textContent=searchRows?`'${searchQ}' 검색 ${rows.length}개`:(all.length?(favOnly?`즐겨찾기 ${rows.length}개`:`글 ${all.length}개`):'');
+  if(!rows.length){box.innerHTML=`<div class="empty">${searchRows?`'${esc(searchQ)}' 검색 결과가 없습니다.`:favOnly?'즐겨찾기한 글이 없습니다. 글 옆 ☆를 누르면 여기 모입니다.':'아직 글이 없습니다. 첫 글을 남겨 주세요.'}</div>`;return}
   box.innerHTML='<table class="board"><tbody>'+rows.map(x=>`<tr class="post" data-open="${x.id}">
     <td class="b-fav">${star(x.id)}</td>
     <td class="b-tag">${x.stock_name||x.stock_code?esc(x.stock_name||x.stock_code):'자유'}</td>
-    <td><span class="b-title">${esc(x.title)}</span>${x.comments?`<span class="b-cnt">${x.comments}</span>`:''}${x.images?`<span class="b-img" title="사진 ${x.images}장">🖼</span>`:''}${x.edited?' <span class="edited">(수정됨)</span>':''}</td>
+    <td><span class="b-title">${hl(x.title)}</span>${x.comments?`<span class="b-cnt">${x.comments}</span>`:''}${x.images?`<span class="b-img" title="사진 ${x.images}장">🖼</span>`:''}${x.edited?' <span class="edited">(수정됨)</span>':''}${x.hits?`<br><span class="muted" style="font-size:12px">[${x.hits.join(' · ')}] ${hl(x.snippet||'')}</span>`:''}</td>
     <td class="b-author">${x.author?esc(x.author):'익명'}</td>
     <td class="b-time">${shortWhen(x.created_at)}</td></tr>`).join('')+'</tbody></table>';
 }
@@ -359,6 +375,7 @@ async function route(){
   document.getElementById('back').style.display=m?'':'none';
   document.getElementById('write-btn').style.display=m?'none':'';
   document.getElementById('board-info').style.display=m?'none':'';
+  document.getElementById('search-box').style.display=m?'none':'flex';
   if(m)document.getElementById('write-box').style.display='none';
   const box=document.getElementById('list');
   try{
@@ -389,6 +406,9 @@ async function addComment(item){
     catch(err){alert(err.message)}});
 }
 document.getElementById('fav-only').onclick=async()=>{favOnly=!favOnly;await loadFavs();if(!current)renderBoard()};
+document.getElementById('s-go').onclick=doSearch;
+document.getElementById('s-clear').onclick=clearSearch;
+document.getElementById('s-q').addEventListener('keydown',e=>{if(e.key==='Enter')doSearch()});
 document.getElementById('list').addEventListener('click',async e=>{
   const fv=e.target.closest('[data-fav]');if(fv){e.stopPropagation();toggleFav(+fv.dataset.fav);return}
   if(e.target.matches('img[data-zoom]')){openLightbox(e.target.src);return}

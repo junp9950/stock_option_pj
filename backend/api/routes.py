@@ -240,6 +240,45 @@ def discussion_board(db: Session = Depends(get_db)):
     return out
 
 
+@router.get('/discussion/search')
+def discussion_search(q: str, scope: str = "all", db: Session = Depends(get_db)):
+    """종목토론 검색 (2026-10-07): 제목·본문·댓글 키워드. scope = all | title | content | comment. 종목명도 제목 쪽에서 같이 찾음."""
+    kw = (q or "").strip()
+    if not kw:
+        return []
+    like = f"%{kw}%"
+    hits: dict[int, list[str]] = {}
+    snip: dict[int, str] = {}
+
+    def _snip(text_: str) -> str:
+        t = (text_ or "").replace("\n", " ")
+        i = t.lower().find(kw.lower())
+        return ("…" if i > 30 else "") + t[max(0, i - 30): i + len(kw) + 50] + ("…" if i + len(kw) + 50 < len(t) else "") if i >= 0 else ""
+    if scope in ("all", "title"):
+        for pid, in db.execute(select(DiscussionPost.id).where(
+                (DiscussionPost.title.ilike(like)) | (DiscussionPost.stock_name.ilike(like)))).all():
+            hits.setdefault(pid, []).append("제목")
+    if scope in ("all", "content"):
+        for pid, content in db.execute(select(DiscussionPost.id, DiscussionPost.content).where(DiscussionPost.content.ilike(like))).all():
+            hits.setdefault(pid, []).append("본문")
+            snip.setdefault(pid, _snip(content))
+    if scope in ("all", "comment"):
+        cnt: dict[int, int] = {}
+        for pid, content in db.execute(select(DiscussionComment.post_id, DiscussionComment.content).where(DiscussionComment.content.ilike(like))).all():
+            cnt[pid] = cnt.get(pid, 0) + 1
+            snip.setdefault(pid, "💬 " + _snip(content))
+        for pid, n in cnt.items():
+            hits.setdefault(pid, []).append(f"댓글 {n}")
+    if not hits:
+        return []
+    board = {x["id"]: x for x in discussion_board(db)}
+    out = []
+    for pid in sorted(hits, reverse=True):
+        if pid in board:
+            out.append({**board[pid], "hits": hits[pid], "snippet": snip.get(pid, "")})
+    return out[:200]
+
+
 # 글 즐겨찾기 — 로그인이 없어서 글쓴이 이름(우라늄·감사하모니카)별로 서버에 저장, 폰·PC 같이 보임 (2026-10-06 우라늄 건의)
 _FAV_NAMES = ("우라늄", "감사하모니카")
 
