@@ -1654,8 +1654,9 @@ def get_dashboard(db: Session = Depends(get_db)):
     alert = tg_get(db, "market_alert_state", {}) or {}
     b = [x for x in mp["items"] if x["b"]]
     best = [x for x in b if 1.5 <= x["tv_x"] <= 6 and x["upper_pct"] <= 10]
-    best_lead = [x for x in best if (x.get("b_rank") or 99) <= 3]
-    best_swing = [x for x in best if 4 <= (x.get("b_rank") or 99) <= 8]
+    from backend.screener.my_pattern import cap_sectors  # noqa: PLC0415
+    best_lead = cap_sectors([x for x in best if (x.get("b_rank") or 99) <= 3], mp.get("heat", {}))     # 섹터당 2개·과열 1개 (2026-10-07)
+    best_swing = cap_sectors([x for x in best if 4 <= (x.get("b_rank") or 99) <= 8], mp.get("heat", {}))
     latest = mp["trading_date"]
     watch = []
     items = tg_get(db, "user_watchlist", []) or []
@@ -1701,7 +1702,7 @@ def get_dashboard(db: Session = Depends(get_db)):
         pass
     return {"as_of": latest, "market": st, "alert": alert, "b_sectors": mp["b_sectors"], "hot": mp["hot"], "sector_day": mp["sector_day"],
             "b_count": len(b), "a_count": sum(1 for x in mp["items"] if x["a"] and not x["b"]), "best": best[:8], "best_lead": best_lead[:8], "best_swing": best_swing[:8], "heat": mp.get("heat", {}), "next": mp["next"][:10],
-            "trend_doji": mp.get("trend_doji", [])[:8], "trend_big": mp.get("trend_big", [])[:10], "rest2": mp.get("rest2", [])[:10], "turn3": mp.get("turn3", [])[:30], "turn2": mp.get("turn2", [])[:12], "box_break": mp.get("box_break", [])[:10], "box_near": mp.get("box_near", [])[:10], "dip": mp.get("dip", []),
+            "trend_doji": mp.get("trend_doji", [])[:8], "trend_big": mp.get("trend_big", [])[:10], "rest2": mp.get("rest2", [])[:10], "turn3": mp.get("turn3", [])[:30], "turn2": mp.get("turn2", [])[:12], "box_break": mp.get("box_break", [])[:10], "box_near": mp.get("box_near", [])[:10], "dip": mp.get("dip", []), "rotation": mp.get("rotation", []), "mode": mp.get("mode"),
             "watch": watch, "volume": vr}
 
 

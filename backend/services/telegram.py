@@ -330,8 +330,8 @@ _PRE_GROUPS = [
 #  로봇은 미국 쪽 짝이 없다 — TSLA 0.26(0.06), SYM·TER·ROK 0.24(0.04): 나스닥 선물만 보면 된다
 
 
-def _premarket_held(db: Session, today: date) -> dict[str, list[str]]:
-    """오늘 종베 종목을 위 섹터별로 나눈다."""
+def _premarket_held(db: Session, today: date, picks: bool = False) -> dict[str, list[str]]:
+    """오늘 종베 종목(picks=True면 내 추천 my_picks_log)을 위 섹터별로 나눈다."""
     from backend.screener.rotation import family_members  # noqa: PLC0415
     fam = family_members(db)
     optic = {r[0] for r in db.execute(text("select distinct ss.stock_code from sector_stocks ss join sectors s on s.id = ss.sector_id "
@@ -340,7 +340,12 @@ def _premarket_held(db: Session, today: date) -> dict[str, list[str]]:
             "광통신": optic, "전력·전선": set(fam.get("전력·전선", [])),
             "2차전지": set(fam.get("2차전지", []))}
     out: dict[str, list[str]] = {}
-    for c, n in db.execute(text("select code, name from user_jongbe where trading_date = :d"), {"d": today}).all():
+    if picks:
+        lg = (_get(db, "my_picks_log", {}) or {}).get(today.isoformat(), {})
+        rows = list({x[0]: (x[0], x[1]) for k in ("lead", "swing", "box", "dip", "rot") for x in lg.get(k, [])}.values())
+    else:
+        rows = db.execute(text("select code, name from user_jongbe where trading_date = :d"), {"d": today}).all()
+    for c, n in rows:
         for g, cs in sets.items():
             if c in cs:
                 out.setdefault(g, []).append(n)
@@ -349,7 +354,7 @@ def _premarket_held(db: Session, today: date) -> dict[str, list[str]]:
 
 
 def send_dip_live(db: Session) -> None:
-    """평일 14:50 — 오른 섹터가 오늘 -2%↓ 빠지는 중이면 종가 매수 후보를 알린다 (2026-10-07)."""
+    """평일 14:50 — 장중 판단: 오늘 장세(과매도·순환·주도·과열)와 그에 맞는 종가 매수 후보 (2026-10-07)."""
     from backend.utils.dates import is_trading_day  # noqa: PLC0415
     from backend.screener.market_regime import current_regime  # noqa: PLC0415
     from backend.screener.my_pattern import dip_live_text  # noqa: PLC0415
@@ -370,10 +375,11 @@ def send_us_premarket(db: Session) -> None:
     if not is_trading_day(today):
         return
     held = _premarket_held(db, today)
-    if not held:
+    mine = _premarket_held(db, today, picks=True)    # 내 추천도 같이 — 10/6 추천이 미국 장비 급락에 그대로 맞음 (2026-10-07)
+    if not held and not mine:
         return
     ch = {}
-    for t in {t for g, ts, _ in _PRE_GROUPS if g in held for t in ts} | {"SOXX", "NVDA", "NQ=F"}:
+    for t in {t for g, ts, _ in _PRE_GROUPS if g in held or g in mine for t in ts} | {"SOXX", "NVDA", "NQ=F"}:
         v = _yahoo_last(t)
         if v:
             ch[t] = (v[0] / v[1] - 1) * 100
@@ -381,7 +387,7 @@ def send_us_premarket(db: Session) -> None:
              f"• 나스닥 선물 {ch.get('NQ=F', 0):+.1f}% · SOXX {ch.get('SOXX', 0):+.1f}% · NVDA {ch.get('NVDA', 0):+.1f}%"]
     warn = []
     for g, ts, th in _PRE_GROUPS:
-        if g not in held:
+        if g not in held and g not in mine:
             continue
         got = [t for t in ts if t in ch]
         if not got:
@@ -390,12 +396,15 @@ def send_us_premarket(db: Session) -> None:
         mark = "⚠️" if e <= th else "🟢" if e >= 1 else "·"
         lines.append(f"\n{mark} <b>{g}</b> 미국 평균 <b>{e:+.1f}%</b>")
         lines.append("  " + " · ".join(f"{t} {ch[t]:+.1f}" for t in got))
-        lines.append(f"  오늘 종베: {', '.join(held[g])}")
+        if held.get(g):
+            lines.append(f"  오늘 종베: {', '.join(held[g])}")
+        if mine.get(g):
+            lines.append(f"  내 추천: {', '.join(mine[g][:6])}")
         if e <= th:
             warn.append(g)
     if warn:
         lines.append(f"\n⚠️ <b>{', '.join(warn)}</b> 프리마켓부터 약함 — 이대로 마감하면 내일 갭 하락 가능"
-                     "\n→ <b>20:00 넥스트레이드 애프터마켓 전</b>에 일부라도 정리 검토")
+                     "\n→ <b>20:00 넥스트레이드 애프터마켓 전</b>에 일부라도 정리 검토 · 시간외로 아직 안 샀다면 이 섹터 추천은 건너뛰기")
     else:
         lines.append("\n· 크게 빠진 곳 없음 — 들고 내일 규칙대로 (프리마켓은 거래가 적어 정규장에서 바뀔 수 있음)")
     send(db, "\n".join(lines), html=True)

@@ -17,6 +17,49 @@ _cache: dict = {}
 DIP_NOTE = {"AI메모리·기판": "3년 5일 +4.0% ⭐", "반도체 장비·재료": "3년 5일 +2.6%", "2차전지": "3년 5일 +1.3% (반등 약함)"}
 
 
+# ── 장세에 따라 오늘 '어떤 방식으로 살지'를 먼저 정한다 (2026-10-07 사용자: "그때그때 장세에 맞게 해야 하고 빠진 건 담아야 하는데 왜 틀에 박혀 있노")
+# 10/6 조건 B가 과열된 기판·2차전지에 몰려 10/7 -1.6%(4/14 이김), 사용자는 섹터를 나눠 +1.2% → 한 가지 규칙만 매일 쓰지 않는다.
+MODES = {
+    "쉬기": ("🔴", "오늘은 쉬는 날", "시장이 하락 중 — 새로 사지 말고 손절선만 확인"),
+    "과매도": ("📉", "주도 섹터가 크게 빠진 날 → 과매도 줍기", "종가 무렵 <b>대형·덜 빠진 주도주</b>를 절반 비중으로 (3년 5일 +2.7~3.0%) · 손절 = 오늘 저가 아래 마감"),
+    "과열": ("🔥", "주도 섹터가 과열 → 올라오는 섹터 먼저", "주도 섹터 종베는 <b>섹터당 1개만·다음 날 정리</b>, 돈이 막 들어온 섹터와 박스 돌파를 먼저"),
+    "주도": ("🟢", "주도 섹터에 돈이 몰리는 날 → 종베", "주도 섹터의 거래 붙은 양봉을 <b>섹터당 2개까지</b> 나눠서 · 다음 날 분할 매도"),
+    "순환": ("🔄", "돈이 다른 섹터로 옮겨 가는 날 → 순환", "주도 섹터는 쉬고, 돈이 옮겨 간 섹터로 — <b>올라오는 섹터(4~8위) 종베·스윙</b>이 먼저, 새로 들어온 섹터(9위↓)는 작게"),
+    "쉬어가기": ("⚪", "살 자리가 뚜렷하지 않은 날", "억지로 사지 말고 내일 후보·관심 종목 선만 확인"),
+}
+
+
+def decide_mode(state: str | None, lead_b: list, hot_lead: list, dip_top: list, rot: list) -> dict:
+    """state=시장 국면, lead_b=돈 몰린 20일 1~3위 섹터, hot_lead=그중 과열(25%↑), dip_top=20일 1~3위 중 오늘 -2%↓, rot=돈 몰린 4위↓ 섹터."""
+    if state == "하락":
+        k, secs = "쉬기", []
+    elif dip_top:
+        k, secs = "과매도", dip_top
+    elif lead_b and hot_lead:
+        k, secs = "과열", hot_lead
+    elif lead_b:
+        k, secs = "주도", lead_b
+    elif rot:
+        k, secs = "순환", rot
+    else:
+        k, secs = "쉬어가기", []
+    ico, title, do = MODES[k]
+    return {"mode": k, "icon": ico, "title": title, "do": do, "sectors": secs}
+
+
+def cap_sectors(items: list, heat: dict, per: int = 2, hot_per: int = 1) -> list:
+    """같은 섹터에 몰리지 않게 섹터당 2개, 과열(25%↑) 섹터는 1개 (2026-10-07)."""
+    cnt: dict[str, int] = {}
+    out = []
+    for x in items:
+        f = x.get("family")
+        lim = hot_per if (heat.get(f) or 0) >= 25 else per
+        if cnt.get(f, 0) < lim:
+            out.append(x)
+            cnt[f] = cnt.get(f, 0) + 1
+    return out
+
+
 def scan(db: Session) -> dict:
     latest = db.execute(text("select max(trading_date) from spot_daily_prices")).scalar()
     if latest is None:
@@ -161,10 +204,31 @@ def scan(db: Session) -> dict:
             if cl == cl and float(r20p.get(c) or 0) >= 0.15 and cl > float(ma20[c]) and cl / float(hi20[c]) - 1 >= -0.10:
                 ds["items"].append({"code": c, "name": names.get(c, c), "change_pct": round(float(chg.at[last, c]) * 100, 1),
                                     "off_hi20_pct": round((cl / float(hi20[c]) - 1) * 100, 1), "low": round(float(L.at[last, c])),
-                                    "liq": float(liq3[c])})
-        ds["items"].sort(key=lambda x: -x["liq"])
+                                    "liq": float(liq3[c]), "best": float(liq3[c]) >= 5e10 and float(chg.at[last, c]) * 100 > ds["chg"]})
+        # 대형(하루 500억↑) & 섹터보다 덜 빠짐이 가장 좋았음(5일 +3.0%) → 먼저, 그다음 거래대금 순 (dipstock.py)
+        ds["items"].sort(key=lambda x: (not x["best"], -x["liq"]))
         ds["items"] = ds["items"][:12]
     dip_secs.sort(key=lambda d: d["chg"])
+    # 순환: 20일 4위↓ 섹터에 오늘 돈이 들어옴(등락 중간 +1%↑·거래 중간 1배↑) → 그 섹터의 거래 붙은 양봉(20일선 위)
+    rot_secs = []
+    for f in order[8:]:          # 9위↓ = 새로 들어온 섹터 (4~8위는 '올라오는 섹터' 조건 B가 이미 맡음)
+        if schg[f] >= 0.01 and svx[f] >= 1.0:
+            its = []
+            for c in fam[f]:
+                if c not in C.columns or (TV[c].iloc[-5:].mean() or 0) < 1e9:
+                    continue
+                cl = float(C.at[last, c])
+                ch_, vx_ = float(chg.at[last, c]), float(tvx.at[last, c])
+                hh, ll, oo = float(H.at[last, c]), float(L.at[last, c]), float(O.at[last, c])
+                up_ = (hh - max(oo, cl)) / (hh - ll) if hh > ll else 0
+                if 0.03 <= ch_ < 0.29 and vx_ >= 1.5 and up_ <= 0.2 and cl > float(ma20[c]):
+                    its.append({"code": c, "name": names.get(c, c), "change_pct": round(ch_ * 100, 1), "tv_x": round(vx_, 1)})
+            its.sort(key=lambda x: -x["change_pct"])
+            rot_secs.append({"family": f, "chg": round(schg[f] * 100, 1), "tvx": round(svx[f], 2), "rank": frank[f], "items": its[:8]})
+    lead_b = [f for f in b_secs if frank[f] <= 3]
+    mode = decide_mode((current_regime(db) or {}).get("state"), lead_b, [f for f in lead_b if (heat.get(f) or 0) >= 25],
+                       [d["family"] for d in dip_secs if frank.get(d["family"], 99) <= 3],
+                       [f for f in b_secs if frank[f] > 3] + [r["family"] for r in rot_secs if r["family"] not in b_secs])
     items.sort(key=lambda x: (not x["b"], -x["change_pct"]))
     bset = {x["code"] for x in items if x["b"]}
     for x in bbrk + bnear:
@@ -181,7 +245,8 @@ def scan(db: Session) -> dict:
     val = {"trading_date": str(latest), "market": reg.get("state"), "b_sectors": b_secs, "trend_doji": tdoji, "trend_big": tbig, "rest2": rest2, "turn3": turn3, "turn2": turn2,
            "hot": order[:3], "sector_day": {f: {"chg": round(schg[f] * 100, 2), "tvx": round(svx[f], 2), "heat": heat.get(f)} for f in order[:6]},
            "heat": heat,
-           "items": items, "next": nxt, "box_break": bbrk, "box_near": bnear, "dip": dip_secs}
+           "items": items, "next": nxt, "box_break": bbrk, "box_near": bnear, "dip": dip_secs,
+           "rotation": rot_secs, "mode": mode}
     _cache.update(key=latest, val=val)
     return val
 
@@ -194,6 +259,21 @@ def _log_box(db: Session, r: dict) -> None:
         log[r["trading_date"]] = {"break": [[x["code"], x["name"], x["close"], x["line"], x["is_b"]] for x in r.get("box_break", [])],
                                   "near": [[x["code"], x["name"], x["close"], x["line"], x["is_b"]] for x in r.get("box_near", [])]}
         _put(db, "box_picks_log", log)
+    except Exception:  # noqa: BLE001
+        pass
+
+
+def _log_picks(db: Session, r: dict, lead: list, swing: list) -> None:
+    """내 추천(장세·조건 B·박스·과매도·순환)을 날짜별로 남긴다 — 사용자 종베(user_jongbe)와 매일 비교 (settings 'my_picks_log')."""
+    try:
+        from backend.services.telegram import _get, _put  # noqa: PLC0415
+        log = _get(db, "my_picks_log", {}) or {}
+        nm = lambda xs: [[x["code"], x["name"], x.get("close")] for x in xs]  # noqa: E731
+        log[r["trading_date"]] = {"mode": (r.get("mode") or {}).get("mode"), "lead": nm(lead), "swing": nm(swing),
+                                  "box": nm(r.get("box_break", [])),
+                                  "dip": [[x["code"], x["name"], None] for d in r.get("dip", []) for x in d["items"][:4]],
+                                  "rot": [[x["code"], x["name"], None] for d in r.get("rotation", []) for x in d["items"][:4]]}
+        _put(db, "my_picks_log", log)
     except Exception:  # noqa: BLE001
         pass
 
@@ -212,8 +292,10 @@ def text_summary(db: Session, k: int = 5) -> str:
     except Exception:  # noqa: BLE001
         pass
     lines.append(f"\n🎯 <b>오늘 종베</b> ({r['trading_date'][5:]})")
-    if r["market"] == "하락":
-        lines.append("🔴 하락장 — 쉬는 날")
+    md = r.get("mode") or {}
+    if md:
+        lines.append(f"{md['icon']} <b>{md['title']}</b>" + (f" ({', '.join(md['sectors'])})" if md.get("sectors") else ""))
+        lines.append("→ " + md["do"])
     lines.append("돈 몰린 섹터: " + (", ".join(r["b_sectors"]) if r["b_sectors"] else "없음 (오늘은 쉬는 날)"))
     bb, bn = r.get("box_break", []), r.get("box_near", [])
     if (bb or bn) and r["market"] != "하락":
@@ -224,8 +306,15 @@ def text_summary(db: Session, k: int = 5) -> str:
         if bn:
             lines.append("  └ 뚫기 직전 (고점 -3% 안 마감 · 10일 · 보조): " + " · ".join(f"{x['name']}({x['line_pct']:+.1f}%)" for x in bn[:k]))
     good = [x for x in r["items"] if x["b"] and 1.5 <= x["tv_x"] <= 6 and x["upper_pct"] <= 10]
-    lead = [x for x in good if (x.get("b_rank") or 99) <= 3][:k]
-    swing = [x for x in good if 4 <= (x.get("b_rank") or 99) <= 8][:k]
+    hot_ = r.get("heat", {})
+    lead = cap_sectors([x for x in good if (x.get("b_rank") or 99) <= 3], hot_)[:k]
+    swing = cap_sectors([x for x in good if 4 <= (x.get("b_rank") or 99) <= 8], hot_)[:k]
+    _log_picks(db, r, lead, swing)
+    rot = r.get("rotation", [])
+    if rot and r["market"] != "하락":
+        lines.append("\n🔄 <b>새로 돈이 들어온 섹터</b> (20일 9위↓ 섹터에 오늘 돈 · 작게, 검증 약함)")
+        for d in rot:
+            lines.append(f"• <b>{d['family']}</b> {d['chg']:+.1f}% · 거래 {d['tvx']}배: " + (" · ".join(x["name"] for x in d["items"][:6]) or "고를 종목 없음"))
     b = lead + swing
     hot_ = r.get("heat", {})
     fmt = lambda x: (f"• {x['name']}  {x['change_pct']:+.1f}% · 거래 {x['tv_x']:.1f}배 · {x['family']}" + ("  ⚠개인만" if x.get("retail_only") else "")  # noqa: E731
@@ -296,7 +385,7 @@ def _dip_live_compute(db: Session) -> dict:
     C = px.pivot(index="d", columns="s", values="c").sort_index().astype(float)
     H = px.pivot(index="d", columns="s", values="h").sort_index().astype(float)
     TV = px.pivot(index="d", columns="s", values="tv").sort_index().astype(float)
-    out = {"as_of": now.strftime("%H:%M"), "secs": []}
+    out = {"as_of": now.strftime("%H:%M"), "secs": [], "rot": [], "sectors": [], "mode": None}
     if len(C.index) < 22:
         return out
     liq = TV.tail(20).mean()
@@ -314,6 +403,20 @@ def _dip_live_compute(db: Session) -> dict:
                 break
     prev = C.iloc[-1]
     dch = (C / C.shift(1) - 1).clip(-0.3, 0.3)
+    stats = {}
+    for f, m in fam.items():
+        cc = [c for c in m if c in live and prev.get(c, 0) > 0 and liq.get(c, 0) >= 1e9]
+        if len(cc) >= 8:
+            chs = sorted(live[c] / prev[c] - 1 for c in cc)
+            stats[f] = {"med": chs[len(chs) // 2], "s20": float((1 + dch[cc].tail(20).mean(axis=1)).prod() - 1), "cc": cc}
+    srank = {f: i + 1 for i, f in enumerate(sorted(stats, key=lambda f: -stats[f]["s20"]))}
+    ma20 = {c: (C[c].tail(19).sum() + live[c]) / 20 for c in live if c in C.columns}
+    for f in sorted(stats, key=lambda f: srank[f]):
+        out["sectors"].append({"family": f, "chg": round(stats[f]["med"] * 100, 1), "rank": srank[f]})
+        if srank[f] > 8 and stats[f]["med"] >= 0.01:
+            its = sorted(({"code": c, "name": names.get(c, c), "change_pct": round((live[c] / prev[c] - 1) * 100, 1)} for c in stats[f]["cc"]
+                          if live[c] / prev[c] - 1 >= 0.03 and live[c] > ma20.get(c, 9e18) and liq.get(c, 0) >= 1e9), key=lambda x: -x["change_pct"])
+            out["rot"].append({"family": f, "chg": round(stats[f]["med"] * 100, 1), "rank": srank[f], "items": its[:8]})
     for f, m in fam.items():
         cc = [c for c in m if c in live and prev.get(c, 0) > 0 and liq.get(c, 0) >= 1e9]
         if len(cc) < 8:
@@ -328,20 +431,42 @@ def _dip_live_compute(db: Session) -> dict:
             ma = (C[c].tail(19).sum() + p) / 20
             hi = max(float(H[c].tail(19).max()), p)
             if liq.get(c, 0) >= 3e9 and prev[c] / C[c].iloc[-21] - 1 >= 0.15 and p > ma and p / hi - 1 >= -0.10:
-                rows.append({"code": c, "name": names.get(c, c), "change_pct": round((p / prev[c] - 1) * 100, 1), "liq": float(liq[c])})
-        rows.sort(key=lambda x: -x["liq"])
-        out["secs"].append({"family": f, "chg": round(g * 100, 1), "s20": round(s20 * 100), "note": DIP_NOTE.get(f, ""), "items": rows[:12]})
-    out["secs"].sort(key=lambda d: d["chg"])
+                rows.append({"code": c, "name": names.get(c, c), "change_pct": round((p / prev[c] - 1) * 100, 1), "liq": float(liq[c]),
+                             "best": liq[c] >= 5e10 and p / prev[c] - 1 > g})
+        rows.sort(key=lambda x: (not x["best"], -x["liq"]))
+        out["secs"].append({"family": f, "chg": round(g * 100, 1), "s20": round(s20 * 100), "note": DIP_NOTE.get(f, ""), "items": rows[:12],
+                            "rank": srank.get(f, 99)})
+    out["secs"].sort(key=lambda d: d["rank"])
+    try:
+        from backend.screener.market_regime import current_regime  # noqa: PLC0415
+        heat = (_cache.get("val") or {}).get("heat", {})
+        lead_b = [f for f in stats if srank[f] <= 3 and stats[f]["med"] >= 0.012]
+        out["mode"] = decide_mode((current_regime(db) or {}).get("state"), lead_b, [f for f in lead_b if (heat.get(f) or 0) >= 25],
+                                  [d["family"] for d in out["secs"] if srank.get(d["family"], 99) <= 3],
+                                  [f for f in stats if 3 < srank[f] <= 8 and stats[f]["med"] >= 0.012] + [r["family"] for r in out["rot"]])
+    except Exception:  # noqa: BLE001
+        pass
     return out
 
 
 def dip_live_text(db: Session) -> str:
-    """장중(14:50) 과매도 줍기 점검 텔레그램 문구. 해당 섹터가 없으면 빈 문자열."""
+    """장중(14:50) 판단 텔레그램 — 장세(과매도/순환/주도/과열)와 그에 맞는 후보. 쉬기·쉬어가기면 빈 문자열."""
     r = dip_live(db, max_age=60)
-    if not r["secs"]:
+    md = r.get("mode") or {}
+    if not md or md["mode"] in ("쉬기", "쉬어가기"):
         return ""
-    body = "\n".join(f"• <b>{d['family']}</b> 지금 {d['chg']:+.1f}% (20일 +{d['s20']}%) {d['note']}\n  "
-                     + (" · ".join(f"{x['name']} {x['change_pct']:+.1f}%" for x in d["items"][:8]) or "고를 종목 없음") for d in r["secs"])
-    return (f"📉 <b>과매도 줍기 점검</b> ({r['as_of']}, 장중 가격)\n오른 섹터가 오늘 크게 빠지는 중 — 종가 무렵 사면 3년 평균 5일 +1.9~4.0%\n"
-            + body
-            + "\n\n→ 종가(또는 시간외)에 <b>절반 비중</b>으로 · 5~10일 · 손절 = 오늘 저가 아래 마감\n⚠ 시장이 하락장으로 바뀌는 날이면 줍지 않기 (26년 5월 실패)")
+    lines = [f"⏱ <b>장중 판단</b> ({r['as_of']}, 종가 전)", f"{md['icon']} <b>{md['title']}</b>" + (f" ({', '.join(md['sectors'])})" if md.get("sectors") else ""),
+             "→ " + md["do"]]
+    if md["mode"] == "과매도" and r["secs"]:
+        lines.append("\n📉 <b>과매도 줍기</b> (오른 섹터가 오늘 -2%↓ · 대형·덜 빠진 순)")
+        lines += [f"• <b>{d['family']}</b> (20일 {d['rank']}위) {d['chg']:+.1f}% {d['note']}\n  "
+                  + (" · ".join(f"{'⭐' if x.get('best') else ''}{x['name']} {x['change_pct']:+.1f}%" for x in d["items"][:6]) or "고를 종목 없음")
+                  for d in r["secs"][:4]]
+        lines.append("⭐ = 하루 500억↑ 대형 & 섹터보다 덜 빠짐 (3년 5일 +3.0% · 가장 좋았음)")
+        lines.append("손절 = 오늘 저가 아래 마감 · 절반 비중 · 5~10일")
+    if r.get("rot"):
+        lines.append("\n🔄 <b>새로 돈이 들어오는 섹터</b> (20일 9위↓ · 작게)")
+        lines += [f"• <b>{d['family']}</b> {d['chg']:+.1f}%: " + (" · ".join(f"{x['name']} {x['change_pct']:+.1f}%" for x in d["items"][:6]) or "고를 종목 없음") for d in r["rot"]]
+    if md["mode"] in ("주도", "과열"):
+        lines.append("\n주도 섹터 종베 후보는 장 마감 뒤 거래량이 확정돼야 정확함 — 15:45 요약 확인")
+    return "\n".join(lines)
