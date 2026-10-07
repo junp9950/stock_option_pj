@@ -365,12 +365,89 @@ def dip_live(db: Session, max_age: int = 300) -> dict:
     import threading  # noqa: PLC0415
     import time  # noqa: PLC0415
     lock = _dip_live.setdefault("lock", threading.Lock())
-    with lock:
+    if _dip_live.get("val") and time.time() - _dip_live["t"] < max_age:
+        return _dip_live["val"]
+    if not lock.acquire(blocking=not _dip_live.get("val")):
+        return _dip_live["val"]          # 계산 중이면 직전 결과를 바로 (계산 20초 — 화면이 기다리지 않게)
+    try:
         if _dip_live.get("val") and time.time() - _dip_live["t"] < max_age:
             return _dip_live["val"]
         val = _dip_live_compute(db)
         _dip_live.update(t=time.time(), val=val)
         return val
+    finally:
+        lock.release()
+
+
+def _day_frac(now) -> float:
+    """장중 누적 거래 비율 대략 (첫 30분 25%, 중간 60%, 마지막 30분 15%) — 거래 배수를 마감 기준으로 환산."""
+    mins = max(1, min(390, (now.hour - 9) * 60 + now.minute))
+    return 0.25 * min(mins, 30) / 30 + 0.60 * max(0, min(mins, 360) - 30) / 330 + 0.15 * max(0, mins - 360) / 30
+
+
+def _live_b_box(db: Session, fam: dict, b_live: list, srank: dict, live: dict, prev, names: dict, heat: dict, now) -> dict:
+    """장중 조건 B·박스 돌파 — 돈 몰린 섹터(지금 등락 중간 +1.2%↑)의 +3%↑ 종목만 토스 일봉으로 거래·꼬리를 본다 (거래는 마감 환산)."""
+    import time  # noqa: PLC0415
+    from backend.services.toss_client import fetch_candles  # noqa: PLC0415
+    res = {"best_lead": [], "best_swing": [], "box_break": [], "box_near": []}
+    cand = {}
+    for f in sorted(b_live, key=lambda f: srank[f]):
+        for c in fam.get(f, []):
+            if c in live and prev.get(c, 0) > 0 and 0.03 <= live[c] / prev[c] - 1 < 0.29:
+                cand.setdefault(c, f)
+    if not cand:
+        return res
+    hist = pd.read_sql(text("select stock_code s, trading_date d, high_price h, close_price c, trading_value tv from spot_daily_prices "
+                            "where stock_code = any(:c) and trading_date >= current_date - 330 and trading_date < current_date"),
+                       db.connection(), params={"c": list(cand)})
+    HC = hist.pivot(index="d", columns="s", values="c").sort_index().astype(float)
+    HH = hist.pivot(index="d", columns="s", values="h").sort_index().astype(float)
+    HT = hist.pivot(index="d", columns="s", values="tv").sort_index().astype(float)
+    frac = _day_frac(now)
+    for c, f in list(cand.items())[:120]:
+        k = None
+        for w in (0.15, 1.0, 2.5):
+            k = fetch_candles(c, "1d", 2)
+            time.sleep(w)
+            if k:
+                break
+        if not k or c not in HC.columns or len(HC[c].dropna()) < 22:
+            continue
+        t = k[-1]
+        o, h, l, cl, v = (float(t[x]) for x in ("openPrice", "highPrice", "lowPrice", "closePrice", "volume"))
+        tv_avg = float(HT[c].tail(20).mean() or 0)
+        if tv_avg <= 0 or tv_avg < 1e9:
+            continue
+        vx = cl * v / tv_avg / frac
+        ch = cl / prev[c] - 1
+        up = (h - max(o, cl)) / (h - l) if h > l else 0.0
+        closes = HC[c].dropna()
+        r20 = cl / float(closes.iloc[-20]) - 1
+        ma20 = (float(closes.tail(19).sum()) + cl) / 20
+        g20 = cl / ma20 - 1
+        rk = srank.get(f, 99)
+        row = {"code": c, "name": names.get(c, c), "close": round(cl), "change_pct": round(ch * 100, 1), "tv_x": round(vx, 1),
+               "upper_pct": round(up * 100), "gap20_pct": round(g20 * 100, 1), "family": f, "b_rank": rk, "retail_only": False, "live": True}
+        if r20 >= 0.12 and g20 <= 0.30 and up <= 0.10 and 1.5 <= vx <= 6:
+            (res["best_lead"] if rk <= 3 else res["best_swing"] if rk <= 8 else []).append(row)
+        # 박스 돌파: 직전 20일 종가 폭 20%↓ · 200일선 위 · 거래대금 30억↑ · 종가(지금) > 직전 20일 최고가
+        c20 = closes.tail(20)
+        ma200 = float(closes.tail(200).mean()) if len(closes) >= 180 else 0
+        line = float(HH[c].dropna().tail(20).max())
+        if tv_avg >= 3e9 and ma200 and cl > ma200 and c20.max() / c20.min() - 1 <= 0.20 and up <= 0.30:
+            bx = {**row, "line": round(line), "line_pct": round((cl / line - 1) * 100, 1), "is_b": False}
+            if cl > line and ch >= 0.05 and vx >= 2:
+                res["box_break"].append(bx)
+            elif line * 0.97 <= cl <= line and vx >= 1:
+                res["box_near"].append(bx)
+    bset = {x["code"] for x in res["best_lead"] + res["best_swing"]}
+    for x in res["box_break"] + res["box_near"]:
+        x["is_b"] = x["code"] in bset
+    for k_ in ("best_lead", "best_swing", "box_break"):
+        res[k_].sort(key=lambda x: -x["change_pct"])
+    res["best_lead"] = cap_sectors(res["best_lead"], heat)[:8]
+    res["best_swing"] = cap_sectors(res["best_swing"], heat)[:8]
+    return res
 
 
 def _dip_live_compute(db: Session) -> dict:
@@ -390,7 +467,7 @@ def _dip_live_compute(db: Session) -> dict:
         return out
     liq = TV.tail(20).mean()
     names = dict(db.execute(text("select code, name from stocks")).all())
-    codes = sorted({c for m in fam.values() for c in m if c in C.columns})
+    codes = sorted(c for c in C.columns if C[c].iloc[-1] == C[c].iloc[-1])    # 시장 국면도 지금 가격으로 — 전 종목
     live: dict[str, float] = {}
     for i in range(0, len(codes), 200):
         for w in (0.3, 2, 5):
@@ -411,6 +488,23 @@ def _dip_live_compute(db: Session) -> dict:
             stats[f] = {"med": chs[len(chs) // 2], "s20": float((1 + dch[cc].tail(20).mean(axis=1)).prod() - 1), "cc": cc}
     srank = {f: i + 1 for i, f in enumerate(sorted(stats, key=lambda f: -stats[f]["s20"]))}
     ma20 = {c: (C[c].tail(19).sum() + live[c]) / 20 for c in live if c in C.columns}
+    # ── 시장·섹터 표도 지금 가격으로 (2026-10-07 "지금 기준으로 시장 데이터 전부")
+    try:
+        from backend.services.telegram import market_status  # noqa: PLC0415
+        out["market"] = market_status(db, {c: (live[c] / prev[c] - 1) * 100 for c in live if prev.get(c, 0) > 0})
+    except Exception:  # noqa: BLE001
+        out["market"] = None
+    heat_live = {}
+    for f, m in fam.items():
+        cc = [c for c in m if c in ma20]
+        if len(cc) >= 5:
+            heat_live[f] = round(sum(1 for c in cc if live[c] / ma20[c] - 1 > 0.2) / len(cc) * 100)
+    out["heat"] = heat_live
+    out["sector_day"] = {f: {"chg": round(float(stats[f]["med"]) * 100, 2), "tvx": None, "heat": heat_live.get(f)}
+                         for f in sorted(stats, key=lambda f: srank[f])[:6]}
+    b_live = [f for f in stats if stats[f]["med"] >= 0.012]
+    out["b_sectors"] = sorted(b_live, key=lambda f: srank[f])
+    out.update(_live_b_box(db, fam, b_live, srank, live, prev, names, heat_live, now))
     for f in sorted(stats, key=lambda f: srank[f]):
         out["sectors"].append({"family": f, "chg": round(float(stats[f]["med"]) * 100, 1), "rank": srank[f]})
         if srank[f] > 8 and stats[f]["med"] >= 0.01:
@@ -439,9 +533,10 @@ def _dip_live_compute(db: Session) -> dict:
     out["secs"].sort(key=lambda d: d["rank"])
     try:
         from backend.screener.market_regime import current_regime  # noqa: PLC0415
-        heat = (_cache.get("val") or {}).get("heat", {})
+        heat = out.get("heat") or (_cache.get("val") or {}).get("heat", {})
         lead_b = [f for f in stats if srank[f] <= 3 and stats[f]["med"] >= 0.012]
-        out["mode"] = decide_mode((current_regime(db) or {}).get("state"), lead_b, [f for f in lead_b if (heat.get(f) or 0) >= 25],
+        mstate = ((out.get("market") or {}).get("전체") or {}).get("state") or (current_regime(db) or {}).get("state")
+        out["mode"] = decide_mode(mstate, lead_b, [f for f in lead_b if (heat.get(f) or 0) >= 25],
                                   [d["family"] for d in out["secs"] if srank.get(d["family"], 99) <= 3],
                                   [f for f in stats if 3 < srank[f] <= 8 and stats[f]["med"] >= 0.012] + [r["family"] for r in out["rot"]])
     except Exception:  # noqa: BLE001

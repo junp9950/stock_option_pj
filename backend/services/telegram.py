@@ -170,8 +170,9 @@ def summary_pending(db: Session) -> bool:
             and _get(db, "telegram_last_summary", "") != latest.isoformat())
 
 
-def market_status(db: Session) -> dict | None:
-    """시장 상태 숫자 — 전체·코스피·코스닥 전종목 평균 국면, 삼전·하닉 vs 코스닥 20일 차이, 삼하 외국인 5일 순매수 (2026-10-06)."""
+def market_status(db: Session, live_chg: dict | None = None) -> dict | None:
+    """시장 상태 숫자 — 전체·코스피·코스닥 전종목 평균 국면, 삼전·하닉 vs 코스닥 20일 차이, 삼하 외국인 5일 순매수 (2026-10-06).
+    live_chg={종목: 오늘 등락%}를 주면 장중 가격을 오늘 하루로 붙여 계산한다 (2026-10-07 '지금 기준으로 전부')."""
     from backend.screener.market_regime import regime_series  # noqa: PLC0415
     rows = db.execute(text(
         "select p.trading_date, s.market, avg(coalesce(p.change_pct, 0)), count(*) from spot_daily_prices p join stocks s on s.code = p.stock_code "
@@ -186,11 +187,24 @@ def market_status(db: Session) -> dict | None:
         t[0] += float(a) * n
         t[1] += n
     agg["전체"] = {d: v[0] / v[1] for d, v in agg["전체"].items()}
+    sh_live = None
+    if live_chg:
+        today = datetime.now(ZoneInfo("Asia/Seoul")).date()
+        mk = dict(db.execute(text("select code, market from stocks where code = any(:c)"), {"c": list(live_chg)}).all())
+        kp = [v for c, v in live_chg.items() if mk.get(c) == "KOSPI"]
+        kq = [v for c, v in live_chg.items() if c in mk and mk.get(c) != "KOSPI"]
+        if kp and kq:
+            agg["코스피"][today], agg["코스닥"][today] = sum(kp) / len(kp), sum(kq) / len(kq)
+            agg["전체"][today] = (sum(kp) + sum(kq)) / (len(kp) + len(kq))
+        if "005930" in live_chg and "000660" in live_chg:
+            sh_live = (today, (live_chg["005930"] + live_chg["000660"]) / 2)
     reg = {k: regime_series(v) for k, v in agg.items()}
     last = max(reg["전체"])
     out = {"as_of": last.isoformat(), **{k: reg[k][max(reg[k])] for k in reg}}
     sh = db.execute(text("select trading_date, avg(change_pct) from spot_daily_prices where stock_code in ('005930','000660') "
                          "and trading_date >= current_date - 60 group by 1 order by 1")).all()
+    if sh_live:
+        sh = [*sh, sh_live]
     q = sorted(agg["코스닥"].items())
     if len(sh) >= 21 and len(q) >= 21:
         import math  # noqa: PLC0415

@@ -757,7 +757,11 @@ async function loadLive(d){
   const el=document.getElementById('db-dip'); if(el) el.insertAdjacentHTML('afterbegin','<div class="ts" id="db-dip-wait">장중 가격으로 확인 중…</div>');
   const r=await fetch(`${API}/dashboard/dip-live`).then(x=>x.ok?x.json():null).catch(()=>null);
   if(!r){ const w=document.getElementById('db-dip-wait'); if(w) w.textContent='장중 가격을 못 불러왔습니다'; return; }
-  renderDashboard(d, false, r);
+  // 시장 국면·20일 비교·섹터 표·조건 B·박스 돌파도 지금 가격으로 바꿔 그림 (2026-10-07 "지금 기준으로 시장 데이터 전부")
+  const d2={...d};
+  if(r.market) d2.market={...r.market, sh_foreign5:(d.market||{}).sh_foreign5};
+  ['sector_day','heat','b_sectors','best_lead','best_swing','box_break','box_near'].forEach(k=>{ if(r[k]!==undefined) d2[k]=r[k]; });
+  renderDashboard(d2, false, r);
 }
 async function renderDashboard(d, stale, live){
   const v=document.getElementById('db-verdict');
@@ -783,7 +787,7 @@ async function renderDashboard(d, stale, live){
   if(al.suck) warn.push('🧲 삼하가 수급 흡수 중 — 코스닥 비중 줄이기');
   if(all.state!=='하락'&&all.vs_ma20_pct!=null&&all.vs_ma20_pct<=1) warn.push('⚠️ 하락 전환 가까움 — 빠지는 종목 줍기 금지');
   v.style.borderColor=vc; v.style.background=vc+'14';
-  const when=live?`⏱ 장중 ${live.as_of} 가격으로 판단 (종가 전이라 바뀔 수 있음) · 과매도·순환 카드는 지금 가격, 나머지 목록은 ${d.as_of||''} 종가 기준`:`${d.as_of||''} 종가 기준 · 장 마감 수집 뒤(16시쯤) 갱신 · 장중엔 지금 가격으로 다시 판단`;
+  const when=live?`⏱ 장중 ${live.as_of} 가격 기준 — 시장·섹터·판단·종베·박스·과매도·순환 모두 지금 가격 (거래량은 마감 환산, 종가 전이라 바뀔 수 있음) · 추세 도지·이틀 쉼·돌려세움·내일 후보는 ${d.as_of||''} 종가 기준`:`${d.as_of||''} 종가 기준 · 장 마감 수집 뒤(16시쯤) 갱신 · 장중엔 지금 가격으로 다시 판단`;
   v.innerHTML=`<div>${vt}</div>${warn.map(w=>`<div style="margin-top:6px;color:#e3b341">${w}</div>`).join('')}<div class="ts" style="margin-top:6px">${when}</div>`;
   const mk=k=>{ const x=m[k]||{}; return `<div style="flex:1;min-width:150px;border:2px solid ${col[x.state]||'#30363d'};border-radius:14px;padding:14px 18px;background:${(col[x.state]||'#30363d')}14">
     <div style="font-size:15px;color:#c9d1d9;font-weight:600">${k}</div>
@@ -801,27 +805,28 @@ async function renderDashboard(d, stale, live){
     +`<div style="margin-top:6px;font-size:13px">→ ${who} <span class="ts">(차이 ${sg(rel)}%p)</span></div>
      <div class="ts" style="margin-top:4px">삼하가 코스닥보다 +15%p 넘게 앞서면 경고 (3년: 그 뒤 20일 코스닥 -3.8%) · 외국인 삼하 5일 <b style="color:${m.sh_foreign5>0?'#f85149':'#58a6ff'}">${(m.sh_foreign5>0?'+':'')+(m.sh_foreign5||0).toLocaleString()}억</b></div>`));
   const sd=Object.entries(d.sector_day||{});
-  top.push(card('🔥 섹터 (20일 순위 · 오늘 등락 중간 · 거래 중간)',sd.map(([f,x],i)=>`<div style="display:flex;justify-content:space-between;font-size:13px;padding:3px 0;border-bottom:1px solid #21262d"><span>${i+1}. ${d.b_sectors.includes(f)?'⭐ ':''}<b style="color:#e6edf3">${f}</b></span><span><span style="color:${x.chg>=0?'#f85149':'#58a6ff'}">${sg(x.chg)}%</span> · <span class="ts">${x.tvx}배</span>${x.heat!=null?` · <span style="color:${x.heat>=25?'#ff7b72':x.heat>=10?'#d29922':'#8b949e'}" title="섹터 종목 중 20일선보다 20% 넘게 뜬 비율">과열 ${x.heat}%</span>`:''}</span></div>`).join('')+'<div class="ts" style="margin-top:6px">⭐ = 오늘 돈 몰린 섹터 · 과열 = 섹터 종목 중 20일선보다 20%↑ 뜬 비율 (25%↑ 🔥 들고 가지 말 것)</div>'));
+  top.push(card('🔥 섹터 (20일 순위 · 오늘 등락 중간 · 거래 중간)',sd.map(([f,x],i)=>`<div style="display:flex;justify-content:space-between;font-size:13px;padding:3px 0;border-bottom:1px solid #21262d"><span>${i+1}. ${d.b_sectors.includes(f)?'⭐ ':''}<b style="color:#e6edf3">${f}</b></span><span><span style="color:${x.chg>=0?'#f85149':'#58a6ff'}">${sg(x.chg)}%</span> · <span class="ts">${x.tvx==null?'거래 -':x.tvx+'배'}</span>${x.heat!=null?` · <span style="color:${x.heat>=25?'#ff7b72':x.heat>=10?'#d29922':'#8b949e'}" title="섹터 종목 중 20일선보다 20% 넘게 뜬 비율">과열 ${x.heat}%</span>`:''}</span></div>`).join('')+'<div class="ts" style="margin-top:6px">⭐ = 오늘 돈 몰린 섹터 · 과열 = 섹터 종목 중 20일선보다 20%↑ 뜬 비율 (25%↑ 🔥 들고 가지 말 것)</div>'));
   const H=d.heat||{}, isHot=x=>(H[x.family]||0)>=25;
   const bchip=x=>chip(x,x.retail_only?'#f85149':'#9e6a03',` <span style="color:#f85149">${sg(x.change_pct)}%</span> <span class="ts">${x.tv_x}배 · ${x.family}</span>${x.retail_only?' <b style="color:#f85149;font-size:11px">⚠개인만</b>':''}${isHot(x)?' <b style="color:#ff7b72;font-size:11px" title="섹터 종목 중 20일선보다 20% 넘게 뜬 비율 '+H[x.family]+'%">🔥과열·다음 날 정리만</b>':''}`);
   const hotNote=[...(d.best_lead||[]),...(d.best_swing||[])].some(isHot)?'<div class="ts" style="color:#ff7b72;margin-top:4px">🔥과열 섹터 = 섹터 종목 25% 넘게 20일선보다 20%↑ 뜸 → 다음 날은 좋았지만 5~10일 들고 가면 나빴음(5일 -5%↓ 26~31%)</div>':'';
   const anyRetail=(d.best||[]).some(x=>x.retail_only)?'<div class="ts" style="color:#f85149;margin-top:4px">⚠개인만 = 외인·기관 둘 다 팔았는데 오른 날 — 빼는 게 좋음</div>':'';
   const C={};   // 카드 모음 → 장세(md.mode)에 맞는 순서로 번호 매김
+  const LV=live?`<div class="ts" style="margin-bottom:6px;color:#58a6ff">⏱ 장중 ${live.as_of} 가격 · 거래는 마감 환산</div>`:'';
   // 박스 돌파 (2026-10-06 rank2.py: 10일 +5.9/+6.8/+6.5% 세 기간 고르게) · 뚫기 직전은 보조
   const boxchip=x=>chip(x,'#f0883e',` <span style="color:#f85149">${sg(x.change_pct)}%</span> <span class="ts">손절 ${x.line.toLocaleString()} · ${x.family}</span>${x.is_b?' <b style="color:#e3b341;font-size:11px">⭐종베도 OK</b>':''}${isHot(x)?' <b style="color:#ff7b72;font-size:11px">🔥과열 섹터</b>':''}`);
   C.box=['#f0883e','📦 박스 돌파 → 5~10일 스윙',
     '20일 동안 눌려 있던 고점을 <b>종가로</b> 뚫음 · 섹터에 돈 몰린 날 · 200일선 위 · 거래 2배↑ · <b>손절 = 뚫은 고점 아래로 마감</b> · 3년 10일 +5.9~6.8% (세 기간 고르게) · ⭐종베도 OK = 다음 날도 가장 좋았음',
-    (all.state==='하락'?'<div style="color:#f85149;font-size:12.5px;margin-bottom:4px">하락장 — 보기만</div>':'')
+    LV+(all.state==='하락'?'<div style="color:#f85149;font-size:12.5px;margin-bottom:4px">하락장 — 보기만</div>':'')
     +((d.box_break||[]).map(boxchip).join('')||'<span class="ts">없음</span>')
     +`<div class="ts" style="margin:8px 0 4px">뚫기 직전 — 고점 -3% 안까지 붙여 마감 (10일 +6~8% · 표본 적어 보조)</div>`
     +((d.box_near||[]).map(x=>chip(x,'#9e6a03',` <span class="ts">고점 ${x.line.toLocaleString()} (${sg(x.line_pct)}%)</span>`)).join('')||'<span class="ts">없음</span>')
     +'<div class="ts" style="margin-top:4px">같은 섹터에서 여러 개 나오면 한두 개만 — 섹터가 꺾이면 같이 꺾임</div>'];
   C.lead=['#e3b341','⭐ 주도 섹터의 힘 있는 양봉 → 종베',
     '돈 몰린 섹터가 20일 1~3위 · 거래 평소 1.5~6배 · 고가 근처 마감 · <b>섹터당 2개(과열 섹터 1개)까지</b> · <b>다음 날 분할 매도</b> · 3년 다음 날 +1.3~1.6%',
-    ((d.best_lead||[]).map(bchip).join('')||'<span class="ts">없음</span>')+anyRetail+hotNote];
+    LV+((d.best_lead||[]).map(bchip).join('')||'<span class="ts">없음</span>')+anyRetail+hotNote];
   C.swing=['#e3b341','⭐ 올라오는 섹터의 힘 있는 양봉 → 5~10일 스윙',
     '돈 몰린 섹터가 20일 4~8위 (아직 주도 전 · 올라오는 중) · <b>5~10일 보유</b> · 3년 10일 +2.6% · 최근 1년 +8.2% · AI 랠리 +6.1%',
-    ((d.best_swing||[]).map(bchip).join('')||'<span class="ts">없음</span>')+`<div class="ts" style="margin-top:4px"><a href="#" onclick="switchTab('jongbe');return false" style="color:#58a6ff">후보 전체 보기 →</a></div>`];
+    LV+((d.best_swing||[]).map(bchip).join('')||'<span class="ts">없음</span>')+`<div class="ts" style="margin-top:4px"><a href="#" onclick="switchTab('jongbe');return false" style="color:#58a6ff">후보 전체 보기 →</a></div>`];
   // 과매도 줍기 (2026-10-07 dipbuy.py·dipstock.py): 직전 20일 +10%↑ 섹터가 오늘 평균 -2%↓ → 대형·덜 빠진 주도주 종가 매수 5~10일
   const dips=live?(live.secs||[]):(d.dip||[]);
   C.dip=['#58a6ff','📉 과매도 줍기 → 5~10일 (오른 섹터가 하루 크게 빠진 날)',
