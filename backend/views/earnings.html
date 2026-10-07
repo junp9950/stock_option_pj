@@ -51,4 +51,13 @@ st.textContent='가격 기준일 '+data.as_of+' · 계산 시각 '+new Date(data
 const rg=data.regime,box=document.getElementById('regime');if(rg){box.hidden=false;box.classList.toggle('down',rg.state==='하락');box.textContent='시장 국면: '+rg.state+' (등가중 지수 20일선 대비 '+(rg.vs_ma20_pct>0?'+':'')+rg.vs_ma20_pct+'%)'+(rg.state==='하락'?' · 하락 국면에서는 신규 매수를 쉬는 것이 과거 자료에서 낙폭을 줄였습니다.':'');}
 render();}catch(e){st.textContent='결과를 불러오지 못했습니다. 잠시 후 다시 확인해 주세요.'}}
 document.getElementById('reload').onclick=load;load();
-</script></body></html>
+</script><script>
+// 비밀번호 관리자(Bitwarden 등) 창이 입력칸에서 뜨지 않게 (2026-10-07)
+(function(){
+  const mark=el=>{ el.setAttribute('data-bwignore','true'); el.setAttribute('data-lpignore','true'); el.setAttribute('data-1p-ignore','true'); el.setAttribute('data-form-type','other'); el.setAttribute('autocomplete','off'); };
+  const scan=root=>{ if(root.querySelectorAll) root.querySelectorAll('input,textarea,[contenteditable]').forEach(mark); if(root.matches&&root.matches('input,textarea,[contenteditable]')) mark(root); };
+  const go=()=>{ scan(document); new MutationObserver(ms=>ms.forEach(m=>m.addedNodes.forEach(n=>n.nodeType===1&&scan(n)))).observe(document.body,{childList:true,subtree:true}); };
+  if(document.body) go(); else document.addEventListener('DOMContentLoaded',go);
+})();
+</script>
+</body></html>

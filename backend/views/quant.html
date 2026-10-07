@@ -23,4 +23,13 @@ const rows=document.getElementById('rows');rows.replaceChildren();for(const r of
 document.getElementById('model').textContent=d.model?'모델 기준 분기 '+d.model.quarter+' · 학습 결과 관측 종료 '+d.model.training_end:'모델 준비 중';
 }catch(e){status.textContent='결과를 불러오지 못했습니다. 잠시 후 다시 확인해 주세요.'}}
 document.getElementById('reload').onclick=load;load();setInterval(load,60000);
-</script></body></html>
+</script><script>
+// 비밀번호 관리자(Bitwarden 등) 창이 입력칸에서 뜨지 않게 (2026-10-07)
+(function(){
+  const mark=el=>{ el.setAttribute('data-bwignore','true'); el.setAttribute('data-lpignore','true'); el.setAttribute('data-1p-ignore','true'); el.setAttribute('data-form-type','other'); el.setAttribute('autocomplete','off'); };
+  const scan=root=>{ if(root.querySelectorAll) root.querySelectorAll('input,textarea,[contenteditable]').forEach(mark); if(root.matches&&root.matches('input,textarea,[contenteditable]')) mark(root); };
+  const go=()=>{ scan(document); new MutationObserver(ms=>ms.forEach(m=>m.addedNodes.forEach(n=>n.nodeType===1&&scan(n)))).observe(document.body,{childList:true,subtree:true}); };
+  if(document.body) go(); else document.addEventListener('DOMContentLoaded',go);
+})();
+</script>
+</body></html>

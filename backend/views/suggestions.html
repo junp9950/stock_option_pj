@@ -59,4 +59,13 @@ if(b.dataset.act==='reply'){if(item.querySelector('.edit'))return;const d=docume
 if(b.dataset.act==='cancel')item.querySelector('.edit').remove();
 if(b.dataset.act==='save'){try{await call('PATCH',`${API}/${id}`,{reply:item.querySelector('.edit textarea').value});await load()}catch(err){alert(err.message)}}});
 load();
-</script></body></html>
+</script><script>
+// 비밀번호 관리자(Bitwarden 등) 창이 입력칸에서 뜨지 않게 (2026-10-07)
+(function(){
+  const mark=el=>{ el.setAttribute('data-bwignore','true'); el.setAttribute('data-lpignore','true'); el.setAttribute('data-1p-ignore','true'); el.setAttribute('data-form-type','other'); el.setAttribute('autocomplete','off'); };
+  const scan=root=>{ if(root.querySelectorAll) root.querySelectorAll('input,textarea,[contenteditable]').forEach(mark); if(root.matches&&root.matches('input,textarea,[contenteditable]')) mark(root); };
+  const go=()=>{ scan(document); new MutationObserver(ms=>ms.forEach(m=>m.addedNodes.forEach(n=>n.nodeType===1&&scan(n)))).observe(document.body,{childList:true,subtree:true}); };
+  if(document.body) go(); else document.addEventListener('DOMContentLoaded',go);
+})();
+</script>
+</body></html>
