@@ -47,6 +47,19 @@ def decide_mode(state: str | None, lead_b: list, hot_lead: list, dip_top: list, 
     return {"mode": k, "icon": ico, "title": title, "do": do, "sectors": secs}
 
 
+def trim_dip(secs: list, max_secs: int = 5, per: int = 6) -> list:
+    """과매도 줍기 목록 줄이기 (2026-10-07 시장 전체가 빠진 날 11개 섹터·수십 종목이 떠서 못 읽음):
+    20일 순위 위쪽 섹터 5개만, 섹터 평균보다 덜 빠진 종목만, ⭐(대형·덜 빠짐) 먼저, 여러 섹터에 겹치면 한 번만, 섹터당 6개."""
+    secs = sorted(secs, key=lambda d: d.get("rank", 99))[:max_secs]
+    seen: set = set()
+    for d in secs:
+        its = [x for x in d["items"] if x["change_pct"] > d["chg"] and x["code"] not in seen]
+        its.sort(key=lambda x: (not x["best"], -x["liq"]))
+        d["items"] = its[:per]
+        seen.update(x["code"] for x in d["items"])
+    return secs
+
+
 def cap_sectors(items: list, heat: dict, per: int = 2, hot_per: int = 1) -> list:
     """같은 섹터에 몰리지 않게 섹터당 2개, 과열(25%↑) 섹터는 1개 (2026-10-07)."""
     cnt: dict[str, int] = {}
@@ -212,9 +225,8 @@ def scan(db: Session) -> dict:
                                     "off_hi20_pct": round((cl / float(hi20[c]) - 1) * 100, 1), "low": round(float(L.at[last, c])),
                                     "liq": float(liq3[c]), "best": bool(float(liq3[c]) >= 5e10 and float(chg.at[last, c]) * 100 > ds["chg"])})
         # 대형(하루 500억↑) & 섹터보다 덜 빠짐이 가장 좋았음(5일 +3.0%) → 먼저, 그다음 거래대금 순 (dipstock.py)
-        ds["items"].sort(key=lambda x: (not x["best"], -x["liq"]))
-        ds["items"] = ds["items"][:12]
-    dip_secs.sort(key=lambda d: d["chg"])
+        ds["rank"] = frank.get(ds["family"], 99)
+    dip_secs = trim_dip(dip_secs)
     # 순환: 20일 4위↓ 섹터에 오늘 돈이 들어옴(등락 중간 +1%↑·거래 중간 1배↑) → 그 섹터의 거래 붙은 양봉(20일선 위)
     rot_secs = []
     for f in order[8:]:          # 9위↓ = 새로 들어온 섹터 (4~8위는 '올라오는 섹터' 조건 B가 이미 맡음)
@@ -540,10 +552,9 @@ def _dip_live_compute(db: Session) -> dict:
             if liq.get(c, 0) >= 3e9 and prev[c] / C[c].iloc[-21] - 1 >= 0.15 and p > ma and p / hi - 1 >= -0.10:
                 rows.append({"code": c, "name": names.get(c, c), "change_pct": round(float(p / prev[c] - 1) * 100, 1), "liq": float(liq[c]),
                              "best": bool(liq[c] >= 5e10 and p / prev[c] - 1 > g)})
-        rows.sort(key=lambda x: (not x["best"], -x["liq"]))
-        out["secs"].append({"family": f, "chg": round(float(g) * 100, 1), "s20": round(s20 * 100), "note": DIP_NOTE.get(f, ""), "items": rows[:12],
+        out["secs"].append({"family": f, "chg": round(float(g) * 100, 1), "s20": round(s20 * 100), "note": DIP_NOTE.get(f, ""), "items": rows,
                             "rank": srank.get(f, 99)})
-    out["secs"].sort(key=lambda d: d["rank"])
+    out["secs"] = trim_dip(out["secs"])
     try:
         from backend.screener.market_regime import current_regime  # noqa: PLC0415
         heat = out.get("heat") or (_cache.get("val") or {}).get("heat", {})
