@@ -691,8 +691,8 @@ select{background:#21262d;border:1px solid #30363d;color:#c9d1d9;padding:6px 10p
 <script>
 // 비밀번호 관리자(Bitwarden 등) 자동완성 창이 검색·숫자 칸마다 뜨지 않게 — 매매 일지 로그인 칸(jr-owner, jr-pin)만 남긴다 (2026-10-06)
 (function(){
-  const mark=el=>{ if(el.tagName==='INPUT'&&el.id!=='jr-owner'&&el.id!=='jr-pin'){ el.setAttribute('data-bwignore','true'); el.setAttribute('data-lpignore','true'); el.setAttribute('data-1p-ignore','true'); if(!el.getAttribute('autocomplete')) el.setAttribute('autocomplete','off'); } };
-  const scan=root=>{ if(root.querySelectorAll) root.querySelectorAll('input').forEach(mark); if(root.tagName==='INPUT') mark(root); };
+  const mark=el=>{ if((el.tagName==='INPUT'||el.tagName==='TEXTAREA')&&el.id!=='jr-owner'&&el.id!=='jr-pin'){ el.setAttribute('data-bwignore','true'); el.setAttribute('data-lpignore','true'); el.setAttribute('data-1p-ignore','true'); if(!el.getAttribute('autocomplete')) el.setAttribute('autocomplete','off'); } };
+  const scan=root=>{ if(root.querySelectorAll) root.querySelectorAll('input,textarea').forEach(mark); if(root.tagName==='INPUT'||root.tagName==='TEXTAREA') mark(root); };
   document.addEventListener('DOMContentLoaded',()=>{ scan(document);
     new MutationObserver(ms=>ms.forEach(m=>m.addedNodes.forEach(n=>n.nodeType===1&&scan(n)))).observe(document.body,{childList:true,subtree:true}); });
 })();

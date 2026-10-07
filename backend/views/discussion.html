@@ -420,4 +420,12 @@ document.getElementById('list').addEventListener('keydown',e=>{
 whoToggle(document.querySelector('[data-who="post"]'));
 whoToggle(document.querySelector('[data-who="me"]'));   // 목록 위 '나는' — 즐겨찾기·글쓰기·댓글 이름이 모두 이걸 따라감
 route();
+
+// 비밀번호 관리자(Bitwarden 등) 창이 글·댓글 칸에서 뜨지 않게 — 입력칸 전부 표시 (2026-10-07, 오늘 탭에만 했던 것)
+(function(){
+  const mark=el=>{ el.setAttribute('data-bwignore','true'); el.setAttribute('data-lpignore','true'); el.setAttribute('data-1p-ignore','true'); el.setAttribute('data-form-type','other'); if(!el.getAttribute('autocomplete')) el.setAttribute('autocomplete','off'); };
+  const scan=root=>{ if(root.querySelectorAll) root.querySelectorAll('input,textarea,[contenteditable]').forEach(mark); if(root.matches&&root.matches('input,textarea,[contenteditable]')) mark(root); };
+  scan(document);
+  new MutationObserver(ms=>ms.forEach(m=>m.addedNodes.forEach(n=>n.nodeType===1&&scan(n)))).observe(document.body,{childList:true,subtree:true});
+})();
 </script></body></html>
