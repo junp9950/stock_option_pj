@@ -289,6 +289,9 @@ def start_scheduler() -> BackgroundScheduler:
     scheduler.add_job(lambda: _tg("send_us_overnight"), 'cron', day_of_week='mon-fri', hour=8, minute=30, id='us_overnight',
                       replace_existing=True, max_instances=1)
     # 19:00 오늘 소부장·기판 종베가 있으면 미국 장비주 프리마켓 → 20:00 넥스트레이드 애프터마켓 전 정리 판단
+    # 14:50 과매도 줍기 점검 — 오른 섹터가 오늘 -2%↓면 종가 매수 후보
+    scheduler.add_job(lambda: _tg("send_dip_live"), 'cron', day_of_week='mon-fri', hour=14, minute=50, id='dip_live',
+                      replace_existing=True, max_instances=1)
     scheduler.add_job(lambda: _tg("send_us_premarket"), 'cron', day_of_week='mon-fri', hour=19, minute=0, id='us_premarket',
                       replace_existing=True, max_instances=1)
     scheduler.add_job(refresh_marcap, 'date', run_date=datetime.now(timezone.utc)+timedelta(seconds=30),

@@ -13,6 +13,8 @@ from sqlalchemy import text
 from sqlalchemy.orm import Session
 
 _cache: dict = {}
+# 과매도 줍기 섹터별 3년 결과 (dipbuy.py, 섹터 평균 종가 매수 → 5일 뒤) — 다른 섹터는 전체 평균 +1.9%
+DIP_NOTE = {"AI메모리·기판": "3년 5일 +4.0% ⭐", "반도체 장비·재료": "3년 5일 +2.6%", "2차전지": "3년 5일 +1.3% (반등 약함)"}
 
 
 def scan(db: Session) -> dict:
@@ -72,6 +74,22 @@ def scan(db: Session) -> dict:
     hi20p = H.rolling(20).max().shift(1).iloc[-1]
     cmx, cmn = C.rolling(20).max().shift(1).iloc[-1], C.rolling(20).min().shift(1).iloc[-1]
     liq3 = TV.shift(1).rolling(20).mean().iloc[-1]
+    # 과매도 줍기 (2026-10-07 dipbuy.py·dipstock.py): 직전 20일 +10%↑ 섹터가 오늘 평균 -2%↓ → 그 섹터를 종가에 사면 3년
+    #   아무 종목 5일 +1.9%·10일 +3.4%(기준 +0.2/+0.5), 기판 5일 +4.0%(71%), 미국 장비 급락 다음 날 기판 +8.7%(8/8).
+    #   종목 고르기는 차이가 작다 — 직전 20일 +15%↑ & 20일선 위 & 20일 고점 -10% 안이 5일 +2.3%로 조금 낫다. 하락장 전환 구간(26-05)은 실패.
+    dch = chg.clip(-0.3, 0.3)
+    liq1 = TV.shift(1).rolling(20).mean() >= 1e9
+    dip_secs = []
+    for f, m in fam.items():
+        cc = [c for c in m if c in C.columns]
+        if len(cc) < 8:
+            continue
+        g = dch[cc].where(liq1[cc]).mean(axis=1)
+        s20 = float((1 + g.iloc[-21:-1].fillna(0)).prod() - 1)
+        if g.iloc[-1] <= -0.02 and s20 >= 0.10:
+            dip_secs.append({"family": f, "chg": round(float(g.iloc[-1]) * 100, 1), "s20": round(s20 * 100), "items": [],
+                              "note": DIP_NOTE.get(f, "")})
+    r20p = C.iloc[-2] / C.iloc[-22] - 1 if len(C.index) > 22 else C.iloc[-1] * float("nan")
     # 바닥 돌려세움 (2026-10-06 turnup.py): 120일 고점 -25%↓ 빠진 뒤 15일 폭 15% 안 횡보 → 작은 양봉 3연속 + 20일선 되찾음
     #   AI 랠리 중 AI 종목 20일 +11.3%(기준 +4.9%), 전 종목 +3.3%(+2.0%). 랠리 전(약세)엔 마이너스 → 상승장에서만.
     hi120 = H.rolling(120, min_periods=100).max()
@@ -135,6 +153,18 @@ def scan(db: Session) -> dict:
             items.append({**row, "a": is_a, "b": is_b, "family": fb, "b_rank": frank.get(fb, 99) if is_b else None})
         elif frank[f0] <= 3 and g20 > 0 and off >= -0.05 and abs(ch) <= 0.02 and vx <= 1.0 and g20 <= 0.30:
             nxt.append(row)
+    for ds in dip_secs:
+        for c in fam[ds["family"]]:
+            if c not in C.columns or not (float(liq3.get(c) or 0) >= 3e9):
+                continue
+            cl = float(C.at[last, c])
+            if cl == cl and float(r20p.get(c) or 0) >= 0.15 and cl > float(ma20[c]) and cl / float(hi20[c]) - 1 >= -0.10:
+                ds["items"].append({"code": c, "name": names.get(c, c), "change_pct": round(float(chg.at[last, c]) * 100, 1),
+                                    "off_hi20_pct": round((cl / float(hi20[c]) - 1) * 100, 1), "low": round(float(L.at[last, c])),
+                                    "liq": float(liq3[c])})
+        ds["items"].sort(key=lambda x: -x["liq"])
+        ds["items"] = ds["items"][:12]
+    dip_secs.sort(key=lambda d: d["chg"])
     items.sort(key=lambda x: (not x["b"], -x["change_pct"]))
     bset = {x["code"] for x in items if x["b"]}
     for x in bbrk + bnear:
@@ -151,7 +181,7 @@ def scan(db: Session) -> dict:
     val = {"trading_date": str(latest), "market": reg.get("state"), "b_sectors": b_secs, "trend_doji": tdoji, "trend_big": tbig, "rest2": rest2, "turn3": turn3, "turn2": turn2,
            "hot": order[:3], "sector_day": {f: {"chg": round(schg[f] * 100, 2), "tvx": round(svx[f], 2), "heat": heat.get(f)} for f in order[:6]},
            "heat": heat,
-           "items": items, "next": nxt, "box_break": bbrk, "box_near": bnear}
+           "items": items, "next": nxt, "box_break": bbrk, "box_near": bnear, "dip": dip_secs}
     _cache.update(key=latest, val=val)
     return val
 
@@ -209,6 +239,11 @@ def text_summary(db: Session, k: int = 5) -> str:
     if b:
         if any(x.get("retail_only") for x in b):
             lines.append("⚠개인만 = 외인·기관 둘 다 팔았는데 오른 날 (그 뒤 약했음)")
+    dp = r.get("dip", [])
+    if dp and r["market"] != "하락":
+        lines.append("\n📉 <b>과매도 줍기</b> (오른 섹터가 하루 크게 빠진 날 · 종가·시간외 매수 · <b>5~10일</b>, 손절 = 오늘 저가 아래 마감)")
+        for d in dp:
+            lines.append(f"• <b>{d['family']}</b> 오늘 {d['chg']:+.1f}% (20일 +{d['s20']}%) {d.get('note', '')}: " + " · ".join(x["name"] for x in d["items"][:6]))
     td = r.get("trend_doji", [])[:k]
     if td:
         lines.append("\n2️⃣ 🕯 <b>추세 도지</b> (상승 추세, 어제 장대양봉 → 오늘 도지 · <b>5일 안쪽 정리</b>)")
@@ -230,3 +265,58 @@ def text_summary(db: Session, k: int = 5) -> str:
         lines.append("\n👀 <b>내일 후보</b> (고점 근처 쉬는 중)")
         lines.append(" · ".join(x["name"] for x in n))
     return "\n".join(lines)
+
+
+def dip_live_text(db: Session) -> str:
+    """장중(14:50) 과매도 줍기 점검 — 토스 실시간 가격으로 섹터 평균을 계산. 해당 섹터가 없으면 빈 문자열."""
+    import time  # noqa: PLC0415
+    from backend.screener.rotation import family_members  # noqa: PLC0415
+    from backend.services.toss_client import _get  # noqa: PLC0415
+    fam = family_members(db)
+    px = pd.read_sql(text("select stock_code s, trading_date d, high_price h, close_price c, trading_value tv from spot_daily_prices "
+                          "where trading_date >= current_date - 45 and trading_date < current_date"), db.connection())
+    C = px.pivot(index="d", columns="s", values="c").sort_index().astype(float)
+    H = px.pivot(index="d", columns="s", values="h").sort_index().astype(float)
+    TV = px.pivot(index="d", columns="s", values="tv").sort_index().astype(float)
+    if len(C.index) < 22:
+        return ""
+    liq = TV.tail(20).mean()
+    names = dict(db.execute(text("select code, name from stocks")).all())
+    codes = sorted({c for m in fam.values() for c in m if c in C.columns})
+    today = pd.Timestamp.now(tz="Asia/Seoul").strftime("%Y-%m-%d")
+    live: dict[str, float] = {}
+    for i in range(0, len(codes), 200):
+        for w in (0.3, 2, 5):
+            time.sleep(w)
+            r = _get("/prices", {"symbols": ",".join(codes[i:i + 200])})
+            if r is not None and r.status_code == 200:
+                for x in r.json().get("result", []):
+                    if x.get("lastPrice") and (x.get("timestamp") or "").startswith(today):
+                        live[x["symbol"]] = float(x["lastPrice"])
+                break
+    prev = C.iloc[-1]
+    dch = (C / C.shift(1) - 1).clip(-0.3, 0.3)
+    out = []
+    for f, m in fam.items():
+        cc = [c for c in m if c in live and prev.get(c, 0) > 0 and liq.get(c, 0) >= 1e9]
+        if len(cc) < 8:
+            continue
+        g = sum(max(min(live[c] / prev[c] - 1, 0.3), -0.3) for c in cc) / len(cc)
+        s20 = float((1 + dch[cc].tail(20).mean(axis=1)).prod() - 1)
+        if g > -0.02 or s20 < 0.10:
+            continue
+        rows = []
+        for c in cc:
+            p = live[c]
+            ma = (C[c].tail(19).sum() + p) / 20
+            hi = max(float(H[c].tail(19).max()), p)
+            if liq.get(c, 0) >= 3e9 and prev[c] / C[c].iloc[-21] - 1 >= 0.15 and p > ma and p / hi - 1 >= -0.10:
+                rows.append((liq[c], f"{names.get(c, c)} {(p / prev[c] - 1) * 100:+.1f}%"))
+        rows.sort(reverse=True)
+        out.append((g, f"• <b>{f}</b> 지금 {g * 100:+.1f}% (20일 +{s20 * 100:.0f}%) {DIP_NOTE.get(f, '')}\n  " + (" · ".join(x for _, x in rows[:8]) or "고를 종목 없음")))
+    if not out:
+        return ""
+    out.sort()
+    return ("📉 <b>과매도 줍기 점검</b> (14:50, 장중 가격)\n오른 섹터가 오늘 크게 빠지는 중 — 종가 무렵 사면 3년 평균 5일 +1.9~4.0%\n"
+            + "\n".join(x for _, x in out)
+            + "\n\n→ 종가(또는 시간외)에 <b>절반 비중</b>으로 · 5~10일 · 손절 = 오늘 저가 아래 마감\n⚠ 시장이 하락장으로 바뀌는 날이면 줍지 않기 (26년 5월 실패)")

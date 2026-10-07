@@ -348,6 +348,20 @@ def _premarket_held(db: Session, today: date) -> dict[str, list[str]]:
     return out
 
 
+def send_dip_live(db: Session) -> None:
+    """평일 14:50 — 오른 섹터가 오늘 -2%↓ 빠지는 중이면 종가 매수 후보를 알린다 (2026-10-07)."""
+    from backend.utils.dates import is_trading_day  # noqa: PLC0415
+    from backend.screener.market_regime import current_regime  # noqa: PLC0415
+    from backend.screener.my_pattern import dip_live_text  # noqa: PLC0415
+    if not is_trading_day(datetime.now(ZoneInfo("Asia/Seoul")).date()):
+        return
+    if (current_regime(db) or {}).get("state") == "하락":
+        return
+    msg = dip_live_text(db)
+    if msg:
+        send(db, msg, html=True)
+
+
 def send_us_premarket(db: Session) -> None:
     """평일 19:00 — 오늘 산 종베가 소부장·기판/광통신/전력이면 같이 움직이는 미국 종목 프리마켓을 알려 준다.
     크게 빠지면 20:00 넥스트레이드 애프터마켓 전에 정리 판단 (2026-10-06)."""

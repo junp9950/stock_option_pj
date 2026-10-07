@@ -809,6 +809,11 @@ async function renderDashboard(d, stale){
   rank.push(rcard('1','#e3b341','⭐ 올라오는 섹터의 힘 있는 양봉 → 5~10일 스윙',
     '돈 몰린 섹터가 20일 4~8위 (아직 주도 전 · 올라오는 중) · <b>5~10일 보유</b> · 3년 10일 +2.6% · 최근 1년 +8.2% · AI 랠리 +6.1%',
     ((d.best_swing||[]).map(bchip).join('')||'<span class="ts">오늘은 없음</span>')+`<div class="ts" style="margin-top:4px"><a href="#" onclick="switchTab('jongbe');return false" style="color:#58a6ff">후보 전체 보기 →</a></div>`));
+  // 과매도 줍기 (2026-10-07 dipbuy.py): 직전 20일 +10%↑ 섹터가 오늘 평균 -2%↓ → 종가 매수 5~10일
+  rank.push(rcard('★','#58a6ff','📉 과매도 줍기 → 5~10일 (오른 섹터가 하루 크게 빠진 날)',
+    '직전 20일 +10%↑ 섹터가 오늘 평균 -2%↓ · <b>종가(또는 시간외)에 절반 비중</b> · 손절 = 오늘 저가 아래 마감 · 3년 5일 +1.9% (기판 +4.0%, 미국 장비 급락 다음 날 기판 +8.7%) · 하락장 전환 날은 실패 · 장중엔 14:50 텔레그램',
+    (all.state==='하락'?'<div style="color:#f85149;font-size:12.5px;margin-bottom:4px">하락장 — 줍지 않기</div>':'')
+    +((d.dip||[]).map(s=>`<div style="margin-bottom:6px"><b style="color:#e6edf3">${s.family}</b> <span style="color:#58a6ff">${sg(s.chg)}%</span> <span class="ts">(20일 +${s.s20}%) ${s.note||''}</span><br>${s.items.map(x=>chip(x,'#1f6feb',` <span class="ts">${sg(x.change_pct)}% · 손절 ${x.low.toLocaleString()}</span>`)).join('')||'<span class="ts">고를 종목 없음</span>'}</div>`).join('')||'<span class="ts">오늘은 해당 없음</span>')));
   rank.push(rcard('2','#bc8cff','🕯 추세 도지 → 5일 안쪽',
     '상승 추세 종목의 장대양봉 다음 날 도지 · 이격 20%↓ · 5일 +3.7% (10일 넘기면 효과 없음)',((d.trend_doji||[]).map(x=>chip(x,'#bc8cff',` <span class="ts">어제 ${sg(x.big_pct)}% · 이격 ${x.gap20_pct}%</span>`)).join('')||'<span class="ts">오늘은 없음</span>')
     +`<div class="ts" style="margin:8px 0 4px">내일 도지면 그 자리 (오늘 장대양봉)</div>`+((d.trend_big||[]).map(x=>chip(x,'#6e40c9',` <span class="ts">${sg(x.change_pct)}%</span>`)).join('')||'<span class="ts">없음</span>')
