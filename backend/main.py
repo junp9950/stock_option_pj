@@ -807,7 +807,7 @@ async function renderDashboard(d, stale, live){
   document.getElementById('db-market').innerHTML=card('📊 시장',
     // ① 오늘 지수 (실제 코스피·코스닥, 네이버) ② 국면(추세) — 둘을 나눠 보여 줌 (2026-10-07 "시장 상태랑 당일 지수 상태 구분 필요")
     (()=>{ const it=d.index_today||{}; const one=k=>{ const x=it[k]; if(!x) return ''; const c=x.pct>=0?'#f85149':'#58a6ff';
-      return `<div style="flex:1;min-width:150px;border:1px solid #30363d;border-radius:10px;padding:8px 14px;background:#161b22"><span class="ts">${k} 지수 ${x.status==='OPEN'?'(장중)':''}</span><br><b style="font-size:20px;color:${c}">${x.close}</b> <b style="color:${c}">${sg(x.pct)}%</b></div>`; };
+      return `<div onclick="openIndexChart('${k==='코스피'?'KOSPI':'KOSDAQ'}','${k}')" title="누르면 최근 60일 차트" style="cursor:pointer;flex:1;min-width:150px;border:1px solid #30363d;border-radius:10px;padding:8px 14px;background:#161b22"><span class="ts">${k} 지수 ${x.status==='OPEN'?'(장중)':''} · 📈 차트</span><br><b style="font-size:20px;color:${c}">${x.close}</b> <b style="color:${c}">${sg(x.pct)}%</b></div>`; };
       return (it['코스피']||it['코스닥'])?`<div class="ts" style="margin-bottom:6px">📉 오늘 지수 (하루 오르내림)</div><div style="display:flex;gap:12px;flex-wrap:wrap;margin-bottom:12px">${one('코스피')}${one('코스닥')}</div>`:''; })()
     +`<div class="ts" style="margin-bottom:6px">🧭 시장 국면 (추세 · 종목 평균 지수가 20일선 아래면 하락, 20일선이 오르면 상승 — 하루 빠져도 20일선 위면 상승 유지)</div><div style="display:flex;gap:12px;flex-wrap:wrap">${mk('전체')}${mk('코스피')}${mk('코스닥')}</div>`);
   // 막대 하나(-15~+15%p)는 0이 어딘지 안 보여 '늘어나는' 것처럼 읽혔음 → 두 막대를 나란히 비교 (2026-10-06)
@@ -1799,15 +1799,27 @@ async function openChartModal(code, name, spikeDate){
     document.getElementById('chart-modal-note').textContent = '차트 로딩 실패';
   }
 }
+// 지수 차트 (2026-10-07: 오늘 탭 지수 카드를 누르면 최근 60일 + EMA)
+async function openIndexChart(sym, name){
+  document.getElementById('chart-modal-title').textContent = `${name} 지수 — 일봉`;
+  document.getElementById('chart-modal-note').textContent = '로딩 중…';
+  document.getElementById('chart-modal-bg').classList.add('show');
+  const data = await fetch(`${API}/index/candles/${sym}?count=150`).then(r=>r.ok?r.json():null).catch(()=>null);
+  if(!data || !data.candles || !data.candles.length){ document.getElementById('chart-modal-note').textContent='지수 데이터를 가져오지 못했습니다'; return; }
+  const g = drawCandleChart(data.candles, null, 60);
+  const c=data.candles, last=+c[c.length-1].closePrice, prev=+c[c.length-2].closePrice;
+  document.getElementById('chart-modal-note').textContent = `최근 60거래일 · 마지막 ${last.toLocaleString()} (${((last/prev-1)*100).toFixed(2)}%)`
+    + (g!=null ? ` · EMA 5·10·20 간격 ${g.toFixed(1)}% ${g<=4?'(모임 ✓)':g>=7?'(벌어짐 ⚠)':''}` : '');
+}
 function closeChartModal(){ document.getElementById('chart-modal-bg').classList.remove('show'); }
 
 // 외부 라이브러리 없이 순수 canvas로 캔들차트 + 거래량 + 눌림목 지지선 그리기
-function drawCandleChart(allCandles, spikeDate){
+function drawCandleChart(allCandles, spikeDate, show){
   // 단기 EMA 5·10·20 (2026-10-07 사용자 "EMA를 내 눈으로 확인할 수 없나") — 앞쪽 캔들로 미리 계산하고 최근 90개만 그림
   const emaOf=(arr,n)=>{ const k=2/(n+1); let e=arr[0]; return arr.map(v=>(e=v*k+e*(1-k))); };
   const closesAll=allCandles.map(c=>+c.closePrice);
   const EMA=[5,10,20].map(n=>emaOf(closesAll,n));
-  const off=Math.max(0,allCandles.length-90);
+  const off=Math.max(0,allCandles.length-(show||90));
   const candles=allCandles.slice(off);
   const ES=EMA.map(a=>a.slice(off));
   const cvCandle = document.getElementById('pb-candle-canvas');

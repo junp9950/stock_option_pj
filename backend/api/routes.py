@@ -1644,6 +1644,24 @@ def get_value_records(db: Session = Depends(get_db)):
     return cached("value_records", (), db, lambda: scan(db))
 
 
+@router.get("/index/candles/{symbol}")
+def get_index_candles(symbol: str, count: int = 150):
+    """코스피·코스닥 지수 일봉 (네이버 fchart) — 오늘 탭 지수 카드를 누르면 차트 (2026-10-07). 토스 캔들과 같은 모양으로 돌려줌."""
+    import re as _re  # noqa: PLC0415
+    import requests  # noqa: PLC0415
+    sym = {"KOSPI": "KOSPI", "KOSDAQ": "KOSDAQ"}.get(symbol.upper())
+    if not sym:
+        raise HTTPException(status_code=400, detail="KOSPI 또는 KOSDAQ")
+    r = requests.get("https://fchart.stock.naver.com/sise.nhn", timeout=10, headers={"User-Agent": "Mozilla/5.0"},
+                     params={"symbol": sym, "timeframe": "day", "count": str(max(30, min(count, 400))), "requestType": "0"})
+    out = []
+    for item in _re.findall(r'data="([^"]+)"', r.text):
+        d, o, h, l, c, v = item.split("|")
+        out.append({"timestamp": f"{d[:4]}-{d[4:6]}-{d[6:8]}T15:30:00+09:00", "openPrice": o, "highPrice": h, "lowPrice": l,
+                    "closePrice": c, "volume": v})
+    return {"symbol": sym, "candles": out}
+
+
 @router.get("/dashboard/dip-live")
 def get_dip_live(db: Session = Depends(get_db)):
     """장중 과매도 줍기 (토스 실시간, 5분 캐시) — 오늘 탭 카드가 장중에 부른다 (2026-10-07)."""
