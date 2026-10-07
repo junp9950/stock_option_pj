@@ -500,7 +500,7 @@ def add_suggestion_comment(sid: int, body: SuggestionCommentIn, db: Session = De
     cm[str(sid)] = lst + [c]
     tg_put(db, "suggestion_comments", cm)
     notify_async(f"📮 건의사항 #{sid} 답글 — {c['author'] or '이름 없음'}{chr(10)}{_cut(content, 200)}{chr(10)}{SITE}/#suggest", author=c["author"],
-                 ref={"suggestion": sid}, only_me=True)
+                 ref={"suggestion": sid})     # 답글은 쓴 사람 빼고 상대에게 (내가 달면 우라늄, 우라늄이 달면 나) — 새 건의만 나에게만 (2026-10-07)
     return c
 
 
