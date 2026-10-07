@@ -874,9 +874,9 @@ async function renderDashboard(d, stale, live){
   // EMA 모임 돌파 (2026-10-07 ema_squeeze.py · 사용자 원칙)
   C.ema=['#56d4dd','📏 EMA(5·10·20) 모임 돌파 → 5~20일',
     '단기 EMA 셋이 4% 안으로 모여 있다가 세 선 위·10일 고점 돌파(+3%↑·거래 1.5배↑) · 3년 5일 +0.9~1.0% (벌어진 뒤 돌파는 -0.2~-1.4%) · <b>섹터 돈 겹치면(⭐) 20일 +6%</b> · <b>📈EMA60 정배열</b>이면 5일 2~3배 · 손절 = 돌파 봉 저가 아래 마감 · 5~10일',
-    ((d.ema_break||[]).map(x=>chip(x,x.money?'#e3b341':'#56d4dd',` <span style="color:#f85149">${sg(x.change_pct)}%</span> <span class="ts">거래 ${x.tv_x}배 · 전날 간격 ${x.ema_gap}%${x.family?' · '+x.family:''}</span>${x.money?' <b style="color:#e3b341;font-size:11px">⭐섹터 돈</b>':''}${x.up60?' <b style="color:#3fb950;font-size:11px" title="종가가 EMA60 위 & EMA20>EMA60">📈정배열</b>':''}`)).join('')||'<span class="ts">오늘 돌파 없음</span>')
+    ((d.ema_break||[]).map(x=>chip(x,x.money?'#e3b341':'#56d4dd',` <span style="color:#f85149">${sg(x.change_pct)}%</span> <span class="ts">거래 ${x.tv_x}배 · 전날 간격 ${x.ema_gap}%${x.family?' · '+x.family:''}</span>${x.money?' <b style="color:#e3b341;font-size:11px">⭐섹터 돈</b>':''}${x.up60?' <b style="color:#3fb950;font-size:11px" title="종가가 EMA60 위 & EMA20>EMA60">📈정배열</b>':''}${x.avwap_below?' <b style="color:#f0883e;font-size:11px" title="기준봉 이후 평균 단가 '+x.avwap.toLocaleString()+' 아래">⚠기준봉VWAP 아래</b>':''}`)).join('')||'<span class="ts">오늘 돌파 없음</span>')
     +`<div class="ts" style="margin:8px 0 4px">내일 후보 — EMA 3% 안으로 모여서 10일 고점 4% 안 · 60일선 위 · 오늘 조용 (뚫는 날 거래·섹터 확인)</div>`
-    +((d.ema_wait||[]).map(x=>chip(x,x.money?'#e3b341':'#30363d',` <span class="ts">고점 ${x.line.toLocaleString()}까지 ${x.to_high_pct}% · 간격 ${x.ema_now}%${x.family?' · '+x.family:''}</span>${x.up60?' <b style="color:#3fb950;font-size:11px">📈</b>':''}`)).join('')||'<span class="ts">없음</span>')];
+    +((d.ema_wait||[]).map(x=>chip(x,x.money?'#e3b341':'#30363d',` <span class="ts">고점 ${x.line.toLocaleString()}까지 ${x.to_high_pct}% · 간격 ${x.ema_now}%${x.family?' · '+x.family:''}</span>${x.up60?' <b style="color:#3fb950;font-size:11px">📈</b>':''}${x.avwap_below?' <b style="color:#f0883e;font-size:11px" title="기준봉 이후 평균 단가 '+x.avwap.toLocaleString()+' 아래">⚠기준봉VWAP 아래</b>':''}`)).join('')||'<span class="ts">없음</span>')];
   C.doji=['#bc8cff','🕯 추세 도지 → 5일 안쪽',
     '상승 추세 종목의 장대양봉 다음 날 도지 · 이격 20%↓ · 5일 +3.7% (10일 넘기면 효과 없음)',((d.trend_doji||[]).map(x=>chip(x,'#bc8cff',` <span class="ts">어제 ${sg(x.big_pct)}% · 이격 ${x.gap20_pct}%</span>`)).join('')||'<span class="ts">없음</span>')
     +`<div class="ts" style="margin:8px 0 4px">내일 도지면 그 자리 (오늘 장대양봉)</div>`+((d.trend_big||[]).map(x=>chip(x,'#6e40c9',` <span class="ts">${sg(x.change_pct)}%</span>`)).join('')||'<span class="ts">없음</span>')];
@@ -1724,7 +1724,7 @@ async function loadEmaSection(){
   if(!d){ b.textContent='불러오지 못했습니다'; return; }
   const eb=d.ema_break||[], ew=d.ema_wait||[];
   document.getElementById('ema-info').textContent=`${d.trading_date} · 돌파 ${eb.length} · 후보 ${ew.length}`;
-  const tag=x=>(x.money?' <b style="color:#e3b341;font-size:11px">⭐섹터 돈</b>':'')+(x.up60?' <b style="color:#3fb950;font-size:11px">📈정배열</b>':'');
+  const tag=x=>(x.money?' <b style="color:#e3b341;font-size:11px">⭐섹터 돈</b>':'')+(x.up60?' <b style="color:#3fb950;font-size:11px">📈정배열</b>':'')+(x.avwap_below?' <b style="color:#f0883e;font-size:11px">⚠기준봉VWAP 아래</b>':'');
   const card=(x,body)=>`<span onclick="openChartModal('${x.code}','${x.name}','')" style="cursor:pointer;border:1px solid ${x.up60?'#3fb950':'#30363d'};border-radius:8px;padding:6px 10px;font-size:12.5px;line-height:1.55"><b style="color:#e6edf3">${x.name}</b>${tag(x)}<br><span class="ts">${body}</span></span>`;
   b.innerHTML=eb.length?eb.map(x=>card(x,`<span style="color:#f85149">${x.change_pct>0?'+':''}${x.change_pct}%</span> · 거래 ${x.tv_x}배 · 전날 간격 ${x.ema_gap}%${x.family?' · '+x.family:''}`)).join(''):'오늘 돌파 없음';
   w.innerHTML=ew.length?ew.map(x=>card(x,`10일 고점 ${x.line.toLocaleString()}까지 ${x.to_high_pct}% · 간격 ${x.ema_now}%${x.family?' · '+x.family:''}`)).join(''):'없음';
@@ -1809,6 +1809,7 @@ function renderMarket(m){
   el.hidden = false;
 }
 
+let _avwapNote='';
 function clearChartCanvas(){   // 열 때 이전 종목 차트가 남아 보이던 것 지움 (2026-10-07)
   ['pb-candle-canvas','pb-volume-canvas'].forEach(id=>{ const cv=document.getElementById(id); if(cv){ const x=cv.getContext('2d'); x.setTransform(1,0,0,1,0,0); x.clearRect(0,0,cv.width,cv.height); } });
 }
@@ -1825,7 +1826,7 @@ async function openChartModal(code, name, spikeDate){
     }
     const g = drawCandleChart(data.candles, spikeDate);
     document.getElementById('chart-modal-note').textContent = (spikeDate ? `스파이크일: ${spikeDate}` : `최근 90거래일 일봉`)
-      + (g!=null ? ` · EMA 5·10·20 간격 ${g.toFixed(1)}% ${g<=4?'(모임 ✓)':g>=7?'(벌어짐 ⚠)':''}` : '');
+      + (g!=null ? ` · EMA 5·10·20 간격 ${g.toFixed(1)}% ${g<=4?'(모임 ✓)':g>=7?'(벌어짐 ⚠)':''}` : '') + _avwapNote;
   }catch(e){
     console.error(e);
     document.getElementById('chart-modal-note').textContent = '차트 로딩 실패';
@@ -1919,6 +1920,24 @@ function drawCandleChart(allCandles, spikeDate, show){
   ES.forEach((a,k)=>{ ctxC.strokeStyle=EC[k]; ctxC.lineWidth=k===3?2.2:1.4; ctxC.beginPath(); a.forEach((v,i)=>{ const x=i*cw+cw/2, y=yP(v); i?ctxC.lineTo(x,y):ctxC.moveTo(x,y); }); ctxC.stroke(); });
   ctxC.lineWidth=1; ctxC.font='12px sans-serif';
   EN.forEach((t,k)=>{ ctxC.fillStyle=EC[k]; ctxC.fillText(t, 8+k*62, 16); });
+  // 기준봉 앵커드 VWAP (2026-10-07 vwap.py: 장대양봉 뒤 종가가 이 선 위면 20일 +2.3%, 아래면 0.0%)
+  // 기준봉 = 보이는 구간에서 가장 최근의 +8%↑·거래 3배↑ 양봉. 그날부터 (고+저+종)/3 × 거래량으로 평균
+  _avwapNote='';
+  const volsAll=allCandles.map(c=>+c.volume);
+  let ai=-1;
+  for(let i=allCandles.length-1;i>=Math.max(off,20);i--){
+    const c=allCandles[i], p=+allCandles[i-1].closePrice, avg=volsAll.slice(i-20,i).reduce((a,b)=>a+b,0)/20;
+    if(+c.closePrice>=p*1.08 && +c.closePrice>+c.openPrice && avg>0 && +c.volume>=avg*3){ ai=i; break; }
+  }
+  if(ai>=0){
+    let pv=0, vv=0; const av=[];
+    for(let i=ai;i<allCandles.length;i++){ const c=allCandles[i], tp=(+c.highPrice + +c.lowPrice + +c.closePrice)/3; pv+=tp*(+c.volume); vv+=+c.volume; av.push(vv?pv/vv:tp); }
+    ctxC.strokeStyle='#f0883e'; ctxC.lineWidth=2; ctxC.setLineDash([6,4]); ctxC.beginPath();
+    av.forEach((v,k)=>{ const x=(ai-off+k)*cw+cw/2, y=yP(v); k?ctxC.lineTo(x,y):ctxC.moveTo(x,y); }); ctxC.stroke(); ctxC.setLineDash([]); ctxC.lineWidth=1;
+    ctxC.fillStyle='#f0883e'; ctxC.fillText('기준봉 VWAP', 8+4*62, 16);
+    const lv=av[av.length-1], lc=+allCandles[allCandles.length-1].closePrice;
+    _avwapNote=` · 기준봉 ${(allCandles[ai].timestamp||'').slice(5,10)} VWAP ${Math.round(lv).toLocaleString()} ${lc>=lv?'위 ✓':'아래 ⚠'}`;
+  }
   const last=ES.slice(0,3).map(a=>a[a.length-1]), cl=+candles[n-1].closePrice;   // 간격은 5·10·20만
   return cl ? (Math.max(...last)-Math.min(...last))/cl*100 : null;
 }

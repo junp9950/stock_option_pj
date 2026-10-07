@@ -242,6 +242,16 @@ def scan(db: Session) -> dict:
         elif (g1 <= 0.03 and cl >= float(_lo.at[last, c]) * 0.99 and cl >= float(hi10n[c]) * 0.96 and cl > float(ma60n[c])
               and abs(ch_) <= 0.02):
             ema_wait.append({**base, "to_high_pct": round((float(hi10n[c]) / cl - 1) * 100, 1), "line": round(float(hi10n[c]))})
+    # 기준봉 앵커드 VWAP — 60일 안 마지막 장대양봉(+8%·거래 3배)부터 거래량 가중 평균 종가. 종가가 그 아래면 ⚠ (vwap.py: 아래면 20일 0.0%, 위 +2.3%)
+    _bigs = (chg >= 0.08) & (tvx >= 3) & (C > O)
+    _vol = (TV / C)
+    for x in ema_brk + ema_wait:
+        c = x["code"]
+        idx = [i for i in range(max(0, len(C.index) - 60), len(C.index)) if bool(_bigs[c].iloc[i])]
+        if idx:
+            a = idx[-1]
+            av = float(TV[c].iloc[a:].sum() / _vol[c].iloc[a:].sum())
+            x["avwap"], x["avwap_below"] = round(av), bool(x["close"] < av)
     ema_brk.sort(key=lambda x: (not x["money"], not x["up60"], -x["liq"]))
     ema_wait.sort(key=lambda x: (not x["money"], not x["up60"], -x["liq"]))
     for ds in dip_secs:
