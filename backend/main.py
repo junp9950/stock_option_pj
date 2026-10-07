@@ -769,7 +769,7 @@ async function loadLive(d){
   // 시장 국면·20일 비교·섹터 표·조건 B·박스 돌파도 지금 가격으로 바꿔 그림 (2026-10-07 "지금 기준으로 시장 데이터 전부")
   const d2={...d};
   if(r.market) d2.market={...r.market, sh_foreign5:(d.market||{}).sh_foreign5};
-  ['sector_day','heat','b_sectors','best_lead','best_swing','box_break','box_near'].forEach(k=>{ if(r[k]!==undefined) d2[k]=r[k]; });
+  ['sector_day','heat','b_sectors','best_lead','best_swing','box_break','box_near','index_today'].forEach(k=>{ if(r[k]!==undefined) d2[k]=r[k]; });
   renderDashboard(d2, false, r);
 }
 async function renderDashboard(d, stale, live){
@@ -799,12 +799,17 @@ async function renderDashboard(d, stale, live){
   const when=live?`⏱ 장중 ${live.as_of} 가격 기준 — 시장·섹터·판단·종베·박스·과매도·순환 모두 지금 가격 (거래량은 마감 환산, 종가 전이라 바뀔 수 있음) · 추세 도지·이틀 쉼·돌려세움·내일 후보는 ${d.as_of||''} 종가 기준`:`${d.as_of||''} 종가 기준 · 장 마감 수집 뒤(16시쯤) 갱신 · 장중엔 지금 가격으로 다시 판단`;
   v.innerHTML=`<div>${vt}</div>${warn.map(w=>`<div style="margin-top:6px;color:#e3b341">${w}</div>`).join('')}<div class="ts" style="margin-top:6px">${when}</div>`;
   const mk=k=>{ const x=m[k]||{}; return `<div style="flex:1;min-width:150px;border:2px solid ${col[x.state]||'#30363d'};border-radius:14px;padding:14px 18px;background:${(col[x.state]||'#30363d')}14">
-    <div style="font-size:15px;color:#c9d1d9;font-weight:600">${k}</div>
+    <div style="font-size:15px;color:#c9d1d9;font-weight:600">${k} <span class="ts" style="font-weight:400">국면(추세)</span></div>
     <div style="font-size:30px;font-weight:800;color:${col[x.state]||'#c9d1d9'};margin:4px 0">${ico[x.state]||''} ${x.state||'-'}</div>
-    <div style="font-size:14px;color:#c9d1d9">20일선보다 <b>${x.vs_ma20_pct!=null?sg(x.vs_ma20_pct)+'%':'-'}</b> · 최근 20일 <b>${x.cum20_pct!=null?sg(x.cum20_pct)+'%':'-'}</b></div></div>`; };
+    <div style="font-size:14px;color:#c9d1d9">${x.today_pct!=null?`오늘 <b style="color:${x.today_pct>=0?'#f85149':'#58a6ff'}">${sg(x.today_pct)}%</b> · `:''}20일선보다 <b>${x.vs_ma20_pct!=null?sg(x.vs_ma20_pct)+'%':'-'}</b> · 최근 20일 <b>${x.cum20_pct!=null?sg(x.cum20_pct)+'%':'-'}</b></div></div>`; };
   const rel=m.rel, relW=rel==null?0:Math.max(0,Math.min(100,(rel+15)/30*100));
   const top=[],rank=[],ref=[];
-  document.getElementById('db-market').innerHTML=card('📊 시장 (종목 평균 지수 · 20일선 아래면 하락)',`<div style="display:flex;gap:12px;flex-wrap:wrap">${mk('전체')}${mk('코스피')}${mk('코스닥')}</div>`);
+  document.getElementById('db-market').innerHTML=card('📊 시장',
+    // ① 오늘 지수 (실제 코스피·코스닥, 네이버) ② 국면(추세) — 둘을 나눠 보여 줌 (2026-10-07 "시장 상태랑 당일 지수 상태 구분 필요")
+    (()=>{ const it=d.index_today||{}; const one=k=>{ const x=it[k]; if(!x) return ''; const c=x.pct>=0?'#f85149':'#58a6ff';
+      return `<div style="flex:1;min-width:150px;border:1px solid #30363d;border-radius:10px;padding:8px 14px;background:#161b22"><span class="ts">${k} 지수 ${x.status==='OPEN'?'(장중)':''}</span><br><b style="font-size:20px;color:${c}">${x.close}</b> <b style="color:${c}">${sg(x.pct)}%</b></div>`; };
+      return (it['코스피']||it['코스닥'])?`<div class="ts" style="margin-bottom:6px">📉 오늘 지수 (하루 오르내림)</div><div style="display:flex;gap:12px;flex-wrap:wrap;margin-bottom:12px">${one('코스피')}${one('코스닥')}</div>`:''; })()
+    +`<div class="ts" style="margin-bottom:6px">🧭 시장 국면 (추세 · 종목 평균 지수가 20일선 아래면 하락, 20일선이 오르면 상승 — 하루 빠져도 20일선 위면 상승 유지)</div><div style="display:flex;gap:12px;flex-wrap:wrap">${mk('전체')}${mk('코스피')}${mk('코스닥')}</div>`);
   // 막대 하나(-15~+15%p)는 0이 어딘지 안 보여 '늘어나는' 것처럼 읽혔음 → 두 막대를 나란히 비교 (2026-10-06)
   const mx=Math.max(Math.abs(m.sh20||0),Math.abs(m.kq20||0),1);
   const bar=(lab,v,c)=>`<div style="display:flex;align-items:center;gap:8px;font-size:13px;margin:4px 0"><span style="width:72px;flex:none">${lab}</span><div style="flex:1;height:10px;background:#21262d;border-radius:5px;overflow:hidden"><div style="height:10px;width:${Math.abs(v)/mx*100}%;background:${v>=0?c:'#58a6ff'}"></div></div><b style="width:58px;text-align:right">${sg(v)}%</b></div>`;

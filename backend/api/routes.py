@@ -1648,7 +1648,13 @@ def get_value_records(db: Session = Depends(get_db)):
 def get_dip_live(db: Session = Depends(get_db)):
     """장중 과매도 줍기 (토스 실시간, 5분 캐시) — 오늘 탭 카드가 장중에 부른다 (2026-10-07)."""
     from backend.screener.my_pattern import dip_live  # noqa: PLC0415
-    return dip_live(db)
+    from backend.services.telegram import index_today  # noqa: PLC0415
+    r = dict(dip_live(db))
+    try:
+        r["index_today"] = index_today()
+    except Exception:  # noqa: BLE001
+        pass
+    return r
 
 
 @router.get("/dashboard")
@@ -1708,7 +1714,12 @@ def get_dashboard(db: Session = Depends(get_db)):
               "new": sorted([{"code": x["code"], "name": x["name"], "days": x["days_since"]} for x in its if x["stage"] == "신규"], key=lambda x: x["days"])[:10]}
     except Exception:  # noqa: BLE001
         pass
-    return {"as_of": latest, "market": st, "alert": alert, "b_sectors": mp["b_sectors"], "hot": mp["hot"], "sector_day": mp["sector_day"],
+    from backend.services.telegram import index_today  # noqa: PLC0415
+    try:
+        idx = index_today()
+    except Exception:  # noqa: BLE001
+        idx = {}
+    return {"as_of": latest, "market": st, "alert": alert, "index_today": idx, "b_sectors": mp["b_sectors"], "hot": mp["hot"], "sector_day": mp["sector_day"],
             "b_count": len(b), "a_count": sum(1 for x in mp["items"] if x["a"] and not x["b"]), "best": best[:8], "best_lead": best_lead[:8], "best_swing": best_swing[:8], "heat": mp.get("heat", {}), "next": mp["next"][:10],
             "trend_doji": mp.get("trend_doji", [])[:8], "trend_big": mp.get("trend_big", [])[:10], "rest2": mp.get("rest2", [])[:10], "turn3": mp.get("turn3", [])[:30], "turn2": mp.get("turn2", [])[:12], "box_break": mp.get("box_break", [])[:10], "box_near": mp.get("box_near", [])[:10], "dip": mp.get("dip", []), "rotation": mp.get("rotation", []), "mode": mp.get("mode"), "ema_break": mp.get("ema_break", []), "ema_wait": mp.get("ema_wait", []),
             "watch": watch, "volume": vr}

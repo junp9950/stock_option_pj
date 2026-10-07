@@ -200,7 +200,7 @@ def market_status(db: Session, live_chg: dict | None = None) -> dict | None:
             sh_live = (today, (live_chg["005930"] + live_chg["000660"]) / 2)
     reg = {k: regime_series(v) for k, v in agg.items()}
     last = max(reg["전체"])
-    out = {"as_of": last.isoformat(), **{k: reg[k][max(reg[k])] for k in reg}}
+    out = {"as_of": last.isoformat(), **{k: {**reg[k][max(reg[k])], "today_pct": round(agg[k][max(reg[k])], 2)} for k in reg}}   # 오늘 종목 평균 등락도 (국면과 헷갈리지 않게)
     sh = db.execute(text("select trading_date, avg(change_pct) from spot_daily_prices where stock_code in ('005930','000660') "
                          "and trading_date >= current_date - 60 group by 1 order by 1")).all()
     if sh_live:
@@ -217,6 +217,27 @@ def market_status(db: Session, live_chg: dict | None = None) -> dict | None:
     return out
 
 
+_idx_cache: dict = {}
+
+
+def index_today() -> dict:
+    """오늘 실제 지수 (네이버, 1분 캐시) — 시장 국면(추세)과 따로 보여 주려고 (2026-10-07 사용자: 둘 다 빠졌는데 '상승'이면 헷갈림)."""
+    import time as _t  # noqa: PLC0415
+    if _idx_cache.get("v") and _t.time() - _idx_cache["t"] < 60:
+        return _idx_cache["v"]
+    out = {}
+    for k, code in (("코스피", "KOSPI"), ("코스닥", "KOSDAQ")):
+        try:
+            j = requests.get(f"https://m.stock.naver.com/api/index/{code}/basic", headers={"User-Agent": "Mozilla/5.0"}, timeout=8).json()
+            out[k] = {"close": j.get("closePrice"), "pct": float(j.get("fluctuationsRatio")), "status": j.get("marketStatus"),
+                      "at": (j.get("localTradedAt") or "")[:16]}
+        except Exception:  # noqa: BLE001
+            pass
+    if out:
+        _idx_cache.update(t=_t.time(), v=out)
+    return out
+
+
 def _st(x: dict) -> str:
     icon = {"상승": "🟢", "횡보": "🟡", "하락": "🔴"}.get(x["state"], "⚪")
     return f"{icon} {x['state']} {x['vs_ma20_pct']:+.1f}%"
@@ -224,7 +245,12 @@ def _st(x: dict) -> str:
 
 def status_line(st: dict) -> str:
     """매일 요약 맨 위 시장 칸 — 폰에서 줄이 중간에 잘리지 않게 한 항목에 한 줄 (2026-10-06)."""
-    out = ("📊 <b>시장</b> (20일선 대비)\n"
+    try:
+        it = index_today()
+        idx = ("📉 <b>오늘 지수</b>\n" + "\n".join(f"• {k}  {v['close']} ({v['pct']:+.2f}%)" for k, v in it.items()) + "\n\n") if it else ""
+    except Exception:  # noqa: BLE001
+        idx = ""
+    out = idx + ("🧭 <b>시장 국면</b> (추세 · 20일선 대비)\n"
            f"• 전체  {_st(st['전체'])}\n• 코스피  {_st(st['코스피'])}\n• 코스닥  {_st(st['코스닥'])}")
     if "rel" in st:
         r = st["rel"]
