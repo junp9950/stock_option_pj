@@ -12,6 +12,8 @@ button{background:#1f6feb;color:#fff;border:0;border-radius:7px;padding:9px 16px
 .preview .rm{position:absolute;top:-8px;right:-8px;background:#f85149;color:#fff;border:0;border-radius:50%;width:22px;height:22px;line-height:22px;padding:0;font-size:13px}
 .shots{display:flex;flex-wrap:wrap;gap:6px;margin-top:8px}.shots img{width:140px;height:140px;object-fit:cover;border-radius:8px;border:1px solid #30363d;cursor:zoom-in}
 .lightbox{display:none;position:fixed;inset:0;background:rgba(0,0,0,.85);z-index:50;align-items:center;justify-content:center;cursor:zoom-out}.lightbox.show{display:flex}.lightbox img{max-width:92vw;max-height:92vh;border-radius:6px}
+.cmts{margin-top:8px;padding-left:12px;border-left:2px solid #30363d}.cmt{font-size:13px;padding:4px 0}.cmt .who{color:#93c5fd;font-weight:600;margin-right:6px}.cmt .t{color:#94a3b8;font-size:11.5px;margin-left:6px}.cmt .x{background:none;border:0;color:#94a3b8;padding:0 4px;font-size:12px}
+.cform{display:flex;gap:6px;margin-top:6px}.cform input{width:110px;padding:6px 8px;font-size:13px}.cform textarea{min-height:36px;height:36px;padding:6px 8px;font-size:13px;flex:1}.cform button{padding:6px 12px;font-size:13px}
 .reply{margin-top:8px;padding:10px 12px;border-left:3px solid #238636;background:#12261a;border-radius:6px;white-space:pre-wrap}.tools{display:flex;flex-wrap:wrap;gap:6px;margin-top:8px}.tools select{width:auto;padding:5px 8px;font-size:13px}.edit{margin-top:8px}.empty{text-align:center;color:#94a3b8;padding:24px}.err{color:#f87171;font-size:13px}
 </style></head><body><main>
 <h1>건의사항</h1><div class="sub">원하는 기능이나 불편한 점을 남겨 주세요. 처리 상황과 답변이 여기에 표시됩니다.</div>
@@ -37,7 +39,12 @@ function render(){const box=document.getElementById('list');const rows=all.filte
 if(!rows.length){box.innerHTML='<div class="empty">'+(all.length?'이 상태의 건의가 없습니다.':'아직 건의가 없습니다. 첫 건의를 남겨 주세요.')+'</div>';return}
 box.innerHTML=rows.map(x=>`<div class="item" data-id="${x.id}"><div class="meta"><span class="st st-${x.status.split(' ')[0]}">${esc(x.status)}</span><span>#${x.id}</span><span>${x.author?esc(x.author)+' · ':''}${when(x.created_at)}</span></div>
 <p class="content">${esc(x.content)}</p>${(x.images||[]).length?`<div class="shots">${x.images.map(u=>`<img src="${u}" alt="첨부 사진">`).join('')}</div>`:''}${x.reply?`<div class="reply"><b>답변</b><br>${esc(x.reply)}</div>`:''}
+<div class="cmts">${(x.comments||[]).map(c=>`<div class="cmt"><span class="who">${esc(c.author||'이름 없음')}</span>${esc(c.content)}<span class="t">${when(c.created_at)}</span><button class="x" data-act="cdel" data-cid="${c.id}" title="답글 삭제">✕</button></div>`).join('')}
+<div class="cform"><input data-f="cauthor" maxlength="40" placeholder="이름" value="${esc(myName())}"><textarea data-f="ccontent" maxlength="1000" placeholder="답글 달기"></textarea><button data-act="cadd">답글</button></div></div>
 <div class="tools"><select aria-label="상태 변경" data-act="status">${STATUS.map(s=>`<option${s===x.status?' selected':''}>${s}</option>`).join('')}</select><button class="ghost" data-act="reply">${x.reply?'답변 수정':'답변 달기'}</button><button class="ghost danger" data-act="del">삭제</button></div></div>`).join('')}
+// 답글 이름은 종목토론에서 고른 이름(같은 사이트 저장값)을 기본으로
+function myName(){try{return localStorage.getItem('sug-author')||localStorage.getItem('disc-author')||''}catch(e){return''}}
+let cposting=false;
 async function load(){try{all=await call('GET',API);render()}catch(e){document.getElementById('list').innerHTML='<div class="empty">목록을 불러오지 못했습니다.</div>'}}
 document.getElementById('submit').onclick=async()=>{const msg=document.getElementById('form-msg');const content=document.getElementById('content').value.trim();if(!content){msg.textContent='내용을 입력해 주세요.';return}
 try{await call('POST',API,{content,author:document.getElementById('author').value.trim(),images});document.getElementById('content').value='';images=[];renderPrev();msg.textContent='';await load()}catch(e){msg.textContent=e.message}};
@@ -54,6 +61,9 @@ document.getElementById('lightbox').onclick=()=>document.getElementById('lightbo
 document.getElementById('filter').onclick=e=>{const b=e.target.closest('button');if(!b)return;filter=b.dataset.v;document.querySelectorAll('#filter button').forEach(x=>x.classList.toggle('on',x===b));render()};
 document.getElementById('list').addEventListener('change',async e=>{if(e.target.dataset.act!=='status')return;const id=e.target.closest('.item').dataset.id;try{await call('PATCH',`${API}/${id}`,{status:e.target.value});await load()}catch(err){alert(err.message)}});
 document.getElementById('list').addEventListener('click',async e=>{const b=e.target.closest('button');if(!b)return;const item=b.closest('.item');const id=item.dataset.id;const x=all.find(v=>String(v.id)===id);
+if(b.dataset.act==='cadd'){if(cposting)return;const ta=item.querySelector('[data-f="ccontent"]'),au=item.querySelector('[data-f="cauthor"]').value.trim();if(!ta.value.trim())return;
+  cposting=true;b.disabled=true;b.textContent='등록 중…';try{try{localStorage.setItem('sug-author',au)}catch(_){}await call('POST',`${API}/${id}/comments`,{author:au,content:ta.value});await load()}catch(err){alert(err.message)}finally{cposting=false}return}
+if(b.dataset.act==='cdel'){if(!confirm('이 답글을 지울까요?'))return;try{await call('DELETE',`${API}/${id}/comments/${b.dataset.cid}`);await load()}catch(err){alert(err.message)}return}
 if(b.dataset.act==='del'){if(!confirm('이 건의를 삭제할까요?'))return;try{await call('DELETE',`${API}/${id}`);await load()}catch(err){alert(err.message)}}
 if(b.dataset.act==='reply'){if(item.querySelector('.edit'))return;const d=document.createElement('div');d.className='edit';d.innerHTML='<textarea maxlength="2000" aria-label="답변"></textarea><div class="row"><button data-act="save">저장</button><button class="ghost" data-act="cancel">취소</button></div>';d.querySelector('textarea').value=x.reply||'';item.append(d);d.querySelector('textarea').focus()}
 if(b.dataset.act==='cancel')item.querySelector('.edit').remove();

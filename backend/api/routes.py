@@ -464,9 +464,52 @@ def _suggestion_dict(x: Suggestion) -> dict:
             "created_at": x.created_at.isoformat() + "Z", "updated_at": x.updated_at.isoformat() + "Z"}
 
 
+# 건의사항 답글 (2026-10-07) — 누구나 여러 개. 표를 새로 만들지 않고 settings 'suggestion_comments' {건의 id: [ {id, author, content, created_at} ]}
+class SuggestionCommentIn(BaseModel):
+    author: str = Field("", max_length=40)
+    content: str = Field(..., max_length=1000)
+
+
+def _sug_comments(db: Session) -> dict:
+    from backend.services.telegram import _get as tg_get  # noqa: PLC0415
+    return tg_get(db, "suggestion_comments", {}) or {}
+
+
 @router.get('/suggestions')
 def list_suggestions(db: Session = Depends(get_db)):
-    return [_suggestion_dict(x) for x in db.scalars(select(Suggestion).order_by(Suggestion.id.desc()))]
+    cm = _sug_comments(db)
+    return [{**_suggestion_dict(x), "comments": cm.get(str(x.id), [])} for x in db.scalars(select(Suggestion).order_by(Suggestion.id.desc()))]
+
+
+@router.post('/suggestions/{sid}/comments')
+def add_suggestion_comment(sid: int, body: SuggestionCommentIn, db: Session = Depends(get_db)):
+    x = db.get(Suggestion, sid)
+    if x is None:
+        raise HTTPException(status_code=404, detail="건의를 찾을 수 없습니다.")
+    content = body.content.strip()
+    if not content:
+        raise HTTPException(status_code=400, detail="내용을 입력해 주세요.")
+    from datetime import datetime as _dt, timezone as _tz  # noqa: PLC0415
+    from backend.services.telegram import SITE, _cut, _put as tg_put, notify_async  # noqa: PLC0415
+    cm = _sug_comments(db)
+    lst = cm.get(str(sid), [])
+    if lst and lst[-1]["content"] == content and lst[-1]["author"] == body.author.strip():
+        return lst[-1]        # 두 번 눌림
+    c = {"id": max((y["id"] for y in lst), default=0) + 1, "author": body.author.strip(), "content": content,
+         "created_at": _dt.now(_tz.utc).isoformat().replace("+00:00", "Z")}
+    cm[str(sid)] = lst + [c]
+    tg_put(db, "suggestion_comments", cm)
+    notify_async(f"📮 건의사항 #{sid} 답글 — {c['author'] or '이름 없음'}{chr(10)}{_cut(content, 200)}{chr(10)}{SITE}/#suggest", author=c["author"])
+    return c
+
+
+@router.delete('/suggestions/{sid}/comments/{cid}')
+def del_suggestion_comment(sid: int, cid: int, db: Session = Depends(get_db)):
+    from backend.services.telegram import _put as tg_put  # noqa: PLC0415
+    cm = _sug_comments(db)
+    cm[str(sid)] = [y for y in cm.get(str(sid), []) if y["id"] != cid]
+    tg_put(db, "suggestion_comments", cm)
+    return {"ok": True}
 
 
 @router.post('/suggestions')
