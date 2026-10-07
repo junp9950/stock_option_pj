@@ -204,7 +204,7 @@ def scan(db: Session) -> dict:
             if cl == cl and float(r20p.get(c) or 0) >= 0.15 and cl > float(ma20[c]) and cl / float(hi20[c]) - 1 >= -0.10:
                 ds["items"].append({"code": c, "name": names.get(c, c), "change_pct": round(float(chg.at[last, c]) * 100, 1),
                                     "off_hi20_pct": round((cl / float(hi20[c]) - 1) * 100, 1), "low": round(float(L.at[last, c])),
-                                    "liq": float(liq3[c]), "best": float(liq3[c]) >= 5e10 and float(chg.at[last, c]) * 100 > ds["chg"]})
+                                    "liq": float(liq3[c]), "best": bool(float(liq3[c]) >= 5e10 and float(chg.at[last, c]) * 100 > ds["chg"])})
         # 대형(하루 500억↑) & 섹터보다 덜 빠짐이 가장 좋았음(5일 +3.0%) → 먼저, 그다음 거래대금 순 (dipstock.py)
         ds["items"].sort(key=lambda x: (not x["best"], -x["liq"]))
         ds["items"] = ds["items"][:12]
@@ -412,11 +412,11 @@ def _dip_live_compute(db: Session) -> dict:
     srank = {f: i + 1 for i, f in enumerate(sorted(stats, key=lambda f: -stats[f]["s20"]))}
     ma20 = {c: (C[c].tail(19).sum() + live[c]) / 20 for c in live if c in C.columns}
     for f in sorted(stats, key=lambda f: srank[f]):
-        out["sectors"].append({"family": f, "chg": round(stats[f]["med"] * 100, 1), "rank": srank[f]})
+        out["sectors"].append({"family": f, "chg": round(float(stats[f]["med"]) * 100, 1), "rank": srank[f]})
         if srank[f] > 8 and stats[f]["med"] >= 0.01:
             its = sorted(({"code": c, "name": names.get(c, c), "change_pct": round((live[c] / prev[c] - 1) * 100, 1)} for c in stats[f]["cc"]
                           if live[c] / prev[c] - 1 >= 0.03 and live[c] > ma20.get(c, 9e18) and liq.get(c, 0) >= 1e9), key=lambda x: -x["change_pct"])
-            out["rot"].append({"family": f, "chg": round(stats[f]["med"] * 100, 1), "rank": srank[f], "items": its[:8]})
+            out["rot"].append({"family": f, "chg": round(float(stats[f]["med"]) * 100, 1), "rank": srank[f], "items": its[:8]})
     for f, m in fam.items():
         cc = [c for c in m if c in live and prev.get(c, 0) > 0 and liq.get(c, 0) >= 1e9]
         if len(cc) < 8:
@@ -431,10 +431,10 @@ def _dip_live_compute(db: Session) -> dict:
             ma = (C[c].tail(19).sum() + p) / 20
             hi = max(float(H[c].tail(19).max()), p)
             if liq.get(c, 0) >= 3e9 and prev[c] / C[c].iloc[-21] - 1 >= 0.15 and p > ma and p / hi - 1 >= -0.10:
-                rows.append({"code": c, "name": names.get(c, c), "change_pct": round((p / prev[c] - 1) * 100, 1), "liq": float(liq[c]),
-                             "best": liq[c] >= 5e10 and p / prev[c] - 1 > g})
+                rows.append({"code": c, "name": names.get(c, c), "change_pct": round(float(p / prev[c] - 1) * 100, 1), "liq": float(liq[c]),
+                             "best": bool(liq[c] >= 5e10 and p / prev[c] - 1 > g)})
         rows.sort(key=lambda x: (not x["best"], -x["liq"]))
-        out["secs"].append({"family": f, "chg": round(g * 100, 1), "s20": round(s20 * 100), "note": DIP_NOTE.get(f, ""), "items": rows[:12],
+        out["secs"].append({"family": f, "chg": round(float(g) * 100, 1), "s20": round(s20 * 100), "note": DIP_NOTE.get(f, ""), "items": rows[:12],
                             "rank": srank.get(f, 99)})
     out["secs"].sort(key=lambda d: d["rank"])
     try:
