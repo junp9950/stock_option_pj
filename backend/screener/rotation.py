@@ -36,11 +36,14 @@ FAMILIES: dict[str, str] = {
     "자동차": r"자동차|전기차|자율주행|타이어",
     "화장품·소비": r"화장품|음식료|면세",
     "게임·엔터": r"게임|엔터|K-POP|웹툰|드라마",
-    "금융·지주": r"증권|은행|보험|지주사|밸류업",
+    "금융·지주": r"증권|은행|보험|지주사",   # '밸류업'은 뺌 — 밸류업 지수·계획 테마는 업종이 아니라서 금융 섹터 355종목 중 157개가 이것 때문에 들어와 있었음 (2026-10-07)
     "AI SW·플랫폼": r"인공지능|AI 챗봇|클라우드|데이터센터|소프트웨어|플랫폼|핀테크|전자결제|애플페이",
 }
 
 
+EXCLUDE_KEY = "sector_exclusions"   # settings 표: {"종목코드": ["섹터", ...]} — 네이버 테마 때문에 붙었지만 시장이 그렇게 안 보는 섹터에서 뺌
+# 기본값 (2026-10-07 사용자: "LS ELECTRIC·효성중공업이 신재생에 드가는 게 맞나") — 태양광·수소·풍력 테마가 붙어 있지만 전력기기주
+DEFAULT_EXCLUSIONS = {"010120": ["신재생"], "298040": ["신재생"]}
 OVERRIDE_KEY = "sector_overrides"   # settings 표: {"종목코드": "섹터"} — 네이버 테마가 시장이 보는 재료를 못 따라갈 때 직접 지정
 
 
@@ -80,7 +83,22 @@ def family_members(db: Session) -> dict[str, list[str]]:
                 out[f].add(code)
     for code, f in get_overrides(db).items():
         out[f].add(code)
+    for code, fams in get_exclusions(db).items():
+        for f in fams:
+            out.get(f, set()).discard(code)
     return {f: sorted(m) for f, m in out.items()}
+
+
+def get_exclusions(db: Session) -> dict[str, list[str]]:
+    raw = db.execute(text("select value from settings where key = :k"), {"k": EXCLUDE_KEY}).scalar()
+    try:
+        ex = json.loads(raw) if raw else {}
+    except ValueError:
+        ex = {}
+    merged = {k: list(v) for k, v in DEFAULT_EXCLUSIONS.items()}
+    for k, v in (ex or {}).items():
+        merged[k] = sorted(set(merged.get(k, [])) | set(v))
+    return merged
 
 
 def scan(db: Session) -> dict:
