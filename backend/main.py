@@ -526,10 +526,10 @@ select{background:#21262d;border:1px solid #30363d;color:#c9d1d9;padding:6px 10p
   <div id="db-verdict" style="border-radius:12px;padding:14px 18px;margin-bottom:14px;border:1px solid #30363d;font-size:15px">로딩 중…</div>
   <div id="db-market" style="margin-bottom:12px"></div>
   <div id="db-top" style="display:grid;grid-template-columns:repeat(auto-fit,minmax(320px,1fr));gap:12px;margin-bottom:6px;align-items:stretch"></div>
-  <div style="font-size:15px;font-weight:700;color:#e6edf3;margin:14px 0 8px">🎯 오늘 살 자리 — 검증 순위대로</div>
+  <div style="font-size:15px;font-weight:700;color:#e6edf3;margin:14px 0 8px">🎯 오늘 볼 자리 — 장세에 맞는 순서로 3개</div>
   <div id="db-rank"></div>
-  <div style="font-size:15px;font-weight:700;color:#e6edf3;margin:14px 0 8px">📎 참고</div>
-  <div id="db-ref" style="display:grid;grid-template-columns:repeat(auto-fit,minmax(320px,1fr));gap:12px;align-items:start"></div>
+  <details style="margin-top:14px"><summary style="font-size:15px;font-weight:700;color:#e6edf3;cursor:pointer">📎 참고 — 내일 후보 · 관심 종목 선 · 대량거래 · 내 원칙 (눌러서 펼치기)</summary>
+  <div id="db-ref" style="display:grid;grid-template-columns:repeat(auto-fit,minmax(320px,1fr));gap:12px;align-items:start;margin-top:10px"></div></details>
 </div>
 
 <div id="panel-candidates" class="panel content">
@@ -794,9 +794,12 @@ async function renderDashboard(d, stale, live){
   const sg=x=>(x>0?'+':'')+x;
   // 카드를 위에서 아래로 흘려 채움(PC에서 좁은 기둥 8개로 쪼개지지 않게, 폰은 한 줄) — 2026-10-06
   // 순위 카드: 왼쪽 굵은 띠 + 순위 번호 (위에서 아래로 1→4)
-  const rcard=(no,c,title,how,body)=>`<div style="display:flex;gap:12px;border:1px solid #30363d;border-left:5px solid ${c};border-radius:12px;padding:12px 14px;margin-bottom:10px;background:#0d1117">
+  // 첫 화면은 대시보드 — 설명은 한 줄(누르면 펼침), 종목이 많으면 잘라서 '더 보기' (2026-10-07 "정보가 너무 많다")
+  const rcard=(no,c,title,how,body,long)=>`<div style="display:flex;gap:12px;border:1px solid #30363d;border-left:5px solid ${c};border-radius:12px;padding:12px 14px;margin-bottom:10px;background:#0d1117">
     <div style="flex:none;width:34px;height:34px;border-radius:50%;background:${c};color:#0d1117;font-weight:800;display:flex;align-items:center;justify-content:center;font-size:15px">${no}</div>
-    <div style="flex:1;min-width:0"><div style="font-size:14.5px;font-weight:700;color:#e6edf3">${title}</div><div class="ts" style="margin:2px 0 8px">${how}</div>${body}</div></div>`;
+    <div style="flex:1;min-width:0"><div style="font-size:14.5px;font-weight:700;color:#e6edf3">${title}</div>
+    <div class="ts" style="margin:2px 0 8px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;cursor:pointer" title="눌러서 설명 펼치기" onclick="this.style.whiteSpace=this.style.whiteSpace==='normal'?'nowrap':'normal'">ⓘ ${how}</div>
+    ${long?`<div style="max-height:118px;overflow:hidden">${body}</div><a href="#" class="ts" style="color:#58a6ff" onclick="this.previousElementSibling.style.maxHeight='none';this.remove();return false">더 보기 ▾</a>`:body}</div></div>`;
   const card=(t,body)=>`<div style="width:100%;height:100%;border:1px solid #30363d;border-radius:12px;padding:12px 14px;background:#0d1117;box-sizing:border-box"><div style="font-size:13px;color:#8b949e;margin-bottom:8px;font-weight:600">${t}</div>${body}</div>`;
   const more=(arr,n,f)=>arr.length<=n?arr.map(f).join(''):arr.slice(0,n).map(f).join('')+`<details style="display:inline"><summary class="ts" style="cursor:pointer;display:inline">외 ${arr.length-n}개 더 보기</summary>${arr.slice(n).map(f).join('')}</details>`;
   const chip=(x,c,extra)=>`<span style="display:inline-block;margin:0 6px 6px 0;padding:4px 9px;border:1px solid ${c||'#30363d'};border-radius:8px;cursor:pointer;font-size:12.5px" onclick="openChartModal('${x.code}','${x.name}','')"><b style="color:#e6edf3">${x.name}</b>${extra||''}</span>`;
@@ -890,7 +893,18 @@ async function renderDashboard(d, stale, live){
     +((d.turn2||[]).length?`<div class="ts" style="margin:6px 0 4px">2연속 — 내일도 양봉이면 3연속</div>`+(d.turn2||[]).map(x=>chip(x,'#30363d','')).join(''):'')];
   const ORDER={과매도:['dip','box','ema','swing','lead','rot','doji','rest2','turn'], 과열:['swing','box','ema','rot','lead','dip','doji','rest2','turn'],
                주도:['lead','box','ema','swing','dip','rot','doji','rest2','turn'], 순환:['swing','rot','ema','box','lead','dip','doji','rest2','turn']};
-  (ORDER[md&&md.mode]||['box','ema','lead','swing','dip','rot','doji','rest2','turn']).forEach((k,i)=>{ const c=C[k]; rank.push(rcard(String(i+1),c[0],c[1],c[2],c[3])); });
+  // 종목이 있는 카드만 위에 3개, 나머지는 접어 둠 · 오늘 없는 자리는 이름만
+  const CNT={lead:(d.best_lead||[]).length, swing:(d.best_swing||[]).length, box:(d.box_break||[]).length+(d.box_near||[]).length,
+    dip:dips.reduce((a,s)=>a+s.items.length,0), rot:rots.reduce((a,s)=>a+s.items.length,0), ema:(d.ema_break||[]).length+(d.ema_wait||[]).length,
+    doji:(d.trend_doji||[]).length+(d.trend_big||[]).length, rest2:(d.rest2||[]).length, turn:(d.turn3||[]).length+(d.turn2||[]).length};
+  const ord=(ORDER[md&&md.mode]||['box','ema','lead','swing','dip','rot','doji','rest2','turn']);
+  const has=ord.filter(k=>CNT[k]>0), none=ord.filter(k=>!CNT[k]);
+  has.slice(0,3).forEach((k,i)=>{ const c=C[k]; rank.push(rcard(String(i+1),c[0],c[1],c[2],c[3],CNT[k]>8)); });
+  const rest=has.slice(3);
+  if(rest.length||none.length){
+    rank.push(`<details style="margin:4px 0 6px"><summary class="ts" style="cursor:pointer;font-size:13px">${rest.length?`다른 자리 ${rest.length}개 더 보기 (${rest.map(k=>C[k][1].split('→')[0].trim()).join(' · ')})`:'다른 자리 없음'}${none.length?` &nbsp;·&nbsp; 오늘 없음: ${none.map(k=>C[k][1].split('→')[0].replace(/^[^가-힣A-Za-z]+/,'').trim()).join(', ')}`:''}</summary><div style="margin-top:8px">`
+      +rest.map((k,i)=>{ const c=C[k]; return rcard(String(i+4),c[0],c[1],c[2],c[3],CNT[k]>8); }).join('')+'</div></details>');
+  }
   ref.push(card('👀 내일 후보 — 뜨는 섹터에서 고점 근처 쉬는 중',(d.next.map(x=>chip(x,'#1f6feb',` <span class="ts">고점 ${x.off_hi20_pct}%</span>`)).join('')||'<span class="ts">없음</span>')+'<div class="ts" style="margin-top:4px">내일 거래 붙은 양봉으로 고점 넘으면 종베 자리</div>'));
   const wc={'⚠ 이탈':'#f85149','✅ 선 위 마감':'#3fb950','🚀 수렴 위로 돌파':'#3fb950'};
   ref.push(card(`📋 관심 종목 — 선에 닿은 것 (${d.watch.length})`,d.watch.map(w=>`<div style="display:flex;justify-content:space-between;gap:8px;font-size:13px;padding:3px 0;border-bottom:1px solid #21262d;cursor:pointer" onclick="openChartModal('${w.code}','${w.name}','')"><span><b style="color:${wc[w.tag]||'#e6edf3'}">${w.tag}</b> ${w.name}</span><span class="ts">${w.close.toLocaleString()} / 선 ${w.level.toLocaleString()} (${sg(w.gap_pct)}%)${w.box_days?`<br><span style="color:#58a6ff">${w.box_days}일 수렴 · 폭 ${w.box_width}% · 손절 ${w.box_low.toLocaleString()} (${w.stop_pct}%)</span>`:''}</span></div>`).join('')||'<span class="ts">없음</span>'));
