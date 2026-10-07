@@ -97,7 +97,7 @@ def notify_async(msg: str, author: str = "", ref: dict | None = None) -> None:
     import threading  # noqa: PLC0415
     author = (author or "").strip()
     if ref:
-        msg += f"{chr(10)}↩ 이 메시지에 답장하면 {'답글' if ref.get('comment') else '댓글'}로 달립니다"
+        msg += f"{chr(10)}↩ 이 메시지에 답장하면 {'답글' if ref.get('comment') or ref.get('suggestion') else '댓글'}로 달립니다"
 
     def _run():
         from backend.db.database import SessionLocal  # noqa: PLC0415
@@ -742,6 +742,9 @@ def _ref_from_text(db: Session, t: str) -> dict | None:
     """기록이 없는 알림(답장 기능 전에 보낸 것)은 알림 글에서 찾는다: 링크의 글 번호 + 댓글 알림이면 작성자·내용 앞부분."""
     import re  # noqa: PLC0415
     from backend.db.models import DiscussionComment  # noqa: PLC0415
+    ms = re.search(r"건의사항 #(\d+)", t)
+    if ms:
+        return {"suggestion": int(ms.group(1))}
     m = re.search(r"discussion#(\d+)", t)
     if not m:
         return None
@@ -763,7 +766,7 @@ def _reply_comment(db: Session, cid: str, reply_mid, msg: dict) -> None:
     ref = _get(db, "telegram_msgmap", {}).get(f"{cid}:{reply_mid}") or _ref_from_text(db, (msg.get("reply_to_message") or {}).get("text") or "")
     if not ref:
         logger.info("텔레그램 답장 댓글: 연결된 글 없음 (chat=%s, reply_to=%s)", cid, reply_mid)
-        send(db, "이 메시지에는 답장으로 댓글을 달 수 없습니다. 종목토론 새 글·댓글 알림에 답장해 주세요.", cid); return
+        send(db, "이 메시지에는 답장으로 댓글을 달 수 없습니다. 종목토론·건의사항 알림에 답장해 주세요.", cid); return
     author = _get(db, "telegram_authors", {}).get(cid)
     if not author:
         logger.info("텔레그램 답장 댓글: 이름 없음 (chat=%s)", cid)
@@ -775,6 +778,14 @@ def _reply_comment(db: Session, cid: str, reply_mid, msg: dict) -> None:
         if img:
             images.append(img)
     from fastapi import HTTPException  # noqa: PLC0415
+    if ref.get("suggestion"):        # 건의사항 알림에 답장 → 그 건의에 답글 (2026-10-07)
+        from backend.api.routes import SuggestionCommentIn, add_suggestion_comment  # noqa: PLC0415
+        try:
+            add_suggestion_comment(int(ref["suggestion"]), SuggestionCommentIn(author=author, content=text_[:1000] or "(사진)"), db)
+        except HTTPException as exc:
+            send(db, f"답글을 못 달았습니다: {exc.detail}", cid); return
+        logger.info("텔레그램 답장 → 건의사항 답글 (chat=%s, %s, #%s)", cid, author, ref["suggestion"])
+        send(db, f"✅ 건의사항 #{ref['suggestion']}에 답글 달았습니다 ({author}){chr(10)}{SITE}/#suggest", cid); return
     from backend.api.routes import CommentIn, create_comment  # noqa: PLC0415
     try:
         create_comment(int(ref["post"]), CommentIn(author=author, content=text_[:1000], images=images,

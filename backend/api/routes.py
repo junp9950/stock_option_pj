@@ -499,7 +499,8 @@ def add_suggestion_comment(sid: int, body: SuggestionCommentIn, db: Session = De
          "created_at": _dt.now(_tz.utc).isoformat().replace("+00:00", "Z")}
     cm[str(sid)] = lst + [c]
     tg_put(db, "suggestion_comments", cm)
-    notify_async(f"📮 건의사항 #{sid} 답글 — {c['author'] or '이름 없음'}{chr(10)}{_cut(content, 200)}{chr(10)}{SITE}/#suggest", author=c["author"])
+    notify_async(f"📮 건의사항 #{sid} 답글 — {c['author'] or '이름 없음'}{chr(10)}{_cut(content, 200)}{chr(10)}{SITE}/#suggest", author=c["author"],
+                 ref={"suggestion": sid})
     return c
 
 
@@ -521,8 +522,9 @@ def create_suggestion(body: SuggestionIn, db: Session = Depends(get_db)):
     db.add(x)
     db.commit()
     from backend.services.telegram import SITE, _cut, notify_async  # noqa: PLC0415
-    notify_async(f"📮 건의사항 새 글 — {x.author or '이름 없음'}{chr(10)}{_cut(x.content, 200)}"
-                 f"{(chr(10) + '🖼 사진 ' + str(len(images)) + '장') if images else ''}{chr(10)}{SITE}/#suggest", author=x.author)
+    notify_async(f"📮 건의사항 #{x.id} 새 글 — {x.author or '이름 없음'}{chr(10)}{_cut(x.content, 200)}"
+                 f"{(chr(10) + '🖼 사진 ' + str(len(images)) + '장') if images else ''}{chr(10)}{SITE}/#suggest", author=x.author,
+                 ref={"suggestion": x.id})
     return _suggestion_dict(x)
 
 
