@@ -851,6 +851,12 @@ async function renderDashboard(d, stale, live){
     '20일 순위 9위↓ 섹터가 오늘 등락 중간 +1%↑ · 그 섹터의 +3%↑ 양봉(20일선 위) · <b>검증 약함 — 비중 작게</b> · 다음 날도 돈이 붙으면 "올라오는 섹터" 종베 자리',
     (live?`<div class="ts" style="margin-bottom:6px;color:#bc8cff">⏱ 장중 ${live.as_of} 가격</div>`:'')
     +(rots.map(s=>`<div style="margin-bottom:6px"><b style="color:#e6edf3">${s.family}</b> <span style="color:#f85149">${sg(s.chg)}%</span> <span class="ts">(20일 ${s.rank}위)</span><br>${s.items.map(x=>chip(x,'#6e40c9',` <span class="ts">${sg(x.change_pct)}%</span>`)).join('')||'<span class="ts">고를 종목 없음</span>'}</div>`).join('')||'<span class="ts">없음</span>')];
+  // EMA 모임 돌파 (2026-10-07 ema_squeeze.py · 사용자 원칙)
+  C.ema=['#56d4dd','📏 EMA(5·10·20) 모임 돌파 → 5~20일',
+    '단기 EMA 셋이 4% 안으로 모여 있다가 세 선 위·10일 고점 돌파(+3%↑·거래 1.5배↑) · 3년 5일 +0.9~1.0% (벌어진 뒤 돌파는 -0.2~-1.4%) · <b>섹터 돈 겹치면(⭐) 20일 +6%</b> · 손절 = 돌파 봉 저가 아래 마감',
+    ((d.ema_break||[]).map(x=>chip(x,x.money?'#e3b341':'#56d4dd',` <span style="color:#f85149">${sg(x.change_pct)}%</span> <span class="ts">거래 ${x.tv_x}배 · 전날 간격 ${x.ema_gap}%${x.family?' · '+x.family:''}</span>${x.money?' <b style="color:#e3b341;font-size:11px">⭐섹터 돈</b>':''}`)).join('')||'<span class="ts">오늘 돌파 없음</span>')
+    +`<div class="ts" style="margin:8px 0 4px">내일 후보 — EMA 3% 안으로 모여서 10일 고점 4% 안 · 60일선 위 · 오늘 조용 (뚫는 날 거래·섹터 확인)</div>`
+    +((d.ema_wait||[]).map(x=>chip(x,x.money?'#e3b341':'#30363d',` <span class="ts">고점 ${x.line.toLocaleString()}까지 ${x.to_high_pct}% · 간격 ${x.ema_now}%${x.family?' · '+x.family:''}</span>`)).join('')||'<span class="ts">없음</span>')];
   C.doji=['#bc8cff','🕯 추세 도지 → 5일 안쪽',
     '상승 추세 종목의 장대양봉 다음 날 도지 · 이격 20%↓ · 5일 +3.7% (10일 넘기면 효과 없음)',((d.trend_doji||[]).map(x=>chip(x,'#bc8cff',` <span class="ts">어제 ${sg(x.big_pct)}% · 이격 ${x.gap20_pct}%</span>`)).join('')||'<span class="ts">없음</span>')
     +`<div class="ts" style="margin:8px 0 4px">내일 도지면 그 자리 (오늘 장대양봉)</div>`+((d.trend_big||[]).map(x=>chip(x,'#6e40c9',` <span class="ts">${sg(x.change_pct)}%</span>`)).join('')||'<span class="ts">없음</span>')];
@@ -862,9 +868,9 @@ async function renderDashboard(d, stale, live){
     (all.state==='하락'?'<div style="color:#f85149;font-size:12.5px;margin-bottom:4px">하락장에선 이 자리도 마이너스였음 — 오늘은 보기만</div>':'')
     +(more(d.turn3||[],10,x=>chip(x,x.ai?'#3fb950':'#30363d',`${x.ai?' <b style="color:#3fb950;font-size:11px">AI</b>':''} <span class="ts">고점 ${x.off120_pct}% · 손절 ${x.box_low.toLocaleString()}</span>`))||'<span class="ts">없음</span>')
     +((d.turn2||[]).length?`<div class="ts" style="margin:6px 0 4px">2연속 — 내일도 양봉이면 3연속</div>`+(d.turn2||[]).map(x=>chip(x,'#30363d','')).join(''):'')];
-  const ORDER={과매도:['dip','box','swing','lead','rot','doji','rest2','turn'], 과열:['swing','box','rot','lead','dip','doji','rest2','turn'],
-               주도:['lead','box','swing','dip','rot','doji','rest2','turn'], 순환:['swing','rot','box','lead','dip','doji','rest2','turn']};
-  (ORDER[md&&md.mode]||['box','lead','swing','dip','rot','doji','rest2','turn']).forEach((k,i)=>{ const c=C[k]; rank.push(rcard(String(i+1),c[0],c[1],c[2],c[3])); });
+  const ORDER={과매도:['dip','box','ema','swing','lead','rot','doji','rest2','turn'], 과열:['swing','box','ema','rot','lead','dip','doji','rest2','turn'],
+               주도:['lead','box','ema','swing','dip','rot','doji','rest2','turn'], 순환:['swing','rot','ema','box','lead','dip','doji','rest2','turn']};
+  (ORDER[md&&md.mode]||['box','ema','lead','swing','dip','rot','doji','rest2','turn']).forEach((k,i)=>{ const c=C[k]; rank.push(rcard(String(i+1),c[0],c[1],c[2],c[3])); });
   ref.push(card('👀 내일 후보 — 뜨는 섹터에서 고점 근처 쉬는 중',(d.next.map(x=>chip(x,'#1f6feb',` <span class="ts">고점 ${x.off_hi20_pct}%</span>`)).join('')||'<span class="ts">없음</span>')+'<div class="ts" style="margin-top:4px">내일 거래 붙은 양봉으로 고점 넘으면 종베 자리</div>'));
   const wc={'⚠ 이탈':'#f85149','✅ 선 위 마감':'#3fb950','🚀 수렴 위로 돌파':'#3fb950'};
   ref.push(card(`📋 관심 종목 — 선에 닿은 것 (${d.watch.length})`,d.watch.map(w=>`<div style="display:flex;justify-content:space-between;gap:8px;font-size:13px;padding:3px 0;border-bottom:1px solid #21262d;cursor:pointer" onclick="openChartModal('${w.code}','${w.name}','')"><span><b style="color:${wc[w.tag]||'#e6edf3'}">${w.tag}</b> ${w.name}</span><span class="ts">${w.close.toLocaleString()} / 선 ${w.level.toLocaleString()} (${sg(w.gap_pct)}%)${w.box_days?`<br><span style="color:#58a6ff">${w.box_days}일 수렴 · 폭 ${w.box_width}% · 손절 ${w.box_low.toLocaleString()} (${w.stop_pct}%)</span>`:''}</span></div>`).join('')||'<span class="ts">없음</span>'));

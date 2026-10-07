@@ -126,6 +126,12 @@ def scan(db: Session) -> dict:
     _hi = _e5.where(_e5 > _e10, _e10).where(lambda x: x > _e20, _e20)
     _lo = _e5.where(_e5 < _e10, _e10).where(lambda x: x < _e20, _e20)
     ema_gap = ((_hi - _lo) / C).iloc[-2]          # 전날 간격
+    # EMA 모임 돌파 / 내일 후보 (사용자 원칙 2026-10-07 "단기 EMA가 모여 있을 때 돌파해야 성공률이 높다", ema_squeeze.py)
+    ema_now = ((_hi - _lo) / C).iloc[-1]
+    hi10p, hi10n = H.rolling(10).max().shift(1).iloc[-1], H.rolling(10).max().iloc[-1]
+    ma60n = C.rolling(60).mean().iloc[-1]
+    liq20 = TV.rolling(20).mean().iloc[-1]
+    ema_brk, ema_wait = [], []
     items, nxt, tdoji, tbig, rest2, turn3, turn2, bbrk, bnear = [], [], [], [], [], [], [], [], []
     # 박스 돌파 / 뚫기 직전 (2026-10-06 boxbreak.py·rank2.py, 사용자 포스코퓨처엠 10/6 차트):
     #   직전 20일 종가 폭 20%↓ 박스 + 200일선 위 + 섹터 돈 몰린 날 + 상승·횡보장, 거래대금 20일 평균 30억↑
@@ -215,6 +221,23 @@ def scan(db: Session) -> dict:
             items.append({**row, "a": is_a, "b": is_b, "family": fb, "b_rank": frank.get(fb, 99) if is_b else None})
         elif frank[f0] <= 3 and g20 > 0 and off >= -0.05 and abs(ch) <= 0.02 and vx <= 1.0 and g20 <= 0.30:
             nxt.append(row)
+    for c in C.columns:
+        cl, lq = float(C.at[last, c]), float(liq20.get(c) or 0)
+        if not (cl == cl and lq >= 3e9 and float(TV.at[last, c] or 0) > 0):
+            continue
+        g0, g1, ch_ = float(ema_gap.get(c, 9)), float(ema_now.get(c, 9)), float(chg.at[last, c])
+        fs_ = sorted((f for f in code_f.get(c, []) if f in frank), key=lambda f: frank[f])
+        base = {"code": c, "name": names.get(c, c), "close": round(cl), "change_pct": round(ch_ * 100, 1), "liq": lq,
+                "ema_gap": round(g0 * 100, 1), "ema_now": round(g1 * 100, 1), "family": fs_[0] if fs_ else "",
+                "money": any(f in b_secs for f in fs_)}
+        if (g0 <= 0.04 and cl > float(_hi.at[last, c]) and cl > float(hi10p[c]) and 0.03 <= ch_ < 0.29
+                and float(tvx.at[last, c]) >= 1.5):
+            ema_brk.append({**base, "tv_x": round(float(tvx.at[last, c]), 1)})
+        elif (g1 <= 0.03 and cl >= float(_lo.at[last, c]) * 0.99 and cl >= float(hi10n[c]) * 0.96 and cl > float(ma60n[c])
+              and abs(ch_) <= 0.02):
+            ema_wait.append({**base, "to_high_pct": round((float(hi10n[c]) / cl - 1) * 100, 1), "line": round(float(hi10n[c]))})
+    ema_brk.sort(key=lambda x: (not x["money"], -x["liq"]))
+    ema_wait.sort(key=lambda x: (not x["money"], -x["liq"]))
     for ds in dip_secs:
         for c in fam[ds["family"]]:
             if c not in C.columns or not (float(liq3.get(c) or 0) >= 3e9):
@@ -264,7 +287,7 @@ def scan(db: Session) -> dict:
            "hot": order[:3], "sector_day": {f: {"chg": round(schg[f] * 100, 2), "tvx": round(svx[f], 2), "heat": heat.get(f)} for f in order[:6]},
            "heat": heat,
            "items": items, "next": nxt, "box_break": bbrk, "box_near": bnear, "dip": dip_secs,
-           "rotation": rot_secs, "mode": mode}
+           "rotation": rot_secs, "mode": mode, "ema_break": ema_brk[:10], "ema_wait": ema_wait[:12]}
     _cache.update(key=latest, val=val)
     return val
 
@@ -351,6 +374,13 @@ def text_summary(db: Session, k: int = 5) -> str:
     if b:
         if any(x.get("retail_only") for x in b):
             lines.append("⚠개인만 = 외인·기관 둘 다 팔았는데 오른 날 (그 뒤 약했음)")
+    eb, ew = r.get("ema_break", []), r.get("ema_wait", [])
+    if (eb or ew) and r["market"] != "하락":
+        lines.append("\n📏 <b>EMA(5·10·20) 모임 돌파</b> (모인 뒤 돌파 5일 +0.9~1.0% · 섹터 돈 겹치면 20일 +6%)")
+        if eb:
+            lines.append("• 오늘 돌파: " + " · ".join(f"{x['name']} {x['change_pct']:+.1f}%" + ("⭐" if x["money"] else "") for x in eb[:6]))
+        if ew:
+            lines.append("• 내일 후보(모여서 10일 고점 앞): " + " · ".join(f"{x['name']}({x['to_high_pct']:.1f}%)" for x in ew[:8]))
     dp = r.get("dip", [])
     if dp and r["market"] != "하락":
         lines.append("\n📉 <b>과매도 줍기</b> (오른 섹터가 하루 크게 빠진 날 · 종가·시간외 매수 · <b>5~10일</b>, 손절 = 오늘 저가 아래 마감)")
