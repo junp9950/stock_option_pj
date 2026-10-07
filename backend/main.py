@@ -1938,15 +1938,19 @@ function drawCandleChart(allCandles, spikeDate, show){
   // 기준봉 = 보이는 구간에서 가장 최근의 +8%↑·거래 3배↑ 양봉. 그날부터 (고+저+종)/3 × 거래량으로 평균
   _avwapNote='';
   const volsAll=allCandles.map(c=>+c.volume);
+  // 기준봉은 이번 상승 구간(7/30 바닥) 이후에서만 찾음 (2026-10-07 사용자: 솔브레인 6/12처럼 하락 전 봉에서 시작하면 의미 없음)
+  const CYCLE='2026-07-30';
+  let cyc=allCandles.findIndex(c=>(c.timestamp||'').slice(0,10)>=CYCLE); if(cyc<0) cyc=allCandles.length;
+  const st=Math.max(off,20,cyc);
   let ai=-1;
-  for(let i=allCandles.length-1;i>=Math.max(off,20);i--){
+  for(let i=allCandles.length-1;i>=st;i--){
     const c=allCandles[i], p=+allCandles[i-1].closePrice, avg=volsAll.slice(i-20,i).reduce((a,b)=>a+b,0)/20;
     if(+c.closePrice>=p*1.08 && +c.closePrice>+c.openPrice && avg>0 && +c.volume>=avg*3){ ai=i; break; }
   }
   let anchorLab='기준봉 VWAP';
   if(ai<0){   // 기준봉(+8%·거래 3배)이 없으면 보이는 구간에서 거래가 가장 많았던 양봉에서 시작 (2026-10-07 SK이노베이션처럼 선이 안 뜨던 것)
     let best=-1;
-    for(let i=Math.max(off,1);i<allCandles.length;i++){ const c=allCandles[i]; if(+c.closePrice>+c.openPrice && +c.closePrice>+allCandles[i-1].closePrice && (best<0||+c.volume>+allCandles[best].volume)) best=i; }
+    for(let i=Math.max(st,1);i<allCandles.length;i++){ const c=allCandles[i]; if(+c.closePrice>+c.openPrice && +c.closePrice>+allCandles[i-1].closePrice && (best<0||+c.volume>+allCandles[best].volume)) best=i; }
     if(best>=0){ ai=best; anchorLab='최대거래 양봉 VWAP'; }
   }
   if(ai>=0){

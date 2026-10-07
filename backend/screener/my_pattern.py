@@ -13,6 +13,7 @@ from sqlalchemy import text
 from sqlalchemy.orm import Session
 
 _cache: dict = {}
+CYCLE_START = "2026-07-30"   # 이번 상승 구간 시작(바닥). 기준봉 VWAP은 이 뒤 장대양봉에서만 (사용자 2026-10-07)
 # 과매도 줍기 섹터별 3년 결과 (dipbuy.py, 섹터 평균 종가 매수 → 5일 뒤) — 다른 섹터는 전체 평균 +1.9%
 DIP_NOTE = {"AI메모리·기판": "3년 5일 +4.0% ⭐", "반도체 장비·재료": "3년 5일 +2.6%", "2차전지": "3년 5일 +1.3% (반등 약함)"}
 
@@ -247,7 +248,7 @@ def scan(db: Session) -> dict:
     _vol = (TV / C)
     for x in ema_brk + ema_wait:
         c = x["code"]
-        idx = [i for i in range(max(0, len(C.index) - 60), len(C.index)) if bool(_bigs[c].iloc[i])]
+        idx = [i for i in range(max(0, len(C.index) - 60), len(C.index)) if bool(_bigs[c].iloc[i]) and str(C.index[i]) >= CYCLE_START]
         if idx:
             a = idx[-1]
             av = float(TV[c].iloc[a:].sum() / _vol[c].iloc[a:].sum())
