@@ -324,7 +324,13 @@ def _yahoo_last(sym: str) -> tuple[float, float] | None:
                          params={"interval": "5m", "range": "1d", "includePrePost": "true"},
                          headers={"User-Agent": "Mozilla/5.0"}, timeout=15).json()["chart"]["result"][0]
         closes = [x for x in r["indicators"]["quote"][0]["close"] if x]
-        prev = r["meta"].get("chartPreviousClose") or r["meta"].get("previousClose")
+        m = r["meta"]
+        prev = m.get("chartPreviousClose") or m.get("previousClose")
+        # 프리·애프터마켓(마지막 봉이 정규장 마감 뒤)이면 기준은 직전 정규장 종가(regularMarketPrice).
+        # chartPreviousClose는 그 전날 종가라 하루치 등락이 겹쳐 2배로 나왔음 (2026-10-07 18:50 LRCX -5.4%로 표시, 실제 -2.0%)
+        ts = [t for t, x in zip(r.get("timestamp") or [], r["indicators"]["quote"][0]["close"]) if x]
+        if ts and m.get("regularMarketTime") and ts[-1] > m["regularMarketTime"] + 60 and m.get("regularMarketPrice"):
+            prev = m["regularMarketPrice"]
         return (float(closes[-1]), float(prev)) if closes and prev else None
     except Exception:  # noqa: BLE001
         return None
