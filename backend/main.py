@@ -632,6 +632,19 @@ select{background:#21262d;border:1px solid #30363d;color:#c9d1d9;padding:6px 10p
       <tbody id="vr-body"><tr><td colspan="5" style="color:#8b949e;text-align:center;padding:20px">로딩 중…</td></tr></tbody>
     </table>
   </details>
+  <details class="sec" data-k="ema">
+    <summary>📏 EMA 모임 돌파 · 후보 <span class="ts" id="ema-info"></span></summary>
+    <p class="lead" style="margin-top:6px">단기 <b>EMA 5·10·20</b>이 모여 있다가(전날 간격 4%↓) 세 선 위·10일 고점 돌파(+3%↑·거래 1.5배↑). <b>EMA60은 추세 필터</b> — 📈정배열(종가>EMA60 & EMA20>EMA60)이면 5일 성적 2~3배. 손절 = 돌파 봉 저가 아래 마감 · 5~10일.</p>
+    <details class="why"><summary>근거 보기</summary>
+      3년 상승·횡보장: 돌파 전날 EMA 간격 0~2% 5일 +1.0% · 2~4% +0.9% · 4~7% +0.4% · 7~12% -0.2% · 12%↑ -1.4% (기준 +0.2%). 섹터에 돈 몰린 날이면 모임 여부와 상관없이 20일 +6% 안팎.
+      조합 비교(3·5·10, 5·10·20, 5·20, 8·13·21 등): 짧은 조합끼리 차이 작음 → 5·10·20 유지. 60일이 든 조합은 최근 1년엔 벌어진 쪽이 더 좋아 모임 신호로는 안 맞음 → 추세 필터로만.
+      5·10·20 모임 돌파 + 정배열 5일 +0.9%/+2.0% (앞 2년/최근 1년) vs 정배열 아님 +0.4%/+0.8%.
+    </details>
+    <div class="ts" style="margin:6px 0 4px">오늘 돌파</div>
+    <div id="ema-brk" style="display:flex;flex-wrap:wrap;gap:6px" class="ts">로딩 중…</div>
+    <div class="ts" style="margin:10px 0 4px">내일 후보 — EMA 3% 안으로 모여서 10일 고점 4% 안 · 60일선 위 · 오늘 조용</div>
+    <div id="ema-wait" style="display:flex;flex-wrap:wrap;gap:6px" class="ts"></div>
+  </details>
   <details class="sec" data-k="lp">
     <summary>🏦 대형주 눌림 박스 <span class="ts" id="lp-info"></span></summary>
     <p class="lead" style="margin-top:6px">하루 거래대금 <b>500억↑ 대형주</b>가 60일 고점에서 <b>-5~-20%</b> 눌려 120일선 근처 위에서 쉬고, 거래가 평소(60일) 이하. 대형주는 바닥(-40%)까지 잘 안 빠져서 바닥 박스 감시에는 안 잡히는 자리(에이피알형). <b>손절 = 최근 15일 박스 하단 아래 마감</b> · 20일 보유.</p>
@@ -1605,6 +1618,7 @@ async function loadCandidates(){
   loadBottomBox();
   loadSupportSetups();
   loadLargePullback();
+  loadEmaSection();
   const body = document.getElementById('cd-body');
   body.innerHTML = '<tr><td colspan="5" style="color:#8b949e;text-align:center;padding:20px">로딩 중…</td></tr>';
   try{
@@ -1701,6 +1715,18 @@ async function loadSupportSetups(){
 }
 
 // ── 바닥 박스 감시 ────────────────────────────────────────────
+// EMA 모임 돌파 · 후보 (2026-10-07) — my-pattern 결과에서
+async function loadEmaSection(){
+  const d=await fetch(`${API}/screener/my-pattern`).then(r=>r.ok?r.json():null).catch(()=>null);
+  const b=document.getElementById('ema-brk'), w=document.getElementById('ema-wait'); if(!b) return;
+  if(!d){ b.textContent='불러오지 못했습니다'; return; }
+  const eb=d.ema_break||[], ew=d.ema_wait||[];
+  document.getElementById('ema-info').textContent=`${d.trading_date} · 돌파 ${eb.length} · 후보 ${ew.length}`;
+  const tag=x=>(x.money?' <b style="color:#e3b341;font-size:11px">⭐섹터 돈</b>':'')+(x.up60?' <b style="color:#3fb950;font-size:11px">📈정배열</b>':'');
+  const card=(x,body)=>`<span onclick="openChartModal('${x.code}','${x.name}','')" style="cursor:pointer;border:1px solid ${x.up60?'#3fb950':'#30363d'};border-radius:8px;padding:6px 10px;font-size:12.5px;line-height:1.55"><b style="color:#e6edf3">${x.name}</b>${tag(x)}<br><span class="ts">${body}</span></span>`;
+  b.innerHTML=eb.length?eb.map(x=>card(x,`<span style="color:#f85149">${x.change_pct>0?'+':''}${x.change_pct}%</span> · 거래 ${x.tv_x}배 · 전날 간격 ${x.ema_gap}%${x.family?' · '+x.family:''}`)).join(''):'오늘 돌파 없음';
+  w.innerHTML=ew.length?ew.map(x=>card(x,`10일 고점 ${x.line.toLocaleString()}까지 ${x.to_high_pct}% · 간격 ${x.ema_now}%${x.family?' · '+x.family:''}`)).join(''):'없음';
+}
 // 대형주 눌림 박스 (2026-10-07)
 async function loadLargePullback(){
   const d=await fetch(`${API}/screener/large-pullback`).then(r=>r.ok?r.json():null).catch(()=>null);
