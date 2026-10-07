@@ -1881,9 +1881,9 @@ function drawCandleChart(allCandles, spikeDate, show){
     ctxC.setLineDash([]);
   }
   // EMA 선 + 범례
-  const EC=['#f778ba','#e3b341','#56d4dd','#c9d1d9'], EN=['EMA5','EMA10','EMA20','EMA60'];
+  const EC=['#f778ba','#e3b341','#56d4dd','#3fb950'], EN=['EMA5','EMA10','EMA20','EMA60'];   // EMA60 = 초록(추세 필터, 굵게)
   ctxC.lineWidth=1.4;
-  ES.forEach((a,k)=>{ ctxC.strokeStyle=EC[k]; ctxC.beginPath(); a.forEach((v,i)=>{ const x=i*cw+cw/2, y=yP(v); i?ctxC.lineTo(x,y):ctxC.moveTo(x,y); }); ctxC.stroke(); });
+  ES.forEach((a,k)=>{ ctxC.strokeStyle=EC[k]; ctxC.lineWidth=k===3?2.2:1.4; ctxC.beginPath(); a.forEach((v,i)=>{ const x=i*cw+cw/2, y=yP(v); i?ctxC.lineTo(x,y):ctxC.moveTo(x,y); }); ctxC.stroke(); });
   ctxC.lineWidth=1; ctxC.font='12px sans-serif';
   EN.forEach((t,k)=>{ ctxC.fillStyle=EC[k]; ctxC.fillText(t, 8+k*62, 16); });
   const last=ES.slice(0,3).map(a=>a[a.length-1]), cl=+candles[n-1].closePrice;   // 간격은 5·10·20만
