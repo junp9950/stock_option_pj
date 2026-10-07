@@ -319,7 +319,7 @@ def us_overnight_text() -> str | None:
     from datetime import timedelta  # noqa: PLC0415
     start = (datetime.now(ZoneInfo("Asia/Seoul")) - timedelta(days=10)).strftime("%Y-%m-%d")
     ch, last = {}, None
-    for t in ("AMAT", "KLAC", "LRCX", "SOXX", "NVDA"):
+    for t in ("AMAT", "KLAC", "LRCX", "SOXX", "NVDA", "MU", "SPY", "QQQ", "DIA", "XLP", "COHR", "LITE", "GEV", "BE", "TSLA"):
         try:
             c = fdr.DataReader(t, start)["Close"].dropna()
             ch[t] = (float(c.iloc[-1]) / float(c.iloc[-2]) - 1) * 100
@@ -330,9 +330,17 @@ def us_overnight_text() -> str | None:
     if not eq:
         return None
     e = sum(eq) / len(eq)
-    lines = [f"🌙 <b>어젯밤 미국 반도체</b> ({last:%m/%d} 마감)" if last else "🌙 <b>어젯밤 미국 반도체</b>",
+    g = lambda t: f"{ch[t]:+.1f}%" if t in ch else "-"  # noqa: E731
+    # 미장 시황 한눈에 (2026-10-08 "아침에 어제 미장 시황") — 지수 → 반도체 → 섹터별 짝 (한국 다음 날과 같이 움직인 것만)
+    lines = [f"🌙 <b>어젯밤 미국장</b> ({last:%m/%d} 마감)" if last else "🌙 <b>어젯밤 미국장</b>",
+             f"• 지수: S&P500 {g('SPY')} · 나스닥 {g('QQQ')} · 다우 {g('DIA')} · 필수소비재 {g('XLP')}",
+             f"\n🔧 <b>반도체</b>",
              f"• 장비(AMAT·램리서치) 평균 <b>{e:+.1f}%</b> (AMAT {ch.get('AMAT', 0):+.1f} · LRCX {ch.get('LRCX', 0):+.1f} · 참고 KLAC {ch.get('KLAC', 0):+.1f})",
-             f"• SOXX {ch.get('SOXX', 0):+.1f}% · NVDA {ch.get('NVDA', 0):+.1f}%"]
+             f"• SOXX {g('SOXX')} · NVDA {g('NVDA')} · 마이크론 {g('MU')}",
+             f"\n🔗 <b>한국 섹터 짝</b>",
+             f"• 광통신 ← 코히런트 {g('COHR')} · 루멘텀 {g('LITE')}",
+             f"• 전력 ← GEV {g('GEV')} · BE {g('BE')}",
+             f"• 2차전지 ← 테슬라 {g('TSLA')}"]
     if e <= -3:
         lines.append("\n⚠️ <b>소부장·기판 시초 대응</b>\n이런 밤 다음 날(1.5년 43번): 시초 평균 <b>-1.7%</b>, 종가 -2.5%, 오른 날 31%"
                      "\n시초 반등을 기다리면 평균 -0.7% 더 빠졌음 → 종베 물량은 시초에 정리 쪽")

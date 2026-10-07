@@ -286,7 +286,7 @@ def start_scheduler() -> BackgroundScheduler:
             db.close()
     scheduler.add_job(_sync_names_job, 'cron', hour=7, minute=10, id='sync_stock_names', replace_existing=True, max_instances=1)
     # 08:30 어젯밤 미국 반도체 장비 → 소부장 시초 대응 알림 (2026-10-06)
-    scheduler.add_job(lambda: _tg("send_us_overnight"), 'cron', day_of_week='mon-fri', hour=8, minute=30, id='us_overnight',
+    scheduler.add_job(lambda: _tg("send_us_overnight"), 'cron', day_of_week='mon-fri', hour=7, minute=50, id='us_overnight',   # 넥장 프리마켓(08:00) 전에 (2026-10-08, 원래 08:30)
                       replace_existing=True, max_instances=1)
     # 19:00 오늘 소부장·기판 종베가 있으면 미국 장비주 프리마켓 → 20:00 넥스트레이드 애프터마켓 전 정리 판단
     # 장중 4분마다 과매도 줍기 미리 계산 — 오늘 탭 카드가 바로 뜨게 (계산 12초, 토스 9번)
