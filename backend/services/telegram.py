@@ -91,7 +91,7 @@ MSGMAP_MAX = 300
 ME = "감사하모니카"      # 사용자 본인 — 본인이 쓴 글·댓글은 알리지 않는다 (2026-10-05 "내꺼는 빼고 우라늄이 뭐 달았을 때만")
 
 
-def notify_async(msg: str, author: str = "", ref: dict | None = None) -> None:
+def notify_async(msg: str, author: str = "", ref: dict | None = None, only_me: bool = False) -> None:
     """요청 처리를 늦추지 않게 별도 스레드로 보낸다 (종목토론·건의사항 새 글·댓글). 본인이 쓴 건 보내지 않는다.
     ref = {"post": 글 id, "comment": 댓글 id} 이면 그 알림에 텔레그램 '답장'으로 댓글을 달 수 있게 기억해 둔다."""
     import threading  # noqa: PLC0415
@@ -107,6 +107,8 @@ def notify_async(msg: str, author: str = "", ref: dict | None = None) -> None:
             targets = board or list(_get(db, "telegram_chats", {}).keys())
             names = _get(db, "telegram_authors", {})
             mine = set(_get(db, "telegram_chats", {}).keys())
+            if only_me:     # 건의사항은 사용자에게만 (2026-10-07) — 게시판 방 중 이름이 사용자인 방, 없으면 사용자 개인 대화
+                targets = [c for c in targets if names.get(c) == ME] or list(mine)
             sent = {}
             for c in targets:
                 # 방마다 그 방 사람이 쓴 글·댓글은 빼고 보냄 (/name 으로 정한 이름. 이름이 없으면 사용자 본인 방만 본인 글을 뺌) — 우라늄도 받게 (2026-10-06)

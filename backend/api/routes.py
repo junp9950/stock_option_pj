@@ -500,7 +500,7 @@ def add_suggestion_comment(sid: int, body: SuggestionCommentIn, db: Session = De
     cm[str(sid)] = lst + [c]
     tg_put(db, "suggestion_comments", cm)
     notify_async(f"📮 건의사항 #{sid} 답글 — {c['author'] or '이름 없음'}{chr(10)}{_cut(content, 200)}{chr(10)}{SITE}/#suggest", author=c["author"],
-                 ref={"suggestion": sid})
+                 ref={"suggestion": sid}, only_me=True)
     return c
 
 
@@ -524,7 +524,7 @@ def create_suggestion(body: SuggestionIn, db: Session = Depends(get_db)):
     from backend.services.telegram import SITE, _cut, notify_async  # noqa: PLC0415
     notify_async(f"📮 건의사항 #{x.id} 새 글 — {x.author or '이름 없음'}{chr(10)}{_cut(x.content, 200)}"
                  f"{(chr(10) + '🖼 사진 ' + str(len(images)) + '장') if images else ''}{chr(10)}{SITE}/#suggest", author=x.author,
-                 ref={"suggestion": x.id})
+                 ref={"suggestion": x.id}, only_me=True)
     return _suggestion_dict(x)
 
 
