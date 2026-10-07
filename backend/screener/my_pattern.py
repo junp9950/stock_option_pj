@@ -187,8 +187,8 @@ def scan(db: Session) -> dict:
                 bbrk.append(bx)
             elif line * 0.97 <= cl <= line and ch >= 0.03 and vx >= 1:
                 bnear.append(bx)
-        is_a = cl > o and ch > 0 and off >= -0.08 and g20 > 0 and vx >= 1
-        is_b = (any(f in b_secs for f in fs) and 0.03 <= ch < 0.29 and r20 >= 0.12 and g20 <= 0.30 and up <= 0.20)
+        is_a = bool(cl > o and ch > 0 and off >= -0.08 and g20 > 0 and vx >= 1)
+        is_b = bool(any(f in b_secs for f in fs) and 0.03 <= ch < 0.29 and r20 >= 0.12 and g20 <= 0.30 and up <= 0.20)
         is_a = is_a and g20 <= 0.30 and up <= 0.35     # 화면엔 과열(이격 30%↑)·윗꼬리 긴 것 뺌 — 3년: 이격 38%↑ 늘 마이너스
         if (is_a and frank[f0] <= 3) or is_b:
             fb = next((f for f in fs if f in b_secs), f0) if is_b else f0
