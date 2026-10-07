@@ -289,6 +289,18 @@ def start_scheduler() -> BackgroundScheduler:
     scheduler.add_job(lambda: _tg("send_us_overnight"), 'cron', day_of_week='mon-fri', hour=8, minute=30, id='us_overnight',
                       replace_existing=True, max_instances=1)
     # 19:00 오늘 소부장·기판 종베가 있으면 미국 장비주 프리마켓 → 20:00 넥스트레이드 애프터마켓 전 정리 판단
+    # 장중 4분마다 과매도 줍기 미리 계산 — 오늘 탭 카드가 바로 뜨게 (계산 12초, 토스 9번)
+    def _warm_dip() -> None:
+        from backend.screener.my_pattern import dip_live  # noqa: PLC0415
+        db = SessionLocal()
+        try:
+            dip_live(db, max_age=0)
+        except Exception as exc:  # noqa: BLE001
+            logger.error("과매도 줍기 미리 계산 실패: %s", type(exc).__name__)
+        finally:
+            db.close()
+    scheduler.add_job(_warm_dip, 'cron', day_of_week='mon-fri', hour='9-15', minute='*/4', id='dip_warm',
+                      replace_existing=True, max_instances=1)
     # 14:50 과매도 줍기 점검 — 오른 섹터가 오늘 -2%↓면 종가 매수 후보
     scheduler.add_job(lambda: _tg("send_dip_live"), 'cron', day_of_week='mon-fri', hour=14, minute=50, id='dip_live',
                       replace_existing=True, max_instances=1)
