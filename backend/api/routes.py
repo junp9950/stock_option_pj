@@ -1806,13 +1806,26 @@ def get_backtest(months: int = 6, min_score: int = 60, min_cap: float = 1000, db
     return run_backtest(db, lookback_months=months, min_score=min_score, min_market_cap=min_cap * 1e8)
 
 
+_CANDLE_CACHE: dict = {}
+
+
 @router.get("/toss/candles/{code}")
 def get_toss_candles(code: str, interval: str = "1d", count: int = 60):
     """토스증권 Open API로 실시간 일봉 캔들 조회 (차트 렌더링용)."""
+    # 같은 종목을 여러 번 열면 토스에 다시 묻지 않게 1분 캐시 (토스 429 방지 · 빨리 뜨게, 2026-10-07)
+    import time as _t  # noqa: PLC0415
+    key = (code, interval, count)
+    hit = _CANDLE_CACHE.get(key)
+    if hit and _t.time() - hit[0] < 60:
+        return hit[1]
     candles = fetch_candles(code, interval=interval, count=count)
     if candles is None:
         raise HTTPException(status_code=502, detail="토스 API에서 캔들 데이터를 가져오지 못했습니다")
-    return {"code": code, "interval": interval, "candles": candles}
+    out = {"code": code, "interval": interval, "candles": candles}
+    if len(_CANDLE_CACHE) > 300:
+        _CANDLE_CACHE.clear()
+    _CANDLE_CACHE[key] = (_t.time(), out)
+    return out
 
 
 @router.get("/universe")

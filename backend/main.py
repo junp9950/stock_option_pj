@@ -24,6 +24,8 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
+from fastapi.middleware.gzip import GZipMiddleware  # noqa: E402
+app.add_middleware(GZipMiddleware, minimum_size=1000)   # 폰에서 느림 (2026-10-07) — 첫 화면 150KB·차트 24KB를 압축해서 보냄
 app.include_router(router, prefix=config.api_prefix)
 
 
@@ -1807,9 +1809,13 @@ function renderMarket(m){
   el.hidden = false;
 }
 
+function clearChartCanvas(){   // 열 때 이전 종목 차트가 남아 보이던 것 지움 (2026-10-07)
+  ['pb-candle-canvas','pb-volume-canvas'].forEach(id=>{ const cv=document.getElementById(id); if(cv){ const x=cv.getContext('2d'); x.setTransform(1,0,0,1,0,0); x.clearRect(0,0,cv.width,cv.height); } });
+}
 async function openChartModal(code, name, spikeDate){
   document.getElementById('chart-modal-title').textContent = `${name} (${code}) — 토스증권 실시간 일봉`;
   document.getElementById('chart-modal-note').textContent = '로딩 중…';
+  clearChartCanvas();
   document.getElementById('chart-modal-bg').classList.add('show');
   try{
     const data = await fetch(`${API}/toss/candles/${code}?interval=1d&count=150`).then(r=>r.ok?r.json():null);   // EMA 계산용으로 더 받아 오고 그림은 90개
@@ -1829,6 +1835,7 @@ async function openChartModal(code, name, spikeDate){
 async function openIndexChart(sym, name){
   document.getElementById('chart-modal-title').textContent = `${name} 지수 — 일봉`;
   document.getElementById('chart-modal-note').textContent = '로딩 중…';
+  clearChartCanvas();
   document.getElementById('chart-modal-bg').classList.add('show');
   const data = await fetch(`${API}/index/candles/${sym}?count=150`).then(r=>r.ok?r.json():null).catch(()=>null);
   if(!data || !data.candles || !data.candles.length){ document.getElementById('chart-modal-note').textContent='지수 데이터를 가져오지 못했습니다'; return; }

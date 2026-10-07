@@ -133,7 +133,8 @@ def scan(db: Session) -> dict:
     up60 = ((C > _e60) & (_e20 > _e60)).iloc[-1]
     hi10p, hi10n = H.rolling(10).max().shift(1).iloc[-1], H.rolling(10).max().iloc[-1]
     ma60n = C.rolling(60).mean().iloc[-1]
-    liq20 = TV.rolling(20).mean().iloc[-1]
+    liq20 = TV.rolling(20).median().iloc[-1]     # 평균은 하루 폭발에 부풀어서(샘표·한국가스공사) 중간값
+    hi20n = H.rolling(20).max().iloc[-1]
     ema_brk, ema_wait = [], []
     items, nxt, tdoji, tbig, rest2, turn3, turn2, bbrk, bnear = [], [], [], [], [], [], [], [], []
     # 박스 돌파 / 뚫기 직전 (2026-10-06 boxbreak.py·rank2.py, 사용자 포스코퓨처엠 10/6 차트):
@@ -227,6 +228,8 @@ def scan(db: Session) -> dict:
     for c in C.columns:
         cl, lq = float(C.at[last, c]), float(liq20.get(c) or 0)
         if not (cl == cl and lq >= 3e9 and float(TV.at[last, c] or 0) > 0):
+            continue
+        if float(hi20n[c]) > cl * 1.15:     # 20일 안에 지금보다 15%↑ 위 고점(폭발 뒤 흘러내린 종목) — 그 뒤 모인 EMA는 의미 없음 (2026-10-07 "이런 건 개오바")
             continue
         g0, g1, ch_ = float(ema_gap.get(c, 9)), float(ema_now.get(c, 9)), float(chg.at[last, c])
         fs_ = sorted((f for f in code_f.get(c, []) if f in frank), key=lambda f: frank[f])
