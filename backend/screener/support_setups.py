@@ -147,7 +147,14 @@ def scan(db: Session) -> dict:
         tv, tx, ch = TV[code].values[-tail:], tvx[code].values[-tail:], CH[code].values[-tail:]
         if len(cl) < tail or np.isnan(cl[-1]):
             continue
-        for r in (_trend(lo, hi, cl, tv, tx, ch), _flat(lo, hi, cl, tv, tx, ch, float(low250.get(code, np.nan)))):
+        hits = [r for r in (_trend(lo, hi, cl, tv, tx, ch), _flat(lo, hi, cl, tv, tx, ch, float(low250.get(code, np.nan)))) if r]
+        if len(hits) == 2:
+            # 두 모양에 다 걸리면 카드 하나로 (2026-10-07 "농심은 왜 두 개냐") — 손절은 가까운 쪽, 위 목표도 가까운 쪽
+            a_, b_ = hits
+            m = {**a_, "type": "추세선 지지 + 수평 지지 수렴", "stop": max(a_["stop"], b_["stop"]),
+                 "support": max(a_["support"], b_["support"]), "target": min(a_["target"], b_["target"])}
+            hits = [m]
+        for r in hits:
             if r:
                 c = float(cl[-1])
                 r.update(code=code, name=nm, close=round(c), change_pct=round(float(ch[-1]), 2),

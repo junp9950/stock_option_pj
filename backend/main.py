@@ -1676,8 +1676,8 @@ async function loadSupportSetups(){
   if(!d){ el.textContent='불러오지 못했습니다'; return; }
   _ssDate=d.trading_date; await lbLoad(d.trading_date);
   document.getElementById('ss-info').textContent=`${d.trading_date} · ${d.items.length}개`;
-  el.innerHTML=d.items.length?d.items.map(x=>`<span onclick="openChartModal('${x.code}','${x.name}','')" style="cursor:pointer;border:1px solid ${x.type==='추세선 지지'?'#bc8cff':'#58a6ff'};border-radius:8px;padding:6px 10px;font-size:12.5px;line-height:1.55">
-    <b style="color:#e6edf3">${x.name}</b>${flagTag(x)} <span style="font-size:11px;color:${x.type==='추세선 지지'?'#bc8cff':'#58a6ff'}">${x.type}</span><br>
+  el.innerHTML=d.items.length?d.items.map(x=>`<span onclick="openChartModal('${x.code}','${x.name}','')" style="cursor:pointer;border:1px solid ${x.type.startsWith('추세선')?'#bc8cff':'#58a6ff'};border-radius:8px;padding:6px 10px;font-size:12.5px;line-height:1.55">
+    <b style="color:#e6edf3">${x.name}</b>${flagTag(x)} <span style="font-size:11px;color:${x.type.startsWith('추세선')?'#bc8cff':'#58a6ff'}">${x.type}</span><br>
     <span style="color:#58a6ff">손절 ${x.stop.toLocaleString()}원 (${x.stop_pct}%)</span> · <span style="color:#f85149">위 ${x.target.toLocaleString()}원 (+${x.target_pct}%)</span><br>
     ${lbBtns(x,'손절 짧은 자리',_ssDate)}<br><span class="ts">현재 ${x.close.toLocaleString()}원 · 거래 터질 때의 ${x.dry}배 · 터진 뒤 ${x.since_burst}일${x.families.length?' · '+x.families[0]:''}</span>
     ${x.fund?`<br><span style="font-size:11.5px;color:${x.fund.good?'#3fb950':x.fund.grow?'#c9d1d9':x.fund.loss?'#f85149':'#8b949e'}">${x.fund.good?'📈 실적 개선':x.fund.grow?'이익 증가':x.fund.loss?'⚠ 영업 적자':'이익 감소'} · ${x.fund.period} 영업익 ${x.fund.op_yoy!=null?(x.fund.op_yoy>0?'+':'')+x.fund.op_yoy+'%':'-'} · 매출 ${x.fund.rev_yoy!=null?(x.fund.rev_yoy>0?'+':'')+x.fund.rev_yoy+'%':'-'}${x.fund.margin!=null?' · 이익률 '+x.fund.margin+'%':''}</span>`:''}</span>`).join('')
