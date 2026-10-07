@@ -1220,29 +1220,28 @@ function jrRenderHolding(){
     return {...x,cost,val,pl:val-cost};
   });
   if(!h.length){ el.innerHTML=''; return; }
-  const cash=+(_jr.cfg.cash||0), tv=h.reduce((a,x)=>a+x.val,0), tot=tv+cash, tc=h.reduce((a,x)=>a+x.cost,0);
+  // 현금은 뺌 (2026-10-07 사용자: 신용 때문에 비중이 어차피 안 맞음) — 비중은 주식 평가금액 합 기준
+  const tv=h.reduce((a,x)=>a+x.val,0), tot=tv, tc=h.reduce((a,x)=>a+x.cost,0);
   const key={rate:x=>-(x.eval_pct??-1e9),cost:x=>-x.cost,eval:x=>-x.val,pl:x=>-x.pl,name:null}[_jrHSort];
   h.sort(key?(a,b)=>key(a)-key(b):(a,b)=>a.name.localeCompare(b.name,'ko'));
   const w=v=>tot?(v/tot*100).toFixed(1)+'%':'-';
   const bar=v=>`<div style="height:4px;background:#21262d;border-radius:2px;margin-top:3px"><div style="height:4px;width:${tot?Math.min(100,v/tot*100):0}%;background:#58a6ff;border-radius:2px"></div></div>`;
-  // 비중 도넛 (평가금액 큰 순 10개 + 기타 + 예수금)
+  // 비중 도넛 (평가금액 큰 순 10개 + 기타)
   const pal=['#1f6feb','#58a6ff','#a5d6ff','#f778ba','#ffa7d1','#bc8cff','#8957e5','#3fb950','#56d4dd','#d29922'];
   const byv=[...h].sort((a,b)=>b.val-a.val), top=byv.slice(0,10), rest=byv.slice(10).reduce((a,x)=>a+x.val,0);
-  const segs=top.map((x,i)=>({n:x.name,v:x.val,c:pal[i]})).concat(rest>0?[{n:'기타 '+(byv.length-10)+'종목',v:rest,c:'#6e7681'}]:[]).concat(cash>0?[{n:'💵 예수금',v:cash,c:'#30363d'}]:[]);
+  const segs=top.map((x,i)=>({n:x.name,v:x.val,c:pal[i]})).concat(rest>0?[{n:'기타 '+(byv.length-10)+'종목',v:rest,c:'#6e7681'}]:[]);
   let acc=0; const grad=segs.map(g=>{ const a=acc/tot*360; acc+=g.v; return `${g.c} ${a}deg ${acc/tot*360}deg`; }).join(',');
   const donut=tot?`<div style="display:flex;flex-wrap:wrap;align-items:center;gap:18px;margin:4px 0 14px">
     <div style="position:relative;width:170px;height:170px;border-radius:50%;background:conic-gradient(${grad});flex:none">
       <div style="position:absolute;inset:34px;border-radius:50%;background:#0d1117;display:flex;flex-direction:column;align-items:center;justify-content:center;text-align:center">
-        <span class="ts">총 자산</span><b style="color:#e6edf3;font-size:15px">${Math.round(tot/10000).toLocaleString()}만</b></div></div>
+        <span class="ts">주식 평가</span><b style="color:#e6edf3;font-size:15px">${Math.round(tot/10000).toLocaleString()}만</b></div></div>
     <div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(150px,1fr));gap:4px 14px;flex:1;min-width:220px;font-size:12.5px">
       ${segs.map(g=>`<div style="display:flex;align-items:center;gap:6px"><span style="width:10px;height:10px;border-radius:50%;background:${g.c};flex:none"></span><span style="color:#c9d1d9;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${g.n}</span><b style="margin-left:auto;color:#e6edf3">${(g.v/tot*100).toFixed(1)}%</b></div>`).join('')}
     </div></div>`:'';
   const opts=[['eval','평가금액 순'],['cost','매입금액 순'],['rate','수익률 순'],['pl','평가손익 순'],['name','가나다 순']];
   el.innerHTML=`<div style="display:flex;flex-wrap:wrap;align-items:center;gap:10px;margin:6px 0 8px">
     <span style="font-size:13px;color:#e6edf3">📦 보유 ${h.length}종목 (일지에 산 기록이 있는 물량)</span>
-    <select onchange="_jrHSort=this.value;jrRenderHolding()" style="background:#0d1117;border:1px solid #30363d;color:#c9d1d9;padding:4px 8px;border-radius:6px">${opts.map(([k,v])=>`<option value="${k}" ${k===_jrHSort?'selected':''}>${v}</option>`).join('')}</select>
-    <label class="ts">예수금 <input id="jr-cash" inputmode="numeric" value="${cash?cash.toLocaleString():''}" placeholder="0" style="width:120px;background:#0d1117;border:1px solid #30363d;color:#c9d1d9;padding:4px 8px;border-radius:6px"> 원</label>
-    <button class="btn btn-sm" onclick="jrSaveCash()">저장</button></div>${donut}
+    <select onchange="_jrHSort=this.value;jrRenderHolding()" style="background:#0d1117;border:1px solid #30363d;color:#c9d1d9;padding:4px 8px;border-radius:6px">${opts.map(([k,v])=>`<option value="${k}" ${k===_jrHSort?'selected':''}>${v}</option>`).join('')}</select></div>${donut}
   <table class="pb-table" style="margin-bottom:16px"><thead><tr><th>종목</th><th>수량 · 평단</th><th style="text-align:right">매입금액</th><th style="text-align:right">평가금액</th><th style="text-align:right">평가손익</th><th style="text-align:right">수익률</th><th style="min-width:90px">비중</th></tr></thead><tbody>`+
   h.map(x=>`<tr style="cursor:pointer" onclick="openChartModal('${x.code}','${x.name}','')"><td><b>${x.name}</b><br><span class="ts">${x.buy_date.slice(5)}${x.buys>1?` 외 ${x.buys-1}번`:''}</span></td>
     <td data-label="수량 · 평단">${x.qty.toLocaleString()}주<br><span class="ts">@${Math.round(x.price).toLocaleString()}</span></td>
@@ -1251,14 +1250,8 @@ function jrRenderHolding(){
     <td data-label="평가손익" style="text-align:right">${x.close?jrWon(x.pl):'-'}</td>
     <td data-label="수익률" style="text-align:right">${jrPct(x.eval_pct)}</td>
     <td data-label="비중">${w(x.val)}${bar(x.val)}</td></tr>`).join('')+
-  `<tr><td><b>💵 예수금</b></td><td></td><td></td><td data-label="평가금액" style="text-align:right">${Math.round(cash).toLocaleString()}</td><td></td><td></td><td data-label="비중">${w(cash)}${bar(cash)}</td></tr>
-   <tr style="border-top:1px solid #30363d"><td><b>합계</b></td><td></td><td data-label="매입금액" style="text-align:right">${Math.round(tc).toLocaleString()}</td><td data-label="평가금액" style="text-align:right"><b>${Math.round(tot).toLocaleString()}</b></td><td data-label="평가손익" style="text-align:right">${jrWon(tv-tc)}</td><td data-label="수익률" style="text-align:right">${jrPct(tc?Math.round((tv/tc-1)*10000)/100:null)}</td><td>100%</td></tr></tbody></table>
-  <div class="ts" style="margin:-10px 0 14px">평가금액은 ${_jr.as_of||''} 시세 기준입니다. 예수금은 직접 넣은 값이고, 증권사 잔고와 다르면 고쳐 주세요.</div>`;
-}
-async function jrSaveCash(){
-  const v=parseFloat((document.getElementById('jr-cash').value||'0').replace(/[^0-9.]/g,''))||0;
-  const r=await fetch(`${API}/journal/config`,{method:'POST',headers:jrH(),body:JSON.stringify({cash:v})}).catch(()=>null);
-  if(r&&r.ok){ _jr.cfg=await r.json(); jrRenderHolding(); }
+  `<tr style="border-top:1px solid #30363d"><td><b>합계</b></td><td></td><td data-label="매입금액" style="text-align:right">${Math.round(tc).toLocaleString()}</td><td data-label="평가금액" style="text-align:right"><b>${Math.round(tot).toLocaleString()}</b></td><td data-label="평가손익" style="text-align:right">${jrWon(tv-tc)}</td><td data-label="수익률" style="text-align:right">${jrPct(tc?Math.round((tv/tc-1)*10000)/100:null)}</td><td>100%</td></tr></tbody></table>
+  <div class="ts" style="margin:-10px 0 14px">평가금액은 ${_jr.as_of||''} 시세 기준 · 비중은 주식 평가금액 합 기준(현금·신용 제외)</div>`;
 }
 async function jrSaveExcl(){
   const v=document.getElementById('jr-excl').value.split(',').map(x=>x.trim()).filter(Boolean);
