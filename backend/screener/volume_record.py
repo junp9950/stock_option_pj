@@ -139,10 +139,10 @@ def scan(db: Session) -> dict:
         turn = (float(pl[-1][5]) > float(pl[-1][2]) and close >= float(pl[-2][5]) * 1.03 and avg20 > 0 and tv[-1] >= 2 * avg20)
         if kind == "윗꼬리" and not broke and close >= float(ev[3]):
             stage = "꼬리 돌파"      # 신기록일 윗꼬리 끝(고가)을 종가로 넘음 = 그날 물린 사람 0
+        elif broke:
+            stage = "무너짐"         # 기준선(신기록 전날 종가)을 깼으면 설거지였든 아니든 무너짐 — 2026-10-07 SK스퀘어·동원개발(고점 -43~-48%)이 '위에서 팔림'으로 계속 보였음
         elif dist or kind == "윗꼬리":
             stage = "설거지"
-        elif broke:
-            stage = "무너짐"
         elif rest < NEW_DAYS:
             stage = "신규"
         elif dry <= DRY_MAX:
