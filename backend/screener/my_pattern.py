@@ -128,6 +128,9 @@ def scan(db: Session) -> dict:
     ema_gap = ((_hi - _lo) / C).iloc[-2]          # 전날 간격
     # EMA 모임 돌파 / 내일 후보 (사용자 원칙 2026-10-07 "단기 EMA가 모여 있을 때 돌파해야 성공률이 높다", ema_squeeze.py)
     ema_now = ((_hi - _lo) / C).iloc[-1]
+    # EMA60 정배열(종가>EMA60 & EMA20>EMA60) — 짧은 모임 돌파 5일: 정배열 +0.94/+1.97% vs 아님 +0.35/+0.76% (학습/검증, ema_combo.py)
+    _e60 = C.ewm(span=60, adjust=False).mean()
+    up60 = ((C > _e60) & (_e20 > _e60)).iloc[-1]
     hi10p, hi10n = H.rolling(10).max().shift(1).iloc[-1], H.rolling(10).max().iloc[-1]
     ma60n = C.rolling(60).mean().iloc[-1]
     liq20 = TV.rolling(20).mean().iloc[-1]
@@ -229,15 +232,15 @@ def scan(db: Session) -> dict:
         fs_ = sorted((f for f in code_f.get(c, []) if f in frank), key=lambda f: frank[f])
         base = {"code": c, "name": names.get(c, c), "close": round(cl), "change_pct": round(ch_ * 100, 1), "liq": lq,
                 "ema_gap": round(g0 * 100, 1), "ema_now": round(g1 * 100, 1), "family": fs_[0] if fs_ else "",
-                "money": any(f in b_secs for f in fs_)}
+                "money": any(f in b_secs for f in fs_), "up60": bool(up60.get(c, False))}
         if (g0 <= 0.04 and cl > float(_hi.at[last, c]) and cl > float(hi10p[c]) and 0.03 <= ch_ < 0.29
                 and float(tvx.at[last, c]) >= 1.5):
             ema_brk.append({**base, "tv_x": round(float(tvx.at[last, c]), 1)})
         elif (g1 <= 0.03 and cl >= float(_lo.at[last, c]) * 0.99 and cl >= float(hi10n[c]) * 0.96 and cl > float(ma60n[c])
               and abs(ch_) <= 0.02):
             ema_wait.append({**base, "to_high_pct": round((float(hi10n[c]) / cl - 1) * 100, 1), "line": round(float(hi10n[c]))})
-    ema_brk.sort(key=lambda x: (not x["money"], -x["liq"]))
-    ema_wait.sort(key=lambda x: (not x["money"], -x["liq"]))
+    ema_brk.sort(key=lambda x: (not x["money"], not x["up60"], -x["liq"]))
+    ema_wait.sort(key=lambda x: (not x["money"], not x["up60"], -x["liq"]))
     for ds in dip_secs:
         for c in fam[ds["family"]]:
             if c not in C.columns or not (float(liq3.get(c) or 0) >= 3e9):

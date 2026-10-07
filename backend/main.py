@@ -858,10 +858,10 @@ async function renderDashboard(d, stale, live){
     +(rots.map(s=>`<div style="margin-bottom:6px"><b style="color:#e6edf3">${s.family}</b> <span style="color:#f85149">${sg(s.chg)}%</span> <span class="ts">(20일 ${s.rank}위)</span><br>${s.items.map(x=>chip(x,'#6e40c9',` <span class="ts">${sg(x.change_pct)}%</span>`)).join('')||'<span class="ts">고를 종목 없음</span>'}</div>`).join('')||'<span class="ts">없음</span>')];
   // EMA 모임 돌파 (2026-10-07 ema_squeeze.py · 사용자 원칙)
   C.ema=['#56d4dd','📏 EMA(5·10·20) 모임 돌파 → 5~20일',
-    '단기 EMA 셋이 4% 안으로 모여 있다가 세 선 위·10일 고점 돌파(+3%↑·거래 1.5배↑) · 3년 5일 +0.9~1.0% (벌어진 뒤 돌파는 -0.2~-1.4%) · <b>섹터 돈 겹치면(⭐) 20일 +6%</b> · 손절 = 돌파 봉 저가 아래 마감',
-    ((d.ema_break||[]).map(x=>chip(x,x.money?'#e3b341':'#56d4dd',` <span style="color:#f85149">${sg(x.change_pct)}%</span> <span class="ts">거래 ${x.tv_x}배 · 전날 간격 ${x.ema_gap}%${x.family?' · '+x.family:''}</span>${x.money?' <b style="color:#e3b341;font-size:11px">⭐섹터 돈</b>':''}`)).join('')||'<span class="ts">오늘 돌파 없음</span>')
+    '단기 EMA 셋이 4% 안으로 모여 있다가 세 선 위·10일 고점 돌파(+3%↑·거래 1.5배↑) · 3년 5일 +0.9~1.0% (벌어진 뒤 돌파는 -0.2~-1.4%) · <b>섹터 돈 겹치면(⭐) 20일 +6%</b> · <b>📈EMA60 정배열</b>이면 5일 2~3배 · 손절 = 돌파 봉 저가 아래 마감 · 5~10일',
+    ((d.ema_break||[]).map(x=>chip(x,x.money?'#e3b341':'#56d4dd',` <span style="color:#f85149">${sg(x.change_pct)}%</span> <span class="ts">거래 ${x.tv_x}배 · 전날 간격 ${x.ema_gap}%${x.family?' · '+x.family:''}</span>${x.money?' <b style="color:#e3b341;font-size:11px">⭐섹터 돈</b>':''}${x.up60?' <b style="color:#3fb950;font-size:11px" title="종가가 EMA60 위 & EMA20>EMA60">📈정배열</b>':''}`)).join('')||'<span class="ts">오늘 돌파 없음</span>')
     +`<div class="ts" style="margin:8px 0 4px">내일 후보 — EMA 3% 안으로 모여서 10일 고점 4% 안 · 60일선 위 · 오늘 조용 (뚫는 날 거래·섹터 확인)</div>`
-    +((d.ema_wait||[]).map(x=>chip(x,x.money?'#e3b341':'#30363d',` <span class="ts">고점 ${x.line.toLocaleString()}까지 ${x.to_high_pct}% · 간격 ${x.ema_now}%${x.family?' · '+x.family:''}</span>`)).join('')||'<span class="ts">없음</span>')];
+    +((d.ema_wait||[]).map(x=>chip(x,x.money?'#e3b341':'#30363d',` <span class="ts">고점 ${x.line.toLocaleString()}까지 ${x.to_high_pct}% · 간격 ${x.ema_now}%${x.family?' · '+x.family:''}</span>${x.up60?' <b style="color:#3fb950;font-size:11px">📈</b>':''}`)).join('')||'<span class="ts">없음</span>')];
   C.doji=['#bc8cff','🕯 추세 도지 → 5일 안쪽',
     '상승 추세 종목의 장대양봉 다음 날 도지 · 이격 20%↓ · 5일 +3.7% (10일 넘기면 효과 없음)',((d.trend_doji||[]).map(x=>chip(x,'#bc8cff',` <span class="ts">어제 ${sg(x.big_pct)}% · 이격 ${x.gap20_pct}%</span>`)).join('')||'<span class="ts">없음</span>')
     +`<div class="ts" style="margin:8px 0 4px">내일 도지면 그 자리 (오늘 장대양봉)</div>`+((d.trend_big||[]).map(x=>chip(x,'#6e40c9',` <span class="ts">${sg(x.change_pct)}%</span>`)).join('')||'<span class="ts">없음</span>')];
@@ -1818,7 +1818,7 @@ function drawCandleChart(allCandles, spikeDate, show){
   // 단기 EMA 5·10·20 (2026-10-07 사용자 "EMA를 내 눈으로 확인할 수 없나") — 앞쪽 캔들로 미리 계산하고 최근 90개만 그림
   const emaOf=(arr,n)=>{ const k=2/(n+1); let e=arr[0]; return arr.map(v=>(e=v*k+e*(1-k))); };
   const closesAll=allCandles.map(c=>+c.closePrice);
-  const EMA=[5,10,20].map(n=>emaOf(closesAll,n));
+  const EMA=[5,10,20,60].map(n=>emaOf(closesAll,n));
   const off=Math.max(0,allCandles.length-(show||90));
   const candles=allCandles.slice(off);
   const ES=EMA.map(a=>a.slice(off));
@@ -1881,12 +1881,12 @@ function drawCandleChart(allCandles, spikeDate, show){
     ctxC.setLineDash([]);
   }
   // EMA 선 + 범례
-  const EC=['#f778ba','#e3b341','#56d4dd'], EN=['EMA5','EMA10','EMA20'];
+  const EC=['#f778ba','#e3b341','#56d4dd','#c9d1d9'], EN=['EMA5','EMA10','EMA20','EMA60'];
   ctxC.lineWidth=1.4;
   ES.forEach((a,k)=>{ ctxC.strokeStyle=EC[k]; ctxC.beginPath(); a.forEach((v,i)=>{ const x=i*cw+cw/2, y=yP(v); i?ctxC.lineTo(x,y):ctxC.moveTo(x,y); }); ctxC.stroke(); });
   ctxC.lineWidth=1; ctxC.font='12px sans-serif';
   EN.forEach((t,k)=>{ ctxC.fillStyle=EC[k]; ctxC.fillText(t, 8+k*62, 16); });
-  const last=ES.map(a=>a[a.length-1]), cl=+candles[n-1].closePrice;
+  const last=ES.slice(0,3).map(a=>a[a.length-1]), cl=+candles[n-1].closePrice;   // 간격은 5·10·20만
   return cl ? (Math.max(...last)-Math.min(...last))/cl*100 : null;
 }
 
