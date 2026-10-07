@@ -108,6 +108,11 @@ def scan(db: Session) -> dict:
         "select stock_code, foreign_net_buy, institution_net_buy from spot_investor_flows where trading_date = :d"), {"d": latest})}
     ma20 = C.rolling(20).mean().iloc[-1]
     hi20 = H.rolling(20).max().iloc[-1]
+    # 단기 EMA(5·10·20) 간격 — 전날 기준. 모여 있을 때(4%↓) 돌파가 5일 +0.9~1.0%, 벌어졌을 때(7%↑) -0.2~-1.4% (ema_squeeze.py, 2026-10-07)
+    _e5, _e10, _e20 = (C.ewm(span=n, adjust=False).mean() for n in (5, 10, 20))
+    _hi = _e5.where(_e5 > _e10, _e10).where(lambda x: x > _e20, _e20)
+    _lo = _e5.where(_e5 < _e10, _e10).where(lambda x: x < _e20, _e20)
+    ema_gap = ((_hi - _lo) / C).iloc[-2]          # 전날 간격
     items, nxt, tdoji, tbig, rest2, turn3, turn2, bbrk, bnear = [], [], [], [], [], [], [], [], []
     # 박스 돌파 / 뚫기 직전 (2026-10-06 boxbreak.py·rank2.py, 사용자 포스코퓨처엠 10/6 차트):
     #   직전 20일 종가 폭 20%↓ 박스 + 200일선 위 + 섹터 돈 몰린 날 + 상승·횡보장, 거래대금 20일 평균 30억↑
@@ -158,7 +163,8 @@ def scan(db: Session) -> dict:
         r20 = float(ret20.at[last, c])
         row = {"code": c, "name": names.get(c, c), "close": round(float(cl)), "change_pct": round(ch * 100, 2), "tv_x": round(vx, 2),
                "gap20_pct": round(g20 * 100, 1), "off_hi20_pct": round(off * 100, 1), "upper_pct": round(up * 100),
-               "ret20_pct": round(r20 * 100, 1), "family": f0, "rank": frank[f0], "value": round(float(TV.at[last, c]))}
+               "ret20_pct": round(r20 * 100, 1), "family": f0, "rank": frank[f0], "value": round(float(TV.at[last, c])),
+               "ema_gap": round(float(ema_gap.get(c, float("nan"))) * 100, 1) if ema_gap.get(c) == ema_gap.get(c) else None}
         fo, ins = flows.get(c, (0.0, 0.0))
         row.update(fo_eok=round(fo / 1e8, 1), ins_eok=round(ins / 1e8, 1), retail_only=bool(c in flows and fo < 0 and ins < 0))
         if ch != ch or vx != vx:
@@ -263,6 +269,11 @@ def _log_box(db: Session, r: dict) -> None:
         pass
 
 
+def ema_tag(x: dict) -> str:
+    g = x.get("ema_gap")
+    return "" if g is None else ("  EMA 모임✓" if g <= 4 else "  ⚠EMA 벌어짐" if g >= 7 else "")
+
+
 def _log_picks(db: Session, r: dict, lead: list, swing: list) -> None:
     """내 추천(장세·조건 B·박스·과매도·순환)을 날짜별로 남긴다 — 사용자 종베(user_jongbe)와 매일 비교 (settings 'my_picks_log')."""
     try:
@@ -301,7 +312,7 @@ def text_summary(db: Session, k: int = 5) -> str:
     if (bb or bn) and r["market"] != "하락":
         _log_box(db, r)
         lines.append("\n🥇 <b>스윙 1순위: 박스 돌파</b> (눌려 있던 20일 고점을 종가로 뚫음 · <b>5~10일</b>, 손절 = 뚫은 고점 아래 마감)")
-        lines += [f"• {x['name']}  {x['change_pct']:+.1f}% · 손절 {x['line']:,} · {x['family']}" + ("  ⭐종베도 OK" if x["is_b"] else "")
+        lines += [f"• {x['name']}  {x['change_pct']:+.1f}% · 손절 {x['line']:,} · {x['family']}" + ("  ⭐종베도 OK" if x["is_b"] else "") + ema_tag(x)
                   + ("  🔥과열 섹터(짧게)" if (r.get("heat", {}).get(x["family"]) or 0) >= 25 else "") for x in bb[:k]] or ["• 오늘은 없음"]
         if bn:
             lines.append("  └ 뚫기 직전 (고점 -3% 안 마감 · 10일 · 보조): " + " · ".join(f"{x['name']}({x['line_pct']:+.1f}%)" for x in bn[:k]))
@@ -317,7 +328,7 @@ def text_summary(db: Session, k: int = 5) -> str:
             lines.append(f"• <b>{d['family']}</b> {d['chg']:+.1f}% · 거래 {d['tvx']}배: " + (" · ".join(x["name"] for x in d["items"][:6]) or "고를 종목 없음"))
     b = lead + swing
     hot_ = r.get("heat", {})
-    fmt = lambda x: (f"• {x['name']}  {x['change_pct']:+.1f}% · 거래 {x['tv_x']:.1f}배 · {x['family']}" + ("  ⚠개인만" if x.get("retail_only") else "")  # noqa: E731
+    fmt = lambda x: (f"• {x['name']}  {x['change_pct']:+.1f}% · 거래 {x['tv_x']:.1f}배 · {x['family']}" + ema_tag(x) + ("  ⚠개인만" if x.get("retail_only") else "")  # noqa: E731
                      + ("  🔥과열 섹터(다음 날 정리만)" if (hot_.get(x["family"]) or 0) >= 25 else ""))
     if lead:
         lines.append("\n1️⃣ ⭐ <b>주도 섹터의 힘 있는 양봉</b> → <b>종베</b> (다음 날 분할 매도)")
@@ -426,7 +437,9 @@ def _live_b_box(db: Session, fam: dict, b_live: list, srank: dict, live: dict, p
         ma20 = (float(closes.tail(19).sum()) + cl) / 20
         g20 = cl / ma20 - 1
         rk = srank.get(f, 99)
-        row = {"code": c, "name": names.get(c, c), "close": round(cl), "change_pct": round(ch * 100, 1), "tv_x": round(vx, 1),
+        es = [closes.ewm(span=n, adjust=False).mean().iloc[-1] for n in (5, 10, 20)]     # 어제까지 종가로 만든 EMA = 돌파 전날 간격
+        egap = round((max(es) - min(es)) / float(closes.iloc[-1]) * 100, 1)
+        row = {"code": c, "name": names.get(c, c), "close": round(cl), "change_pct": round(ch * 100, 1), "tv_x": round(vx, 1), "ema_gap": egap,
                "upper_pct": round(up * 100), "gap20_pct": round(g20 * 100, 1), "family": f, "b_rank": rk, "retail_only": False, "live": True}
         if r20 >= 0.12 and g20 <= 0.30 and up <= 0.10 and 1.5 <= vx <= 6:
             (res["best_lead"] if rk <= 3 else res["best_swing"] if rk <= 8 else []).append(row)

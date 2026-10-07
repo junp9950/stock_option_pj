@@ -816,13 +816,15 @@ async function renderDashboard(d, stale, live){
   const sd=Object.entries(d.sector_day||{});
   top.push(card('🔥 섹터 (20일 순위 · 오늘 등락 중간 · 거래 중간)',sd.map(([f,x],i)=>`<div style="display:flex;justify-content:space-between;font-size:13px;padding:3px 0;border-bottom:1px solid #21262d"><span>${i+1}. ${d.b_sectors.includes(f)?'⭐ ':''}<b style="color:#e6edf3">${f}</b></span><span><span style="color:${x.chg>=0?'#f85149':'#58a6ff'}">${sg(x.chg)}%</span> · <span class="ts">${x.tvx==null?'거래 -':x.tvx+'배'}</span>${x.heat!=null?` · <span style="color:${x.heat>=25?'#ff7b72':x.heat>=10?'#d29922':'#8b949e'}" title="섹터 종목 중 20일선보다 20% 넘게 뜬 비율">과열 ${x.heat}%</span>`:''}</span></div>`).join('')+'<div class="ts" style="margin-top:6px">⭐ = 오늘 돈 몰린 섹터 · 과열 = 섹터 종목 중 20일선보다 20%↑ 뜬 비율 (25%↑ 🔥 들고 가지 말 것)</div>'));
   const H=d.heat||{}, isHot=x=>(H[x.family]||0)>=25;
-  const bchip=x=>chip(x,x.retail_only?'#f85149':'#9e6a03',` <span style="color:#f85149">${sg(x.change_pct)}%</span> <span class="ts">${x.tv_x}배 · ${x.family}</span>${x.retail_only?' <b style="color:#f85149;font-size:11px">⚠개인만</b>':''}${isHot(x)?' <b style="color:#ff7b72;font-size:11px" title="섹터 종목 중 20일선보다 20% 넘게 뜬 비율 '+H[x.family]+'%">🔥과열·다음 날 정리만</b>':''}`);
+  // EMA(5·10·20) 모임/벌어짐 표시 (2026-10-07 ema_squeeze.py: 모임 4%↓ 돌파 5일 +0.9~1.0%, 벌어짐 7%↑ -0.2~-1.4%)
+  const emaTag=x=>x.ema_gap==null?'':x.ema_gap<=4?` <b style="color:#3fb950;font-size:11px" title="돌파 전날 5·10·20일 EMA 간격 ${x.ema_gap}%">EMA 모임✓</b>`:x.ema_gap>=7?` <b style="color:#d29922;font-size:11px" title="돌파 전날 5·10·20일 EMA 간격 ${x.ema_gap}% — 벌어진 상태 돌파는 5일 평균 마이너스였음">⚠EMA 벌어짐</b>`:'';
+  const bchip=x=>chip(x,x.retail_only?'#f85149':'#9e6a03',` <span style="color:#f85149">${sg(x.change_pct)}%</span> <span class="ts">${x.tv_x}배 · ${x.family}</span>${emaTag(x)}${x.retail_only?' <b style="color:#f85149;font-size:11px">⚠개인만</b>':''}${isHot(x)?' <b style="color:#ff7b72;font-size:11px" title="섹터 종목 중 20일선보다 20% 넘게 뜬 비율 '+H[x.family]+'%">🔥과열·다음 날 정리만</b>':''}`);
   const hotNote=[...(d.best_lead||[]),...(d.best_swing||[])].some(isHot)?'<div class="ts" style="color:#ff7b72;margin-top:4px">🔥과열 섹터 = 섹터 종목 25% 넘게 20일선보다 20%↑ 뜸 → 다음 날은 좋았지만 5~10일 들고 가면 나빴음(5일 -5%↓ 26~31%)</div>':'';
   const anyRetail=(d.best||[]).some(x=>x.retail_only)?'<div class="ts" style="color:#f85149;margin-top:4px">⚠개인만 = 외인·기관 둘 다 팔았는데 오른 날 — 빼는 게 좋음</div>':'';
   const C={};   // 카드 모음 → 장세(md.mode)에 맞는 순서로 번호 매김
   const LV=live?`<div class="ts" style="margin-bottom:6px;color:#58a6ff">⏱ 장중 ${live.as_of} 가격 · 거래는 마감 환산</div>`:'';
   // 박스 돌파 (2026-10-06 rank2.py: 10일 +5.9/+6.8/+6.5% 세 기간 고르게) · 뚫기 직전은 보조
-  const boxchip=x=>chip(x,'#f0883e',` <span style="color:#f85149">${sg(x.change_pct)}%</span> <span class="ts">손절 ${x.line.toLocaleString()} · ${x.family}</span>${x.is_b?' <b style="color:#e3b341;font-size:11px">⭐종베도 OK</b>':''}${isHot(x)?' <b style="color:#ff7b72;font-size:11px">🔥과열 섹터</b>':''}`);
+  const boxchip=x=>chip(x,'#f0883e',` <span style="color:#f85149">${sg(x.change_pct)}%</span> <span class="ts">손절 ${x.line.toLocaleString()} · ${x.family}</span>${x.is_b?' <b style="color:#e3b341;font-size:11px">⭐종베도 OK</b>':''}${emaTag(x)}${isHot(x)?' <b style="color:#ff7b72;font-size:11px">🔥과열 섹터</b>':''}`);
   C.box=['#f0883e','📦 박스 돌파 → 5~10일 스윙',
     '20일 동안 눌려 있던 고점을 <b>종가로</b> 뚫음 · 섹터에 돈 몰린 날 · 200일선 위 · 거래 2배↑ · <b>손절 = 뚫은 고점 아래로 마감</b> · 3년 10일 +5.9~6.8% (세 기간 고르게) · ⭐종베도 OK = 다음 날도 가장 좋았음',
     LV+(all.state==='하락'?'<div style="color:#f85149;font-size:12.5px;margin-bottom:4px">하락장 — 보기만</div>':'')
