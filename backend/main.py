@@ -1928,6 +1928,10 @@ function drawCandleChart(allCandles, spikeDate, show){
     ctxC.beginPath(); ctxC.moveTo(x1,y1); ctxC.lineTo(x2, Math.min(y1,y2)); ctxC.stroke();
     ctxC.setLineDash([]);
   }
+  // 7/30 바닥(이번 상승 구간 시작) 세로 점선
+  { const ci=candles.findIndex(c=>(c.timestamp||'').slice(0,10)>='2026-07-30');
+    if(ci>0){ const x=ci*cw; ctxC.strokeStyle='#6e7681'; ctxC.setLineDash([2,4]); ctxC.beginPath(); ctxC.moveTo(x,20); ctxC.lineTo(x,H); ctxC.stroke(); ctxC.setLineDash([]);
+      ctxC.fillStyle='#8b949e'; ctxC.font='11px sans-serif'; ctxC.fillText('7/30 바닥', x+3, H-6); } }
   // EMA 선 + 범례
   const EC=['#f778ba','#e3b341','#56d4dd','#3fb950'], EN=['EMA5','EMA10','EMA20','EMA60'];   // EMA60 = 초록(추세 필터, 굵게)
   ctxC.lineWidth=1.4;

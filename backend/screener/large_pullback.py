@@ -24,6 +24,9 @@ def scan(db: Session) -> dict:
     for f, mem in family_members(db).items():
         for c in mem:
             fam_of.setdefault(c, []).append(f)
+    from backend.screener.my_pattern import CYCLE_START  # noqa: PLC0415
+    import datetime as _dt  # noqa: PLC0415
+    _cyc = max(_dt.date.fromisoformat(CYCLE_START), C.index[-60]) if len(C.index) >= 60 else _dt.date.fromisoformat(CYCLE_START)
     items = []
     for c in C.columns:
         s = C[c].dropna()
@@ -34,7 +37,7 @@ def scan(db: Session) -> dict:
             continue
         cl = float(s.iloc[-1])
         ma120 = float(s.tail(120).mean())
-        hi60 = float(H[c].tail(60).max())
+        hi60 = float(H[c][H.index >= _cyc].max()) if (H.index >= _cyc).any() else float(H[c].tail(60).max())   # 7/30 바닥 이후 고점 (사용자 2026-10-07)
         off = cl / hi60 - 1
         vr = float(V[c].tail(5).mean() / V[c].tail(60).mean()) if V[c].tail(60).mean() else 9
         if not (cl > ma120 * 0.97 and OFF_LO <= off <= OFF_HI and vr <= MAX_VR):

@@ -16,7 +16,7 @@ from __future__ import annotations
 
 import statistics
 from collections import defaultdict
-from datetime import timedelta
+from datetime import date, timedelta
 
 from sqlalchemy import text
 from sqlalchemy.orm import Session
@@ -179,6 +179,11 @@ def scan(db: Session) -> dict:
         x["flags"] = fl.get(x["code"], {}).get("flags", [])
     # 신기록 뒤 경과일로 자르지 않는 이유 (2026-10-04, 진입 신호 130건 40일 시장 대비): 61~80일 뒤 신호 43건 평균 +9.6%p·중간 +2.4%p로
     # 21~40일(48건 +4.0%p)보다 나빴던 게 아니다. 대신 화면에 '며칠 전 신기록'을 크게 보여 준다.
+    # 이번 상승 구간(7/30 바닥) 이후 신기록만 — 하락장 때 터진 거래는 지금 흐름과 상관없음 (사용자 2026-10-07)
+    from backend.screener.my_pattern import CYCLE_START  # noqa: PLC0415
+    items = [x for x in items if x["event_date"] >= CYCLE_START]
+    if win_start.isoformat() < CYCLE_START:
+        win_start = date.fromisoformat(CYCLE_START)
     order = {"꼬리 돌파": 0, "숨고르기": 1, "신규": 2, "진행 중": 3, "설거지": 4, "무너짐": 5}
     items.sort(key=lambda x: x["market_cap"] or 0, reverse=True)   # 단계 안에서는 시총 큰 종목부터
     items.sort(key=lambda x: (order[x["stage"]], not x["entry_signal"]))
