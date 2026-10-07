@@ -748,6 +748,21 @@ async function loadDashboard(){
   if(!d){ if(!old) document.getElementById('db-verdict').textContent='불러오지 못했습니다'; return; }
   try{ localStorage.setItem('db-last',JSON.stringify(d)); }catch(e){}
   renderDashboard(d, false);
+  loadDipLive();
+}
+// 장중(평일 9:00~15:40)에는 과매도 줍기를 실시간 가격으로 다시 그린다 (대시보드 본체는 장 마감 데이터) — 2026-10-07
+async function loadDipLive(){
+  const k=new Date(new Date().toLocaleString('en-US',{timeZone:'Asia/Seoul'})), hm=k.getHours()*100+k.getMinutes(), wd=k.getDay();
+  if(wd===0||wd===6||hm<900||hm>1540) return;
+  const el=document.getElementById('db-dip'); if(!el) return;
+  el.insertAdjacentHTML('afterbegin','<div class="ts" id="db-dip-wait">장중 가격으로 확인 중…</div>');
+  const r=await fetch(`${API}/dashboard/dip-live`).then(x=>x.ok?x.json():null).catch(()=>null);
+  const box=document.getElementById('db-dip'); if(!box) return;
+  if(!r){ const w=document.getElementById('db-dip-wait'); if(w) w.textContent='장중 가격을 못 불러왔습니다'; return; }
+  const sg=x=>(x>0?'+':'')+x;
+  const chip=(x)=>`<span style="display:inline-block;margin:0 6px 6px 0;padding:4px 9px;border:1px solid #1f6feb;border-radius:8px;cursor:pointer;font-size:12.5px" onclick="openChartModal('${x.code}','${x.name}','')"><b style="color:#e6edf3">${x.name}</b> <span class="ts">${sg(x.change_pct)}%</span></span>`;
+  box.innerHTML=`<div class="ts" style="margin-bottom:6px;color:#58a6ff">⏱ 장중 ${r.as_of} 가격 기준 (종가 전이라 바뀔 수 있음)</div>`
+    +((r.secs||[]).map(s=>`<div style="margin-bottom:6px"><b style="color:#e6edf3">${s.family}</b> <span style="color:#58a6ff">${sg(s.chg)}%</span> <span class="ts">(20일 +${s.s20}%) ${s.note||''}</span><br>${s.items.map(chip).join('')||'<span class="ts">고를 종목 없음</span>'}</div>`).join('')||'<span class="ts">지금은 -2% 넘게 빠진 오른 섹터 없음</span>');
 }
 async function renderDashboard(d, stale){
   const v=document.getElementById('db-verdict');
@@ -813,7 +828,7 @@ async function renderDashboard(d, stale){
   rank.push(rcard('★','#58a6ff','📉 과매도 줍기 → 5~10일 (오른 섹터가 하루 크게 빠진 날)',
     '직전 20일 +10%↑ 섹터가 오늘 평균 -2%↓ · <b>종가(또는 시간외)에 절반 비중</b> · 손절 = 오늘 저가 아래 마감 · 3년 5일 +1.9% (기판 +4.0%, 미국 장비 급락 다음 날 기판 +8.7%) · 하락장 전환 날은 실패 · 장중엔 14:50 텔레그램',
     (all.state==='하락'?'<div style="color:#f85149;font-size:12.5px;margin-bottom:4px">하락장 — 줍지 않기</div>':'')
-    +((d.dip||[]).map(s=>`<div style="margin-bottom:6px"><b style="color:#e6edf3">${s.family}</b> <span style="color:#58a6ff">${sg(s.chg)}%</span> <span class="ts">(20일 +${s.s20}%) ${s.note||''}</span><br>${s.items.map(x=>chip(x,'#1f6feb',` <span class="ts">${sg(x.change_pct)}% · 손절 ${x.low.toLocaleString()}</span>`)).join('')||'<span class="ts">고를 종목 없음</span>'}</div>`).join('')||'<span class="ts">오늘은 해당 없음</span>')));
+    +'<div id="db-dip">'+((d.dip||[]).map(s=>`<div style="margin-bottom:6px"><b style="color:#e6edf3">${s.family}</b> <span style="color:#58a6ff">${sg(s.chg)}%</span> <span class="ts">(20일 +${s.s20}%) ${s.note||''}</span><br>${s.items.map(x=>chip(x,'#1f6feb',` <span class="ts">${sg(x.change_pct)}% · 손절 ${x.low.toLocaleString()}</span>`)).join('')||'<span class="ts">고를 종목 없음</span>'}</div>`).join('')||'<span class="ts">어제 종가 기준 해당 없음</span>')+'</div>'));
   rank.push(rcard('2','#bc8cff','🕯 추세 도지 → 5일 안쪽',
     '상승 추세 종목의 장대양봉 다음 날 도지 · 이격 20%↓ · 5일 +3.7% (10일 넘기면 효과 없음)',((d.trend_doji||[]).map(x=>chip(x,'#bc8cff',` <span class="ts">어제 ${sg(x.big_pct)}% · 이격 ${x.gap20_pct}%</span>`)).join('')||'<span class="ts">오늘은 없음</span>')
     +`<div class="ts" style="margin:8px 0 4px">내일 도지면 그 자리 (오늘 장대양봉)</div>`+((d.trend_big||[]).map(x=>chip(x,'#6e40c9',` <span class="ts">${sg(x.change_pct)}%</span>`)).join('')||'<span class="ts">없음</span>')

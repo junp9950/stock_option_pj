@@ -267,23 +267,41 @@ def text_summary(db: Session, k: int = 5) -> str:
     return "\n".join(lines)
 
 
-def dip_live_text(db: Session) -> str:
-    """장중(14:50) 과매도 줍기 점검 — 토스 실시간 가격으로 섹터 평균을 계산. 해당 섹터가 없으면 빈 문자열."""
+_dip_live: dict = {}
+
+
+def dip_live(db: Session, max_age: int = 300) -> dict:
+    """장중 과매도 줍기 — 토스 실시간 가격으로 섹터 평균을 계산 (5분 캐시, 토스 429 방지).
+    섹터: 오늘 평균 -2%↓ & 어제까지 20일 +10%↑. 종목: 직전 20일 +15%↑ · 20일선 위 · 20일 고점 -10% 안 · 하루 30억↑."""
+    import threading  # noqa: PLC0415
+    import time  # noqa: PLC0415
+    lock = _dip_live.setdefault("lock", threading.Lock())
+    with lock:
+        if _dip_live.get("val") and time.time() - _dip_live["t"] < max_age:
+            return _dip_live["val"]
+        val = _dip_live_compute(db)
+        _dip_live.update(t=time.time(), val=val)
+        return val
+
+
+def _dip_live_compute(db: Session) -> dict:
     import time  # noqa: PLC0415
     from backend.screener.rotation import family_members  # noqa: PLC0415
     from backend.services.toss_client import _get  # noqa: PLC0415
     fam = family_members(db)
+    now = pd.Timestamp.now(tz="Asia/Seoul")
+    today = now.strftime("%Y-%m-%d")
     px = pd.read_sql(text("select stock_code s, trading_date d, high_price h, close_price c, trading_value tv from spot_daily_prices "
-                          "where trading_date >= current_date - 45 and trading_date < current_date"), db.connection())
+                          "where trading_date >= cast(:t as date) - 45 and trading_date < cast(:t as date)"), db.connection(), params={"t": today})
     C = px.pivot(index="d", columns="s", values="c").sort_index().astype(float)
     H = px.pivot(index="d", columns="s", values="h").sort_index().astype(float)
     TV = px.pivot(index="d", columns="s", values="tv").sort_index().astype(float)
+    out = {"as_of": now.strftime("%H:%M"), "secs": []}
     if len(C.index) < 22:
-        return ""
+        return out
     liq = TV.tail(20).mean()
     names = dict(db.execute(text("select code, name from stocks")).all())
     codes = sorted({c for m in fam.values() for c in m if c in C.columns})
-    today = pd.Timestamp.now(tz="Asia/Seoul").strftime("%Y-%m-%d")
     live: dict[str, float] = {}
     for i in range(0, len(codes), 200):
         for w in (0.3, 2, 5):
@@ -296,7 +314,6 @@ def dip_live_text(db: Session) -> str:
                 break
     prev = C.iloc[-1]
     dch = (C / C.shift(1) - 1).clip(-0.3, 0.3)
-    out = []
     for f, m in fam.items():
         cc = [c for c in m if c in live and prev.get(c, 0) > 0 and liq.get(c, 0) >= 1e9]
         if len(cc) < 8:
@@ -311,12 +328,20 @@ def dip_live_text(db: Session) -> str:
             ma = (C[c].tail(19).sum() + p) / 20
             hi = max(float(H[c].tail(19).max()), p)
             if liq.get(c, 0) >= 3e9 and prev[c] / C[c].iloc[-21] - 1 >= 0.15 and p > ma and p / hi - 1 >= -0.10:
-                rows.append((liq[c], f"{names.get(c, c)} {(p / prev[c] - 1) * 100:+.1f}%"))
-        rows.sort(reverse=True)
-        out.append((g, f"• <b>{f}</b> 지금 {g * 100:+.1f}% (20일 +{s20 * 100:.0f}%) {DIP_NOTE.get(f, '')}\n  " + (" · ".join(x for _, x in rows[:8]) or "고를 종목 없음")))
-    if not out:
+                rows.append({"code": c, "name": names.get(c, c), "change_pct": round((p / prev[c] - 1) * 100, 1), "liq": float(liq[c])})
+        rows.sort(key=lambda x: -x["liq"])
+        out["secs"].append({"family": f, "chg": round(g * 100, 1), "s20": round(s20 * 100), "note": DIP_NOTE.get(f, ""), "items": rows[:12]})
+    out["secs"].sort(key=lambda d: d["chg"])
+    return out
+
+
+def dip_live_text(db: Session) -> str:
+    """장중(14:50) 과매도 줍기 점검 텔레그램 문구. 해당 섹터가 없으면 빈 문자열."""
+    r = dip_live(db, max_age=60)
+    if not r["secs"]:
         return ""
-    out.sort()
-    return ("📉 <b>과매도 줍기 점검</b> (14:50, 장중 가격)\n오른 섹터가 오늘 크게 빠지는 중 — 종가 무렵 사면 3년 평균 5일 +1.9~4.0%\n"
-            + "\n".join(x for _, x in out)
+    body = "\n".join(f"• <b>{d['family']}</b> 지금 {d['chg']:+.1f}% (20일 +{d['s20']}%) {d['note']}\n  "
+                     + (" · ".join(f"{x['name']} {x['change_pct']:+.1f}%" for x in d["items"][:8]) or "고를 종목 없음") for d in r["secs"])
+    return (f"📉 <b>과매도 줍기 점검</b> ({r['as_of']}, 장중 가격)\n오른 섹터가 오늘 크게 빠지는 중 — 종가 무렵 사면 3년 평균 5일 +1.9~4.0%\n"
+            + body
             + "\n\n→ 종가(또는 시간외)에 <b>절반 비중</b>으로 · 5~10일 · 손절 = 오늘 저가 아래 마감\n⚠ 시장이 하락장으로 바뀌는 날이면 줍지 않기 (26년 5월 실패)")

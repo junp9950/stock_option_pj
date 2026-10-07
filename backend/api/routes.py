@@ -1636,6 +1636,13 @@ def get_value_records(db: Session = Depends(get_db)):
     return cached("value_records", (), db, lambda: scan(db))
 
 
+@router.get("/dashboard/dip-live")
+def get_dip_live(db: Session = Depends(get_db)):
+    """장중 과매도 줍기 (토스 실시간, 5분 캐시) — 오늘 탭 카드가 장중에 부른다 (2026-10-07)."""
+    from backend.screener.my_pattern import dip_live  # noqa: PLC0415
+    return dip_live(db)
+
+
 @router.get("/dashboard")
 def get_dashboard(db: Session = Depends(get_db)):
     """첫 화면 대시보드: 시장(전체·코스피·코스닥·삼하 수급) · 오늘 판단 · 조건 B 추린 후보 · 내일 후보 · 관심 종목 선 · 대량거래 (2026-10-06)."""
