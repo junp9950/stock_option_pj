@@ -179,7 +179,7 @@ def report(db: Session, force: bool = False) -> str | None:
     today = datetime.now(ZoneInfo("Asia/Seoul")).date().isoformat()
     g = {k: [] for k in ("brk", "fire", "close", "candle", "warn", "dry", "far")}
     last_date = ""
-    skip = set(post_items(db))       # 정리 글에 있는 종목은 정리 글 체크 메시지에서 따로 본다
+    skip = {c for c, _ in _held(db)}     # 보유 종목은 보유 종목 점검 메시지에서 따로 본다 (2026-10-08)
     for it in _items(db):
         if it["code"] in skip:
             continue
@@ -212,14 +212,6 @@ def report(db: Session, force: bool = False) -> str | None:
         else:
             far = f"(선까지 {(lv / p - 1) * 100:.0f}%)" if it["kind"] == "above" else ""
             g["far"].append(escape(it["name"]) + far)
-    # 보유 종목(매매 일지)도 꽉 찬 음봉만 따로 본다 — 관심 목록에 없어도 (2026-10-07)
-    have = {it["code"] for it in _items(db)}
-    for code, name in _held(db):
-        if code in have:
-            continue
-        s = _day(code, fetch_candles)
-        if s and "⚠꽉찬음봉" in s["tags"]:
-            g["warn"].append(_full_bear_line(f"<b>{escape(name)}</b>(보유)", s))
     if not force and last_date != today:
         return None     # 휴장일
     d = last_date[5:].replace("-", "/")
@@ -239,11 +231,94 @@ def report(db: Session, force: bool = False) -> str | None:
     return "\n".join(out)
 
 
+def _positions(db: Session) -> list[dict]:
+    """매매 일지로 지금 보유 수량·평단(이동평균) — 판 만큼 수량만 줄인다."""
+    from sqlalchemy import text  # noqa: PLC0415
+    pos: dict[str, dict] = {}
+    for code, name, side, qty, price in db.execute(text(
+            "select code, name, side, qty, price from trade_executions where owner = 'junp' order by trade_date, seq, id")).all():
+        p = pos.setdefault(code, {"code": code, "name": name, "qty": 0, "avg": 0.0})
+        if side == "매수":
+            tot = p["qty"] + qty
+            p["avg"] = (p["avg"] * p["qty"] + float(price) * qty) / tot if tot > 0 else 0.0
+            p["qty"] = tot
+        else:
+            p["qty"] -= qty
+    return [p for p in pos.values() if p["qty"] > 0]
+
+
+def _plan(db: Session, code: str, wl: dict, posts: dict) -> dict:
+    """보유 종목의 손절선·메모: 관심 목록 hold 줄 → 정리 글 메모 순."""
+    w = wl.get(code)
+    if w and w.get("kind") == "hold" and w.get("level"):
+        return {"stop": float(w["level"]), "note": w.get("note", "")}
+    it = posts.get(code)
+    if it and it.get("kind") == "hold" and it.get("level"):
+        return {"stop": float(it["level"]), "note": it.get("memo", "").replace(chr(10), " ")}
+    return {"stop": 0.0, "note": (w or {}).get("note", "") or (it or {}).get("memo", "").replace(chr(10), " ")}
+
+
+def held_report(db: Session, force: bool = False) -> str | None:
+    """보유 종목 장 마감 점검 — 손절선 지켰나 · 매수가 대비 · 봉·거래. 금액은 안 적는다 (%만)."""
+    from html import escape  # noqa: PLC0415
+    from backend.services.toss_client import fetch_candles  # noqa: PLC0415
+    pos = _positions(db)
+    if not pos:
+        return None
+    wl = {x["code"]: x for x in _items(db)}
+    try:
+        posts = post_items(db)
+    except Exception:  # noqa: BLE001
+        posts = {}
+    bad, ok, small = [], [], []
+    last_date = ""
+    for p in sorted(pos, key=lambda x: -x["qty"] * x["avg"]):
+        s = _day(p["code"], fetch_candles)
+        if not s:
+            continue
+        last_date = max(last_date, s["date"])
+        c, nm = s["close"], escape(p["name"])
+        if p["qty"] * c < 2_000_000:          # 1주짜리 장기 보유 등은 한 줄로 묶는다
+            small.append(f"{nm} {s['chg']:+.1f}%")
+            continue
+        pl = _plan(db, p["code"], wl, posts)
+        gain = (c / p["avg"] - 1) * 100 if p["avg"] else 0.0
+        head = f"<b>{nm}</b> {_won(c)} ({s['chg']:+.1f}%) · 매수가 대비 {gain:+.1f}% · {_candle_word(s)} · 거래 {s['vx']:.1f}배"
+        sub = []
+        stop, warn = pl["stop"], ""
+        if stop:
+            if c < stop:
+                warn = f"손절선 {_won(stop)} 아래 마감"
+            else:
+                sub.append(f"손절 {_won(stop)}까지 {(stop / c - 1) * 100:+.1f}%")
+                if gain >= 5 and stop < p["avg"]:
+                    sub.append(f"<b>로스컷을 본전 {_won(p['avg'])} 위로 올릴 만함</b>")
+        if "⚠꽉찬음봉" in s["tags"]:
+            warn = (warn + " · " if warn else "") + "거래 터진 꽉 찬 음봉"
+        elif "⚠장대음봉" in s["tags"] and not warn:
+            warn = "거래 실린 장대음봉"
+        note = re.sub(r"^보유 [\d,]+주 평단 [\d,]+ \([\d/]+\)\s*·?\s*", "", pl["note"] or "")    # 수량·평단은 위 줄과 겹친다
+        if note:
+            sub.append(f"<i>{escape(note[:60])}</i>")
+        line = head + (f" · ⚠ <b>{warn}</b>" if warn else "") + (f"\n   └ {' · '.join(sub)}" if sub else "")
+        (bad if warn else ok).append(line)
+    if not force and last_date != datetime.now(ZoneInfo("Asia/Seoul")).date().isoformat():
+        return None
+    out = [f"💼 <b>보유 종목 {last_date[5:].replace('-', '/')} {_when()}</b> ({len(bad) + len(ok)}종목)"]
+    if bad:
+        out += ["", "⚠ <b>손절·위험 신호</b>"] + bad
+    if ok:
+        out += ["", "✅ <b>손절선 지킴</b>"] + ok
+    if small:
+        out += ["", f"<i>· 그 밖에: {', '.join(small)}</i>"]
+    return "\n".join(out)
+
+
 def send_report(db: Session, force: bool = False, chat_id: str | None = None) -> None:
     from backend.services.telegram import _get, _put, send  # noqa: PLC0415
     _CANDLES.clear()
     msg = report(db, force=force)
-    msg2 = post_report(db, force=force)
+    msg2 = held_report(db, force=force)    # 정리 글 체크 대신 보유 종목 기준 (2026-10-08 "장 마감 후에 오는 거 내 보유 종목 기준으로")
     if not msg and not msg2:
         return
     chats = [chat_id] if chat_id else _get(db, CHAT_KEY, None)
