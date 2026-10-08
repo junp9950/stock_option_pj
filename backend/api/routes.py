@@ -1954,8 +1954,11 @@ def get_sector_calendar(db: Session = Depends(get_db)):
 @router.get("/sectors/rotation")
 def get_sector_rotation(db: Session = Depends(get_db)):
     """순환매 모니터: 이야기 줄기 16개의 순위·확산·자금 흐름과 과열/유입 표시."""
-    from backend.screener.rotation import scan  # noqa: PLC0415
+    from backend.screener.rotation import scan, scan_live  # noqa: PLC0415
     from backend.services.result_cache import cached  # noqa: PLC0415
+    live = scan_live(db)          # 장중에는 지금 가격·거래량으로 (2026-10-08)
+    if live:
+        return live
     return cached("sector_rotation", (), db, lambda: scan(db))
 
 

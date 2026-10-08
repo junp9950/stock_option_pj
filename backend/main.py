@@ -1380,7 +1380,7 @@ async function loadRotation(){
   try{
     const d=await fetch(`${API}/sectors/rotation`).then(r=>r.ok?r.json():null);
     if(!d||!d.items.length){body.innerHTML='<tr><td colspan="6" style="color:#8b949e;text-align:center;padding:16px">데이터 없음</td></tr>';return;}
-    document.getElementById('rot-info').textContent=`· ${d.trading_date} 장 마감 기준`;
+    document.getElementById('rot-info').textContent=d.live?`· 오늘 ${d.live.as_of} 기준${d.live.projected?' (장중 · 거래대금은 마감까지 환산)':''}`:`· ${d.trading_date} 장 마감 기준`;
     const c=n=>n>0?'#f85149':n<0?'#58a6ff':'#8b949e';
     const sg=n=>(n>0?'+':'')+n;
     const badge={'과열':'<b style="color:#f85149;border:1px solid #f85149;border-radius:8px;padding:0 6px;font-size:11px">과열</b>','주의':'<b style="color:#d29922;border:1px solid #d29922;border-radius:8px;padding:0 6px;font-size:11px">주의</b>'};

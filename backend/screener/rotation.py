@@ -15,7 +15,10 @@ from __future__ import annotations
 
 import json
 import re
-from datetime import timedelta
+import threading
+import time
+from datetime import date, datetime, timedelta
+from zoneinfo import ZoneInfo
 
 import pandas as pd
 from sqlalchemy import text
@@ -101,7 +104,8 @@ def get_exclusions(db: Session) -> dict[str, list[str]]:
     return merged
 
 
-def scan(db: Session) -> dict:
+def scan(db: Session, live: dict | None = None, frac: float = 1.0) -> dict:
+    """live = {code: {c, v, chg}} 이면 오늘 줄을 붙여 장중 기준으로 계산 (거래대금은 frac로 나눠 마감 환산)."""
     latest = db.execute(text("select max(trading_date) from spot_daily_prices")).scalar()
     if latest is None:
         return {"trading_date": None, "items": []}
@@ -111,6 +115,12 @@ def scan(db: Session) -> dict:
     C = px.pivot(index="trading_date", columns="stock_code", values="c").sort_index()
     TV = px.pivot(index="trading_date", columns="stock_code", values="tv").sort_index()
     CH = px.pivot(index="trading_date", columns="stock_code", values="ch").sort_index()
+    if live:
+        today = datetime.now(_KST).date()
+        cc = [c for c in C.columns if c in live]
+        C = pd.concat([C, pd.DataFrame([{c: live[c]["c"] for c in cc}], index=[today])])
+        TV = pd.concat([TV, pd.DataFrame([{c: live[c]["c"] * live[c]["v"] / max(frac, 0.05) for c in cc}], index=[today])])
+        CH = pd.concat([CH, pd.DataFrame([{c: live[c]["chg"] for c in cc}], index=[today])])
     ret20 = C / C.shift(20) - 1
     above = C > C.rolling(20).mean()
     stretched = (C / C.rolling(20).mean() - 1) >= 0.2   # 20일선보다 20% 넘게 뜬 종목
@@ -152,3 +162,37 @@ def scan(db: Session) -> dict:
         })
     items.sort(key=lambda x: x["rank"])
     return {"trading_date": d.isoformat(), "items": items}
+
+
+_KST = ZoneInfo("Asia/Seoul")
+_LIVE: dict = {"t": 0.0, "v": None}
+_LIVE_LOCK = threading.Lock()
+
+
+def scan_live(db: Session, max_age: float = 90) -> dict | None:
+    """장중(평일 9:00~DB 갱신 전)에는 네이버 실시간 시세로 다시 계산 — 90초 캐시, 계산 중이면 직전 결과 (2026-10-08 사용자 요청)."""
+    now = datetime.now(_KST)
+    if now.weekday() >= 5 or now.hour < 9:
+        return None
+    latest = db.execute(text("select max(trading_date) from spot_daily_prices")).scalar()
+    if latest is None or latest >= now.date():
+        return None
+    hit = _LIVE["v"]
+    if hit and hit.get("trading_date") == now.date().isoformat() and time.time() - _LIVE["t"] < max_age:
+        return hit
+    if not _LIVE_LOCK.acquire(blocking=hit is None):
+        return hit if hit and hit.get("trading_date") == now.date().isoformat() else None
+    try:
+        from backend.screener.my_pattern import _day_frac  # noqa: PLC0415
+        from backend.services.naver_live import snapshot  # noqa: PLC0415
+        codes = [r[0] for r in db.execute(text("select distinct stock_code from spot_daily_prices where trading_date = :d"), {"d": latest}).all()]
+        live = snapshot(codes)
+        if len(live) < len(codes) * 0.5:      # 휴장일·장 전·네이버 실패
+            return None
+        frac = 1.0 if (now.hour, now.minute) >= (15, 30) else _day_frac(now)
+        out = scan(db, live=live, frac=frac)
+        out["live"] = {"as_of": now.strftime("%H:%M"), "projected": frac < 1.0}
+        _LIVE.update(t=time.time(), v=out)
+        return out
+    finally:
+        _LIVE_LOCK.release()
