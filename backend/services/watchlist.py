@@ -287,7 +287,7 @@ def held_report(db: Session, force: bool = False) -> str | None:
         last_date = max(last_date, s["date"])
         c = s["close"]
         stop = _plan(db, p["code"], wl, posts)["stop"]
-        gain = (c / p["avg"] - 1) * 100 if p["avg"] else 0.0
+        gain = (c * 0.998 / p["avg"] - 1) * 100 if p["avg"] else 0.0     # 증권사 앱처럼 팔 때 세금·수수료 0.2% 뺀 수익률
         room = (c / stop - 1) * 100 if stop else None          # 손절선까지 남은 여유 (+면 위)
         risk = "⚠꽉찬음봉" in s["tags"] or "⚠장대음봉" in s["tags"]
         if stop and c < stop:
@@ -299,7 +299,7 @@ def held_report(db: Session, force: bool = False) -> str | None:
         if gain >= 5 and stop and stop < p["avg"]:
             line2 += f"\n   ↑ 로스컷 본전({_won(p['avg'])}) 위로 올리기"
         tag = " · <b>거래 터진 꽉 찬 음봉</b>" if "⚠꽉찬음봉" in s["tags"] else (" · <b>장대음봉</b>" if "⚠장대음봉" in s["tags"] else "")
-        line3 = f"수익 {gain:+.1f}% · {_candle_word(s)} · 거래 {s['vx']:.1f}배{tag}"
+        line3 = f"평단 {_won(p['avg'])} · 수익 <b>{gain:+.1f}%</b> · {_candle_word(s)} · 거래 {s['vx']:.1f}배{tag}"
         rows.append(((room if room is not None else 99), f"{icon} <b>{escape(p['name'])}</b>  {_won(c)} ({s['chg']:+.1f}%)\n   {line2}\n   {line3}"))
     if not force and last_date != datetime.now(ZoneInfo("Asia/Seoul")).date().isoformat():
         return None
