@@ -341,6 +341,41 @@ def _log_picks(db: Session, r: dict, lead: list, swing: list) -> None:
         pass
 
 
+def top3_lines(db: Session, r: dict) -> list[str]:
+    """매일 종베 3개 (2026-10-08 사용자 "한 세 개 정도 꼽아서 매일 보내라").
+    주도 섹터 조건 B가 있으면 그 상위 3, 없고 시장이 -1%↓ 빠진 날이면 '버틴 종목'(hold_up) 3, 둘 다 없으면 쉬기."""
+    from backend.screener.hold_up import STAT, picks  # noqa: PLC0415
+    from backend.services.telegram import _get, _put  # noqa: PLC0415
+    good = [x for x in r["items"] if x["b"] and 1.5 <= x["tv_x"] <= 6 and x["upper_pct"] <= 10]
+    lead = cap_sectors([x for x in good if (x.get("b_rank") or 99) <= 3], r.get("heat", {}))[:3]
+    out = ["", "🎯 <b>오늘 종베 3</b>"]
+    log = []
+    if r.get("market") == "하락":
+        out.append("<i>시장 하락 국면 — 원칙상 쉬는 날, 참고만</i>")
+    if lead:
+        out.append("주도 섹터 거래 붙은 양봉 (조건 B)")
+        for i, x in enumerate(lead, 1):
+            out.append(f"{i}. <b>{x['name']}</b> {x['change_pct']:+.1f}% · {x.get('family', '')}")
+            log.append(x["code"])
+    else:
+        h = picks(db)
+        if h["items"] and h.get("down_day"):
+            out.append(f"시장 {h['market']:+.1f}%에도 버틴 종목 · 최근 돈 들어온 종목")
+            for i, x in enumerate(h["items"], 1):
+                out.append(f"{i}. <b>{x['name']}</b> {x['close']:,.0f} · 오늘 {x['chg']:+.1f}% (시장보다 {x['rel']:+.1f}%p)")
+                out.append(f"   손절 오늘 저가 {x['low']:,.0f} · 기준봉 {x['spike']} · 20일선 {x['gap20']:+.0f}%")
+                log.append(x["code"])
+            out.append(f"<i>{STAT}</i>")
+        else:
+            out.append("오늘은 고를 종목 없음 → 쉬기")
+    if log:
+        out.append("파는 법: 다음 날 +2% 못 가면 정리 · 넘으면 절반 덜고 나머지 손절선 올리기")
+        hist = _get(db, "top3_log", {}) or {}
+        hist[r["trading_date"]] = log
+        _put(db, "top3_log", dict(list(hist.items())[-120:]))
+    return out
+
+
 def text_summary(db: Session, k: int = 5) -> str:
     """텔레그램용 짧은 요약."""
     r = scan(db)
@@ -360,6 +395,10 @@ def text_summary(db: Session, k: int = 5) -> str:
         lines.append(f"{md['icon']} <b>{md['title']}</b>" + (f" ({', '.join(md['sectors'])})" if md.get("sectors") else ""))
         lines.append("→ " + md["do"])
     lines.append("돈 몰린 섹터: " + (", ".join(r["b_sectors"]) if r["b_sectors"] else "없음 (오늘은 쉬는 날)"))
+    try:
+        lines += top3_lines(db, r)
+    except Exception:  # noqa: BLE001
+        pass
     bb, bn = r.get("box_break", []), r.get("box_near", [])
     if (bb or bn) and r["market"] != "하락":
         _log_box(db, r)
