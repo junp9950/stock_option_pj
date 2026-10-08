@@ -264,7 +264,8 @@ HELD_EXCLUDE = ["005935", "000660", "086790", "012330", "0080Y0"]
 
 
 def held_report(db: Session, force: bool = False) -> str | None:
-    """보유 종목 장 마감 점검 — 종목마다 3줄: 이름·종가 / 손절선까지 / 수익·봉·거래. 손절에 가까운 순. 금액은 안 적는다 (%만)."""
+    """(아이콘은 색이 아니라 모양으로 구분 — 사용자 노랑·초록 색약, 2026-10-08)
+    보유 종목 장 마감 점검 — 종목마다 3줄: 이름·종가 / 손절선까지 / 수익·봉·거래. 손절에 가까운 순. 금액은 안 적는다 (%만)."""
     from html import escape  # noqa: PLC0415
     from backend.services.telegram import _get  # noqa: PLC0415
     from backend.services.toss_client import fetch_candles  # noqa: PLC0415
@@ -290,11 +291,11 @@ def held_report(db: Session, force: bool = False) -> str | None:
         room = (c / stop - 1) * 100 if stop else None          # 손절선까지 남은 여유 (+면 위)
         risk = "⚠꽉찬음봉" in s["tags"] or "⚠장대음봉" in s["tags"]
         if stop and c < stop:
-            icon, line2 = "🔴", f"손절 {_won(stop)} <b>아래 마감 → 정리</b>"
+            icon, line2 = "⛔", f"손절 {_won(stop)} <b>아래 마감 → 정리</b>"
         elif risk or (room is not None and room <= 2):
-            icon, line2 = "🟡", f"손절 {_won(stop)} · <b>{room:.1f}% 남음</b>" if stop else "손절선 없음"
+            icon, line2 = "⚠️", f"손절 {_won(stop)} · <b>{room:.1f}% 남음</b>" if stop else "손절선 없음"
         else:
-            icon, line2 = "🟢", f"손절 {_won(stop)} · {room:.1f}% 남음" if stop else "손절선 없음"
+            icon, line2 = "✅", f"손절 {_won(stop)} · {room:.1f}% 남음" if stop else "손절선 없음"
         if gain >= 5 and stop and stop < p["avg"]:
             line2 += f"\n   ↑ 로스컷 본전({_won(p['avg'])}) 위로 올리기"
         tag = " · <b>거래 터진 꽉 찬 음봉</b>" if "⚠꽉찬음봉" in s["tags"] else (" · <b>장대음봉</b>" if "⚠장대음봉" in s["tags"] else "")
@@ -303,10 +304,10 @@ def held_report(db: Session, force: bool = False) -> str | None:
     if not force and last_date != datetime.now(ZoneInfo("Asia/Seoul")).date().isoformat():
         return None
     rows.sort(key=lambda x: x[0])
-    n_out = sum(r[1].startswith("🔴") for r in rows)
-    n_near = sum(r[1].startswith("🟡") for r in rows)
+    n_out = sum(r[1].startswith("⛔") for r in rows)
+    n_near = sum(r[1].startswith("⚠️") for r in rows)
     head = f"💼 <b>보유 종목 {last_date[5:].replace('-', '/')} {_when()}</b>"
-    summ = f"{len(rows)}종목 · 🔴 손절 {n_out} · 🟡 2% 안 {n_near}"
+    summ = f"{len(rows)}종목 · ⛔ 손절 {n_out} · ⚠️ 2% 안 {n_near} · ✅ 여유 {len(rows) - n_out - n_near}"
     return "\n\n".join([head + "\n" + summ] + [r[1] for r in rows])
 
 
