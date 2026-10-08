@@ -258,11 +258,18 @@ def _plan(db: Session, code: str, wl: dict, posts: dict) -> dict:
     return {"stop": 0.0, "note": (w or {}).get("note", "") or (it or {}).get("memo", "").replace(chr(10), " ")}
 
 
+# 장기 보유(보통 계좌 · 안 파는 종목)는 보유 종목 점검에서 뺀다 — 사용자 2026-10-08 "삼전우 하닉 하나금융지주 이런 거는 빼고".
+# settings 'held_exclude'(코드 목록)로 바꿀 수 있다.
+HELD_EXCLUDE = ["005935", "000660", "086790", "012330", "0080Y0"]
+
+
 def held_report(db: Session, force: bool = False) -> str | None:
-    """보유 종목 장 마감 점검 — 손절선 지켰나 · 매수가 대비 · 봉·거래. 금액은 안 적는다 (%만)."""
+    """보유 종목 장 마감 점검 — 종목마다 3줄: 이름·종가 / 손절선까지 / 수익·봉·거래. 손절에 가까운 순. 금액은 안 적는다 (%만)."""
     from html import escape  # noqa: PLC0415
+    from backend.services.telegram import _get  # noqa: PLC0415
     from backend.services.toss_client import fetch_candles  # noqa: PLC0415
-    pos = _positions(db)
+    skip = set(_get(db, "held_exclude", None) or HELD_EXCLUDE)
+    pos = [p for p in _positions(db) if p["code"] not in skip]
     if not pos:
         return None
     wl = {x["code"]: x for x in _items(db)}
@@ -270,48 +277,37 @@ def held_report(db: Session, force: bool = False) -> str | None:
         posts = post_items(db)
     except Exception:  # noqa: BLE001
         posts = {}
-    bad, ok, small = [], [], []
+    rows = []
     last_date = ""
-    for p in sorted(pos, key=lambda x: -x["qty"] * x["avg"]):
+    for p in pos:
         s = _day(p["code"], fetch_candles)
         if not s:
             continue
         last_date = max(last_date, s["date"])
-        c, nm = s["close"], escape(p["name"])
-        if p["qty"] * c < 2_000_000:          # 1주짜리 장기 보유 등은 한 줄로 묶는다
-            small.append(f"{nm} {s['chg']:+.1f}%")
-            continue
-        pl = _plan(db, p["code"], wl, posts)
+        c = s["close"]
+        stop = _plan(db, p["code"], wl, posts)["stop"]
         gain = (c / p["avg"] - 1) * 100 if p["avg"] else 0.0
-        head = f"<b>{nm}</b> {_won(c)} ({s['chg']:+.1f}%) · 매수가 대비 {gain:+.1f}% · {_candle_word(s)} · 거래 {s['vx']:.1f}배"
-        sub = []
-        stop, warn = pl["stop"], ""
-        if stop:
-            if c < stop:
-                warn = f"손절선 {_won(stop)} 아래 마감"
-            else:
-                sub.append(f"손절 {_won(stop)}까지 {(stop / c - 1) * 100:+.1f}%")
-                if gain >= 5 and stop < p["avg"]:
-                    sub.append(f"<b>로스컷을 본전 {_won(p['avg'])} 위로 올릴 만함</b>")
-        if "⚠꽉찬음봉" in s["tags"]:
-            warn = (warn + " · " if warn else "") + "거래 터진 꽉 찬 음봉"
-        elif "⚠장대음봉" in s["tags"] and not warn:
-            warn = "거래 실린 장대음봉"
-        note = re.sub(r"^보유 [\d,]+주 평단 [\d,]+ \([\d/]+\)\s*·?\s*", "", pl["note"] or "")    # 수량·평단은 위 줄과 겹친다
-        if note:
-            sub.append(f"<i>{escape(note[:60])}</i>")
-        line = head + (f" · ⚠ <b>{warn}</b>" if warn else "") + (f"\n   └ {' · '.join(sub)}" if sub else "")
-        (bad if warn else ok).append(line)
+        room = (c / stop - 1) * 100 if stop else None          # 손절선까지 남은 여유 (+면 위)
+        risk = "⚠꽉찬음봉" in s["tags"] or "⚠장대음봉" in s["tags"]
+        if stop and c < stop:
+            icon, line2 = "🔴", f"손절 {_won(stop)} <b>아래 마감 → 정리</b>"
+        elif risk or (room is not None and room <= 2):
+            icon, line2 = "🟡", f"손절 {_won(stop)} · <b>{room:.1f}% 남음</b>" if stop else "손절선 없음"
+        else:
+            icon, line2 = "🟢", f"손절 {_won(stop)} · {room:.1f}% 남음" if stop else "손절선 없음"
+        if gain >= 5 and stop and stop < p["avg"]:
+            line2 += f"\n   ↑ 로스컷 본전({_won(p['avg'])}) 위로 올리기"
+        tag = " · <b>거래 터진 꽉 찬 음봉</b>" if "⚠꽉찬음봉" in s["tags"] else (" · <b>장대음봉</b>" if "⚠장대음봉" in s["tags"] else "")
+        line3 = f"수익 {gain:+.1f}% · {_candle_word(s)} · 거래 {s['vx']:.1f}배{tag}"
+        rows.append(((room if room is not None else 99), f"{icon} <b>{escape(p['name'])}</b>  {_won(c)} ({s['chg']:+.1f}%)\n   {line2}\n   {line3}"))
     if not force and last_date != datetime.now(ZoneInfo("Asia/Seoul")).date().isoformat():
         return None
-    out = [f"💼 <b>보유 종목 {last_date[5:].replace('-', '/')} {_when()}</b> ({len(bad) + len(ok)}종목)"]
-    if bad:
-        out += ["", "⚠ <b>손절·위험 신호</b>"] + bad
-    if ok:
-        out += ["", "✅ <b>손절선 지킴</b>"] + ok
-    if small:
-        out += ["", f"<i>· 그 밖에: {', '.join(small)}</i>"]
-    return "\n".join(out)
+    rows.sort(key=lambda x: x[0])
+    n_out = sum(r[1].startswith("🔴") for r in rows)
+    n_near = sum(r[1].startswith("🟡") for r in rows)
+    head = f"💼 <b>보유 종목 {last_date[5:].replace('-', '/')} {_when()}</b>"
+    summ = f"{len(rows)}종목 · 🔴 손절 {n_out} · 🟡 2% 안 {n_near}"
+    return "\n\n".join([head + "\n" + summ] + [r[1] for r in rows])
 
 
 def send_report(db: Session, force: bool = False, chat_id: str | None = None) -> None:
