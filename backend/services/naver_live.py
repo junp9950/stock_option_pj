@@ -5,6 +5,7 @@
 """
 from __future__ import annotations
 
+import re
 import threading
 import time
 from datetime import datetime
@@ -51,3 +52,30 @@ def snapshot(codes: list[str], max_age: float = 60) -> dict[str, dict]:
     with _lock:
         _cache.update(t=time.time(), key=key, v=out)
     return out
+
+
+_FCHART = "https://fchart.stock.naver.com/sise.nhn?symbol={code}&timeframe=minute&count=420&requestType=0"
+_LEGACY = "https://polling.finance.naver.com/api/realtime?query=SERVICE_ITEM:{code}"
+
+
+def krx_day(code: str) -> dict | None:
+    """오늘 정규장(15:30까지) 봉 — 시가·고가·저가·종가·거래량과 기준가(어제 정규장 종가).
+
+    토스 일봉·DB 종가는 마지막 체결가라 넥스트레이드(20시까지)·시간외 단일가가 섞인다
+    (2026-10-08 LS머트리얼즈: 어제 정규장 15,600인데 시간외 15,350이 종가로 잡혀 +5.5%가 +7.2%로 나옴).
+    """
+    today = datetime.now(_KST).strftime("%Y%m%d")
+    try:
+        r = requests.get(_LEGACY.format(code=code), timeout=6, headers={"User-Agent": "Mozilla/5.0"})
+        d = r.json()["result"]["areas"][0]["datas"][0]
+        m = requests.get(_FCHART.format(code=code), timeout=6, headers={"User-Agent": "Mozilla/5.0"}).text
+    except Exception:  # noqa: BLE001
+        return None
+    close = vol = None
+    for x in re.findall(r'data="(\d{12})\|[^|]*\|[^|]*\|[^|]*\|(\d+)\|(\d+)"', m):
+        if x[0][:8] == today and x[0][8:] <= "1530":
+            close, vol = float(x[1]), float(x[2])
+    if close is None or not d.get("sv"):
+        return None
+    return {"open": float(d.get("ov") or close), "high": float(d.get("hv") or close), "low": float(d.get("lv") or close),
+            "close": close, "volume": vol, "base": float(d["sv"])}

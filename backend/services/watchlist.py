@@ -349,8 +349,22 @@ def _day(code: str, fetch) -> dict | None:
             time.sleep(wait)
             if c:
                 break
+        if c and len(c) >= 3:
+            c = _krx_patch(code, c)
         _CANDLES[code] = _shape(c) if c and len(c) >= 3 else None
     return _CANDLES[code]
+
+
+def _krx_patch(code: str, c: list[dict]) -> list[dict]:
+    """토스 일봉의 오늘 봉·어제 종가를 정규장(15:30) 기준으로 바꾼다 — 손절은 정규장 종가로 본다 (2026-10-08)."""
+    from backend.services.naver_live import krx_day  # noqa: PLC0415
+    k = krx_day(code)
+    if not k or not str(c[-1].get("timestamp", "")).startswith(datetime.now(ZoneInfo("Asia/Seoul")).date().isoformat()):
+        return c
+    c = [dict(x) for x in c]
+    c[-1].update(openPrice=k["open"], highPrice=max(k["high"], k["close"]), lowPrice=min(k["low"], k["close"]), closePrice=k["close"], volume=k["volume"])
+    c[-2]["closePrice"] = k["base"]
+    return c
 
 
 def _sections(content: str) -> list[tuple[str, str]]:
