@@ -300,7 +300,7 @@ def held_report(db: Session, force: bool = False) -> str | None:
             line2 += f"\n   ↑ 로스컷 본전({_won(p['avg'])}) 위로 올리기"
         tag = " · <b>거래 터진 꽉 찬 음봉</b>" if "⚠꽉찬음봉" in s["tags"] else (" · <b>장대음봉</b>" if "⚠장대음봉" in s["tags"] else "")
         line3 = f"평단 {_won(p['avg'])} · 수익 <b>{gain:+.1f}%</b> · {_candle_word(s)} · 거래 {s['vx']:.1f}배{tag}"
-        rows.append(((room if room is not None else 99), f"{icon} <b>{escape(p['name'])}</b>  {_won(c)} ({s['chg']:+.1f}%)\n   {line2}\n   {line3}"))
+        rows.append(((room if room is not None else 99), f"{icon} <b>{escape(p['name'])}</b>  {_won(c)} · 오늘 {s['chg']:+.1f}%\n   {line2}\n   {line3}"))
     if not force and last_date != datetime.now(ZoneInfo("Asia/Seoul")).date().isoformat():
         return None
     rows.sort(key=lambda x: x[0])
