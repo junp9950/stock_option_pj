@@ -43,7 +43,24 @@ def _grade(tt: int) -> tuple[str, str]:
     return ("S", "강세") if tt >= 8 else ("H", "양호") if tt == 7 else ("N", "중립") if tt >= 5 else ("W", "약세") if tt >= 3 else ("D", "하락")
 
 
+_PANEL: dict = {}
+
+
 def panel(db: Session, code: str, owner: str | None = None) -> dict:
+    """60초 캐시 (같은 종목을 다시 누르면 바로)."""
+    import time  # noqa: PLC0415
+    key = (code, owner)
+    hit = _PANEL.get(key)
+    if hit and time.time() - hit[0] < 60:
+        return hit[1]
+    v = _panel(db, code, owner)
+    if len(_PANEL) > 300:
+        _PANEL.clear()
+    _PANEL[key] = (time.time(), v)
+    return v
+
+
+def _panel(db: Session, code: str, owner: str | None = None) -> dict:
     """owner(매매 일지 로그인)가 있을 때만 평단·손절·수익을 넣는다 — 공개 화면엔 금액·보유 정보 금지 (2026-10-09)."""
     name = db.execute(text("select name from stocks where code = :c"), {"c": code}).scalar() or code
     q = db.execute(text("select trading_date, open_price, high_price, low_price, close_price, volume from spot_daily_prices "

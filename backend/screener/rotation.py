@@ -76,7 +76,18 @@ def set_override(db: Session, code: str, family: str | None) -> dict[str, str]:
     return ov
 
 
+_FM: dict = {"t": 0.0, "v": None}
+
+
 def family_members(db: Session) -> dict[str, list[str]]:
+    """섹터 16개 소속 종목. 테마 수천 개에 정규식을 돌려 0.2초쯤 걸려서 5분 캐시 (2026-10-09 차트 창 패널이 느리던 것)."""
+    if _FM["v"] is not None and time.time() - _FM["t"] < 300:
+        return _FM["v"]
+    _FM.update(t=time.time(), v=_family_members(db))
+    return _FM["v"]
+
+
+def _family_members(db: Session) -> dict[str, list[str]]:
     out: dict[str, set[str]] = {f: set() for f in FAMILIES}
     for code, theme in db.execute(text(
         "select ss.stock_code, s.sector_name from sector_stocks ss join sectors s on s.id = ss.sector_id where s.is_active"
