@@ -184,6 +184,13 @@ def _panel(db: Session, code: str, owner: str | None = None) -> dict:
         stage, title, sub = 0, "관찰 중", f"이평선 {align}"
 
     chips = []
+    try:
+        from backend.services.stock_signals import close_scores as _cs  # noqa: PLC0415
+        _sc = _cs(db).get("scores", {}).get(code)
+        if _sc:
+            chips.append((_sc["score"] >= 6, f"종가 점수 {_sc['score']}/7") if (_sc["score"] >= 6 or _sc["score"] <= 3) else None)
+    except Exception:  # noqa: BLE001
+        pass
     chips.append((tt >= 7, f"추세 조건 {tt}/8") if (tt >= 7 or tt <= 4) else None)
     if rs is not None:
         chips.append((False, f"RS {rs:.0f} · 과열권") if rs >= 95 else (True, f"RS {rs:.0f}") if rs >= 70 else (False, f"RS {rs:.0f} · 약함") if rs < 50 else None)
@@ -207,7 +214,15 @@ def _panel(db: Session, code: str, owner: str | None = None) -> dict:
                  {"label": "저항 (20일 고가)", "value": f"{resist:,.0f}", "sub": f"{(resist/c-1)*100:+.1f}%"},
                  {"label": "52주 고가", "value": f"{hi52:,.0f}", "sub": f"{(hi52/c-1)*100:+.1f}%"}]
 
+    csc = None
+    try:
+        from backend.services.stock_signals import CLOSE_FLAGS, close_scores  # noqa: PLC0415
+        csc = close_scores(db).get("scores", {}).get(code)
+    except Exception:  # noqa: BLE001
+        pass
     rows = [
+        ({"k": "종가 진입 점수", "v": f"{csc['score']}/7", "tip": " · ".join(f"{'✓' if f else '✗'} {n}" for n, f in zip(CLOSE_FLAGS, csc["flags"]))}
+         if csc else {"k": "종가 진입 점수", "v": "추세 아님 (종가 > 20일선 > 60일선 아님)"}),
         {"k": "추세 조건", "v": f"{tt}/8", "tip": " · ".join(f"{'✓' if v else '✗'} {n}" for n, v in tt_list)},
         {"k": "RS Rating", "v": f"{rs:.0f}" if rs is not None else "-"},
         {"k": "이평선 (5·10·20·60)", "v": align},

@@ -2020,7 +2020,7 @@ async function loadWorkspace(){
   if(!_ws.code){ const L=wsItems(_ws.tab); const f=L[0]||(d.candidates||[])[0]||(d.watch||[])[0]; if(f) wsOpen(f.code,f.name); }
 }
 function wsItems(t){ const d=_ws.data||{}; return t==='watch'?(d.watch||[]):(d.candidates||[]).filter(x=>(x.lane||'entry')===t); }
-const WS_LANE={entry:'추세추종 · 모두 종가에 자리 잡기 · 손절 = 그날 저가 아래 · 그다음은 매도 방식: 빨리 챙기기(다음 날 +2% 못 가면 정리) 또는 끌고 가기(14일선 아래 절반·21일선 아래 나머지). 3년: 종가 매수(버틴 종목)는 빨리 챙기기, ▲ 진입(돌파)은 끌고 가기가 나았음',
+const WS_LANE={entry:'추세추종 · 모두 종가에 자리 잡기 · 숫자 = 종가 진입 점수(7개 조건, 3년: 6↑ 이김 43%·평균 +1.5%) · 손절 = 그날 저가 아래 · 그다음은 매도 방식: 빨리 챙기기(다음 날 +2% 못 가면 정리) 또는 끌고 가기(14일선 아래 절반·21일선 아래 나머지). 3년: 종가 매수(버틴 종목)는 빨리 챙기기, ▲ 진입(돌파)은 끌고 가기가 나았음',
   wait:'아직 신호 전 · 돌파가 나오면 그때', watch:'적어 둔 관심 종목'};
 function wsTab(t){ _ws.tab=t; try{ localStorage.setItem('ws-tab',t); }catch(e){} renderWsList(); }
 function renderWsList(){
@@ -2036,7 +2036,7 @@ function renderWsList(){
     else tg=`${KIND[x.kind]||''}${x.level?' '+Math.round(x.level).toLocaleString():''}${x.note?' · '+x.note:''}`;
     const sub=_ws.tab==='held'&&x.gain!=null?`<div class="ws-tg" style="text-align:right">수익 ${x.gain>0?'+':''}${x.gain}%</div>`:'';
     return `<div class="ws-item${x.code===_ws.code?' on':''}" data-c="${x.code}" onclick="wsOpen('${x.code}','${x.name.replace(/'/g,'')}')">${wsAv(x.code,x.name)}
-      <div class="ws-txt"><div class="ws-nm">${x.name}</div><div class="ws-tg" title="${tg.replace(/"/g,'')}">${tg}</div></div>
+      <div class="ws-txt"><div class="ws-nm">${x.name}${x.score!=null?` <span style="font-size:11px;padding:0 6px;border-radius:8px;border:1px solid ${x.score>=6?'var(--blue)':'var(--line)'};color:${x.score>=6?'var(--blue)':'var(--muted)'}" title="종가 진입 점수 (7개 조건 중) — 3년: 6↑ 이김 43%·평균 +1.5%, 3↓ 이김 20~28%">${x.score}/7</span>`:''}</div><div class="ws-tg" title="${tg.replace(/"/g,'')}">${tg}</div></div>
       <div class="ws-px">${x.close?Math.round(x.close).toLocaleString():'-'}<div style="color:${x.chg>0?'var(--up)':x.chg<0?'var(--down)':'var(--muted)'}">${x.chg>0?'+':''}${(x.chg||0).toFixed(2)}%</div>${sub}</div></div>`;
   };
   if(_ws.tab==='held'){ const a=L.filter(x=>!x.long), b=L.filter(x=>x.long);

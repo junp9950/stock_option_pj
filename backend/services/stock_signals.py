@@ -217,7 +217,7 @@ def workspace_list(db: Session) -> dict:
     from backend.services.result_cache import cached  # noqa: PLC0415
     now = datetime.now(ZoneInfo("Asia/Seoul"))
     if not (is_trading_day(now.date()) and 9 <= now.hour < 16):
-        return cached("workspace_list_v3", (), db, lambda: _workspace_list(db))
+        return cached("workspace_list_v4", (), db, lambda: _workspace_list(db))
     return _workspace_list(db)
 
 
@@ -243,6 +243,14 @@ def _workspace_list(db: Session) -> dict:
     try:      # ▲ 진입 신호가 오늘 뜬 종목 — 맨 위
         for x in entry_today(db):
             add(x["code"], f"▲ 진입 ({x['kind']})")
+    except Exception:  # noqa: BLE001
+        pass
+    scores = {}
+    try:      # 종가 진입 점수 6↑ (7개 조건 중) — 사용자 목표 "종가에 안전하고 확률 높은 추세 종목" (3년 이김 43%·평균 +1.5%)
+        scores = close_scores(db).get("scores", {})
+        for c_, v_ in sorted(scores.items(), key=lambda kv: -kv[1]["score"]):
+            if v_["score"] >= 6:
+                add(c_, f"종가 점수 {v_['score']}/7")
     except Exception:  # noqa: BLE001
         pass
     log = _get(db, "top3_log", {}) or {}
@@ -303,7 +311,11 @@ def _workspace_list(db: Session) -> dict:
         return "wait" if t.startswith("돌파 대기") else "entry"
     cands = []
     for x in cand.values():
-        y = price(x); y["lane"] = lane(x["tags"]); cands.append(y)
+        y = price(x); y["lane"] = lane(x["tags"])
+        sc = scores.get(x["code"])
+        y["score"] = sc["score"] if sc else None
+        cands.append(y)
+    cands.sort(key=lambda y: (y["lane"] != "entry", -(y["score"] if y["score"] is not None else -1)))
     return {"as_of": str(latest), "live": live_at, "mode": mp.get("mode"),
             "candidates": cands, "watch": sorted((price(w) for w in watch), key=lambda w: -w["chg"])}
 
@@ -420,3 +432,45 @@ def market_breadth(db: Session) -> dict:
          "weak": bool(idx_up and d10 <= -0.05), "narrow": bool(now < 0.40)}
     _BR.update(key=latest, v=v)
     return v
+
+
+CLOSE_FLAGS = ["60일 고점 -5% 안", "RS 70~95", "거래 0.7~3배", "고가 쪽 마감", "그날 0~+8%", "20일선 +15% 안", "EMA 간격 6% 안"]
+
+
+def close_scores(db: Session) -> dict:
+    """종가 진입 점수 (0~7) — 사용자 목표 "종가에 안전하고 확률 높은 종목을 추세 기반으로" (2026-10-09).
+    대상: 거래대금 20일 평균 30억↑ · 추세 기본(종가 > EMA20 > EMA60). 7개 조건 중 맞는 개수.
+    3년(close_entry_study.py · 종가 진입 · 손절 그날 저가-1% · 최대 10일, 상승·횡보장): 점수 0 이김 20%·평균 -1.7% → 점수 6↑ 이김 43%·평균 +1.5%·최악10% -11%,
+    점수 7 이김 46%·+1.5%. 기간을 반으로 나눠도 둘 다 점수 따라 이김 비율이 올라감(앞 26→47%, 뒤 31→46%). 디스크 캐시."""
+    latest = db.execute(text("select max(trading_date) from spot_daily_prices")).scalar()
+    from backend.services.result_cache import cached  # noqa: PLC0415
+    v = cached("close_scores_v1", (), db, lambda: _close_scores(db, latest)) or {}
+    return v
+
+
+def _close_scores(db: Session, latest) -> dict:
+    px = pd.read_sql(text("select stock_code s, trading_date d, high_price h, low_price l, close_price c, volume v, trading_value tv "
+                          "from spot_daily_prices where trading_date >= cast(:d as date) - 400 and trading_date <= :d"), db.connection(), params={"d": latest})
+    P = {k: px.pivot(index="d", columns="s", values=k).sort_index().astype("float32") for k in ("h", "l", "c", "v", "tv")}
+    del px
+    H, L, C, V, TV = P["h"], P["l"], P["c"], P["v"], P["tv"]
+    liq = TV.rolling(20).mean() >= 3e9
+    e5, e10, e20, e60 = (C.ewm(span=n, adjust=False).mean() for n in (5, 10, 20, 60))
+    rs_raw = 0.4 * (C / C.shift(63) - 1) + 0.2 * (C / C.shift(126) - 1) + 0.2 * (C / C.shift(189) - 1) + 0.2 * (C / C.shift(252) - 1)
+    RS = rs_raw.where(liq).rank(axis=1, pct=True).iloc[-1] * 98 + 1
+    r = -1
+    c, h, l = C.iloc[r], H.iloc[r], L.iloc[r]
+    chg = c / C.iloc[r - 1] - 1
+    trend = (c > e20.iloc[r]) & (e20.iloc[r] > e60.iloc[r]) & liq.iloc[r]
+    hi60 = c / H.iloc[-60:].max() - 1
+    vx = V.iloc[r] / V.iloc[-21:-1].mean()
+    pos = (c - l) / (h - l).replace(0, np.nan)
+    gap20 = c / C.iloc[-20:].mean() - 1
+    ehi = np.maximum(np.maximum(e5.iloc[r], e10.iloc[r]), e20.iloc[r]); elo = np.minimum(np.minimum(e5.iloc[r], e10.iloc[r]), e20.iloc[r])
+    spread = (ehi - elo) / c
+    flags = [hi60 >= -0.05, (RS >= 70) & (RS < 95), (vx >= 0.7) & (vx < 3), pos >= 0.7, (chg >= 0) & (chg < 0.08), gap20 < 0.15, spread < 0.06]
+    out = {}
+    for code in trend[trend].index:
+        f = [bool(x.get(code, False)) for x in flags]
+        out[code] = {"score": sum(f), "flags": f, "stop": float(l[code]) * 0.99, "risk": float(1 - l[code] * 0.99 / c[code])}
+    return {"date": str(latest), "scores": out}
