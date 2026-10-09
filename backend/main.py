@@ -308,7 +308,7 @@ select{background:#21262d;border:1px solid #30363d;color:#c9d1d9;padding:6px 10p
   <div class="tab" onclick="switchTab('journal')">매매 일지</div>
   <div class="tab" onclick="switchTab('screener')">거래대금 순위</div>
   <div class="tab" onclick="switchTab('heatmap')">시장 히트맵</div>
-  <div class="tab" onclick="switchTab('jongbe')">종베 (검증 중)</div>
+  <div class="tab" onclick="switchTab('jongbe')">종베</div>
   <div class="tab" onclick="switchTab('discussion')">종목토론</div>
   <div class="tab" onclick="switchTab('suggest')">건의사항</div>
 </div>
@@ -357,12 +357,7 @@ select{background:#21262d;border:1px solid #30363d;color:#c9d1d9;padding:6px 10p
   <div id="mp-box" style="border:1px solid #9e6a03;border-radius:10px;padding:12px 16px;margin-bottom:14px;background:rgba(210,153,34,.06)">로딩 중…</div>
   <b style="font-size:15px;color:#e6edf3;display:block;margin:4px 0 8px">① 시장</b>
   <div id="jb-market" style="border-radius:10px;padding:12px 16px;margin-bottom:12px;border:1px solid #30363d">로딩 중…</div>
-  <p class="lead">시장 상승·횡보 → 뜨거운 섹터 → 그날 섹터에 돈 몰림 → 거래 실린 양봉, 또는 <b style="color:#e3b341">🕯 큰 양봉 다음 날 밑꼬리 도지</b>. <b>파는 법:</b> 다음 날 +2% 미만이면 전부 정리, +2% 이상이면 30% · 그다음 날도 오르면 30% 더 · 나머지는 최고 종가 -15% 이탈 시 (3년 평균 +0.98%, 이김 43%).</p>
-  <details class="why"><summary>근거 보기</summary>
-    3년(상승·횡보장, 다음 날 "갭상승이면 시가·아니면 종가" 매도): 기본 +0.42%, 뜨거운 섹터(20일 상승 상위 3) +0.74%, <b style="color:#3fb950">A등급(섹터 종목 거래 중간값 1배↑) +1.20%·수익 74%</b>, B +0.35%. 종목 혼자 5배↑ 터져도 섹터가 조용하면 +0.43%, 섹터 밖 +0.28%, 하락장 +0.12%.
-    시가 매도는 -5% 넘는 손실 2%, 종가까지 들고 가면 18%. 이격 +20%↑·그날 +12%↑는 평균은 비슷한데 큰 손실이 2~4배("급등·과열 빼기" 필터).
-    🔔 = 오늘 거래대금이 몇 년 만의 최대, 🔥 = 대량거래 관심종목 단계. 숫자는 수수료·세금 빼기 전.
-  </details>
+  <p class="lead">시장 상승·횡보 → 뜨거운 섹터 → 그날 섹터에 돈 몰림 → 거래 실린 양봉, 또는 <b style="color:#e3b341">🕯 큰 양봉 다음 날 밑꼬리 도지</b>. <b>파는 법:</b> 다음 날 +2% 미만이면 전부 정리, +2% 이상이면 30% · 그다음 날도 오르면 30% 더 · 나머지는 최고 종가 -15% 이탈 시.</p>
   <div style="display:flex;flex-wrap:wrap;align-items:center;gap:10px;margin-bottom:6px">
     <b style="font-size:15px;color:#e6edf3;margin:4px 0 8px">② 뜨는 섹터</b> <span class="ts" id="jb-date"></span>
     <label style="font-size:12.5px;color:#c9d1d9">시총
@@ -388,21 +383,12 @@ select{background:#21262d;border:1px solid #30363d;color:#c9d1d9;padding:6px 10p
     <p class="lead" style="margin:4px 0 6px">오늘 거래대금이 6개월 넘게 만의 최고인 종목 (거래대금 30억↑). 오래된 기록일수록 위. 관심 등록용 — 터진 날 추격보다 며칠 쉬는 걸 보고 들어가기.</p>
     <div id="vrc-body" style="display:flex;flex-wrap:wrap;gap:6px">로딩 중…</div>
     <span class="ts" id="lu-info" hidden></span>
-    <details class="why" style="margin:6px 0 6px"><summary>근거 보기</summary>
-      평소 10배↑·+5% 양봉 신기록을 터진 날 종가에 사면 20일 뒤 중간 -7%(대신 95%가 20일 안 더 높은 가격을 찍음) → 차트 후보 탭 '대량거래 관심종목'에서 숨고르기 뒤 진입 신호를 보세요.
-      몇 년 만의 최대 거래대금(평소 10배↑)이면서 상한가로 끝난 종목. 3년 247건: 종가 매수 → 다음 날 시가 평균 +5.6%(중간 +4.3%, 수익 74%).
-      <b style="color:#f85149">단 상한가에 묶이면 실제로 못 사는 경우가 많습니다.</b> 점상 = 하루 종일 상한가.
-    </details>
     <div id="lu-body" class="ts" hidden></div>
   </div>
 
   <div style="margin:4px 0 22px">
     <b style="font-size:15px;color:#e6edf3;margin:4px 0 8px">③ 뜨는 섹터의 좋은 차트 · 며칠~몇 주 들고 갈 종목 (스윙·선취매)</b> <span class="ts" id="jb-ch-info"></span>
     <p class="lead" style="margin-top:6px"><b style="color:#3fb950">🚀 돌파</b>·<b>돌파 대기</b> = 120일 박스 상단(20일 넘게 묵은 고점) 처음 넘음·-3% 이내 (이미 많이 오른 종목·꼬리만 남은 종목 뺌) · <b style="color:#3fb950">🚀 꼬리 돌파</b> = 종가 고점 넘고 버티다 옛 꼬리 끝까지 종가로 넘음(물린 사람 0) · <b style="color:#3fb950">저가 지킴</b> = 대량거래 봉 저가 안 깸 · <b style="color:#58a6ff">눌림</b> = 20일 고점 -5~-15% · <b style="color:#e3b341">버팀</b> = 섹터 빠진 날 안 빠짐</p>
-    <details class="why"><summary>근거 보기</summary>
-      3년(같은 날 시장 대비 20일 뒤): 돌파 +2.9%p, 돌파 대기 +2.4%p, 눌림 +2.2%p, 저가 지킴 +1.3%p (뜨거운 섹터 아무 종목 +1.7%p). 거래 2배 넘게 터지며 돌파(📢)는 +0.8%p로 약함.
-      어느 종목이 터질지는 못 맞힘(10일 안 폭발 8~11%) → 여러 개로 나누고 터지면 대부분 챙기기. 박스 안으로 다시 들어오거나 손절선 깨면 정리.
-    </details>
     <table class="pb-table">
       <thead><tr><th>종목</th><th>근거</th><th>오늘</th><th>섹터</th><th>종가</th></tr></thead>
       <tbody id="jb-charts"><tr><td colspan="5" style="color:#8b949e;text-align:center;padding:16px">로딩 중…</td></tr></tbody>
@@ -412,10 +398,6 @@ select{background:#21262d;border:1px solid #30363d;color:#c9d1d9;padding:6px 10p
   <div style="margin:4px 0 22px">
     <b style="font-size:15px;color:#e6edf3;margin:4px 0 8px">④ 다음에 뜰 섹터 후보 (움직이기 시작)</b>
     <p class="lead" style="margin-top:6px">상위 3 밖인데 최근 5일 시장보다 +2%p↑ · 20일 안 돈 유입(섹터 거래대금 1.5배 + 섹터 +1%) 2번↑ · 순위 5일 새 3계단↑ 중 하나. 누르면 그 섹터 종목이 보입니다.</p>
-    <details class="why"><summary>근거 보기</summary>
-      3년: 테마에 20일 안 돈이 2번 넘게 들어오면 20일 안 주도(상위 10)가 될 확률 7% → 20%, 이미 31~60위면 29%. 다만 돈 들어온 날 바로 사는 건 평균 이득이 없었고, 순위가 올라올 때가 타이밍.
-      반도체 → 로봇 → 2차전지 순환은 6번 중 3번 정도. 로봇이 1등인데 반도체가 꺾이고 시장 신호가 약해지면 순환이 아니라 상승장 끝이었던 경우가 많음.
-    </details>
     <div id="jb-movers" style="display:flex;flex-wrap:wrap;gap:8px"></div>
     <div id="jb-mover-detail" style="margin-top:8px"></div>
   </div>
@@ -554,11 +536,6 @@ select{background:#21262d;border:1px solid #30363d;color:#c9d1d9;padding:6px 10p
   <div style="margin-bottom:20px">
     <div style="font-size:12px;color:#8b949e;margin-bottom:6px;letter-spacing:.06em">🔄 순환매 모니터 (섹터 16개) <span class="ts" id="rot-info"></span></div>
     <p class="lead">지금 어느 섹터에 돈이 붙었나를 보는 표. 다음에 어디가 오를지 맞히는 용도는 아닙니다.</p>
-    <details class="why"><summary>근거 보기</summary>
-      272개 테마를 16개 섹터로 묶음. <b style="color:#f85149">과열</b> = 섹터 안 종목 중 20일선보다 20%↑ 뜬 종목이 20% 이상, <b style="color:#d29922">주의</b> = 10~20%.
-      3년: 이 비율 0~5% 섹터는 20일 뒤 +0.1%p, 10~20% -0.3%p, 20~30% -1.7%p, 30%↑ -3.1%p. 상위 3 섹터 + 섹터 종목 거래 중간값 1배↑의 거래 실린 양봉 종베 +1.20%(섹터 밖 +0.28%).
-      다음 10~20일 앞설 섹터는 거의 못 맞힘(-0.2%p). 섹터 밖에서 돈이 반복해 들어오는 테마는 주도가 될 확률이 3~4배지만, 들어온 날 사는 건 평균 이득이 없었습니다.
-    </details>
     <table>
       <thead><tr><th>섹터</th><th>20일 상승 (순위)</th><th>확산 (20일선 위)<br><span class="ts">+20% 넘게 뜬 종목</span></th><th>거래대금 (평소 대비)</th><th>오늘</th><th>오늘 돈 붙은 종목 (거래 2배↑)</th></tr></thead>
       <tbody id="rot-body"><tr><td colspan="6" style="color:#8b949e;text-align:center;padding:16px">로딩 중…</td></tr></tbody>
@@ -574,7 +551,7 @@ select{background:#21262d;border:1px solid #30363d;color:#c9d1d9;padding:6px 10p
     </table>
   </div>
 
-  <details class="why" style="margin-top:8px"><summary>외국인·기관 수급 테마 표 보기 (3년 검증 안 된 참고용)</summary>
+  <details class="why" style="margin-top:8px"><summary>외국인·기관 수급 테마 표 보기 (참고용)</summary>
   <!-- 매집 감지 테마 -->
   <div style="margin:10px 0 20px">
     <div style="font-size:12px;text-transform:uppercase;color:#8b949e;margin-bottom:8px;letter-spacing:.06em">🕵️ 매집 감지 테마 (수급↑ 주가↔)</div>
@@ -655,7 +632,7 @@ select{background:#21262d;border:1px solid #30363d;color:#c9d1d9;padding:6px 10p
       <div class="ws-ctl"><div class="ws-per" id="ws-tf"><button data-tf="1d" onclick="wsTf('1d')">일봉</button><button data-tf="1w" onclick="wsTf('1w')">주봉</button><button data-tf="60m" onclick="wsTf('60m')">60분</button><button data-tf="30m" onclick="wsTf('30m')">30분</button><button data-tf="15m" onclick="wsTf('15m')">15분</button><button data-tf="5m" onclick="wsTf('5m')">5분</button><button data-tf="1m" onclick="wsTf('1m')">1분</button></div>
       <div class="ws-per" id="ws-per"><button data-n="66" onclick="wsPeriod(66)">3개월</button><button data-n="130" onclick="wsPeriod(130)">6개월</button><button data-n="250" onclick="wsPeriod(250)">1년</button></div></div>
       <div class="lwbox"><div class="lwleg" id="ws-chart-leg"></div><div id="ws-chart" class="lwc"></div></div>
-      <details class="ws-lg"><summary>ⓘ 차트 표시 설명</summary><div class="ws-legend"><span>▲ <b>진입</b> = 사기 좋은 자리 (3년 평균 +2.6%, 2~3주 보유 · 급등봉 당일은 안 냄) → 스탑로스 = 신호 봉 저가 -1% 예약 · ▼ 14일선 아래 종가 절반 · 21일선 아래 종가 나머지</span><span>● 보라 숫자 <b>6·7</b> = 종가 진입 점수 (7개 조건 중 맞은 개수 · 상승·횡보장만) → 사면 바로 스탑로스 = 그날 저가 -1% 예약 · 21일선 아래 종가면 다음 날 아침 정리 (3년 평균 +2.2% · 손절폭 3%↓면 +3.2% · 한 번 손실은 손절폭만큼으로 고정)</span><span>↑ <b>종가 매수</b> = 그날 종가에 살 후보 (진입 시점일 뿐 · 파는 건 위와 같음)</span><span>↑ 파란 화살표 = 박스 위로 돌파 · 이평선 모였다 돌파 (3년 10일 평균 +1.5% · +0.7%)</span><span>● 초록 = 오르던 종목의 거래 적은 눌림</span><span>· 작은 점 = 참고 (돌파 대기 · 아깝게 놓침 · 상승 추세 시작) — 봉에 올리면 위에 내용</span><span>■ 회색 = 급등봉 · 1년 최대 거래</span><span>▼ 주황 = 조심</span><span>· 두 손가락으로 확대, 끌어서 이동, 누르면 그 날 가격</span></div></details>
+      <details class="ws-lg"><summary>ⓘ 차트 표시 설명</summary><div class="ws-legend"><span>▲ <b>진입</b> = 사기 좋은 자리 (2~3주 보유 · 급등봉 당일은 안 냄) → 스탑로스 = 신호 봉 저가 -1% 예약 · ▼ 14일선 아래 종가 절반 · 21일선 아래 종가 나머지</span><span>● 보라 숫자 <b>6·7</b> = 종가 진입 점수 (7개 조건 중 맞은 개수 · 상승·횡보장만) → 사면 바로 스탑로스 = 그날 저가 -1% 예약 · 21일선 아래 종가면 다음 날 아침 정리</span><span>↑ <b>종가 매수</b> = 그날 종가에 살 후보 (진입 시점일 뿐 · 파는 건 위와 같음)</span><span>↑ 파란 화살표 = 박스 위로 돌파 · 이평선 모였다 돌파</span><span>● 초록 = 오르던 종목의 거래 적은 눌림</span><span>· 작은 점 = 참고 (돌파 대기 · 아깝게 놓침 · 상승 추세 시작) — 봉에 올리면 위에 내용</span><span>■ 회색 = 급등봉 · 1년 최대 거래</span><span>▼ 주황 = 조심</span><span>· 두 손가락으로 확대, 끌어서 이동, 누르면 그 날 가격</span></div></details>
     </div>
     <aside class="cm-panel" id="ws-panel"></aside>
   </div>
@@ -676,17 +653,11 @@ select{background:#21262d;border:1px solid #30363d;color:#c9d1d9;padding:6px 10p
     <summary>🎯 손절 짧은 자리 <span class="ts" id="ss-info"></span></summary>
 
     <p class="lead" style="margin-top:6px"><b>추세선 지지</b>(저점 높이는 추세선 + 위 수평 저항, 전진건설로봇형) · <b>수평 지지 수렴</b>(거래 마르며 좁아지는 박스, SK이터닉스형). 둘 다 앞서 거래가 터진 뒤 거래가 마른 종목. 손절선이 가까운 순.</p>
-    <details class="why"><summary>근거 보기</summary>
-      3년(종가 매수, 손절선 아래 종가면 정리, 손절폭의 3배(+3R)에 절반 익절 후 나머지 본전 손절, 최대 20일):
-      추세선 지지 578건 평균 +0.10R · 이김 37% · 손절 59% · <b>+3R 도달 23%</b> / 수평 지지 수렴 619건 +0.05R · +3R 21%, 뜨거운 섹터 안이면 +0.22R.
-      평균이 크게 남는 자리는 아니고 <b>잃을 땐 손절폭만큼 작게, 4~5번에 1번은 3배 이상</b> 먹는 구조입니다. 손절선은 꼭 지키기.<br>
-      <b>실적으로 크게 갈림</b>(그 시점 공시된 최근 분기, 1,012건): <b style="color:#3fb950">📈 실적 개선(영업익 +30%·매출 +10%) +0.52R · 이김 48%</b>, 이익 증가 +0.36R, 이익률 10%↑ +0.40R, 실적 개선 아님 +0.06R, <b style="color:#f85149">영업 적자 -0.20R · 손절 63%</b>. 그래서 실적 좋은 순으로 보여 줍니다.
-    </details>
     <div id="ss-body" style="display:flex;flex-wrap:wrap;gap:6px" class="ts">로딩 중…</div>
   </details>
   <details class="sec" data-k="cd">
     <summary>📐 차트 모양 후보 <span class="ts" id="cd-sum"></span></summary>
-  <p class="lead">불플래그 · 상승삼각형 · 기준봉 눌림 · 장대음봉도지 · <b style="color:#f778ba">VCP</b>(눌림 폭이 15일마다 줄고 거래 마름 · 매수선 -5% 안이 3년 +3.3%p, 뜨는 섹터면 +7.2%p) 중 하나라도 해당하는 종목. 손절선까지 <b style="color:#3fb950">3~6%</b>가 적정.</p>
+  <p class="lead">불플래그 · 상승삼각형 · 기준봉 눌림 · 장대음봉도지 · <b style="color:#f778ba">VCP</b>(눌림 폭이 15일마다 줄고 거래 마름) 중 하나라도 해당하는 종목. 손절선까지 <b style="color:#3fb950">3~6%</b>가 적정.</p>
   <div class="toolbar" style="margin-bottom:12px">
     <label style="display:flex;align-items:center;gap:6px;font-size:13px;color:#8b949e">
       최소 시가총액(억원)
@@ -754,16 +725,16 @@ select{background:#21262d;border:1px solid #30363d;color:#c9d1d9;padding:6px 10p
       🚀 <b>윗꼬리 뚫음</b> — 터진 날 윗꼬리 끝(그날 고가)을 종가로 넘음 → 그날 산 사람이 전부 수익이라 위에 팔 물량이 없음<br>
       🆕 <b>최근 터짐</b> — 터진 지 10일 안<br>
       📈 <b>오르는 중</b> — 아직 거래가 안 말랐음 (쉬기 전)<br>
-      ⚠ <b>위에서 팔림</b> — 터진 다음 1~2일 더 큰 거래로 윗꼬리 음봉 → 20일 뒤 중간 <b style="color:#f85149">-12%</b>, 조심<br>
+      ⚠ <b>위에서 팔림</b> — 터진 다음 1~2일 더 큰 거래로 윗꼬리 음봉 → 조심<br>
       <span class="ts">무너짐</span> — 기준선 아래로 내려갔거나 한 번이라도 -15% 아래로 마감 → 끝난 종목 (기본 화면에서 뺌)<br><br>
       <b style="color:#e3b341">🎯 언제 사나</b><br>
       '쉬는 중'에 <b>+3% 양봉 · 거래 2배</b>로 다시 고개를 드는 날 (돌려세우는 봉) + 시장이 상승·횡보일 때<br>
-      → 40일 뒤 시장보다 <b>+1.9%p</b>, 실적까지 좋아진 종목(📈 실적)이면 <b>+7.8%p</b>(31건). 하락장에선 -5.8%p라 쉬기.<br><br>
+      → 실적까지 좋아진 종목(📈 실적)이면 더 좋았습니다. 하락장에선 쉬기.<br><br>
       <b>왜 터진 날 안 사나</b><br>
-      3년 동안 터진 날 종가에 사면 20일 뒤 중간 <b style="color:#f85149">-7%</b>였습니다. 대신 95%가 20일 안에 그보다 높은 값을 한 번은 찍었습니다(중간 +15%). 크게 흔들리는 종목이라는 뜻입니다.<br><br>
+      터진 날 바로 사면 대부분 다시 밀렸습니다. 대신 대부분 20일 안에 그보다 높은 값을 한 번은 찍습니다. 쉬었다가 다시 고개를 드는 날을 기다립니다.<br><br>
       <b>파는 법</b><br>
-      +10%에서 절반 팔고, 나머지는 보유 중 최고 종가에서 -8% 내려오면 정리 → 중간 <b>+3.8%</b>, 69% 수익 (그냥 40일 들고 있기는 중간 -2.0%).<br>
-      다음 날 시초가가 +5% 넘게 뜨면 일부 덜기 (+7.3%).
+      +10%에서 절반 팔고, 나머지는 보유 중 최고 종가에서 -8% 내려오면 정리.<br>
+      다음 날 시초가가 +5% 넘게 뜨면 일부 덜기.
       </div>
     </details>
     <table class="pb-table">
@@ -774,11 +745,6 @@ select{background:#21262d;border:1px solid #30363d;color:#c9d1d9;padding:6px 10p
   <details class="sec" data-k="ema">
     <summary>📏 EMA 모임 돌파 · 후보 <span class="ts" id="ema-info"></span></summary>
     <p class="lead" style="margin-top:6px">단기 <b>EMA 5·10·20</b>이 모여 있다가(전날 간격 4%↓) 세 선 위·10일 고점 돌파(+3%↑·거래 1.5배↑). <b>EMA60은 추세 필터</b> — 📈정배열(종가>EMA60 & EMA20>EMA60)이면 5일 성적 2~3배. 손절 = 돌파 봉 저가 아래 마감 · 5~10일.</p>
-    <details class="why"><summary>근거 보기</summary>
-      3년 상승·횡보장: 돌파 전날 EMA 간격 0~2% 5일 +1.0% · 2~4% +0.9% · 4~7% +0.4% · 7~12% -0.2% · 12%↑ -1.4% (기준 +0.2%). 섹터에 돈 몰린 날이면 모임 여부와 상관없이 20일 +6% 안팎.
-      조합 비교(3·5·10, 5·10·20, 5·20, 8·13·21 등): 짧은 조합끼리 차이 작음 → 5·10·20 유지. 60일이 든 조합은 최근 1년엔 벌어진 쪽이 더 좋아 모임 신호로는 안 맞음 → 추세 필터로만.
-      5·10·20 모임 돌파 + 정배열 5일 +0.9%/+2.0% (앞 2년/최근 1년) vs 정배열 아님 +0.4%/+0.8%.
-    </details>
     <div class="ts" style="margin:6px 0 4px">오늘 돌파</div>
     <div id="ema-brk" style="display:flex;flex-wrap:wrap;gap:6px" class="ts">로딩 중…</div>
     <div class="ts" style="margin:10px 0 4px">내일 후보 — EMA 3% 안으로 모여서 10일 고점 4% 안 · 60일선 위 · 오늘 조용</div>
@@ -787,19 +753,12 @@ select{background:#21262d;border:1px solid #30363d;color:#c9d1d9;padding:6px 10p
   <details class="sec" data-k="lp">
     <summary>🏦 대형주 눌림 박스 <span class="ts" id="lp-info"></span></summary>
     <p class="lead" style="margin-top:6px">하루 거래대금 <b>500억↑ 대형주</b>가 60일 고점에서 <b>-5~-20%</b> 눌려 120일선 근처 위에서 쉬고, 거래가 평소(60일) 이하. 대형주는 바닥(-40%)까지 잘 안 빠져서 바닥 박스 감시에는 안 잡히는 자리(에이피알형). <b>손절 = 최근 15일 박스 하단 아래 마감</b> · 20일 보유.</p>
-    <details class="why"><summary>근거 보기</summary>
-      3년 상승·횡보장(5거래일 간격 표본): 대형주 936건 <b>20일 뒤 평균 +7.0%</b>(오른 경우 57%), 5일 +1.8% · 10일 +3.1%. 같은 조건 전 종목은 20일 +3.0%.
-      긴 상승 추세선에 닿은 경우만 골라도 더 좋아지지 않았음(+4.2%, 오른 경우 65%). 하락장에선 보기만. 화면은 15일 박스 폭 20% 이하만 보여 줌(막 무너진 종목 제외, 검증 밖 조건).
-    </details>
     <div id="lp-body" style="display:flex;flex-wrap:wrap;gap:6px" class="ts">로딩 중…</div>
   </details>
   <details class="sec" data-k="bb">
     <summary>👀 바닥 박스 감시 <span class="ts" id="bb-info"></span></summary>
 
     <p class="lead" style="margin-top:6px">급등했다 크게 빠진 뒤(120일 고점 -40%↓, 1년 저점보다는 15%↑ 위) 15일째 좁은 박스(폭 13%↓)에서 거래 없이 버티는 종목. 아직 신저가를 깨는 종목은 뺍니다. <b>추천이 아니라 감시용</b> — 박스에서 터지는 날(🔔) 섹터·시장이 받쳐 주면 봅니다.</p>
-    <details class="why"><summary>근거 보기</summary>
-      3년 373건: 처음 박스가 된 날 사면 20일 뒤 같은 날 평균 대비 -0.9%p, 40일 -3.2%p(대부분 더 흘러내림). 20일 안 +10%·거래 5배로 터질 확률은 18%로 아무 종목(15%)보다 조금 높을 뿐. 거래가 더 마를수록(0.3배↓) 오히려 나빴습니다. 한선엔지니어링은 8/24~9/15 폭 11.6% 박스 뒤 9/16 +24%.
-    </details>
     <div id="bb-burst" style="margin-bottom:8px"></div>
     <div id="bb-body" style="display:flex;flex-wrap:wrap;gap:6px" class="ts">로딩 중…</div>
   </details>
@@ -937,16 +896,16 @@ function renderHomeTop(d, live){
   const add=(t,sub,v,k,click)=>rows.push({t,sub,v,k,click});
   add('시장 국면','종목 평균 지수 · 20일선 '+(all.vs_ma20_pct!=null?sg(all.vs_ma20_pct)+'%':'-'),all.state||'-',all.state==='상승'?'g':all.state==='하락'?'b':'n');
   if(br.pct!=null) add('시장 폭','50일선 위 비율 · 10일 '+sg(br.chg10)+'%p'+(br.weak?' · 속 약해짐':''),br.pct+'%',br.weak||br.narrow?'b':br.pct>=55?'g':'n');
-  if(br.hi60!=null) add('신고가 · 신저가','60일 기준 · 거래 30억↑',br.hi60+' · '+br.lo60,br.hi60>=br.lo60*2&&br.hi60>=10?'g':br.lo60>br.hi60?'b':'n');
+  if(br.hi60!=null) add('신고가 · 신저가','최근 60일 최고 · 최저 종가 종목 수',br.hi60+' · '+br.lo60,br.hi60>=br.lo60*2&&br.hi60>=10?'g':br.lo60>br.hi60?'b':'n');
   if(m.rel!=null) add('삼전·하닉 vs 코스닥','최근 20일 · 삼하 '+sg(m.sh20)+'% · 코스닥 '+sg(m.kq20)+'%',sg(m.rel)+'%p',m.rel>=10?'b':m.rel<=-3?'g':'n');
-  if(m.sh_foreign5!=null) add('외국인','삼전·하닉 5일 순매수',(m.sh_foreign5>=0?'+':'')+Math.round(m.sh_foreign5).toLocaleString()+'억',m.sh_foreign5>0?'g':'b');
+  if(m.sh_foreign5!=null) add('외국인','삼전·하닉 5일 순매수',(Math.abs(m.sh_foreign5)>=10000?(m.sh_foreign5>=0?'+':'-')+(Math.abs(m.sh_foreign5)/10000).toFixed(1)+'조':(m.sh_foreign5>=0?'+':'')+Math.round(m.sh_foreign5).toLocaleString()+'억'),m.sh_foreign5>0?'g':'b');
   const good=rows.filter(r=>r.k==='g').length;
   let vt, vk;
   if(all.state==='하락'){ vt='쉬는 날'; vk='b'; } else if(br.weak||br.narrow){ vt='들어가도 크기 줄이기'; vk='b'; } else if(all.state==='상승'){ vt='진입 가능'; vk='g'; } else { vt='골라서 작게'; vk='n'; }
   const when=live?`장중 ${live.as_of}`:`${(d.as_of||'').slice(5).replace('-','/')} 마감 기준`;
   document.getElementById('hc-market').innerHTML=`<div class="hc-h"><b>시장 상태</b><span>${when}</span></div>
     <div class="hc-verdict"><span class="hc-badge ${B[vk][0]}">${B[vk][1].split(' ')[0]}</span><b>${vt}</b></div>
-    <div class="hc-sum">근거 ${rows.length}개 중 ${good}개 양호 · 하락장은 쉬고, 폭이 줄면 크기 줄이기 (3년 확인)</div>
+    <div class="hc-sum">근거 ${rows.length}개 중 ${good}개 양호 · 하락장은 쉬고, 폭이 줄면 크기 줄이기</div>
     <div class="hc-bars">${rows.map(r=>`<i class="${r.k==='g'?'g':r.k==='b'?'b':''}"></i>`).join('')}</div>
     ${rows.map(r=>`<div class="hc-row"><div class="t"><b>${r.t}</b><span>${r.sub}</span></div><div class="v">${r.v}</div><span class="hc-badge ${B[r.k][0]}">${B[r.k][1]}</span></div>`).join('')}`;
   const ix=k=>{ const x=it[k]; if(!x) return ''; const c=x.pct>=0?'var(--up)':'var(--down)';
@@ -955,7 +914,7 @@ function renderHomeTop(d, live){
   document.getElementById('hc-today').innerHTML=`<div class="hc-h"><b>오늘</b><span class="hc-tg"><button data-s="KOSPI" onclick="hcSpark('KOSPI')">코스피</button><button data-s="KOSDAQ" onclick="hcSpark('KOSDAQ')">코스닥</button></span></div>
     <div class="hc-spark" id="hc-spark"></div><div class="hc-sx" id="hc-sx"></div>
     <div class="hc-head">${md.title||'판단 준비 중'}</div><div class="hc-do">${md.do?'→ '+md.do:''}</div>
-    <div class="hc-nums">${ix('코스피')}${ix('코스닥')}${br.adv_pct!=null?`<div class="hc-num"><div class="l">오른 종목 비율</div><div class="v">${br.adv_pct}%</div><div class="s" style="color:var(--muted)">거래 10억↑</div></div>`:''}</div>
+    <div class="hc-nums">${ix('코스피')}${ix('코스닥')}${br.adv_pct!=null?`<div class="hc-num"><div class="l">오른 종목 비율</div><div class="v">${br.adv_pct}%</div><div class="s" style="color:var(--muted)">조용한 종목 빼고</div></div>`:''}</div>
     ${(st.strong||[]).length?`<div class="hc-flow"><span class="k">강함</span><div>${st.strong.map(x=>pill(x,'up')).join('')}</div><span class="k">약함</span><div>${(st.weak||[]).map(x=>pill(x,'dn')).join('')}</div></div>`:''}`;
 }
 // '오늘' 카드 지수 하루 선 (SVG) — 전일 종가 점선 · 위면 빨강, 아래면 파랑
@@ -1034,7 +993,7 @@ async function renderDashboard(d, stale, live){
   top.push(card('🧲 최근 20일 — 삼전·하닉 vs 코스닥',rel==null?'<span class="ts">-</span>':
     bar('삼전·하닉',m.sh20,'#f778ba')+bar('코스닥 평균',m.kq20,'#3fb950')
     +`<div style="margin-top:6px;font-size:13px">→ ${who} <span class="ts">(차이 ${sg(rel)}%p)</span></div>
-     <div class="ts" style="margin-top:4px">삼하가 코스닥보다 +15%p 넘게 앞서면 경고 (3년: 그 뒤 20일 코스닥 -3.8%) · 외국인 삼하 5일 <b style="color:${m.sh_foreign5>0?'#f85149':'#58a6ff'}">${(m.sh_foreign5>0?'+':'')+(m.sh_foreign5||0).toLocaleString()}억</b></div>`));
+     <div class="ts" style="margin-top:4px">삼하가 코스닥보다 +15%p 넘게 앞서면 경고 · 외국인 삼하 5일 <b style="color:${m.sh_foreign5>0?'#f85149':'#58a6ff'}">${(m.sh_foreign5>0?'+':'')+(m.sh_foreign5||0).toLocaleString()}억</b></div>`));
   const sd=Object.entries(d.sector_day||{});
   top.push(card('🔥 섹터 (20일 순위 · 오늘 등락 중간 · 거래 중간)',sd.map(([f,x],i)=>`<div style="display:flex;justify-content:space-between;font-size:13px;padding:3px 0;border-bottom:1px solid #21262d"><span>${i+1}. ${d.b_sectors.includes(f)?'⭐ ':''}<b style="color:#e6edf3">${f}</b></span><span><span style="color:${x.chg>=0?'#f85149':'#58a6ff'}">${sg(x.chg)}%</span> · <span class="ts">${x.tvx==null?'거래 -':x.tvx+'배'}</span>${x.heat!=null?` · <span style="color:${x.heat>=25?'#ff7b72':x.heat>=10?'#d29922':'#8b949e'}" title="섹터 종목 중 20일선보다 20% 넘게 뜬 비율">과열 ${x.heat}%</span>`:''}</span></div>`).join('')+'<div class="ts" style="margin-top:6px">⭐ = 오늘 돈 몰린 섹터 · 과열 = 섹터 종목 중 20일선보다 20%↑ 뜬 비율 (25%↑ 🔥 들고 가지 말 것)</div>'));
   const H=d.heat||{}, isHot=x=>(H[x.family]||0)>=25;
@@ -1048,34 +1007,34 @@ async function renderDashboard(d, stale, live){
   // 박스 돌파 (2026-10-06 rank2.py: 10일 +5.9/+6.8/+6.5% 세 기간 고르게) · 뚫기 직전은 보조
   const boxchip=x=>chip(x,'#f0883e',` <span style="color:#f85149">${sg(x.change_pct)}%</span> <span class="ts">손절 ${x.line.toLocaleString()} · ${x.family}</span>${x.is_b?' <b style="color:#e3b341;font-size:11px">⭐종베도 OK</b>':''}${emaTag(x)}${isHot(x)?' <b style="color:#ff7b72;font-size:11px">🔥과열 섹터</b>':''}`);
   C.box=['#f0883e','📦 박스 돌파 → 5~10일 스윙',
-    '20일 동안 눌려 있던 고점을 <b>종가로</b> 뚫음 · 섹터에 돈 몰린 날 · 200일선 위 · 거래 2배↑ · <b>손절 = 뚫은 고점 아래로 마감</b> · 3년 10일 +5.9~6.8% (세 기간 고르게) · ⭐종베도 OK = 다음 날도 가장 좋았음',
+    '20일 동안 눌려 있던 고점을 <b>종가로</b> 뚫음 · 섹터에 돈 몰린 날 · 200일선 위 · 거래 2배↑ · <b>손절 = 뚫은 고점 아래로 마감</b>',
     LV+(all.state==='하락'?'<div style="color:#f85149;font-size:12.5px;margin-bottom:4px">하락장 — 보기만</div>':'')
     +((d.box_break||[]).map(boxchip).join('')||'<span class="ts">없음</span>')
     +`<div class="ts" style="margin:8px 0 4px">뚫기 직전 — 고점 -3% 안까지 붙여 마감 (10일 +6~8% · 표본 적어 보조)</div>`
     +((d.box_near||[]).map(x=>chip(x,'#9e6a03',` <span class="ts">고점 ${x.line.toLocaleString()} (${sg(x.line_pct)}%)</span>`)).join('')||'<span class="ts">없음</span>')
     +'<div class="ts" style="margin-top:4px">같은 섹터에서 여러 개 나오면 한두 개만 — 섹터가 꺾이면 같이 꺾임</div>'];
   C.lead=['#e3b341','⭐ 주도 섹터의 힘 있는 양봉 → 종베',
-    '돈 몰린 섹터가 20일 1~3위 · 거래 평소 1.5~6배 · 고가 근처 마감 · <b>섹터당 2개(과열 섹터 1개)까지</b> · <b>다음 날 분할 매도</b> · 3년 다음 날 +1.3~1.6%',
+    '돈 몰린 섹터가 20일 1~3위 · 거래 평소 1.5~6배 · 고가 근처 마감 · <b>섹터당 2개(과열 섹터 1개)까지</b> · <b>다음 날 분할 매도</b>',
     LV+((d.best_lead||[]).map(bchip).join('')||'<span class="ts">없음</span>')+anyRetail+hotNote];
   C.swing=['#e3b341','⭐ 올라오는 섹터의 힘 있는 양봉 → 5~10일 스윙',
-    '돈 몰린 섹터가 20일 4~8위 (아직 주도 전 · 올라오는 중) · <b>5~10일 보유</b> · 3년 10일 +2.6% · 최근 1년 +8.2% · AI 랠리 +6.1%',
+    '돈 몰린 섹터가 20일 4~8위 (아직 주도 전 · 올라오는 중) · <b>5~10일 보유</b> ',
     LV+((d.best_swing||[]).map(bchip).join('')||'<span class="ts">없음</span>')+`<div class="ts" style="margin-top:4px"><a href="#" onclick="switchTab('jongbe');return false" style="color:#58a6ff">후보 전체 보기 →</a></div>`];
   // 과매도 줍기 (2026-10-07 dipbuy.py·dipstock.py): 직전 20일 +10%↑ 섹터가 오늘 평균 -2%↓ → 대형·덜 빠진 주도주 종가 매수 5~10일
   const dips=live?(live.secs||[]):(d.dip||[]);
   C.dip=['#58a6ff','📉 과매도 줍기 → 5~10일 (오른 섹터가 하루 크게 빠진 날)',
-    '직전 20일 +10%↑ 섹터가 오늘 평균 -2%↓ · <b>대형(하루 500억↑)·섹터보다 덜 빠진 종목(⭐)</b>이 가장 좋았음(5일 +3.0%) · <b>종가에 절반 비중</b> · 손절 = 오늘 저가 아래 마감 · 하락장 전환 날은 실패',
+    '직전 20일 +10%↑ 섹터가 오늘 평균 -2%↓ · <b>대형(하루 500억↑)·섹터보다 덜 빠진 종목(⭐)</b>이 가장 좋았음 · <b>종가에 절반 비중</b> · 손절 = 오늘 저가 아래 마감 · 하락장 전환 날은 실패',
     (all.state==='하락'?'<div style="color:#f85149;font-size:12.5px;margin-bottom:4px">하락장 — 줍지 않기</div>':'')
     +'<div id="db-dip">'+(live?`<div class="ts" style="margin-bottom:6px;color:#58a6ff">⏱ 장중 ${live.as_of} 가격</div>`:'')
     +(dips.map(s=>`<div style="margin-bottom:6px"><b style="color:#e6edf3">${s.family}</b> <span style="color:#58a6ff">${sg(s.chg)}%</span> <span class="ts">(20일 ${s.rank?s.rank+'위 · ':''}+${s.s20}%) ${s.note||''}</span><br>${s.items.map(x=>chip(x,x.best?'#e3b341':'#1f6feb',`${x.best?' <b style="color:#e3b341;font-size:11px">⭐</b>':''} <span class="ts">${sg(x.change_pct)}%${x.low?' · 손절 '+x.low.toLocaleString():''}</span>`)).join('')||'<span class="ts">고를 종목 없음</span>'}</div>`).join('')||`<span class="ts">${live?'지금은 -2% 넘게 빠진 오른 섹터 없음':'해당 없음'}</span>`)+'</div>'];
   // 순환: 20일 4위↓ 섹터에 오늘 돈 (2026-10-07 — 검증 약함: B 9위↓ 이김 62~72%)
   const rots=live?(live.rot||[]):(d.rotation||[]);
   C.rot=['#bc8cff','🔄 새로 돈이 들어온 섹터 → 작게',
-    '20일 순위 9위↓ 섹터가 오늘 등락 중간 +1%↑ · 그 섹터의 +3%↑ 양봉(20일선 위) · <b>검증 약함 — 비중 작게</b> · 다음 날도 돈이 붙으면 "올라오는 섹터" 종베 자리',
+    '20일 순위 9위↓ 섹터가 오늘 등락 중간 +1%↑ · 그 섹터의 +3%↑ 양봉(20일선 위) · <b>비중 작게</b> · 다음 날도 돈이 붙으면 "올라오는 섹터" 종베 자리',
     (live?`<div class="ts" style="margin-bottom:6px;color:#bc8cff">⏱ 장중 ${live.as_of} 가격</div>`:'')
     +(rots.map(s=>`<div style="margin-bottom:6px"><b style="color:#e6edf3">${s.family}</b> <span style="color:#f85149">${sg(s.chg)}%</span> <span class="ts">(20일 ${s.rank}위)</span><br>${s.items.map(x=>chip(x,'#6e40c9',` <span class="ts">${sg(x.change_pct)}%</span>`)).join('')||'<span class="ts">고를 종목 없음</span>'}</div>`).join('')||'<span class="ts">없음</span>')];
   // EMA 모임 돌파 (2026-10-07 ema_squeeze.py · 사용자 원칙)
   C.ema=['#56d4dd','📏 EMA(5·10·20) 모임 돌파 → 5~20일',
-    '단기 EMA 셋이 4% 안으로 모여 있다가 세 선 위·10일 고점 돌파(+3%↑·거래 1.5배↑) · 3년 5일 +0.9~1.0% (벌어진 뒤 돌파는 -0.2~-1.4%) · <b>섹터 돈 겹치면(⭐) 20일 +6%</b> · <b>📈EMA60 정배열</b>이면 5일 2~3배 · 손절 = 돌파 봉 저가 아래 마감 · 5~10일',
+    '단기 EMA 셋이 4% 안으로 모여 있다가 세 선 위·10일 고점 돌파(+3%↑·거래 1.5배↑) · <b>섹터 돈 겹치면(⭐) 20일 +6%</b> · <b>📈EMA60 정배열</b>이면 5일 2~3배 · 손절 = 돌파 봉 저가 아래 마감 · 5~10일',
     ((d.ema_break||[]).map(x=>chip(x,x.money?'#e3b341':'#56d4dd',` <span style="color:#f85149">${sg(x.change_pct)}%</span> <span class="ts">거래 ${x.tv_x}배 · 전날 간격 ${x.ema_gap}%${x.family?' · '+x.family:''}</span>${x.money?' <b style="color:#e3b341;font-size:11px">⭐섹터 돈</b>':''}${x.up60?' <b style="color:#3fb950;font-size:11px" title="종가가 EMA60 위 & EMA20>EMA60">📈정배열</b>':''}${x.avwap_below?' <b style="color:#f0883e;font-size:11px" title="기준봉 이후 평균 단가 '+x.avwap.toLocaleString()+' 아래">⚠기준봉VWAP 아래</b>':''}`)).join('')||'<span class="ts">오늘 돌파 없음</span>')
     +`<div class="ts" style="margin:8px 0 4px">내일 후보 — EMA 3% 안으로 모여서 10일 고점 4% 안 · 60일선 위 · 오늘 조용 (뚫는 날 거래·섹터 확인)</div>`
     +((d.ema_wait||[]).map(x=>chip(x,x.money?'#e3b341':'#30363d',` <span class="ts">고점 ${x.line.toLocaleString()}까지 ${x.to_high_pct}% · 간격 ${x.ema_now}%${x.family?' · '+x.family:''}</span>${x.up60?' <b style="color:#3fb950;font-size:11px">📈</b>':''}${x.avwap_below?' <b style="color:#f0883e;font-size:11px" title="기준봉 이후 평균 단가 '+x.avwap.toLocaleString()+' 아래">⚠기준봉VWAP 아래</b>':''}`)).join('')||'<span class="ts">없음</span>')];
@@ -1110,8 +1069,8 @@ async function renderDashboard(d, stale, live){
   const vr=d.volume||{};
   ref.push(card('🔥 대량거래 관심종목',[['🎯 진입 신호',vr.signal,'#e3b341'],['🚀 꼬리 돌파',vr.tail_break,'#3fb950'],['🆕 신규(최근 터짐)',vr.new,'#58a6ff']].map(([t,l,c])=>`<div style="margin-bottom:4px"><span class="ts">${t}</span><br>${(l||[]).map(x=>chip(x,c,x.days!=null?` <span class="ts">${x.days}일 전</span>`:'')).join('')||'<span class="ts">없음</span>'}</div>`).join('')));
   ref.push(card('📌 데이터로 확인된 내 원칙',`<ol style="margin:0;padding-left:18px;font-size:13px;line-height:1.7">
-    <li><b>하락장은 쉰다</b> — 특히 들고 가기 금지 (하락 구간 스윙 평균 -4.8%)</li>
-    <li><b>빠지는 종목 줍지 않기</b> — 20일선 아래·고점 -8%↓ 매수 평균 -1.4%</li>
+    <li><b>하락장은 쉰다</b> — 특히 들고 가기 금지</li>
+    <li><b>빠지는 종목 줍지 않기</b> — 20일선 아래·고점 -8%↓에서 사지 않기</li>
     <li><b>종베는 섹터에 돈 들어온 날의 거래 붙은 양봉</b> — 혼자 튄 종목 X</li>
     <li>B로 산 건 <b>분할 매도</b> (다음 날 +2%↓ 전량, ↑면 30%씩), 쉬는 봉은 <b>3~5일</b> 손절선만</li>
     <li><b>추격 금지</b> — 이격 30%↑ · 윗꼬리 긴 날 · 거래 6배↑ 피하기</li></ol>`));
@@ -1132,9 +1091,9 @@ async function loadMyPattern(){
   el.innerHTML=`<b style="font-size:15px;color:#e3b341">🎯 오늘 종베 — 돈 몰린 섹터의 힘 있는 양봉 · 내가 잘 먹던 자리</b> <span class="ts">${r.trading_date} 종가 기준 · 시장 ${r.market||'-'}</span>
    <div class="ts" style="margin:4px 0 8px">섹터 오늘(등락 중간·거래 중간): ${sd}</div>
    ${r.market==='하락'?'<div style="color:#f85149;margin-bottom:6px">하락장 — 쉬는 날</div>':''}
-   <div style="margin-bottom:4px"><b style="color:#e3b341">⭐ 돈 몰린 섹터의 힘 있는 양봉</b> <span class="ts">${r.b_sectors.length?'섹터: '+r.b_sectors.join(', '):'오늘은 쉬는 날 (돈 몰린 섹터 없음)'} · 3년 검증 1년 +1.91%·이김 81% (날짜 단위 +0.91%)</span></div>
+   <div style="margin-bottom:4px"><b style="color:#e3b341">⭐ 돈 몰린 섹터의 힘 있는 양봉</b> <span class="ts">${r.b_sectors.length?'섹터: '+r.b_sectors.join(', '):'오늘은 쉬는 날 (돈 몰린 섹터 없음)'}</span></div>
    <div>${B.map(x=>chip(x,'#9e6a03')).join('')||''}</div>
-   <div style="margin:6px 0 4px"><b style="color:#3fb950">🎯 내가 잘 먹던 자리 (고점 근처 양봉)</b> <span class="ts">뜨는 섹터 1~3위 · 양봉 · 20일 고점 -8% 안 · 20일선 위 · 거래 1배↑ (사용자 매수 501건 중 +2.04%, 종베로 +3.73%·이김 80% / 3년 +0.5~0.7%)</span></div>
+   <div style="margin:6px 0 4px"><b style="color:#3fb950">🎯 내가 잘 먹던 자리 (고점 근처 양봉)</b> <span class="ts">뜨는 섹터 1~3위 · 양봉 · 20일 고점 -8% 안 · 20일선 위 · 거래 1배↑</span></div>
    <div>${A.slice(0,30).map(x=>chip(x,'#238636')).join('')||'<span class="ts">없음</span>'}${A.length>30?`<span class="ts">외 ${A.length-30}개</span>`:''}</div>
    <div style="margin:6px 0 4px"><b style="color:#58a6ff">👀 내일 후보</b> <span class="ts">뜨는 섹터 · 20일선 위 · 고점 -5% 안에서 오늘 조용히 쉰 종목 — 내일 거래 붙은 양봉이면 A</span></div>
    <div>${N.map(x=>chip(x,'#1f6feb')).join('')||'<span class="ts">없음</span>'}</div>
@@ -1153,7 +1112,7 @@ async function loadJongbe(){
   mk.style.background=d.market_ok?'rgba(63,185,80,.10)':'rgba(248,81,73,.12)';
   mk.style.borderColor=d.market_ok?'#3fb950':'#f85149';
   mk.innerHTML=d.market_ok?`<b style="color:#3fb950">시장 ${st}</b> <span style="color:#e6edf3;margin-left:6px">종베 가능</span>`
-    :`<b style="color:#f85149">시장 ${st} · 종베 쉬기</b> <span class="ts">3년 확인: 하락장 종베는 거의 0(+0.12%)</span>`;
+    :`<b style="color:#f85149">시장 ${st} · 종베 쉬기</b>`;
   document.getElementById('jb-date').textContent=`· ${d.trading_date} 장 마감 기준`;
   const stc={'과열':'#f85149','주의':'#d29922'};
   document.getElementById('jb-fams').innerHTML=d.families.map(f=>{
@@ -1203,7 +1162,7 @@ function renderJongbe(){
   const items=pool.filter(x=>showB||x.grade==='A');
   document.getElementById('jb-count').textContent=`A ${nA}개 · B ${nB}개 (전체 후보 ${d.items.length}개)`;
   const body=document.getElementById('jb-body');
-  if(!items.length){ body.innerHTML=`<tr><td colspan="5" style="color:#8b949e;text-align:center;padding:20px">${nB&&!showB?`오늘은 A등급이 없습니다. <a href="#" onclick="document.getElementById('jb-showb').checked=true;renderJongbe();return false" style="color:#58a6ff">B등급 ${nB}개 보기</a> (3년 다음 날 평균 +0.35%, A는 +1.20%)`:'오늘은 조건에 맞는 종목이 없습니다'}</td></tr>`; }
+  if(!items.length){ body.innerHTML=`<tr><td colspan="5" style="color:#8b949e;text-align:center;padding:20px">${nB&&!showB?`오늘은 A등급이 없습니다. <a href="#" onclick="document.getElementById('jb-showb').checked=true;renderJongbe();return false" style="color:#58a6ff">B등급 ${nB}개 보기</a>`:'오늘은 조건에 맞는 종목이 없습니다'}</td></tr>`; }
   else body.innerHTML=items.map(x=>`<tr style="cursor:pointer" onclick="openChartModal('${x.code}','${x.name}','')">
     <td><b>${x.name}</b> <span style="color:#8b949e;font-size:11px">${x.code}</span>${x.earn_up?' <span style="color:#3fb950;font-size:11px;border:1px solid #238636;border-radius:8px;padding:0 5px">📈 실적</span>':''}${x.leader?' <span style="color:#e3b341;font-size:11px">👑 대장</span>':''}${flagTag(x)}${x.record_today?' <span style="color:#f85149;font-size:11px" title="오늘 몇 년 만의 최대 거래대금">🔔 거래대금 신기록</span>':''}${x.vr_stage&&x.vr_stage!=='무너짐'&&!x.record_today?` <span style="font-size:11px;color:${x.vr_signal?'#e3b341':'#8b949e'}" title="대량거래 관심종목 단계 (스윙 관점)">🔥 ${x.vr_signal?'진입 신호':x.vr_stage}</span>`:''}${x.market_cap?`<br><span class="ts">시총 ${cdWon(x.market_cap)}</span>`:''}${(d.ai_picks||[]).includes(x.code)?' <b style="color:#bc8cff;font-size:11px" title="장 마감 기준 규칙으로 고른 3개(점수·윗꼬리 순). 매일 기록해 사용자 선택과 비교">🤖 Claude 선택</b>':''}${lbBtns(x,'종베')}</td>
     <td data-label="등급"><b style="color:${x.grade==='A'?'#3fb950':'#c9d1d9'}">${x.grade}</b>${x.pos60_pct!=null?` <span class="ts" title="60일 종가 고점 대비 ${x.pos60_pct}% — 3년 확인상 돌파형·반등형 다음 날 성과는 같았음(+0.5~0.7%)">${x.pos60_pct>=0?(x.under_wick?'돌파형 (전 고점 윗꼬리 아래)':'돌파형'):x.pos60_pct>=-5?'고점 근처':'반등형'}</span>`:''}<br><span class="ts">${(()=>{ const tv=Math.max(...d.families.filter(f=>x.families.includes(f.family)).map(f=>f.tv_med),0); return x.grade==='A'?`섹터 종목 거래 중간 ${tv.toFixed(2)}배`:`섹터 종목 거래 중간 ${tv.toFixed(2)}배<br>(1배↑면 A)`; })()}</span></td>
@@ -1247,7 +1206,7 @@ function renderJongbe(){
   document.getElementById('jb-movers').innerHTML=mv.length?mv.map(m=>`<span onclick="jbMover('${m.family}')" style="cursor:pointer;padding:7px 11px;border:1px solid ${m.why.length>=2?'#3fb950':'#30363d'};border-radius:8px;font-size:12.5px">
       <b style="color:#e6edf3">${m.family}</b> <span class="ts">${m.rank}위</span><br><span class="ts" style="color:#c9d1d9">${m.why.join(' · ')}</span></span>`).join('')
     :'<span class="ts">지금 상위 3 밖에서 움직이기 시작한 섹터는 없습니다</span>';
-  document.getElementById('jb-limit').innerHTML=lim.length?`상한가 (체결 어려움 주의): ${lim.map(x=>`<b style="color:#e6edf3;cursor:pointer" onclick="openChartModal('${x.code}','${x.name}','')">${x.name}</b>${x.record_today?' <span style="color:#f85149;font-size:11px">🔔 신기록 · 3년 다음 날 시가 평균 +5.6%</span>':''}`).join(' · ')}`:'';
+  document.getElementById('jb-limit').innerHTML=lim.length?`상한가 (체결 어려움 주의): ${lim.map(x=>`<b style="color:#e6edf3;cursor:pointer" onclick="openChartModal('${x.code}','${x.name}','')">${x.name}</b>${x.record_today?' <span style="color:#f85149;font-size:11px">🔔 신기록</span>':''}`).join(' · ')}`:'';
 }
 async function jbMover(fam){
   const el=document.getElementById('jb-mover-detail');
@@ -2228,7 +2187,7 @@ function renderStockPanel(p, target){
     <div class="cp-chips">${p.chips.map(c=>`<span class="cp-chip ${c.ok?'ok':'warn'}">${c.ok?'✓':'⚠'} ${c.text}</span>`).join('')}</div>
     <div class="cp-cards">${p.cards.map(c=>`<div class="cp-card"><div class="l">${c.label}</div><div class="v">${c.value}</div><div class="s">${c.sub||''}</div></div>`).join('')}</div>
     <div class="cp-rows">${p.rows.map(r=>`<div class="cp-row"${r.tip?` title="${r.tip}"`:''}><span class="k">${r.k}${r.tip?' ⓘ':''}</span><span class="v">${r.v}</span></div>`).join('')}</div>
-    <div class="ts" style="font-size:10.5px">일봉 ${p.date} 기준 · 종가는 정규장 15:30 · 추세 조건 8/8은 상승장 60일 +9%(3년), RS 95↑는 오히려 약했음</div>`;
+    <div class="ts" style="font-size:10.5px">일봉 ${p.date} 기준 · 종가는 정규장 15:30</div>`;
 }
 let _cm={code:null,tf:'1d',cache:{}};
 async function cmTf(tf){

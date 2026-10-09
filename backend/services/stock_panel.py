@@ -168,7 +168,7 @@ def _panel(db: Session, code: str, owner: str | None = None) -> dict:
             stage, title = (3, "보유 중 · 수익") if held["gain"] >= 5 else (2, "보유 중")
             sub = f"손절 {held['stop']:,.0f}까지 {room:.1f}%" if room is not None else "손절선 없음 — 정해 두세요"
     elif act and act["days"] == 1:
-        stage, title, sub = 1, "▲ 진입 신호 · 이번 봉", f"진입 {act['entry']:,.0f} · 스탑로스 {act['stop']:,.0f} 예약 ({(act['stop']/act['entry']-1)*100:+.1f}%) · 3년 평균 +2.6% · 이김 32%"
+        stage, title, sub = 1, "▲ 진입 신호 · 이번 봉", f"진입 {act['entry']:,.0f} · 스탑로스 {act['stop']:,.0f} 예약 ({(act['stop']/act['entry']-1)*100:+.1f}%)"
     elif act:
         stage = 3 if act["half"] else 2
         title = f"진입 신호 {act['days']}일째 · {act['gain']:+.1f}%"
@@ -283,7 +283,7 @@ def _panel(db: Session, code: str, owner: str | None = None) -> dict:
         stop_ref, stop_lab = float(L.iloc[-1]) * 0.99, "스탑로스(오늘 저가 -1%)"
     dist = (1 - stop_ref / c) * 100 if stop_ref else 99      # 종가에서 손절선까지 내려가는 폭 (목록의 손절폭과 같은 기준)
     checks.append({"ok": dist <= 5, "k": "손절 거리", "v": f"{stop_lab} {stop_ref:,.0f}까지 {dist:.1f}%"
-                   + (" ✅ 손익비 좋음 (3%↓)" if dist <= 3 else "" if dist <= 5 else " (멀어서 손익비 나쁨 · 3년: 8%↑면 얻을 게 없었음)")})
+                   + (" ✅ 손익비 좋음 (3%↓)" if dist <= 3 else "" if dist <= 5 else " (멀어서 손익비 나쁨)")})
     disp_c, disp_chg = c, (c / prev - 1) * 100
     try:      # 보여 주는 종가·등락은 정규장 15:30 기준 (DB 종가엔 시간외가 섞인다)
         from backend.services.naver_live import krx_day  # noqa: PLC0415
