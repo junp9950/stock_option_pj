@@ -19,24 +19,31 @@ _RS: dict = {"key": None, "v": {}}
 _RS_LOCK = threading.Lock()
 
 
+def _rs_compute(db: Session, latest) -> dict:
+    px = pd.read_sql(text("select stock_code s, trading_date d, close_price c, trading_value tv from spot_daily_prices "
+                          "where trading_date >= cast(:d as date) - 380"), db.connection(), params={"d": latest})
+    C = px.pivot(index="d", columns="s", values="c").sort_index().astype(float).ffill(limit=5)
+    TV = px.pivot(index="d", columns="s", values="tv").sort_index().astype(float)
+    r = lambda k: C.iloc[-1] / C.iloc[-1 - k] - 1 if len(C) > k else C.iloc[-1] * np.nan
+    raw = 0.4 * r(63) + 0.2 * r(126) + 0.2 * r(189) + 0.2 * r(min(252, len(C) - 1))
+    ok = (TV.iloc[-20:].mean() >= 1e9) & raw.notna()
+    rs = (raw[ok].rank(pct=True) * 98 + 1).round()
+    return {"date": str(latest), "rs": {k: float(v) for k, v in rs.items()}}
+
+
 def rs_table(db: Session) -> dict[str, float]:
-    """전 종목 RS Rating(1~99, IBD식 0.4·3개월 + 0.2·6·9·12개월 백분위). DB 날짜가 바뀔 때만 다시 계산."""
+    """전 종목 RS Rating(1~99, IBD식 0.4·3개월 + 0.2·6·9·12개월 백분위). 디스크 캐시라 재시작 직후에도 바로 (2026-10-09 "모든 탭 느리다")."""
     latest = db.execute(text("select max(trading_date) from spot_daily_prices")).scalar()
     if _RS["key"] == latest:
         return _RS["v"]
+    from backend.services.result_cache import cached  # noqa: PLC0415
     with _RS_LOCK:
         if _RS["key"] == latest:
             return _RS["v"]
-        px = pd.read_sql(text("select stock_code s, trading_date d, close_price c, trading_value tv from spot_daily_prices "
-                              "where trading_date >= cast(:d as date) - 380"), db.connection(), params={"d": latest})
-        C = px.pivot(index="d", columns="s", values="c").sort_index().astype(float).ffill(limit=5)
-        TV = px.pivot(index="d", columns="s", values="tv").sort_index().astype(float)
-        r = lambda k: C.iloc[-1] / C.iloc[-1 - k] - 1 if len(C) > k else C.iloc[-1] * np.nan
-        raw = 0.4 * r(63) + 0.2 * r(126) + 0.2 * r(189) + 0.2 * r(min(252, len(C) - 1))
-        ok = (TV.iloc[-20:].mean() >= 1e9) & raw.notna()
-        rs = (raw[ok].rank(pct=True) * 98 + 1).round()
-        _RS.update(key=latest, v={k: float(v) for k, v in rs.items()})
-        return _RS["v"]
+        v = cached("rs_table_v1", (), db, lambda: _rs_compute(db, latest)) or {}
+        if v.get("date") == str(latest):
+            _RS.update(key=latest, v=v["rs"])
+        return v.get("rs", {})
 
 
 def _grade(tt: int) -> tuple[str, str]:

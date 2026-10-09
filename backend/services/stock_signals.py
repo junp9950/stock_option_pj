@@ -72,7 +72,10 @@ def signals(db: Session, code: str, days: int = 260, owner: str | None = None) -
     park = doji & after_big & (C >= big_close * 0.97)
     uptrend = (r20 >= 0.15) & (C > ma20) & (ma20 > ma60)
     quiet = uptrend & (C < O) & (chg < 0) & (chg > -0.06) & (vx >= 0.5) & (vx < 0.8)
-    fullbear = (chg <= -0.04) & ((O - C) / rng >= 0.8) & (lower <= 0.10) & (vx >= 2)
+    # 큰 음봉은 '오르던 종목'일 때만 위험 (3년: 5일 -1.5%) — 전체로는 10일 +0.7%로 오히려 반등 (park_wick.py 2026-10-09)
+    fullbear = (chg <= -0.04) & ((O - C) / rng >= 0.8) & (lower <= 0.10) & (vx >= 2) & (r20 >= 0.15)
+    # 급등 뒤 쉬는 봉 중 윗꼬리 길고(폭의 50%↑) 거래 1.5배↑ = 위에서 물량 — 3년 10일 -1.7% (사용자 "윗꼬리 큰 쉬는 봉이 맞나")
+    park_sell = park & (upper >= 0.5) & (vx >= 1.5)
     record = (TV >= TV.shift(1).rolling(250, min_periods=200).max()) & (tvx >= 3)
 
     # 아깝게 놓친 자리 (조건 하나만 살짝 모자람) — 문턱은 그대로, 왜 안 걸렸는지만 흐리게 (2026-10-09 테크윙 9/29·10/1)
@@ -95,8 +98,11 @@ def signals(db: Session, code: str, days: int = 260, owner: str | None = None) -
         for d in mask[mask.fillna(False)].index:
             near.append((d, f"아깝게 놓친 {base} ({fmt(float(val[d]))})"))
     rules = [  # (마스크, 라벨, 종류, 위/아래) — 위에서부터 우선 (한 봉에 여러 개면 앞의 것 2개까지)
-        (box, "박스 위로 돌파", "buy", "below"), (ema, "이평선 모였다 돌파", "buy", "below"), (jb, "거래 실린 양봉", "buy", "below"),
-        (park, "급등 뒤 쉬는 봉", "buy", "below"), (quiet, "거래 적은 눌림", "rest", "below"),
+        # 3년 상승장 10일: 박스 돌파 +1.5% · 이평선 돌파 +0.7% · 거래 적은 눌림 +0.7% (기준 +0.2%) — 사는 자리로 표시
+        # 거래 실린 양봉(섹터 조건 없이 5일 -0.05%)·급등 뒤 쉬는 봉(-0.3%)은 검증이 약해 참고 점으로 내림 (2026-10-09)
+        (box, "박스 위로 돌파", "buy", "below"), (ema, "이평선 모였다 돌파", "buy", "below"), (quiet, "거래 적은 눌림", "rest", "below"),
+        (park_sell, "⚠ 급등 뒤 윗꼬리 매물", "warn", "above"),
+        (park & ~park_sell, "급등 뒤 쉬는 봉 (참고)", "note", "below"), (jb, "거래 실린 양봉 (참고)", "note", "below"),
         (big, "급등봉", "info", "above"), (record, "1년 최대 거래", "info", "above"), (fullbear, "⚠ 거래 많은 큰 음봉", "warn", "above"),
     ]
     start = df.index[-min(days, len(df))]
@@ -202,7 +208,19 @@ def _krx_closes(codes: list[str], key: str) -> dict[str, tuple[float, float]]:
 
 
 def workspace_list(db: Session) -> dict:
-    """첫 화면 왼쪽 목록: 오늘 후보 · 보유 · 관심 (2026-10-09). 장중이면 네이버 실시간 가격."""
+    """첫 화면 왼쪽 목록. 장중이 아니면 디스크 캐시(재시작 직후에도 바로), 장중이면 실시간 가격으로 매번."""
+    from datetime import datetime  # noqa: PLC0415
+    from zoneinfo import ZoneInfo  # noqa: PLC0415
+    from backend.utils.dates import is_trading_day  # noqa: PLC0415
+    from backend.services.result_cache import cached  # noqa: PLC0415
+    now = datetime.now(ZoneInfo("Asia/Seoul"))
+    if not (is_trading_day(now.date()) and 9 <= now.hour < 16):
+        return cached("workspace_list_v1", (), db, lambda: _workspace_list(db))
+    return _workspace_list(db)
+
+
+def _workspace_list(db: Session) -> dict:
+    """첫 화면 왼쪽 목록: 오늘 후보 · 관심 (2026-10-09). 장중이면 네이버 실시간 가격."""
     from datetime import datetime  # noqa: PLC0415
     from zoneinfo import ZoneInfo  # noqa: PLC0415
     from backend.services import watchlist as W  # noqa: PLC0415
@@ -263,7 +281,8 @@ def workspace_list(db: Session) -> dict:
     now = datetime.now(ZoneInfo("Asia/Seoul"))
     live_at = None
     px.update(_krx_closes(codes, str(latest)))        # 장 마감 뒤·휴장일엔 정규장 15:30 종가로 (DB 종가엔 시간외가 섞임)
-    if now.weekday() < 5 and 9 <= now.hour < 16 and latest < now.date():
+    from backend.utils.dates import is_trading_day  # noqa: PLC0415
+    if is_trading_day(now.date()) and 9 <= now.hour < 16 and latest < now.date():
         try:
             from backend.services.naver_live import snapshot  # noqa: PLC0415
             lv = snapshot(sorted(codes), max_age=30)
@@ -319,13 +338,24 @@ _ENTRY: dict = {"key": None, "v": []}
 
 
 def entry_today(db: Session, asof=None) -> list[dict]:
+    """디스크 캐시 (재시작 직후에도 바로). asof를 주면 그 날짜로 바로 계산(검증용)."""
+    if asof is not None:
+        return _entry_today(db, asof)
+    latest = db.execute(text("select max(trading_date) from spot_daily_prices")).scalar()
+    if _ENTRY["key"] == latest:
+        return _ENTRY["v"]
+    from backend.services.result_cache import cached  # noqa: PLC0415
+    v = cached("entry_today_v1", (), db, lambda: {"date": str(latest), "items": _entry_today(db, latest)}) or {}
+    if v.get("date") == str(latest):
+        _ENTRY.update(key=latest, v=v["items"])
+    return v.get("items", [])
+
+
+def _entry_today(db: Session, asof=None) -> list[dict]:
     """전 종목에 ▲ 진입 규칙을 돌려 가장 최근 거래일에 신호가 뜬 종목 (DB 날짜가 바뀔 때만 계산, 약 2~4초).
     규칙은 signals()와 같다: (박스 돌파 또는 EMA 모임 돌파·정배열) + 상승·횡보장 + 추세 조건 6/7↑. 하루 거래대금 20일 평균 30억↑만."""
     latest = asof or db.execute(text("select max(trading_date) from spot_daily_prices")).scalar()
-    if _ENTRY["key"] == latest:
-        return _ENTRY["v"]
     if not _bull_days(db).get(latest, False):
-        _ENTRY.update(key=latest, v=[])
         return []
     px = pd.read_sql(text("select stock_code s, trading_date d, open_price o, high_price h, low_price l, close_price c, trading_value tv "
                           "from spot_daily_prices where trading_date >= cast(:d as date) - 420 and trading_date <= :d"), db.connection(), params={"d": latest})
@@ -354,5 +384,4 @@ def entry_today(db: Session, asof=None) -> list[dict]:
     out = [{"code": c, "name": names.get(c, c), "kind": "박스 위로 돌파" if bool(box[c]) else "이평선 모였다 돌파", "close": float(C[c].iloc[r]),
             "stop": float(L[c].iloc[r]) * 0.99, "chg": float(chg[c].iloc[r]) * 100} for c in hit[hit].index]
     out.sort(key=lambda x: -x["chg"])
-    _ENTRY.update(key=latest, v=out)
     return out

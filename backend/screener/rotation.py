@@ -185,6 +185,9 @@ def scan_live(db: Session, max_age: float = 90) -> dict | None:
     now = datetime.now(_KST)
     if now.weekday() >= 5 or now.hour < 9:
         return None
+    from backend.utils.dates import is_trading_day  # noqa: PLC0415
+    if not is_trading_day(now.date()):      # 휴장일엔 네이버를 부르지 않음 (2026-10-09 한글날에 매번 2.6초 걸리던 것)
+        return None
     latest = db.execute(text("select max(trading_date) from spot_daily_prices")).scalar()
     if latest is None or latest >= now.date():
         return None
@@ -215,6 +218,16 @@ _MEM_LOCK = threading.Lock()
 
 
 def members_all(db: Session) -> dict:
+    """장중이 아니면 디스크 캐시 (재시작 직후에도 바로)."""
+    from backend.utils.dates import is_trading_day  # noqa: PLC0415
+    now = datetime.now(_KST)
+    if not (is_trading_day(now.date()) and now.hour >= 9):
+        from backend.services.result_cache import cached  # noqa: PLC0415
+        return cached("members_all_v1", (), db, lambda: _members_all(db))
+    return _members_all(db)
+
+
+def _members_all(db: Session) -> dict:
     """16개 섹터 소속 종목을 한 번에 (섹터 누르면 바로 펼치게 미리 받아 둔다, 2026-10-09). 장중 90초 · 그 밖엔 DB 날짜가 바뀔 때까지 캐시."""
     from backend.utils.dates import is_trading_day  # noqa: PLC0415
     now = datetime.now(_KST)

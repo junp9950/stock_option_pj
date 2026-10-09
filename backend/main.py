@@ -160,9 +160,10 @@ select{background:#21262d;border:1px solid #30363d;color:#c9d1d9;padding:6px 10p
 /* 차트 (Lightweight Charts: 확대·이동·십자선, 2026-10-09) */
 .lwbox{position:relative}.lwc{width:100%;height:520px}
 #cm-chart.lwc{height:460px}
-.lwleg{font-size:11.5px;color:var(--body);line-height:1.5;min-height:52px;padding:2px 2px 4px}
+.lwleg{font-size:11.5px;color:var(--body);line-height:1.5;height:56px;overflow:hidden;padding:2px 2px 4px}
+.lwleg>div{white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 .lwleg b{color:var(--text)}
-@media(max-width:760px){.lwc,#cm-chart.lwc{height:400px}.lwleg{font-size:10.5px;min-height:46px}
+@media(max-width:760px){.lwc,#cm-chart.lwc{height:400px}.lwleg{font-size:10.5px;height:50px}
   .mstrip{position:static;box-shadow:none;flex-wrap:nowrap;overflow-x:auto;white-space:nowrap;font-size:12px;padding:6px 10px;gap:8px;-webkit-overflow-scrolling:touch}
   .mstrip .ix b{font-size:14px}.mstrip .rg .ts:last-child,.mstrip .sep{display:none}.mstrip .rg{padding:1px 7px;font-size:11.5px}}
 /* 시장 한 줄 (맨 위 고정, 2026-10-09) — 색약이라 ▲▼■ 모양도 같이 */
@@ -283,8 +284,8 @@ select{background:#21262d;border:1px solid #30363d;color:#c9d1d9;padding:6px 10p
   <div class="tab" onclick="switchTab('suggest')">건의사항</div>
 </div>
 
-<div id="panel-suggest" class="panel"><iframe title="건의사항" id="suggest-frame" style="width:100%;height:1600px;border:0" loading="lazy"></iframe></div>
-<div id="panel-discussion" class="panel"><iframe title="종목토론" id="discussion-frame" style="width:100%;height:2000px;border:0" loading="lazy"></iframe></div>
+<div id="panel-suggest" class="panel"><iframe title="건의사항" id="suggest-frame" style="width:100%;height:1600px;border:0"></iframe></div>
+<div id="panel-discussion" class="panel"><iframe title="종목토론" id="discussion-frame" style="width:100%;height:2000px;border:0"></iframe></div>
 
 <!-- 거래대금 순위 탭 -->
 <div id="panel-screener" class="panel content">
@@ -620,7 +621,7 @@ select{background:#21262d;border:1px solid #30363d;color:#c9d1d9;padding:6px 10p
       <div class="ws-per" id="ws-tf"><button data-tf="1d" onclick="wsTf('1d')">일봉</button><button data-tf="1w" onclick="wsTf('1w')">주봉</button><button data-tf="60m" onclick="wsTf('60m')">60분</button><button data-tf="30m" onclick="wsTf('30m')">30분</button><button data-tf="15m" onclick="wsTf('15m')">15분</button><button data-tf="5m" onclick="wsTf('5m')">5분</button><button data-tf="1m" onclick="wsTf('1m')">1분</button></div>
       <div class="ws-per" id="ws-per"><button data-n="66" onclick="wsPeriod(66)">3개월</button><button data-n="130" onclick="wsPeriod(130)">6개월</button><button data-n="250" onclick="wsPeriod(250)">1년</button></div>
       <div class="lwbox"><div class="lwleg" id="ws-chart-leg"></div><div id="ws-chart" class="lwc"></div></div>
-      <div class="ws-legend"><span>▲ <b>진입</b> = 사기 좋은 자리 (지난 3년 평균 +2.7%, 2~3주 보유) → ▼ 절반 팔기 · 나머지 팔기 / 손절</span><span>↑ <b>종가 매수</b> = 그날 종가에 살 후보 (다음 날 +2% 못 가면 정리, 넘으면 절반 팔고 나머지는 손절선 올려 가며 보유)</span><span>↑ 파란 화살표 = 오를 때 자주 나온 모양</span><span>· 작은 점 = 참고 (돌파 대기 · 아깝게 놓침 · 상승 추세 시작) — 봉에 올리면 위에 내용</span><span>■ 회색 = 급등봉 · 1년 최대 거래</span><span>▼ 주황 = 조심</span><span>· 두 손가락으로 확대, 끌어서 이동, 누르면 그 날 가격</span></div>
+      <div class="ws-legend"><span>▲ <b>진입</b> = 사기 좋은 자리 (지난 3년 평균 +2.7%, 2~3주 보유) → ▼ 절반 팔기 · 나머지 팔기 / 손절</span><span>↑ <b>종가 매수</b> = 그날 종가에 살 후보 (다음 날 +2% 못 가면 정리, 넘으면 절반 팔고 나머지는 손절선 올려 가며 보유)</span><span>↑ 파란 화살표 = 박스 위로 돌파 · 이평선 모였다 돌파 (3년 10일 평균 +1.5% · +0.7%)</span><span>● 초록 = 오르던 종목의 거래 적은 눌림</span><span>· 작은 점 = 참고 (돌파 대기 · 아깝게 놓침 · 상승 추세 시작) — 봉에 올리면 위에 내용</span><span>■ 회색 = 급등봉 · 1년 최대 거래</span><span>▼ 주황 = 조심</span><span>· 두 손가락으로 확대, 끌어서 이동, 누르면 그 날 가격</span></div>
     </div>
     <aside class="cm-panel" id="ws-panel"></aside>
   </div>
@@ -2230,9 +2231,9 @@ function renderLwChart(cid, allCandles, signals, per){
   const leg=document.getElementById(cid+'-leg'), byT={}; data.forEach((d,i)=>byT[d.time]=i);
   const sigBy={}; (signals||[]).forEach(sg=>{ (sigBy[sg.date]=sigBy[sg.date]||[]).push(sg.label); });   // 올린 봉의 우리 신호도 글자로
   const show=i=>{ if(!leg||i==null||i<0) return; const d=data[i], pc=i>0?data[i-1].close:d.open, ch=(d.close/pc-1)*100, c=ch>=0?'#f85149':'#58a6ff';
-    leg.innerHTML=`<b>${d.lab}</b> 시 ${Math.round(d.open).toLocaleString()} 고 ${Math.round(d.high).toLocaleString()} 저 ${Math.round(d.low).toLocaleString()} 종 <b style="color:${c}">${Math.round(d.close).toLocaleString()} (${ch>=0?'+':''}${ch.toFixed(2)}%)</b> · 거래 ${Math.round(d.vol).toLocaleString()}`
-      +`<br>${EN.map((n,k)=>`<span style="color:${EC[k]}">EMA${n} ${Math.round(ES[k][i]).toLocaleString()}</span>`).join(' · ')}`
-      +(sigBy[d.time]?`<br><b style="color:#58a6ff">신호: ${sigBy[d.time].join(' · ')}</b>`:''); };
+    leg.innerHTML=`<div><b>${d.lab}</b> 시 ${Math.round(d.open).toLocaleString()} 고 ${Math.round(d.high).toLocaleString()} 저 ${Math.round(d.low).toLocaleString()} 종 <b style="color:${c}">${Math.round(d.close).toLocaleString()} (${ch>=0?'+':''}${ch.toFixed(2)}%)</b> · 거래 ${Math.round(d.vol).toLocaleString()}</div>`
+      +`<div>${EN.map((n,k)=>`<span style="color:${EC[k]}">EMA${n} ${Math.round(ES[k][i]).toLocaleString()}</span>`).join(' · ')}</div>`
+      +`<div><b style="color:#58a6ff">${sigBy[d.time]?'신호: '+sigBy[d.time].join(' · '):'&nbsp;'}</b></div>`; };
   show(data.length-1);
   chart.subscribeCrosshairMove(p=>{ show(p&&p.time&&byT[p.time]!=null?byT[p.time]:data.length-1); });
   const n=data.length; chart.timeScale().setVisibleLogicalRange({from:Math.max(0,n-(per||90)),to:n+2});
