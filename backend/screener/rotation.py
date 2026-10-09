@@ -253,20 +253,25 @@ def _members_all(db: Session) -> dict:
             if live:
                 as_of = f"오늘 {now:%H:%M}"
         rows = {}
+        frac = 1.0
+        if live:      # 장중 거래대금은 지금까지 누적 → 마감 환산 (섹터 수급 표와 같은 방식)
+            from backend.screener.my_pattern import _day_frac  # noqa: PLC0415
+            frac = 1.0 if (now.hour, now.minute) >= (15, 30) else _day_frac(now)
         for c in C.columns:
             s_ = C[c].dropna()
-            avg = TV[c].iloc[-21:-1].mean()
+            # 거래(평소 대비) = 오늘 거래대금 ÷ 직전 20거래일 평균 (오늘 빼고). 장중엔 DB 마지막 날이 어제라 마지막 20일 전부가 '직전'
+            avg = TV[c].iloc[-20:].mean() if c in live else TV[c].iloc[-21:-1].mean()
             if len(s_) < 21 or not avg or avg < 1e9:
                 continue
             last = s_.iloc[-1]
             if c in live:
-                now_p, prev, tv_today = live[c]["c"], last, live[c]["c"] * live[c]["v"]
+                now_p, prev, tv_today = live[c]["c"], last, live[c]["c"] * live[c]["v"] / max(frac, 0.05)
                 ma20, base20 = (s_.iloc[-19:].sum() + now_p) / 20, s_.iloc[-20]
             else:
                 now_p, prev, tv_today = last, s_.iloc[-2], TV[c].iloc[-1]
                 ma20, base20 = s_.iloc[-20:].mean(), s_.iloc[-21]
             rows[c] = {"code": c, "name": names.get(c, c), "chg": round(float(now_p / prev - 1) * 100, 1), "ret20": round(float(now_p / base20 - 1) * 100, 1),
-                       "gap20": round(float(now_p / ma20 - 1) * 100, 1), "tv_x": round(float(tv_today / avg), 1), "tv": round(float(tv_today) / 1e8)}
+                       "gap20": round(float(now_p / ma20 - 1) * 100, 1), "tv_x": round(float(tv_today / avg), 1), "tv": round(float(tv_today * (frac if c in live else 1)) / 1e8)}   # 거래대금 칸은 실제 누적
         out = {"as_of": as_of, "live": bool(live),
                "families": {f: sorted((rows[c] for c in m if c in rows), key=lambda x: -x["chg"]) for f, m in fams.items()}}
         _MEM.update(t=time.time(), key=key, v=out)
