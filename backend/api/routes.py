@@ -1859,6 +1859,7 @@ def warm_caches(db: Session) -> None:
     get_chart_candidates(min_cap=0, db=db)
     get_volume_records(db=db)
     get_sector_rotation(db=db)
+    get_sector_members_all(db=db)      # 섹터 누르면 바로 펼치게
     get_sector_calendar(db=db)
     get_jongbe(db=db)
     get_value_records(db=db)
@@ -1949,6 +1950,13 @@ def get_sector_calendar(db: Session = Depends(get_db)):
     from backend.screener.sector_calendar import scan  # noqa: PLC0415
     from backend.services.result_cache import cached  # noqa: PLC0415
     return cached("sector_calendar_v2", (), db, lambda: scan(db))
+
+
+@router.get("/sectors/rotation/members-all")
+def get_sector_members_all(db: Session = Depends(get_db)):
+    """16개 섹터 소속 종목 한 번에 — 표가 뜰 때 미리 받아 두면 섹터를 눌렀을 때 바로 펼쳐진다."""
+    from backend.screener.rotation import members_all  # noqa: PLC0415
+    return members_all(db)
 
 
 @router.get("/sectors/rotation/members")

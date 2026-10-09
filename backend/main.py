@@ -1384,6 +1384,7 @@ async function loadRotation(){
     const c=n=>n>0?'#f85149':n<0?'#58a6ff':'#8b949e';
     const sg=n=>(n>0?'+':'')+n;
     const badge={'과열':'<b style="color:#f85149;border:1px solid #f85149;border-radius:8px;padding:0 6px;font-size:11px">과열</b>','주의':'<b style="color:#d29922;border:1px solid #d29922;border-radius:8px;padding:0 6px;font-size:11px">주의</b>'};
+    window._rotMem=null; loadRotMembers();
     body.innerHTML=d.items.map(t=>{
       const mv=t.rank_10ago-t.rank;
       return `<tr style="cursor:pointer" onclick="toggleRotMembers(this,'${t.family}')" title="눌러서 종목 보기">
@@ -1396,6 +1397,11 @@ async function loadRotation(){
     </tr>`}).join('');
   }catch(e){console.error(e);body.innerHTML='<tr><td colspan="6" style="color:#f85149;text-align:center;padding:16px">로딩 실패</td></tr>';}
 }
+// 섹터 소속 종목은 표가 뜰 때 한 번에 미리 받아 둔다 (누르면 바로 펼치게)
+function loadRotMembers(){
+  window._rotMemP=fetch(`${API}/sectors/rotation/members-all`).then(r=>r.ok?r.json():null).then(d=>{window._rotMem=d;return d;}).catch(()=>null);
+  return window._rotMemP;
+}
 // 섹터를 누르면 소속 종목 펼치기 (2026-10-09 건의 #2)
 async function toggleRotMembers(tr,fam){
   const nx=tr.nextElementSibling;
@@ -1403,7 +1409,10 @@ async function toggleRotMembers(tr,fam){
   const row=document.createElement('tr'); row.className='rot-mem';
   row.innerHTML='<td colspan="6" style="background:#0d1117;padding:8px 10px"><span class="ts">불러오는 중…</span></td>';
   tr.after(row);
-  const d=await fetch(`${API}/sectors/rotation/members?family=${encodeURIComponent(fam)}`).then(r=>r.ok?r.json():null).catch(()=>null);
+  let d=null;
+  const all=window._rotMem||await (window._rotMemP||loadRotMembers());
+  if(all&&all.families&&all.families[fam]) d={as_of:all.as_of,items:all.families[fam]};
+  if(!d) d=await fetch(`${API}/sectors/rotation/members?family=${encodeURIComponent(fam)}`).then(r=>r.ok?r.json():null).catch(()=>null);
   const td=row.firstElementChild;
   if(!d||!d.items.length){td.innerHTML='<span class="ts">종목 없음</span>';return;}
   const c=n=>n>0?'#f85149':n<0?'#58a6ff':'#8b949e', sg=n=>(n>0?'+':'')+n;

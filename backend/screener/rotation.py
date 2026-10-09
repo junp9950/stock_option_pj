@@ -199,39 +199,56 @@ def scan_live(db: Session, max_age: float = 90) -> dict | None:
 
 
 
-def members(db: Session, family: str) -> dict:
-    """섹터를 누르면 나오는 소속 종목 (2026-10-09 건의 #2). 거래 10억↑만, 오늘 등락 순. 장중이면 네이버 실시간 가격."""
-    fam = family_members(db).get(family)
-    if not fam:
-        return {"family": family, "items": []}
-    px = pd.read_sql(text("select stock_code s, trading_date d, close_price c, trading_value tv from spot_daily_prices "
-                          "where trading_date >= (select max(trading_date) from spot_daily_prices) - 45 and stock_code = any(:m)"),
-                     db.connection(), params={"m": fam})
-    C = px.pivot(index="d", columns="s", values="c").sort_index().astype(float)
-    TV = px.pivot(index="d", columns="s", values="tv").sort_index().astype(float)
-    names = dict(db.execute(text("select code, name from stocks where code = any(:m)"), {"m": fam}).all())
-    live, as_of = {}, str(C.index[-1])
+_MEM: dict = {"t": 0.0, "key": None, "v": None}
+_MEM_LOCK = threading.Lock()
+
+
+def members_all(db: Session) -> dict:
+    """16개 섹터 소속 종목을 한 번에 (섹터 누르면 바로 펼치게 미리 받아 둔다, 2026-10-09). 장중 90초 · 그 밖엔 DB 날짜가 바뀔 때까지 캐시."""
+    from backend.utils.dates import is_trading_day  # noqa: PLC0415
     now = datetime.now(_KST)
-    if now.weekday() < 5 and now.hour >= 9 and C.index[-1] < now.date():
-        from backend.services.naver_live import snapshot  # noqa: PLC0415
-        live = snapshot(list(C.columns))
-        if live:
-            as_of = f"오늘 {now:%H:%M}"
-    out = []
-    for c in C.columns:
-        s_ = C[c].dropna()
-        avg = TV[c].iloc[-21:-1].mean() if len(TV) > 21 else TV[c].mean()
-        if len(s_) < 21 or not avg or avg < 1e9:
-            continue
-        last = s_.iloc[-1]
-        if c in live:
-            now_p, prev = live[c]["c"], last
-            tv_today = live[c]["c"] * live[c]["v"]
-        else:
-            now_p, prev, tv_today = last, s_.iloc[-2], TV[c].iloc[-1]
-        ma20 = (s_.iloc[-19:].sum() + now_p) / 20 if c in live else s_.iloc[-20:].mean()
-        base20 = s_.iloc[-20] if c in live else s_.iloc[-21]
-        out.append({"code": c, "name": names.get(c, c), "chg": round(float(now_p / prev - 1) * 100, 1), "ret20": round(float(now_p / base20 - 1) * 100, 1),
-                    "gap20": round(float(now_p / ma20 - 1) * 100, 1), "tv_x": round(float(tv_today / avg), 1), "tv": round(float(tv_today) / 1e8)})
-    out.sort(key=lambda x: -x["chg"])
-    return {"family": family, "as_of": as_of, "live": bool(live), "items": out}
+    latest = db.execute(text("select max(trading_date) from spot_daily_prices")).scalar()
+    live_on = now.weekday() < 5 and now.hour >= 9 and latest is not None and latest < now.date() and is_trading_day(now.date())
+    key = (str(latest), live_on)
+    if _MEM["v"] is not None and _MEM["key"] == key and (not live_on or time.time() - _MEM["t"] < 90):
+        return _MEM["v"]
+    with _MEM_LOCK:
+        if _MEM["v"] is not None and _MEM["key"] == key and (not live_on or time.time() - _MEM["t"] < 90):
+            return _MEM["v"]
+        fams = family_members(db)
+        allc = sorted({c for m in fams.values() for c in m})
+        px = pd.read_sql(text("select stock_code s, trading_date d, close_price c, trading_value tv from spot_daily_prices "
+                              "where trading_date >= cast(:d as date) - 45 and stock_code = any(:m)"), db.connection(), params={"d": latest, "m": allc})
+        C = px.pivot(index="d", columns="s", values="c").sort_index().astype(float)
+        TV = px.pivot(index="d", columns="s", values="tv").sort_index().astype(float)
+        names = dict(db.execute(text("select code, name from stocks")).all())
+        live, as_of = {}, str(C.index[-1])
+        if live_on:
+            from backend.services.naver_live import snapshot  # noqa: PLC0415
+            live = snapshot(list(C.columns))
+            if live:
+                as_of = f"오늘 {now:%H:%M}"
+        rows = {}
+        for c in C.columns:
+            s_ = C[c].dropna()
+            avg = TV[c].iloc[-21:-1].mean()
+            if len(s_) < 21 or not avg or avg < 1e9:
+                continue
+            last = s_.iloc[-1]
+            if c in live:
+                now_p, prev, tv_today = live[c]["c"], last, live[c]["c"] * live[c]["v"]
+                ma20, base20 = (s_.iloc[-19:].sum() + now_p) / 20, s_.iloc[-20]
+            else:
+                now_p, prev, tv_today = last, s_.iloc[-2], TV[c].iloc[-1]
+                ma20, base20 = s_.iloc[-20:].mean(), s_.iloc[-21]
+            rows[c] = {"code": c, "name": names.get(c, c), "chg": round(float(now_p / prev - 1) * 100, 1), "ret20": round(float(now_p / base20 - 1) * 100, 1),
+                       "gap20": round(float(now_p / ma20 - 1) * 100, 1), "tv_x": round(float(tv_today / avg), 1), "tv": round(float(tv_today) / 1e8)}
+        out = {"as_of": as_of, "live": bool(live),
+               "families": {f: sorted((rows[c] for c in m if c in rows), key=lambda x: -x["chg"]) for f, m in fams.items()}}
+        _MEM.update(t=time.time(), key=key, v=out)
+        return out
+
+
+def members(db: Session, family: str) -> dict:
+    d = members_all(db)
+    return {"family": family, "as_of": d["as_of"], "live": d["live"], "items": d["families"].get(family, [])}
