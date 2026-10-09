@@ -170,19 +170,12 @@ def signals(db: Session, code: str, days: int = 260, owner: str | None = None) -
             last_c = float(C.iloc[-1])
             active = {"date": str(d), "entry": p0, "stop": stop, "days": len(idx) - i, "gain": (last_c / p0 - 1) * 100, "half": half}
             break
-    # 급락 날 줍기 자리 (dip_now와 같은 조건 · 손절 20일선 -1%) — 지난 급락 날에 어디서 떴을지 (2026-10-09 "지금은 못 보는 거제")
+    # 급락 날 줍기 자리 (_dip_picks와 같은 규칙) — 지난 급락 날에 어디서 떴을지 (2026-10-09 "지금은 못 보는 거제")
     try:
-        mk = _market_chg(db)
-        rh2 = rs_hist(db); ra = rh2.get("rs", {}).get(code)
-        if ra is not None:
-            RS2 = pd.Series(ra.astype(float), index=[pd.Timestamp(x).date() for x in rh2["dates"]]).reindex(df.index)
-            hi60r = C / H.rolling(60).max() - 1
-            liq30 = TV.rolling(20).mean() >= 3e9
-            for d in df.index[df.index >= start]:
-                if mk.get(d, 0) > -2 or not bool(bull[d]):
-                    continue
-                if (C[d] > e20[d] > e60[d]) and liq30[d] and 70 <= (RS2[d] if RS2[d] == RS2[d] else 0) < 95 and hi60r[d] >= -0.10 and chg[d] < 0 and e20[d] * 0.99 < C[d]:
-                    items.append({"date": str(d), "label": f"⬇ 급락 날 줍기 (시장 {mk[d]:+.1f}% · 손절 20일선 {e20[d] * 0.99:,.0f})", "kind": "dip", "pos": "below", "price": float(L[d])})
+        for d, picks in _dip_history(db).items():
+            if d >= start and code in picks:
+                st_ = picks[code]
+                items.append({"date": str(d), "label": f"⬇ 급락 날 줍기 (손절 20일선 {st_:,.0f} · 수량 절반)", "kind": "dip", "pos": "below", "price": float(L[d]) if d in L.index else st_})
     except Exception:  # noqa: BLE001
         pass
     # 종가 진입 점수 6↑ 자리 (close_scores와 같은 7개 조건, 상승·횡보장만) — 사용자 목표 "종가에 안전하고 확률 높은 추세 종목".
@@ -317,7 +310,7 @@ def _workspace_list(db: Session) -> dict:
         pass
     try:      # 급락 날 줍기 (시장 -2%↓ 날 같이 빠진 센 종목 · 손절 20일선 · 크기 절반)
         for x in dip_now(db).get("items", [])[:8]:
-            add(x["code"], "⬇ 급락 날 줍기 ✅" if x.get("tier") == 1 else "⬇ 급락 날 줍기 · 수량 절반")
+            add(x["code"], "⬇ 급락 날 줍기 · 수량 절반 (시험 중)", x.get("family", ""))
     except Exception:  # noqa: BLE001
         pass
     log = _get(db, "top3_log", {}) or {}
@@ -625,10 +618,12 @@ def close_scores_now(db: Session, max_age: float = 120) -> dict:
 
 
 def _dip_picks(db: Session, latest, live: dict | None = None, frac: float = 1.0, frames: dict | None = None) -> dict:
-    """급락 날 줍기 (2026-10-09 사용자 "하락장 초입이면 빠르게 끊고, 잠깐의 풀백이면 좋은 포지셔닝").
-    조건: 시장(거래 10억↑ 종목 평균) 그날 -2%↓ · 센 종목(종가>EMA20>EMA60 · 거래 30억↑ · RS 70~95 · 60일 고점 -10% 안)이 같이 빠짐(그날 음수).
-    손절 = 20일선 -1% (그날 저가 손절은 다음 날 흔들림에 잘림) · 크기 절반.
-    12년(spot_daily_hist · v12.py, 상승장): 2019~22 R +0.38(168건) · 2023~ +0.35(245건) · 최악10% -15% · 그날 -5%↓ 빠진 것 R 1.16(56건)."""
+    """급락 날 줍기 — 사용자 감각 그대로 단순하게 (2026-10-09 "주도주 소부장이 많이 빠졌네, 이럴 때 줍는다").
+    상승장에서 시장(거래 10억↑ 종목 평균) -2%↓ 날, 뜨는 섹터(20일 상승률 종목 가운데값 상위 3)의 주도주
+    (종가>EMA20>EMA60 · 거래 30억↑ · RS 70~95 · 60일 고점 -10% 안)가 그날 빠졌을 때 → 종가에 수량 절반 · 손절 20일선 -1% · 21일선 아래 종가면 다음 날 아침 정리.
+    12년(v12f.py): R +0.39(2019~22) / +0.71(2023~), 다음 날 오른 비율 56~61% vs 섹터 밖 45%. (주도주 조건 없이 섹터만: +0.83 / -0.10)
+    단 상승장 급락 날은 12년에 18일뿐 → '시험 중'. 거래량·손절폭으로 더 쪼개지 않는다(18번을 쪼개면 우연을 규칙으로 착각)."""
+    from backend.screener.rotation import family_members  # noqa: PLC0415
     P = frames or _close_frames(db, latest)
     H, L, C, V, TV = P["h"], P["l"], P["c"], P["v"], P["tv"]
     asof = str(latest)
@@ -643,41 +638,59 @@ def _dip_picks(db: Session, latest, live: dict | None = None, frac: float = 1.0,
     chg = C.iloc[-1] / C.iloc[-2] - 1
     tv20 = TV.rolling(20).mean().iloc[-1]
     mkt = float(chg[tv20 >= 1e9].clip(-0.3, 0.3).mean())
-    out = {"date": asof, "market": round(mkt * 100, 2), "live": bool(live), "items": []}
+    out = {"date": asof, "market": round(mkt * 100, 2), "live": bool(live), "items": [], "sectors": []}
     if mkt > -0.02:
         return out
+    r20 = C.iloc[-1] / C.iloc[-21] - 1
+    fam = family_members(db)
+    med = {f: float(r20[[c for c in m if c in r20.index and tv20.get(c, 0) >= 1e9]].median()) for f, m in fam.items()
+           if len([c for c in m if c in r20.index and tv20.get(c, 0) >= 1e9]) >= 5}
+    top = [f for f, _ in sorted(med.items(), key=lambda kv: -kv[1])[:3]]
+    out["sectors"] = top
+    e20 = C.ewm(span=20, adjust=False).mean().iloc[-1]
+    e60 = C.ewm(span=60, adjust=False).mean().iloc[-1]
     liq = TV.rolling(20).mean() >= 3e9
-    e20, e60 = C.ewm(span=20, adjust=False).mean().iloc[-1], C.ewm(span=60, adjust=False).mean().iloc[-1]
     rs_raw = 0.4 * (C / C.shift(63) - 1) + 0.2 * (C / C.shift(126) - 1) + 0.2 * (C / C.shift(189) - 1) + 0.2 * (C / C.shift(252) - 1)
     RS = rs_raw.where(liq).rank(axis=1, pct=True).iloc[-1] * 98 + 1
     c = C.iloc[-1]
     hi60 = c / H.iloc[-60:].max() - 1
-    ok = (c > e20) & (e20 > e60) & liq.iloc[-1] & (RS >= 70) & (RS < 95) & (hi60 >= -0.10) & (chg < 0)
     names = dict(db.execute(text("select code, name from stocks")).all())
-    for code in ok[ok.fillna(False).astype(bool)].index:
-        stop = float(e20[code]) * 0.99
-        if stop >= float(c[code]):
-            continue
-        rk = (1 - stop / float(c[code])) * 100
-        if rk > 15:            # 12년: 손절폭 15%↑ R -0.14 (최악10% -23%) → 뺌
-            continue
-        cg = float(chg[code]) * 100
-        # 고르는 순서 (12년 v12d.py, 두 기간 모두 같은 방향): 손절폭 8%↓ + 그날 -3%↓ R +0.94/+1.20 · 손절폭 8%↓ +0.56/+0.66 ·
-        # 시장보다 더 빠짐 +0.47/+0.53 (덜 빠진 것 +0.28/+0.12) · RS 70~85가 85~95보다 나음(+0.65/+0.56 vs -0.18/-0.06)
-        vxx = float(V[code].iloc[-1] / V[code].iloc[-21:-1].mean()) if V[code].iloc[-21:-1].mean() > 0 else 0.0
-        if vxx < 0.7:          # 12년: 거래 없이 조용히 빠진 날 R -0.09/-0.23 (사줄 사람이 없음) → 뺌 (2026-10-09 "거래량 없는 음봉은?")
-            continue
-        # 거래 1배↑ + 손절폭 8%↓ R +1.74/+1.91 (85건) · 거래 1~1.5배 +1.50/+1.08 · 거래 1배 미만 + 손절폭 8%↓ -0.26/-0.03
-        tier = 1 if (vxx >= 1 and rk <= 8) else 2 if vxx >= 1 else 3 if (rk <= 8 and cg <= -3) else 4
-        if float(RS[code]) >= 85:
-            tier += 1
-        out["items"].append({"code": code, "name": names.get(code, code), "chg": round(cg, 2), "close": float(c[code]),
-                             "stop": round(stop), "risk": round(rk, 1), "rs": round(float(RS[code])), "tier": tier, "vx": round(vxx, 1)})
-    out["items"].sort(key=lambda x: (x["tier"], x["risk"]))
+    seen = set()
+    for f in top:
+        for code in fam.get(f, []):
+            if code in seen or code not in c.index:
+                continue
+            # 주도주 = 섹터 안에서도 센 종목 (뜨는 섹터만 보고 다 담으면 12년 2023~ R -0.10 · 센 종목만이면 +0.71, v12h.py)
+            if not (tv20.get(code, 0) >= 3e9 and c[code] > e20[code] > e60[code] and 70 <= RS.get(code, 0) < 95
+                    and hi60.get(code, -1) >= -0.10 and chg[code] < 0):
+                continue
+            seen.add(code)
+            stop = float(e20[code]) * 0.99
+            out["items"].append({"code": code, "name": names.get(code, code), "chg": round(float(chg[code]) * 100, 2), "close": float(c[code]),
+                                 "stop": round(stop), "risk": round((1 - stop / float(c[code])) * 100, 1), "family": f})
+    out["items"].sort(key=lambda x: x["risk"])          # 손절이 가까운 것부터 보여 줌 (순서일 뿐, 거르지는 않음)
     return out
 
 
 _DIP: dict = {"t": 0.0, "v": None, "key": None}
+_DIPH: dict = {"key": None, "v": {}}
+
+
+def _dip_history(db: Session) -> dict:
+    """최근 400일 상승장 급락 날마다 _dip_picks 결과 {날짜: {종목: 손절가}} — 차트 표시용, DB 날짜가 바뀔 때만."""
+    latest = db.execute(text("select max(trading_date) from spot_daily_prices")).scalar()
+    if _DIPH["key"] == latest:
+        return _DIPH["v"]
+    P = _close_frames(db, latest)
+    mk = _market_chg(db); bulls = _bull_days(db)
+    idx = list(P["c"].index); out = {}
+    for r, d in enumerate(idx):
+        if r < 60 or mk.get(d, 0) > -2 or not bulls.get(d, False):
+            continue
+        v = _dip_picks(db, d, frames={k: x.iloc[:r + 1] for k, x in P.items()})
+        out[d] = {x["code"]: x["stop"] for x in v.get("items", [])}
+    _DIPH.update(key=latest, v=out)
+    return out
 
 
 def dip_now(db: Session, max_age: float = 120) -> dict:
@@ -756,7 +769,7 @@ def tracking(db: Session) -> dict:
     날짜마다 그날까지 데이터로 점수를 다시 계산한다 (signal_log가 쌓이기 전 날짜는 '다시 계산'). DB 날짜가 바뀔 때만 · 디스크 캐시."""
     latest = db.execute(text("select max(trading_date) from spot_daily_prices")).scalar()
     from backend.services.result_cache import cached  # noqa: PLC0415
-    return cached("tracking_v4", (), db, lambda: _tracking(db, latest)) or {}
+    return cached("tracking_v6", (), db, lambda: _tracking(db, latest)) or {}
 
 
 def _tracking(db: Session, latest, days: int = 20) -> dict:
