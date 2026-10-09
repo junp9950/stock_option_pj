@@ -59,6 +59,25 @@ def signals(db: Session, code: str, days: int = 260, owner: str | None = None) -
     fullbear = (chg <= -0.04) & ((O - C) / rng >= 0.8) & (lower <= 0.10) & (vx >= 2)
     record = (TV >= TV.shift(1).rolling(250, min_periods=200).max()) & (tvx >= 3)
 
+    # 아깝게 놓친 자리 (조건 하나만 살짝 모자람) — 문턱은 그대로, 왜 안 걸렸는지만 흐리게 (2026-10-09 테크윙 9/29·10/1)
+    box_core = (C > hi20p) & (C > ma200)
+    box_w = hi20p / lo20p - 1
+    near_box_vol = box_core & (box_w <= 0.20) & (chg >= 0.05) & (tvx >= 1.4) & (tvx < 2) & ~box
+    near_box_w = box_core & (box_w > 0.20) & (box_w <= 0.27) & (chg >= 0.05) & (tvx >= 2) & ~box
+    ema_core = (C > ehi) & (C > hi10p) & (chg >= 0.03) & (chg < 0.29)
+    near_ema_gap = ema_core & (gap_prev > 0.04) & (gap_prev <= 0.05) & (tvx >= 1.5) & ~ema
+    near_ema_vol = ema_core & (gap_prev <= 0.04) & (tvx >= 1.2) & (tvx < 1.5) & ~ema
+    near_big = (chg >= 0.08) & (C > O) & (vx >= 2.4) & (vx < 3) & ~big
+    align = (e5 > e10) & (e10 > e20) & (e20 > e60)
+    align_start = align & ~align.shift(1, fill_value=False)
+    def _lab(base, ser, fmt):
+        return {d: f"{base}? {fmt(ser[d])}" for d in ser.index}
+    near = []
+    for mask, base, val, fmt in ((near_box_vol, "박스 돌파", tvx, lambda v: f"거래 {v:.1f}배"), (near_box_w, "박스 돌파", box_w, lambda v: f"폭 {v*100:.0f}%"),
+                                 (near_ema_gap, "EMA 모임", gap_prev, lambda v: f"간격 {v*100:.1f}%"), (near_ema_vol, "EMA 모임", tvx, lambda v: f"거래 {v:.1f}배"),
+                                 (near_big, "기준봉", vx, lambda v: f"거래 {v:.1f}배")):
+        for d in mask[mask.fillna(False)].index:
+            near.append((d, f"{base}? {fmt(float(val[d]))}"))
     rules = [  # (마스크, 라벨, 종류, 위/아래) — 위에서부터 우선 (한 봉에 여러 개면 앞의 것 2개까지)
         (box, "박스 돌파", "buy", "below"), (ema, "EMA 모임 돌파", "buy", "below"), (jb, "종베 모양", "buy", "below"),
         (park, "주차 도지", "buy", "below"), (quiet, "조용한 음봉", "rest", "below"),
@@ -70,6 +89,22 @@ def signals(db: Session, code: str, days: int = 260, owner: str | None = None) -
         for d in mask[mask.fillna(False) & (mask.index >= start)].index:
             price = float(L[d]) if pos == "below" else float(H[d])
             items.append({"date": str(d), "label": lab, "kind": kind, "pos": pos, "price": price})
+    for d, lab in near:
+        if d >= start:
+            items.append({"date": str(d), "label": lab, "kind": "near", "pos": "below", "price": float(L[d])})
+    for d in align_start[align_start & (align_start.index >= start)].index:
+        items.append({"date": str(d), "label": "정배열 시작", "kind": "note", "pos": "above", "price": float(H[d])})
+    # 지금 상태 (오늘 후보 목록의 '대기') — 마지막 봉에 점선으로
+    try:
+        from backend.services.result_cache import cached  # noqa: PLC0415
+        from backend.screener.my_pattern import scan as mp_scan  # noqa: PLC0415
+        mp = cached("my_pattern_v6", (), db, lambda: mp_scan(db)) or {}
+        last_d = df.index[-1]
+        for key, lab in (("ema_wait", "대기 · EMA 모임"), ("box_near", "대기 · 박스 뚫기 직전")):
+            if any(x.get("code") == code for x in mp.get(key) or []):
+                items.append({"date": str(last_d), "label": lab, "kind": "wait", "pos": "below", "price": float(L[last_d])})
+    except Exception:  # noqa: BLE001
+        pass
     # 매일 고른 종베 3 (settings top3_log) — 그날 우리가 실제로 꼽은 자리
     try:
         from backend.services.telegram import _get  # noqa: PLC0415

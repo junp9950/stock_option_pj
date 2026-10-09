@@ -605,7 +605,7 @@ select{background:#21262d;border:1px solid #30363d;color:#c9d1d9;padding:6px 10p
       <div class="ws-per" id="ws-per"><button data-n="66" onclick="wsPeriod(66)">3개월</button><button data-n="130" onclick="wsPeriod(130)">6개월</button><button data-n="250" onclick="wsPeriod(250)">1년</button></div>
       <canvas id="ws-candle" style="width:100%;height:480px;display:block"></canvas>
       <canvas id="ws-volume" style="width:100%;height:90px;display:block;margin-top:4px"></canvas>
-      <div class="ws-legend"><span><i style="background:#1f6feb"></i>사는 자리 모양</span><span><i style="background:#2d7d6f"></i>쉬는 자리</span><span><i style="background:#484f58"></i>기준봉·거래 신기록</span><span><i style="background:#9a4d0f"></i>⚠ 위험</span><span>· 내 매수·매도 자리는 매매 일지 탭에서 · 차트 신호는 이 종목만 본 모양 (섹터·시장은 왼쪽 후보 목록에서)</span></div>
+      <div class="ws-legend"><span><i style="background:#1f6feb"></i>사는 자리 모양</span><span><i style="background:#2d7d6f"></i>쉬는 자리</span><span><i style="background:#484f58"></i>기준봉·거래 신기록</span><span><i style="background:#9a4d0f"></i>⚠ 위험</span><span>┆점선 = 대기 · 아깝게 놓침(?) · 정배열 시작</span><span>· 내 매수·매도 자리는 매매 일지 탭에서 · 차트 신호는 이 종목만 본 모양 (섹터·시장은 왼쪽 후보 목록에서)</span></div>
     </div>
     <aside class="cm-panel" id="ws-panel"></aside>
   </div>
@@ -2223,7 +2223,8 @@ function drawCandleChart(allCandles, spikeDate, show, opt){
     const COL={buy:['#1f6feb','#fff'],rest:['#2d7d6f','#fff'],info:['#484f58','#e6edf3'],warn:['#9a4d0f','#fff'],trade_buy:['#e6edf3','#0d1117'],trade_sell:['#8957e5','#fff']};
     const placed=[], cnt={}; ctxC.font='11px sans-serif'; ctxC.lineWidth=1;
     const rr=(x,y,w,h,r)=>{ ctxC.beginPath(); if(ctxC.roundRect) ctxC.roundRect(x,y,w,h,r); else ctxC.rect(x,y,w,h); };
-    opt.signals.forEach(sg=>{
+    const PR={trade_buy:0,trade_sell:0,buy:1,warn:2,rest:3,info:4,wait:5,near:6,note:7};
+    [...opt.signals].sort((a,b)=>(PR[a.kind]??9)-(PR[b.kind]??9)).forEach(sg=>{
       const i=idxOf[sg.date]; if(i===undefined) return;
       const k=i+sg.pos; cnt[k]=(cnt[k]||0)+1; if(cnt[k]>2 && !sg.kind.startsWith('trade')) return;
       const c=candles[i], x=i*cw+cw/2, tw=ctxC.measureText(sg.label).width+10, th=16, below=sg.pos==='below';
@@ -2231,6 +2232,12 @@ function drawCandleChart(allCandles, spikeDate, show, opt){
       let y = below ? anchor+8 : anchor-8-th, bx=Math.min(Math.max(x-tw/2,2),PW-tw-2);
       for(let t=0;t<8;t++){ if(!placed.some(r=>bx<r.x+r.w+2 && bx+tw+2>r.x && y<r.y+r.h+1 && y+th+1>r.y)) break; y += below ? th+3 : -(th+3); }
       y=Math.max(20,Math.min(H-th-1,y)); placed.push({x:bx,y,w:tw,h:th});
+      if(sg.kind==='near'||sg.kind==='wait'||sg.kind==='note'){   // 점선·흐린 표시: 아깝게 놓침 / 지금 대기 / 정배열 시작(정보)
+        const col=sg.kind==='wait'?'#58a6ff':sg.kind==='note'?'#8b949e':'#6e7681';
+        ctxC.strokeStyle=col; ctxC.setLineDash([3,3]); ctxC.beginPath(); ctxC.moveTo(x,anchor); ctxC.lineTo(x, below?y:y+th); ctxC.stroke();
+        if(sg.kind!=='note'){ rr(bx,y,tw,th,5); ctxC.stroke(); }
+        ctxC.setLineDash([]); ctxC.fillStyle=col; ctxC.fillText(sg.label,bx+5,y+12); return;
+      }
       const [bg,fg]=COL[sg.kind]||COL.info;
       ctxC.strokeStyle=bg; ctxC.beginPath(); ctxC.moveTo(x,anchor); ctxC.lineTo(x, below?y:y+th); ctxC.stroke();
       ctxC.fillStyle=bg; rr(bx,y,tw,th,5); ctxC.fill(); ctxC.fillStyle=fg; ctxC.fillText(sg.label,bx+5,y+12);
