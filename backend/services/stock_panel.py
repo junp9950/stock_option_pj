@@ -139,7 +139,7 @@ def _panel(db: Session, code: str, owner: str | None = None) -> dict:
         from backend.services.telegram import _get  # noqa: PLC0415
         log = _get(db, "top3_log", {}) or {}
         if log and code in log.get(max(log), []):
-            tags.insert(0, "종가 매수 → 내일 매도")
+            tags.insert(0, "종가 매수 후보")
     except Exception:  # noqa: BLE001
         pass
 
@@ -167,7 +167,10 @@ def _panel(db: Session, code: str, owner: str | None = None) -> dict:
         title = f"진입 신호 {act['days']}일째 · {act['gain']:+.1f}%"
         sub = f"{act['date'][5:].replace('-', '/')} 진입 {act['entry']:,.0f} · 손절 {act['stop']:,.0f}" + (" · 절반 팔았음 (21일선 아래면 나머지)" if act["half"] else " · 14일선 아래로 내려오면 절반 팔기")
     elif tags:
-        stage, title, sub = 1, tags[0], " · ".join(tags[1:]) or "오늘 우리 후보 목록에 있음"
+        stage, title = 1, tags[0]
+        sub = " · ".join(tags[1:]) or "오늘 우리 후보 목록에 있음"
+        if tags[0] == "종가 매수 후보":     # 파는 법 (사용자 원칙: 이익은 손절선 올려 가며 길게)
+            sub = "다음 날 +2% 못 가면 정리 · 넘으면 절반 팔고 나머지는 손절선 올려 가며 보유" + (f" · {sub}" if tags[1:] else "")
     elif up and c > ema[10] and spread <= 4:
         stage, title, sub = 0, "힘 모으는 중", f"이평선 정배열 · 5·10·20일선 간격 {spread:.1f}% · 종가가 10일선 위"
     else:
