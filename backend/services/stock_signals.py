@@ -196,12 +196,34 @@ def signals(db: Session, code: str, days: int = 260, owner: str | None = None) -
             # 실제로 사는 조건(점수 6↑ + 손절폭 8%↓ + 상승장)을 다 만족한 날만 '매수'로 — 숫자 6·7은 뜻이 안 읽힘 (2026-10-09 "시그널을 확실히")
             # 매수는 시장보다 센 종목(RS 70~95)만 — 다른 6개가 맞아도 RS가 낮으면 12년 R -0.27/+0.01/+0.25 (맞으면 -0.15/+0.12/+0.45, v12i.py)
             # 2026-10-09 한중엔시에스 10/2: RS 34인데 나머지 6개가 맞아 '매수'가 떴던 것
-            for d in sc[(sc >= 6) & fl[1].fillna(False) & base_ok & (rk_ <= 0.08) & (sc.index >= start)].index:
+            buy_ok = (sc >= 6) & fl[1].fillna(False) & base_ok & (rk_ <= 0.08)
+            pos_ = {d: k for k, d in enumerate(df.index)}
+            prev_on, run_best = False, None
+            for k, d in enumerate(df.index):
+                on = bool(buy_ok.iloc[k])
+                if not on:
+                    prev_on, run_best = False, None
+                    continue
+                if d < start:
+                    prev_on, run_best = True, (rk_[d] if run_best is None else min(run_best, rk_[d]))
+                    continue
                 miss = [CLOSE_FLAGS[j] for j, f in enumerate(fl) if not bool(f[d])]
                 good = rk_[d] <= 0.03
-                items.append({"date": str(d), "label": f"{'✅ ' if good else ''}종가 매수 · 손절 {L[d] * 0.99:,.0f} (-{rk_[d] * 100:.1f}%)"
-                              + (" · 수량 절반" if rk_[d] > 0.05 else "") + f" · 점수 {int(sc[d])}/7" + (f" (빠짐: {miss[0]})" if miss else ""),
-                              "kind": "score", "pos": "below", "price": float(L[d]), "score": int(sc[d]), "good": bool(good)})
+                desc = (f"손절 {L[d] * 0.99:,.0f} (-{rk_[d] * 100:.1f}%)" + (" · 수량 절반" if rk_[d] > 0.05 else "")
+                        + f" · 점수 {int(sc[d])}/7" + (f" (빠짐: {miss[0]})" if miss else ""))
+                # 연속으로 뜨는 날: 첫날만 '매수', 이어지는 날은 '자리 유지' 점 · 손절폭이 확 짧아지면 '더 좋은 자리' (2026-10-09 "매일 뜬 이유가 뭐야")
+                if not prev_on:
+                    items.append({"date": str(d), "label": f"{'✅ ' if good else ''}종가 매수 · {desc}", "kind": "score", "pos": "below",
+                                  "price": float(L[d]), "score": int(sc[d]), "good": bool(good)})
+                    run_best = rk_[d]
+                elif rk_[d] <= run_best * 0.75 or (good and run_best > 0.03):
+                    items.append({"date": str(d), "label": f"더 좋은 자리 (손절폭 짧아짐) · {desc}", "kind": "score_better", "pos": "below",
+                                  "price": float(L[d]), "score": int(sc[d])})
+                    run_best = rk_[d]
+                else:
+                    items.append({"date": str(d), "label": f"매수 자리 유지 · {desc}", "kind": "score_keep", "pos": "below",
+                                  "price": float(L[d]), "score": int(sc[d])})
+                prev_on = True
     except Exception:  # noqa: BLE001
         pass
     for d, lab in near:
