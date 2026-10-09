@@ -1386,15 +1386,36 @@ async function loadRotation(){
     const badge={'과열':'<b style="color:#f85149;border:1px solid #f85149;border-radius:8px;padding:0 6px;font-size:11px">과열</b>','주의':'<b style="color:#d29922;border:1px solid #d29922;border-radius:8px;padding:0 6px;font-size:11px">주의</b>'};
     body.innerHTML=d.items.map(t=>{
       const mv=t.rank_10ago-t.rank;
-      return `<tr>
-      <td><b>${t.family}</b> ${badge[t.status]||''}<br><span class="ts">${t.count}종목</span></td>
+      return `<tr style="cursor:pointer" onclick="toggleRotMembers(this,'${t.family}')" title="눌러서 종목 보기">
+      <td><b>${t.family}</b> ${badge[t.status]||''} <span class="ts">▸</span><br><span class="ts">${t.count}종목 · 눌러서 보기</span></td>
       <td><b style="color:${c(t.ret20_pct)}">${sg(t.ret20_pct)}%</b> <span class="ts">${t.rank}위</span>${mv?` <span style="font-size:11px;color:${mv>0?'#3fb950':'#8b949e'}">${mv>0?'▲':'▼'}${Math.abs(mv)}</span>`:''}<br><span class="ts">5일 ${sg(t.ret5_pct)}%</span></td>
       <td>${t.breadth_pct}% <span class="ts">(10일 전 ${t.breadth_10ago}%)</span><br><span class="ts" style="color:${t.stretch_pct>=20?'#f85149':t.stretch_pct>=10?'#d29922':'#8b949e'}">+20% 넘게 뜬 종목 ${t.stretch_pct}% (10일 전 ${t.stretch_10ago}%)</span></td>
       <td><b style="color:${t.tv5_x>=1.1?'#f85149':t.tv5_x<0.9?'#58a6ff':'#c9d1d9'}">${t.tv5_x.toFixed(2)}배</b> <span class="ts">최근 5일 · 5일 정점 ${t.tv5_peak5.toFixed(2)}</span><br><span class="ts">오늘 ${t.tv1_x.toFixed(2)}배</span></td>
       <td style="color:${c(t.chg_pct)}">${sg(t.chg_pct.toFixed(1))}%</td>
-      <td style="font-size:12px">${t.leaders.map(l=>`<span style="cursor:pointer" onclick="openChartModal('${l.code}','${l.name}','')">${l.name} <span style="color:${c(l.change_pct)}">${sg(l.change_pct)}%</span></span>`).join(' · ')||'<span class="ts">없음</span>'}</td>
+      <td style="font-size:12px">${t.leaders.map(l=>`<span style="cursor:pointer" onclick="event.stopPropagation();openChartModal('${l.code}','${l.name}','')">${l.name} <span style="color:${c(l.change_pct)}">${sg(l.change_pct)}%</span></span>`).join(' · ')||'<span class="ts">없음</span>'}</td>
     </tr>`}).join('');
   }catch(e){console.error(e);body.innerHTML='<tr><td colspan="6" style="color:#f85149;text-align:center;padding:16px">로딩 실패</td></tr>';}
+}
+// 섹터를 누르면 소속 종목 펼치기 (2026-10-09 건의 #2)
+async function toggleRotMembers(tr,fam){
+  const nx=tr.nextElementSibling;
+  if(nx&&nx.classList.contains('rot-mem')){nx.remove();return;}
+  const row=document.createElement('tr'); row.className='rot-mem';
+  row.innerHTML='<td colspan="6" style="background:#0d1117;padding:8px 10px"><span class="ts">불러오는 중…</span></td>';
+  tr.after(row);
+  const d=await fetch(`${API}/sectors/rotation/members?family=${encodeURIComponent(fam)}`).then(r=>r.ok?r.json():null).catch(()=>null);
+  const td=row.firstElementChild;
+  if(!d||!d.items.length){td.innerHTML='<span class="ts">종목 없음</span>';return;}
+  const c=n=>n>0?'#f85149':n<0?'#58a6ff':'#8b949e', sg=n=>(n>0?'+':'')+n;
+  const line=x=>`<tr><td style="padding:3px 6px"><span style="cursor:pointer;text-decoration:underline dotted" onclick="openChartModal('${x.code}','${x.name}','')">${x.name}</span></td>
+    <td style="color:${c(x.chg)};padding:3px 6px">${sg(x.chg)}%</td><td style="color:${c(x.ret20)};padding:3px 6px">${sg(x.ret20)}%</td>
+    <td style="padding:3px 6px;color:${x.gap20>=20?'#f85149':'#c9d1d9'}">${sg(x.gap20)}%</td><td style="padding:3px 6px;${x.tv_x>=2?'font-weight:700':''}">${x.tv_x}배</td><td class="ts" style="padding:3px 6px">${x.tv.toLocaleString()}억</td></tr>`;
+  const head='<tr class="ts"><th style="text-align:left;padding:3px 6px">종목</th><th>오늘</th><th>20일</th><th>20일선 이격</th><th>거래 (평소 대비)</th><th>거래대금</th></tr>';
+  const first=d.items.slice(0,30), rest=d.items.slice(30);
+  td.innerHTML=`<div class="ts" style="margin-bottom:4px">${fam} ${d.items.length}종목 (하루 거래대금 10억↑) · ${d.as_of} 기준 · 오늘 등락 순 · 이름 누르면 차트</div>
+    <table style="width:100%;font-size:12px">${head}${first.map(line).join('')}</table>`
+    +(rest.length?`<button class="ts" style="margin-top:6px;background:none;border:1px solid #30363d;border-radius:6px;color:#8b949e;padding:3px 10px;cursor:pointer" onclick="this.previousElementSibling.insertAdjacentHTML('beforeend',window._rotRest);this.remove()">${rest.length}개 더 보기</button>`:'');
+  window._rotRest=rest.map(line).join('');
 }
 async function loadLiveThemes(){
   const body=document.getElementById('live-theme-body');

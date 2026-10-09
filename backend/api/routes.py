@@ -1951,6 +1951,13 @@ def get_sector_calendar(db: Session = Depends(get_db)):
     return cached("sector_calendar_v2", (), db, lambda: scan(db))
 
 
+@router.get("/sectors/rotation/members")
+def get_sector_members(family: str, db: Session = Depends(get_db)):
+    """섹터 소속 종목 — 순환매 모니터에서 섹터를 누르면 (2026-10-09 건의 #2)."""
+    from backend.screener.rotation import members  # noqa: PLC0415
+    return members(db, family)
+
+
 @router.get("/sectors/rotation")
 def get_sector_rotation(db: Session = Depends(get_db)):
     """순환매 모니터: 이야기 줄기 16개의 순위·확산·자금 흐름과 과열/유입 표시."""
