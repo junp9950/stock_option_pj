@@ -138,7 +138,9 @@ select{background:#21262d;border:1px solid #30363d;color:#c9d1d9;padding:6px 10p
 /* 첫 화면 작업대: 종목 목록 | 신호 찍힌 차트 | 패널 (2026-10-09, Lazy Alpha식) */
 .ws{display:grid;grid-template-columns:270px minmax(0,1fr) 320px;gap:14px;align-items:start;margin-bottom:14px}
 .ws-list,.ws-main{background:var(--card);border:1px solid var(--line);border-radius:10px;padding:10px}
-.ws-list{max-height:660px;overflow-y:auto}
+.ws-list{max-height:none;display:flex;flex-direction:column;min-height:0}
+.ws-list>#ws-items,.ws-list>#jr-ws-items{flex:1;min-height:0;overflow-y:auto}
+.ws-sub{font-size:11.5px;color:var(--muted);margin:10px 4px 4px;padding-top:8px;border-top:1px solid var(--line2)}.ws-item.dim{opacity:.72}
 .ws-main{min-width:0;padding:12px}
 .ws #ws-panel{background:var(--card);border:1px solid var(--line);border-radius:10px;padding:12px}
 .ws-search{position:relative;margin-bottom:6px}.ws-search input{width:100%;box-sizing:border-box;background:var(--card2);border:1px solid var(--line);color:var(--text);border-radius:16px;padding:7px 12px;font-size:13px;outline:none}.ws-search input:focus{border-color:var(--blue)}#ws-sr{position:absolute;left:0;right:0;top:100%;z-index:30;background:var(--card);border:1px solid var(--line);border-radius:10px;margin-top:4px;max-height:360px;overflow:auto;display:none;box-shadow:0 6px 18px rgba(0,0,0,.4)}#ws-sr.on{display:block}
@@ -2082,7 +2084,15 @@ function renderWsList(){
   };
   if(_ws.tab==='held'){ const a=L.filter(x=>!x.long), b=L.filter(x=>x.long);
     el.innerHTML=a.map(row).join('')+(b.length?`<div class="ws-sec">장기 보유</div>`+b.map(row).join(''):''); }
-  else el.innerHTML=L.map(row).join('');
+  else{
+    let h=L.map(row).join('');
+    if(_ws.tab==='entry'&&L.length<6){      // 오늘 진입이 적은 날: 아래를 비워 두지 않고 다음 후보(대기)를 흐리게 이어서 (2026-10-09 "여기가 붕 뜬다")
+      const W=wsItems('wait').slice(0,10);
+      if(W.length) h+=`<div class="ws-sub">다음 후보 · 대기</div>`+W.map(x=>row(x).replace('class="ws-item','class="ws-item dim')).join('');
+    }
+    el.innerHTML=h;
+  }
+  wsFit();
 }
 let _wsQT=null;
 function wsSearch(v){      // 종목 검색 (2026-10-09) — 이름·코드·초성, 고르면 오른쪽에 차트·패널
@@ -2104,6 +2114,11 @@ function wsPick(code,name){
   const m=document.querySelector('.ws-main'); if(m&&window.innerWidth<900) m.scrollIntoView({behavior:'smooth',block:'start'});
 }
 document.addEventListener('click',e=>{ if(!e.target.closest('.ws-search')){ const b=document.getElementById('ws-sr'); if(b) b.classList.remove('on'); } });
+// 목록 칸 높이를 가운데 차트 칸에 맞춤 (PC) — 짧은 목록이 위에 떠 보이지 않게
+function wsFit(){ const m=document.querySelector('#panel-home .ws-main'), l=document.querySelector('#panel-home .ws-list');
+  if(!m||!l) return; l.style.height=window.innerWidth>760?m.offsetHeight+'px':''; }
+if(window.ResizeObserver){ const _wsRO=new ResizeObserver(()=>wsFit()); document.addEventListener('DOMContentLoaded',()=>{ const m=document.querySelector('#panel-home .ws-main'); if(m) _wsRO.observe(m); }); }
+window.addEventListener('resize',wsFit);
 async function wsOpen(code,name){
   _ws.code=code;
   document.querySelectorAll('.ws-item').forEach(e=>e.classList.toggle('on',e.dataset.c===code));
