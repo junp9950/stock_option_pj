@@ -37,6 +37,11 @@ def log_signals(db: Session) -> str:
         "entry": [{"code": x["code"], "name": x["name"], "kind": x["kind"], "close": x["close"], "stop": round(x["stop"])} for x in entries],
         "score": [{"code": c, "name": names.get(c, c), "score": v["score"], "stop": round(v["stop"])} for c, v in sc.items() if v["score"] >= 6],
     }
+    try:      # 급락 날 줍기 실제 기록 (시장 -2%↓ 날만 생김)
+        from backend.services.stock_signals import _dip_picks  # noqa: PLC0415
+        log[str(latest)]["dip"] = [{"code": x["code"], "name": x["name"], "chg": x["chg"], "stop": x["stop"]} for x in _dip_picks(db, latest).get("items", [])]
+    except Exception as exc:  # noqa: BLE001
+        logger.warning("급락 줍기 기록 실패: %s", exc)
     try:      # 비교용 뒷기록 (화면·텔레그램엔 안 보임, 2026-10-09 사용자 "뒤로 백데이터로 · 어디에 뜨게는 하지 말고")
         log[str(latest)]["lazy"] = _lazy_today(db, latest)
     except Exception as exc:  # noqa: BLE001

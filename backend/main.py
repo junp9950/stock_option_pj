@@ -897,17 +897,18 @@ function renderHomeTop(d, live){
   const rows=[];
   const add=(t,sub,v,k,click)=>rows.push({t,sub,v,k,click});
   add('시장 국면','종목 평균 지수 · 20일선 '+(all.vs_ma20_pct!=null?sg(all.vs_ma20_pct)+'%':'-'),all.state||'-',all.state==='상승'?'g':all.state==='하락'?'b':'n');
-  if(br.pct!=null) add('시장 폭','50일선 위 비율 · 10일 '+sg(br.chg10)+'%p'+(br.weak?' · 속 약해짐':''),br.pct+'%',br.weak||br.narrow?'b':br.pct>=55?'g':'n');
+  if(br.pct!=null) add('시장 폭','50일선 위 비율 · 10일 '+sg(br.chg10)+'%p'+(br.weak?' · 곧 흔들릴 수 있음':''),br.pct+'%',br.narrow?'b':br.weak?'n':br.pct>=55?'g':'n');
   if(br.hi60!=null) add('신고가 · 신저가','최근 60일 최고 · 최저 종가 종목 수',br.hi60+' · '+br.lo60,br.hi60>=br.lo60*2&&br.hi60>=10?'g':br.lo60>br.hi60?'b':'n');
   if(m.rel!=null) add('삼전·하닉 vs 코스닥','최근 20일 · 삼하 '+sg(m.sh20)+'% · 코스닥 '+sg(m.kq20)+'%',sg(m.rel)+'%p',m.rel>=10?'b':m.rel<=-3?'g':'n');
   if(m.sh_foreign5!=null) add('외국인','삼전·하닉 5일 순매수',(Math.abs(m.sh_foreign5)>=10000?(m.sh_foreign5>=0?'+':'-')+(Math.abs(m.sh_foreign5)/10000).toFixed(1)+'조':(m.sh_foreign5>=0?'+':'')+Math.round(m.sh_foreign5).toLocaleString()+'억'),m.sh_foreign5>0?'g':'b');
   const good=rows.filter(r=>r.k==='g').length;
   let vt, vk;
-  if(all.state==='하락'){ vt='쉬는 날'; vk='b'; } else if(br.weak||br.narrow){ vt='들어가도 크기 줄이기'; vk='b'; } else if(all.state==='상승'){ vt='진입 가능'; vk='g'; } else { vt='골라서 작게'; vk='n'; }
+  // 속 약해짐 = '꺾임'이 아니라 '곧 흔들림' (12년: 20일 안 20일선 이탈 88% vs 76%, 낙폭은 같고 20일 뒤 시장은 더 오름) — 2026-10-09
+  if(all.state==='하락'){ vt='쉬는 날'; vk='b'; } else if(br.weak||br.narrow){ vt='곧 흔들릴 수 있음 · 쫓지 말고 빠지는 날 줍기'; vk='n'; } else if(all.state==='상승'){ vt='진입 가능'; vk='g'; } else { vt='골라서 작게'; vk='n'; }
   const when=live?`장중 ${live.as_of}`:`${(d.as_of||'').slice(5).replace('-','/')} 마감 기준`;
   document.getElementById('hc-market').innerHTML=`<div class="hc-h"><b>시장 상태</b><span>${when}</span></div>
     <div class="hc-verdict"><span class="hc-badge ${B[vk][0]}">${B[vk][1].split(' ')[0]}</span><b>${vt}</b></div>
-    <div class="hc-sum">근거 ${rows.length}개 중 ${good}개 양호 · 하락장은 쉬고, 폭이 줄면 크기 줄이기</div>
+    <div class="hc-sum">근거 ${rows.length}개 중 ${good}개 양호 · 하락장은 쉬고, 시장이 -2% 넘게 빠지는 날은 센 종목 줍기</div>
     <div class="hc-bars">${rows.map(r=>`<i class="${r.k==='g'?'g':r.k==='b'?'b':''}"></i>`).join('')}</div>
     ${rows.map(r=>`<div class="hc-row"><div class="t"><b>${r.t}</b><span>${r.sub}</span></div><div class="v">${r.v}</div><span class="hc-badge ${B[r.k][0]}">${B[r.k][1]}</span></div>`).join('')}`;
   const ix=k=>{ const x=it[k]; if(!x) return ''; const c=x.pct>=0?'var(--up)':'var(--down)';
@@ -2061,7 +2062,7 @@ async function loadWorkspace(){
   if(!_ws.code){ const L=wsItems(_ws.tab); const f=L[0]||(d.candidates||[])[0]||(d.track||[])[0]; if(f) wsOpen(f.code,f.name); }
 }
 function wsItems(t){ const d=_ws.data||{}; return t==='track'?(d.track||[]):(d.candidates||[]).filter(x=>(x.lane||'entry')===t); }
-const WS_LANE={entry:'종가에 진입 · ✅ 손절폭 3%↓ 먼저 · 5~8%는 수량 절반 · 사면 스탑로스(그날 저가 -1%) 예약 · 21일선 아래 종가면 다음 날 아침 정리',
+const WS_LANE={entry:'종가에 진입 · ✅ 손절폭 3%↓ 먼저 · 5~8%는 수량 절반 · 사면 스탑로스(그날 저가 -1%) 예약 · 21일선 아래 종가면 다음 날 아침 정리 · ⬇ 급락 날 줍기는 손절 20일선 · 수량 절반',
   wait:'신호 전 · 돌파 나오면 그때 · ⏸ 손절폭 8%↑는 폭 좁은 날 기다리기 · 참고 = 다른 기준 신호', track:'내 매매 아님 · 최근 20일 사이트 신호를 규칙대로 따라간 것 · ⚠ = 내일 아침 정리'};
 function wsTab(t){ _ws.tab=t; try{ localStorage.setItem('ws-tab',t); }catch(e){} renderWsList(); }
 function renderWsList(){

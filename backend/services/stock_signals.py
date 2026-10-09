@@ -285,6 +285,11 @@ def _workspace_list(db: Session) -> dict:
                 add(c_, "⏸ 폭 좁은 날 기다리기")
     except Exception:  # noqa: BLE001
         pass
+    try:      # 급락 날 줍기 (시장 -2%↓ 날 같이 빠진 센 종목 · 손절 20일선 · 크기 절반)
+        for x in dip_now(db).get("items", [])[:8]:
+            add(x["code"], "⬇ 급락 날 줍기 · 손절 20일선 · 수량 절반")
+    except Exception:  # noqa: BLE001
+        pass
     log = _get(db, "top3_log", {}) or {}
     if log:
         for c in log.get(max(log), []):
@@ -343,7 +348,7 @@ def _workspace_list(db: Session) -> dict:
         return {**x, "close": c, "chg": round(ch, 2)}
     def lane(tags):
         # 2026-10-09 사용자 "오늘 정한 기준으로 바꾸고": 오늘 진입 = ▲ 진입 · 종가 점수 6↑(손절폭 8%↓)만. 그 밖(종가 매수·파란 화살표 등)은 대기에 참고로
-        return "entry" if any(t.startswith(("▲", "✅ 손익비", "종가 점수 6↑", "후순위")) for t in tags) else "wait"
+        return "entry" if any(t.startswith(("▲", "✅ 손익비", "종가 점수 6↑", "후순위", "⬇ 급락")) for t in tags) else "wait"
     cands = []
     for x in cand.values():
         if lane(x["tags"]) == "wait" and not x["tags"][0].startswith(("돌파 대기", "⏸")):
@@ -455,7 +460,8 @@ _BR: dict = {"key": None, "v": None}
 
 def market_breadth(db: Session) -> dict:
     """시장 폭 = 하루 거래대금 30억↑ 종목 중 50일선 위 비율, 10일 변화, '속 약해짐'(지수 20일선 위인데 폭 10일 새 5%p↓).
-    3년(entry_sig2.py): 속 약해짐일 때 진입 10일 -0.3% vs 폭 늘 때 +3.4% · 폭 40% 미만 11건 전패 (Lazy Alpha 교육 '먼저 알아챈다', 2026-10-09)."""
+    12년(v12c.py, 2026-10-09): 속 약해짐 뒤 20일 안 지수 20일선 이탈 88%(그 밖 76%)지만 최대 낙폭 -3.6%(그 밖 -3.5%) · 20일 뒤 시장 +2.4%(+1.3%)
+    → '꺾임'이 아니라 '곧 흔들림' 신호. 진입 성적 깎는 근거는 12년엔 없음 → 화면 문구: 새로 쫓지 말고 빠지는 날 줍기 준비."""
     latest = db.execute(text("select max(trading_date) from spot_daily_prices")).scalar()
     if _BR["key"] == latest:
         return _BR["v"]
@@ -586,6 +592,81 @@ def close_scores_now(db: Session, max_age: float = 120) -> dict:
         return v
     except Exception:  # noqa: BLE001
         return close_scores(db)
+
+
+def _dip_picks(db: Session, latest, live: dict | None = None, frac: float = 1.0) -> dict:
+    """급락 날 줍기 (2026-10-09 사용자 "하락장 초입이면 빠르게 끊고, 잠깐의 풀백이면 좋은 포지셔닝").
+    조건: 시장(거래 10억↑ 종목 평균) 그날 -2%↓ · 센 종목(종가>EMA20>EMA60 · 거래 30억↑ · RS 70~95 · 60일 고점 -10% 안)이 같이 빠짐(그날 음수).
+    손절 = 20일선 -1% (그날 저가 손절은 다음 날 흔들림에 잘림) · 크기 절반.
+    12년(spot_daily_hist · v12.py, 상승장): 2019~22 R +0.38(168건) · 2023~ +0.35(245건) · 최악10% -15% · 그날 -5%↓ 빠진 것 R 1.16(56건)."""
+    P = _close_frames(db, latest)
+    H, L, C, V, TV = P["h"], P["l"], P["c"], P["v"], P["tv"]
+    asof = str(latest)
+    if live:
+        from datetime import date as _date  # noqa: PLC0415
+        today = _date.today()
+        row = {k: pd.Series({c: x[k] for c, x in live.items() if x.get(k)}, dtype="float32").reindex(C.columns) for k in ("h", "l", "c")}
+        vol = pd.Series({c: x["v"] / max(frac, 0.05) for c, x in live.items()}, dtype="float32").reindex(C.columns)
+        add = lambda F, ser: pd.concat([F, ser.to_frame(today).T])  # noqa: E731
+        H, L, C, V, TV = add(H, row["h"]), add(L, row["l"]), add(C, row["c"]), add(V, vol), add(TV, row["c"] * vol)
+        asof = str(today)
+    chg = C.iloc[-1] / C.iloc[-2] - 1
+    tv20 = TV.rolling(20).mean().iloc[-1]
+    mkt = float(chg[tv20 >= 1e9].clip(-0.3, 0.3).mean())
+    out = {"date": asof, "market": round(mkt * 100, 2), "live": bool(live), "items": []}
+    if mkt > -0.02:
+        return out
+    liq = TV.rolling(20).mean() >= 3e9
+    e20, e60 = C.ewm(span=20, adjust=False).mean().iloc[-1], C.ewm(span=60, adjust=False).mean().iloc[-1]
+    rs_raw = 0.4 * (C / C.shift(63) - 1) + 0.2 * (C / C.shift(126) - 1) + 0.2 * (C / C.shift(189) - 1) + 0.2 * (C / C.shift(252) - 1)
+    RS = rs_raw.where(liq).rank(axis=1, pct=True).iloc[-1] * 98 + 1
+    c = C.iloc[-1]
+    hi60 = c / H.iloc[-60:].max() - 1
+    ok = (c > e20) & (e20 > e60) & liq.iloc[-1] & (RS >= 70) & (RS < 95) & (hi60 >= -0.10) & (chg < 0)
+    names = dict(db.execute(text("select code, name from stocks")).all())
+    for code in ok[ok.fillna(False).astype(bool)].index:
+        stop = float(e20[code]) * 0.99
+        if stop >= float(c[code]):
+            continue
+        out["items"].append({"code": code, "name": names.get(code, code), "chg": round(float(chg[code]) * 100, 2), "close": float(c[code]),
+                             "stop": round(stop), "risk": round((1 - stop / float(c[code])) * 100, 1), "rs": round(float(RS[code]))})
+    out["items"].sort(key=lambda x: x["chg"])          # 많이 빠진 것부터 (-5%↓가 가장 좋았음)
+    return out
+
+
+_DIP: dict = {"t": 0.0, "v": None, "key": None}
+
+
+def dip_now(db: Session, max_age: float = 120) -> dict:
+    """장중이면 실시간 가격(2분 캐시), 아니면 마지막 마감 기준. 상승·횡보장일 때만 (하락장 R -0.47)."""
+    import time  # noqa: PLC0415
+    from datetime import datetime  # noqa: PLC0415
+    from zoneinfo import ZoneInfo  # noqa: PLC0415
+    from backend.utils.dates import is_trading_day  # noqa: PLC0415
+    now = datetime.now(ZoneInfo("Asia/Seoul"))
+    latest = db.execute(text("select max(trading_date) from spot_daily_prices")).scalar()
+    if not _bull_days(db).get(latest, False):
+        return {"date": str(latest), "items": [], "bear": True}
+    live_on = is_trading_day(now.date()) and 9 <= now.hour < 16 and latest < now.date()
+    key = (str(latest), live_on)
+    if _DIP["v"] is not None and _DIP["key"] == key and (not live_on or time.time() - _DIP["t"] < max_age):
+        return _DIP["v"]
+    v = {"date": str(latest), "items": []}
+    try:
+        if live_on:
+            from backend.screener.my_pattern import _day_frac  # noqa: PLC0415
+            from backend.services.naver_live import snapshot  # noqa: PLC0415
+            codes = list(_close_frames(db, latest)["c"].columns)
+            lv = snapshot(codes, max_age=60)
+            if len(lv) >= len(codes) * 0.5:
+                v = _dip_picks(db, latest, live=lv, frac=1.0 if (now.hour, now.minute) >= (15, 30) else _day_frac(now))
+                v["at"] = now.strftime("%H:%M")
+        else:
+            v = _dip_picks(db, latest)
+    except Exception:  # noqa: BLE001
+        pass
+    _DIP.update(t=time.time(), v=v, key=key)
+    return v
 
 
 _RSH: dict = {"key": None, "v": None}

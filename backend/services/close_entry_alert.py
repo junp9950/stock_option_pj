@@ -31,7 +31,16 @@ def text_now(db: Session, k: int = 8) -> str | None:
     try:
         br = market_breadth(db)
         if br.get("weak") or br.get("narrow"):
-            out.append(f"⚠ 시장 폭 {br['pct']}% ({br['chg10']:+.1f}%p) — 속 약해짐, 크기 줄이기")
+            out.append(f"⚠ 시장 폭 {br['pct']}% ({br['chg10']:+.1f}%p) — 곧 흔들릴 수 있음 · 새로 쫓지 말고 빠지는 날 줍기 준비")
+    except Exception:  # noqa: BLE001
+        pass
+    try:      # 급락 날 줍기 (시장 -2%↓ 날 같이 빠진 센 종목 · 손절 20일선 · 수량 절반)
+        from backend.services.stock_signals import dip_now  # noqa: PLC0415
+        dp = dip_now(db)
+        if dp.get("items"):
+            out.append(f"⬇ <b>급락 날 줍기</b> 시장 {dp.get('market', 0):+.1f}% · 같이 빠진 센 종목 {len(dp['items'])}개 (손절 20일선 · 수량 절반)")
+            for x in dp["items"][:6]:
+                out.append(f"  · <b>{x['name']}</b> {x['chg']:+.1f}% · 손절 {x['stop']:,.0f} (-{x['risk']:.1f}%)")
     except Exception:  # noqa: BLE001
         pass
     if not rows:

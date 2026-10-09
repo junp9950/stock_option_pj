@@ -176,7 +176,9 @@ def _panel(db: Session, code: str, owner: str | None = None) -> dict:
     elif tags:
         stage, title = 1, tags[0]
         sub = " · ".join(tags[1:]) or "오늘 우리 후보 목록에 있음"
-        if tags[0].startswith(("종가 매수", "✅ 손익비", "종가 점수", "후순위")):
+        if tags[0].startswith("⬇ 급락"):
+            sub = f"시장 급락에 같이 빠진 센 종목 · 손절 20일선 {float(ema[20]) * 0.99:,.0f}원 (-1%) · 수량 절반 · 21일선 아래 종가면 다음 날 아침 정리"
+        elif tags[0].startswith(("종가 매수", "✅ 손익비", "종가 점수", "후순위")):
             # 사용자 (2026-10-09): "추세매매가 하고 싶은 거다 · 종베는 그냥 진입 시점일 뿐" → 종가에 사서 21일선까지 끌고 간다
             try:
                 from backend.services.stock_signals import close_scores_now as _csn  # noqa: PLC0415
@@ -262,7 +264,7 @@ def _panel(db: Session, code: str, owner: str | None = None) -> dict:
         if bull_now and not brd.get("weak") and not brd.get("narrow"):
             checks.append({"ok": True, "k": "시장 상태", "v": f"시장 상승·횡보 · 시장 폭 {brd['pct']}%"})
         else:
-            why = "하락 국면" if not bull_now else ("속 약해짐 (지수는 오르는데 폭 감소)" if brd.get("weak") else "시장 폭 좁음")
+            why = "하락 국면" if not bull_now else ("곧 흔들릴 수 있음 (지수는 오르는데 폭 감소) · 새로 쫓기보다 빠지는 날 줍기" if brd.get("weak") else "시장 폭 좁음")
             checks.append({"ok": False, "k": "시장 상태", "v": why})
     except Exception:  # noqa: BLE001
         pass
@@ -279,6 +281,8 @@ def _panel(db: Session, code: str, owner: str | None = None) -> dict:
         checks.append({"ok": False, "k": "신호", "v": "아직 확정 신호 없음"})
     if act:                                   # 스윙 진입: 신호 봉 저가 -1%
         stop_ref, stop_lab = act["stop"], "진입 손절"
+    elif tags and tags[0].startswith("⬇ 급락"):  # 급락 날 줍기: 20일선 -1% (12년 R +0.35~0.38, 그날 저가 손절은 다음 날 흔들림에 잘림)
+        stop_ref, stop_lab = ema[20] * 0.99, "20일선 -1%"
     else:                                     # 종가 진입: 오늘 저가 -1% (3년: 손절폭 3%↓ R +1.7 · 8%↑ R 0, trend_exit.py)
         stop_ref, stop_lab = float(L.iloc[-1]) * 0.99, "스탑로스(오늘 저가 -1%)"
     dist = (1 - stop_ref / c) * 100 if stop_ref else 99      # 종가에서 손절선까지 내려가는 폭 (목록의 손절폭과 같은 기준)
