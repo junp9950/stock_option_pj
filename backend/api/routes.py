@@ -1788,9 +1788,11 @@ def get_dashboard(db: Session = Depends(get_db)):
                                             {"d": latest, "c": [x["code"] for x in items]}).all():
             hl.setdefault(code_, ([], []))
             hl[code_][0].append(float(h_)); hl[code_][1].append(float(l_))
+        from backend.services.watchlist import _positions  # noqa: PLC0415
+        _mine = {p_["code"] for p_ in _positions(db)}       # 공개 화면: 보유 종목(손절선 줄)은 빼고 매매 일지 탭에서만
         for x in items:
             c, lv, kind = px.get(x["code"]), x.get("level") or 0, x.get("kind")
-            if not c or not lv:
+            if not c or not lv or x["code"] in _mine:
                 continue
             gap = (c / lv - 1) * 100
             tag = None
