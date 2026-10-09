@@ -168,17 +168,25 @@ def _panel(db: Session, code: str, owner: str | None = None) -> dict:
             stage, title = (3, "보유 중 · 수익") if held["gain"] >= 5 else (2, "보유 중")
             sub = f"손절 {held['stop']:,.0f}까지 {room:.1f}%" if room is not None else "손절선 없음 — 정해 두세요"
     elif act and act["days"] == 1:
-        stage, title, sub = 1, "▲ 진입 신호 · 이번 봉", f"진입 {act['entry']:,.0f} · 손절 {act['stop']:,.0f} ({(act['stop']/act['entry']-1)*100:+.1f}%) · 3년 평균 +3.4% · 이김 36%"
+        stage, title, sub = 1, "▲ 진입 신호 · 이번 봉", f"진입 {act['entry']:,.0f} · 스탑로스 {act['stop']:,.0f} 예약 ({(act['stop']/act['entry']-1)*100:+.1f}%) · 3년 평균 +2.6% · 이김 32%"
     elif act:
         stage = 3 if act["half"] else 2
         title = f"진입 신호 {act['days']}일째 · {act['gain']:+.1f}%"
-        sub = f"{act['date'][5:].replace('-', '/')} 진입 {act['entry']:,.0f} · 손절 {act['stop']:,.0f}" + (" · 절반 팔았음 (21일선 아래면 나머지)" if act["half"] else " · 14일선 아래로 내려오면 절반 팔기")
+        sub = f"{act['date'][5:].replace('-', '/')} 진입 {act['entry']:,.0f} · 스탑로스 {act['stop']:,.0f}" + (" · 절반 팔았음 (21일선 아래 종가면 다음 날 아침 나머지)" if act["half"] else " · 14일선 아래로 내려오면 절반 팔기")
     elif tags:
         stage, title = 1, tags[0]
         sub = " · ".join(tags[1:]) or "오늘 우리 후보 목록에 있음"
         if tags[0].startswith(("종가 매수", "✅ 손익비", "종가 점수")):
             # 사용자 (2026-10-09): "추세매매가 하고 싶은 거다 · 종베는 그냥 진입 시점일 뿐" → 종가에 사서 21일선까지 끌고 간다
-            sub = "종가에 진입 · 그날 저가 -1% 아래 종가면 정리 · 아니면 21일선 아래로 마감할 때까지 보유" + (f" · {sub}" if tags[1:] else "")
+            try:
+                from backend.services.stock_signals import close_scores_now as _csn  # noqa: PLC0415
+                _s = _csn(db).get("scores", {}).get(code)
+            except Exception:  # noqa: BLE001
+                _s = None
+            _stop = _s["stop"] if _s else float(L.iloc[-1]) * 0.99
+            # 2026-10-09 "스탑로스 걸어 놓고 냉정하게": 손절은 예약 주문, 추세 매도는 종가 판단 → 다음 날 아침
+            sub = (f"종가에 진입 · 스탑로스 {_stop:,.0f}원 예약 (오늘 저가 -1%) · 21일선 아래 종가면 다음 날 아침 정리"
+                   + (f" · {sub}" if tags[1:] else ""))
     elif up and c > ema[10] and spread <= 4:
         stage, title, sub = 0, "힘 모으는 중", f"이평선 정배열 · 5·10·20일선 간격 {spread:.1f}% · 종가가 10일선 위"
     else:
@@ -272,7 +280,7 @@ def _panel(db: Session, code: str, owner: str | None = None) -> dict:
     if act:                                   # 스윙 진입: 신호 봉 저가 -1%
         stop_ref, stop_lab = act["stop"], "진입 손절"
     else:                                     # 종가 진입: 오늘 저가 -1% (3년: 손절폭 3%↓ R +1.7 · 8%↑ R 0, trend_exit.py)
-        stop_ref, stop_lab = float(L.iloc[-1]) * 0.99, "오늘 저가 -1%"
+        stop_ref, stop_lab = float(L.iloc[-1]) * 0.99, "스탑로스(오늘 저가 -1%)"
     dist = (1 - stop_ref / c) * 100 if stop_ref else 99      # 종가에서 손절선까지 내려가는 폭 (목록의 손절폭과 같은 기준)
     checks.append({"ok": dist <= 5, "k": "손절 거리", "v": f"{stop_lab} {stop_ref:,.0f}까지 {dist:.1f}%"
                    + (" ✅ 손익비 좋음 (3%↓)" if dist <= 3 else "" if dist <= 5 else " (멀어서 손익비 나쁨 · 3년: 8%↑면 얻을 게 없었음)")})

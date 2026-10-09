@@ -162,7 +162,7 @@ def jongbe_summary(db: Session) -> str:
     if doji:
         lines.append(f"\n🕯 밑꼬리 도지 {len(doji)}개")
         lines += [f"· {x['name']} 밑꼬리 {x.get('low_wick_pct')}% · 전날 +{x.get('prev_chg')}%" for x in doji[:8]]
-    lines.append("\n파는 법: 산 날 저가 -1% 아래 종가면 정리 · 아니면 21일선 아래로 마감할 때까지 보유")
+    lines.append("\n파는 법: 산 날 저가 -1%에 스탑로스 예약 · 21일선 아래 종가면 다음 날 아침 정리")
     return "\n".join(lines)
 
 

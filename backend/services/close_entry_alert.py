@@ -38,8 +38,8 @@ def text_now(db: Session, k: int = 8) -> str | None:
     good = [r for r in rows if r[1]["risk"] <= 0.03]
     out.append(f"점수 6↑ {len(rows)}개 · 그중 ✅ 손절폭 3%↓ {len(good)}개")
     for c, v in rows[:k]:
-        out.append(f"{'✅' if v['risk'] <= 0.03 else '·'} <b>{names.get(c, c)}</b> {v['score']}/7 · 손절 {v['stop']:,.0f} (-{v['risk'] * 100:.1f}%)")
-    out.append("파는 법: 손절선 아래 종가면 정리 · 아니면 21일선 아래로 마감할 때까지 보유")
+        out.append(f"{'✅' if v['risk'] <= 0.03 else '·'} <b>{names.get(c, c)}</b> {v['score']}/7 · 스탑로스 {v['stop']:,.0f} (-{v['risk'] * 100:.1f}%)")
+    out.append("파는 법: 사면 바로 스탑로스 예약 (정규장만) · 21일선 아래 종가면 다음 날 아침 정리")
     out.append("<i>3년: ✅ 평균 +3.9% (손절폭의 1.7배) · 점수 6↑ 전체 +2.2% · 손절폭 8%↑는 얻을 게 없었음</i>")
     return "\n".join(out)
 

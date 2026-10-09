@@ -625,7 +625,7 @@ select{background:#21262d;border:1px solid #30363d;color:#c9d1d9;padding:6px 10p
       <div class="ws-per" id="ws-tf"><button data-tf="1d" onclick="wsTf('1d')">일봉</button><button data-tf="1w" onclick="wsTf('1w')">주봉</button><button data-tf="60m" onclick="wsTf('60m')">60분</button><button data-tf="30m" onclick="wsTf('30m')">30분</button><button data-tf="15m" onclick="wsTf('15m')">15분</button><button data-tf="5m" onclick="wsTf('5m')">5분</button><button data-tf="1m" onclick="wsTf('1m')">1분</button></div>
       <div class="ws-per" id="ws-per"><button data-n="66" onclick="wsPeriod(66)">3개월</button><button data-n="130" onclick="wsPeriod(130)">6개월</button><button data-n="250" onclick="wsPeriod(250)">1년</button></div>
       <div class="lwbox"><div class="lwleg" id="ws-chart-leg"></div><div id="ws-chart" class="lwc"></div></div>
-      <div class="ws-legend"><span>▲ <b>진입</b> = 사기 좋은 자리 (지난 3년 평균 +3.4%, 2~3주 보유 · 급등봉 당일은 안 냄) → ▼ 절반 팔기 · 나머지 팔기 / 손절</span><span>● 보라 숫자 <b>6·7</b> = 종가 진입 점수 (7개 조건 중 맞은 개수 · 상승·횡보장만) → 손절 = 그날 저가 -1% 아래 종가 · 아니면 21일선 아래 마감까지 보유 (3년 평균 +2.2%, 손절폭 3%↓면 +3.9%)</span><span>↑ <b>종가 매수</b> = 그날 종가에 살 후보 (진입 시점일 뿐 · 파는 건 위와 같음)</span><span>↑ 파란 화살표 = 박스 위로 돌파 · 이평선 모였다 돌파 (3년 10일 평균 +1.5% · +0.7%)</span><span>● 초록 = 오르던 종목의 거래 적은 눌림</span><span>· 작은 점 = 참고 (돌파 대기 · 아깝게 놓침 · 상승 추세 시작) — 봉에 올리면 위에 내용</span><span>■ 회색 = 급등봉 · 1년 최대 거래</span><span>▼ 주황 = 조심</span><span>· 두 손가락으로 확대, 끌어서 이동, 누르면 그 날 가격</span></div>
+      <div class="ws-legend"><span>▲ <b>진입</b> = 사기 좋은 자리 (3년 평균 +2.6%, 2~3주 보유 · 급등봉 당일은 안 냄) → 스탑로스 = 신호 봉 저가 -1% 예약 · ▼ 14일선 아래 종가 절반 · 21일선 아래 종가 나머지</span><span>● 보라 숫자 <b>6·7</b> = 종가 진입 점수 (7개 조건 중 맞은 개수 · 상승·횡보장만) → 사면 바로 스탑로스 = 그날 저가 -1% 예약 · 21일선 아래 종가면 다음 날 아침 정리 (3년 평균 +2.2% · 손절폭 3%↓면 +3.2% · 한 번 손실은 손절폭만큼으로 고정)</span><span>↑ <b>종가 매수</b> = 그날 종가에 살 후보 (진입 시점일 뿐 · 파는 건 위와 같음)</span><span>↑ 파란 화살표 = 박스 위로 돌파 · 이평선 모였다 돌파 (3년 10일 평균 +1.5% · +0.7%)</span><span>● 초록 = 오르던 종목의 거래 적은 눌림</span><span>· 작은 점 = 참고 (돌파 대기 · 아깝게 놓침 · 상승 추세 시작) — 봉에 올리면 위에 내용</span><span>■ 회색 = 급등봉 · 1년 최대 거래</span><span>▼ 주황 = 조심</span><span>· 두 손가락으로 확대, 끌어서 이동, 누르면 그 날 가격</span></div>
     </div>
     <aside class="cm-panel" id="ws-panel"></aside>
   </div>
@@ -2024,7 +2024,7 @@ async function loadWorkspace(){
   if(!_ws.code){ const L=wsItems(_ws.tab); const f=L[0]||(d.candidates||[])[0]||(d.watch||[])[0]; if(f) wsOpen(f.code,f.name); }
 }
 function wsItems(t){ const d=_ws.data||{}; return t==='watch'?(d.watch||[]):(d.candidates||[]).filter(x=>(x.lane||'entry')===t); }
-const WS_LANE={entry:'추세 매매 · 종가에 진입 · ✅ = 점수 6↑ + 손절폭 3%↓ (3년 평균 +3.9%) · 손절선 아래 종가면 정리, 아니면 21일선 아래 마감까지 보유',
+const WS_LANE={entry:'추세 매매 · 종가에 진입 · ✅ = 점수 6↑ + 손절폭 3%↓ · 사면 바로 스탑로스(그날 저가 -1%) 예약 · 21일선 아래 종가면 다음 날 아침 정리',
   wait:'아직 신호 전 · 돌파가 나오면 그때', watch:'적어 둔 관심 종목'};
 function wsTab(t){ _ws.tab=t; try{ localStorage.setItem('ws-tab',t); }catch(e){} renderWsList(); }
 function renderWsList(){

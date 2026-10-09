@@ -113,7 +113,8 @@ def signals(db: Session, code: str, days: int = 260, owner: str | None = None) -
             items.append({"date": str(d), "label": lab, "kind": kind, "pos": pos, "price": price})
     # ▲ 진입 신호 (2026-10-09 "우리도 진입 신호 같은 건 좀"): (박스 돌파 또는 EMA 모임 돌파·정배열) + 상승·횡보장 + 추세 조건 6/7↑
     # 3년(entry_sig.py, 종가 진입): 1,223건 평균 +3.4% · 이김 36% · 평균 14일 / 하락장이면 -1.7%라 안 냄.
-    # 흐름: 손절 = 신호 봉 저가 -1% 아래 종가 · ½ 익절 = EMA14 아래 종가 · 청산 = EMA21 아래 종가. 들고 있는 동안은 새 진입 안 냄.
+    # 흐름: 손절 = 신호 봉 저가 -1%에 예약 매도(장중 닿으면, 시가가 아래면 시가) · ½ 익절 = EMA14 아래 종가 · 청산 = EMA21 아래 종가. 들고 있는 동안은 새 진입 안 냄.
+    # 2026-10-09 사용자 "스탑로스 걸어 놓고 냉정하게" → 예약 손절 3년(entry_stop.py) 1,513건 평균 +2.59%·R +0.51·최악5% -1.0R (종가 손절 +3.06%·R +0.60·최악5% -1.66R)
     e14, e21 = C.ewm(span=14, adjust=False).mean(), C.ewm(span=21, adjust=False).mean()
     s50, s150 = C.rolling(50).mean(), C.rolling(150, min_periods=135).mean()
     hi52, lo52 = H.rolling(250, min_periods=200).max(), L.rolling(250, min_periods=200).min()
@@ -138,8 +139,9 @@ def signals(db: Session, code: str, days: int = 260, owner: str | None = None) -
         half, out = False, None
         for k in range(i + 1, len(idx)):
             c = float(C.iloc[k])
-            if c < stop:
-                out = (k, f"손절 {(c/p0-1)*100:+.1f}%", "exit_bad"); break
+            if float(L.iloc[k]) < stop:          # 예약 손절 (장중 닿으면 체결, 시가가 손절가 아래면 시가)
+                px = min(float(O.iloc[k]) or stop, stop)
+                out = (k, f"손절 {(px/p0-1)*100:+.1f}%", "exit_bad"); break
             if not half and k - i > 1 and c < float(e14.iloc[k]):
                 half = True
                 items.append({"date": str(idx[k]), "label": f"절반 팔기 {(c/p0-1)*100:+.1f}%", "kind": "exit", "pos": "above", "price": float(H.iloc[k])})
