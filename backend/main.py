@@ -614,7 +614,7 @@ select{background:#21262d;border:1px solid #30363d;color:#c9d1d9;padding:6px 10p
   <div class="ws">
     <div class="ws-list">
       <div class="ws-search"><input id="ws-q" placeholder="🔍 종목 검색 (이름·코드·초성)" autocomplete="off" oninput="wsSearch(this.value)" onkeydown="if(event.key==='Enter'){const f=document.querySelector('#ws-sr .ws-item');if(f)f.click();}else if(event.key==='Escape'){this.value='';wsSearch('');}"><div id="ws-sr"></div></div>
-      <div class="ws-tabs"><button data-t="entry" onclick="wsTab('entry')">오늘 진입</button><button data-t="wait" onclick="wsTab('wait')">대기</button><button data-t="track" onclick="wsTab('track')">진행 중</button></div>
+      <div class="ws-tabs"><button data-t="entry" onclick="wsTab('entry')">오늘 진입</button><button data-t="wait" onclick="wsTab('wait')">대기</button><button data-t="track" onclick="wsTab('track')">신호 추적</button></div>
       <div class="ts" id="ws-lane-note" style="margin:0 4px 4px"></div>
       <div class="ts" id="ws-asof" style="margin:0 4px 4px"></div>
       <div id="ws-items"><div class="ts" style="padding:10px">불러오는 중…</div></div>
@@ -2025,10 +2025,10 @@ async function loadWorkspace(){
 }
 function wsItems(t){ const d=_ws.data||{}; return t==='track'?(d.track||[]):(d.candidates||[]).filter(x=>(x.lane||'entry')===t); }
 const WS_LANE={entry:'추세 매매 · 종가에 진입 · ✅ = 점수 6↑ + 손절폭 3%↓ · 손절폭 5~8%는 후순위·수량 절반 이하 · 사면 바로 스탑로스(그날 저가 -1%) 예약 · 21일선 아래 종가면 다음 날 아침 정리',
-  wait:'아직 신호 전 · 돌파가 나오면 그때 · ⏸ = 점수는 좋은데 손절폭 8%↑ (3년: 얻을 게 거의 없었음) → 하루 폭 좁게 고가 쪽 마감하는 날 기다리기', track:'최근 20거래일 점수 6↑ 신호를 규칙대로 따라간 것 (그날까지 데이터로 다시 계산) · 스탑로스 안 맞고 21일선 위 = 아직 들고 갈 자리 · ⚠ = 오늘 21일선 아래 마감 → 내일 아침 정리'};
+  wait:'아직 신호 전 · 돌파가 나오면 그때 · ⏸ = 점수는 좋은데 손절폭 8%↑ (3년: 얻을 게 거의 없었음) → 하루 폭 좁게 고가 쪽 마감하는 날 기다리기', track:'내 매매 아님 · 사이트 신호만 · 최근 20거래일 점수 6↑ 신호를 규칙대로 따라간 것 (그날까지 데이터로 다시 계산) · 스탑로스 안 맞고 21일선 위 = 아직 들고 갈 자리 · ⚠ = 오늘 21일선 아래 마감 → 내일 아침 정리'};
 function wsTab(t){ _ws.tab=t; try{ localStorage.setItem('ws-tab',t); }catch(e){} renderWsList(); }
 function renderWsList(){
-  document.querySelectorAll('.ws-tabs button').forEach(b=>{ const n=wsItems(b.dataset.t).length; b.classList.toggle('on',b.dataset.t===_ws.tab); b.innerHTML=`${{entry:'오늘 진입',wait:'대기',track:'진행 중'}[b.dataset.t]} ${n}`; });
+  document.querySelectorAll('.ws-tabs button').forEach(b=>{ const n=wsItems(b.dataset.t).length; b.classList.toggle('on',b.dataset.t===_ws.tab); b.innerHTML=`${{entry:'오늘 진입',wait:'대기',track:'신호 추적'}[b.dataset.t]} ${n}`; });
   const td=(_ws.data||{}).track_done||{};
   document.getElementById('ws-lane-note').textContent=(WS_LANE[_ws.tab]||'')+(_ws.tab==='track'&&(td.stop||td.exit)?` · 그사이 끝난 것: 스탑로스 ${td.stop||0} · 21일선 정리 ${td.exit||0}`:'');
   const L=wsItems(_ws.tab), el=document.getElementById('ws-items');
