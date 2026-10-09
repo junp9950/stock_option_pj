@@ -18,7 +18,7 @@ def text_now(db: Session, k: int = 8) -> str | None:
     if not sc.get("live"):
         return None
     names = dict(db.execute(text("select code, name from stocks")).all())
-    allr = [(c, v) for c, v in sc["scores"].items() if (v["score"] >= 6 or v.get("ema")) and v["flags"][1]]     # 시장보다 센 종목(RS 70~95)만 · 이평선 모였다 돌파 포함
+    allr = [(c, v) for c, v in sc["scores"].items() if (v["score"] >= 6 or v.get("ema") or v.get("hot")) and v["flags"][1]]     # 시장보다 센 종목(RS 70~95)만 · 이평선 모였다 돌파 포함
     wide = [cv for cv in allr if cv[1]["risk"] > 0.08]          # 손절폭 8%↑는 뺀다 (3년 R +0.11) · 5~8%는 후순위 (R +0.35)
     rows = sorted((cv for cv in allr if cv[1]["risk"] <= 0.08), key=lambda cv: cv[1]["risk"])
     out = [f"⏱ <b>종가 진입 후보</b> {sc.get('at', '')} 기준 (봉 확정 전)"]
@@ -47,7 +47,7 @@ def text_now(db: Session, k: int = 8) -> str | None:
     if not rows:
         out.append("매수 신호 (손절폭 8%↓) 종목 없음 → 쉬기" + (f" (손절폭 넓어서 뺀 것 {len(wide)}개)" if wide else ""))
         return "\n".join(out)
-    good = [r for r in rows if r[1]["risk"] <= 0.03]
+    good = [r for r in rows if r[1]["risk"] <= 0.03 and not r[1].get("hot")]
     out.append(f"매수 신호 {len(rows)}개 · ✅ 손절폭 3%↓ {len(good)}개" + (f" · 8%↑라 뺀 것 {len(wide)}개" if wide else ""))
     try:
         from backend.services.stock_signals import sector_rank_of  # noqa: PLC0415
@@ -56,7 +56,7 @@ def text_now(db: Session, k: int = 8) -> str | None:
         srk = {}
     rows = sorted(rows, key=lambda cv: (srk.get(cv[0], (99, ""))[0] > 8, cv[1]["risk"]))     # 섹터 1~8위 먼저
     for c, v in rows[:k]:
-        out.append(f"{'✅' if v['risk'] <= 0.03 else '·'} <b>{names.get(c, c)}</b> {'이평선 돌파 · ' if v.get('ema') else ''}{v['score']}/7 · 스탑로스 {v['stop']:,.0f} (-{v['risk'] * 100:.1f}%)"
+        out.append(f"{'✅' if v['risk'] <= 0.03 and not v.get('hot') else '·'} <b>{names.get(c, c)}</b> {'이평선 돌파 · ' if v.get('ema') else ''}{'과열 매수(이번 장) · 수량 절반 · ' if v.get('hot') else ''}{v['score']}/7 · 스탑로스 {v['stop']:,.0f} (-{v['risk'] * 100:.1f}%)"
                    + (" · 후순위, 수량 절반 이하" if v["risk"] > 0.05 else "")
                    + (f" · {srk[c][1]} {srk[c][0]}위" if srk.get(c, (99,))[0] <= 8 else " · 섹터 밖"))
     out.append("파는 법: 사면 바로 스탑로스 예약 (정규장만) · 21일선 아래 종가면 다음 날 아침 정리")
