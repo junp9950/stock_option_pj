@@ -142,6 +142,28 @@ select{background:#21262d;border:1px solid #30363d;color:#c9d1d9;padding:6px 10p
 .ws-main{min-width:0;padding:12px}
 .ws #ws-panel{background:var(--card);border:1px solid var(--line);border-radius:10px;padding:12px}
 .ws-search{position:relative;margin-bottom:6px}.ws-search input{width:100%;box-sizing:border-box;background:var(--card2);border:1px solid var(--line);color:var(--text);border-radius:16px;padding:7px 12px;font-size:13px;outline:none}.ws-search input:focus{border-color:var(--blue)}#ws-sr{position:absolute;left:0;right:0;top:100%;z-index:30;background:var(--card);border:1px solid var(--line);border-radius:10px;margin-top:4px;max-height:360px;overflow:auto;display:none;box-shadow:0 6px 18px rgba(0,0,0,.4)}#ws-sr.on{display:block}
+.htop{display:grid;grid-template-columns:minmax(0,1.55fr) minmax(0,1fr);gap:14px;margin-bottom:14px}
+.hcard{background:var(--card);border:1px solid var(--line);border-radius:14px;padding:18px 20px;min-width:0}
+.hc-h{display:flex;justify-content:space-between;align-items:baseline;gap:8px;margin-bottom:10px}.hc-h b{font-size:15px;color:var(--text)}.hc-h span{font-size:11.5px;color:var(--muted)}
+.hc-head{font-size:20px;font-weight:800;color:var(--text);line-height:1.35;margin:2px 0 4px;word-break:keep-all}
+.hc-do{font-size:13px;color:var(--muted);margin-bottom:14px;word-break:keep-all}
+.hc-nums{display:flex;gap:0;margin-bottom:14px}.hc-num{flex:1;min-width:0;padding:0 14px;border-left:1px solid var(--line)}.hc-num:first-child{padding-left:0;border-left:none}
+.hc-num .l{font-size:11.5px;color:var(--muted)}.hc-num .v{font-size:22px;font-weight:800;color:var(--text);margin:2px 0}.hc-num .s{font-size:12.5px;font-weight:600}
+.hc-flow{display:grid;grid-template-columns:40px 1fr;gap:6px 8px;align-items:center;font-size:12px}.hc-flow .k{color:var(--muted)}
+.hc-pill{display:inline-block;margin:0 5px 4px 0;padding:3px 10px;border-radius:12px;border:1px solid var(--line);font-size:12px;color:var(--text);white-space:nowrap}
+.hc-pill.up{border-color:rgba(248,81,73,.45)}.hc-pill.dn{border-color:rgba(88,166,255,.45)}
+.hc-verdict{display:flex;align-items:center;gap:8px;margin:2px 0 4px}.hc-verdict b{font-size:17px;color:var(--text)}
+.hc-sum{font-size:12.5px;color:var(--muted);margin-bottom:8px}
+.hc-bars{display:flex;gap:4px;margin:6px 0 12px}.hc-bars i{flex:1;height:5px;border-radius:3px;background:var(--line)}
+.hc-bars i.g{background:var(--blue)}.hc-bars i.b{background:var(--orange)}
+.hc-row{display:flex;align-items:center;gap:10px;padding:10px 0;border-top:1px solid var(--line2)}
+.hc-row .t{flex:1;min-width:0}.hc-row .t b{display:block;font-size:13.5px;color:var(--text)}.hc-row .t span{font-size:11.5px;color:var(--muted)}
+.hc-row .v{font-size:16px;font-weight:700;color:var(--text);white-space:nowrap}
+.hc-badge{font-size:11px;font-weight:700;padding:2px 8px;border-radius:10px;white-space:nowrap;border:1px solid}
+.hc-badge.g{color:var(--blue);border-color:rgba(88,166,255,.45);background:rgba(56,139,253,.10)}
+.hc-badge.n{color:var(--muted);border-color:var(--line)}
+.hc-badge.b{color:var(--orange);border-color:rgba(240,136,62,.5);background:rgba(240,136,62,.10)}
+@media(max-width:900px){.htop{grid-template-columns:1fr}.hc-head{font-size:18px}.hc-num .v{font-size:19px}.hcard{padding:16px}}
 .ws-tabs{display:flex;gap:6px;margin-bottom:6px}
 .ws-tabs button{flex:1;background:var(--card2);border:1px solid var(--line);color:var(--muted);border-radius:16px;padding:6px 0;font-size:12px;cursor:pointer;white-space:nowrap}
 .ws-tabs button.on{background:var(--text);color:var(--bg);font-weight:700;border-color:var(--text)}
@@ -610,8 +632,10 @@ select{background:#21262d;border:1px solid #30363d;color:#c9d1d9;padding:6px 10p
 <!-- 눌림목 레이더 탭 -->
 <!-- 오늘 (대시보드, 2026-10-06) -->
 <div id="panel-home" class="panel active content">
-  <div id="db-strip" class="mstrip"><span class="ts">시장 불러오는 중…</span></div>
-  <div id="db-verdict" style="border-radius:12px;padding:14px 18px;margin-bottom:14px;border:1px solid #30363d;font-size:15px">로딩 중…</div>
+  <!-- 첫 화면 위: '오늘' 카드 + '시장 상태' 카드 (2026-10-09 "Lazy Alpha 라운지처럼 깔끔하게") — 예전 띠·판단 상자는 숨김(아래 코드가 아직 씀) -->
+  <div class="htop"><section class="hcard" id="hc-today"><div class="ts">불러오는 중…</div></section><section class="hcard" id="hc-market"></section></div>
+  <div id="db-strip" class="mstrip" style="display:none"></div>
+  <div id="db-verdict" style="display:none"></div>
   <div class="ws">
     <div class="ws-list">
       <div class="ws-search"><input id="ws-q" placeholder="🔍 종목 검색 (이름·코드·초성)" autocomplete="off" oninput="wsSearch(this.value)" onkeydown="if(event.key==='Enter'){const f=document.querySelector('#ws-sr .ws-item');if(f)f.click();}else if(event.key==='Escape'){this.value='';wsSearch('');}"><div id="ws-sr"></div></div>
@@ -900,7 +924,36 @@ async function loadLive(d){
   ['sector_day','heat','b_sectors','best_lead','best_swing','box_break','box_near','index_today'].forEach(k=>{ if(r[k]!==undefined) d2[k]=r[k]; });
   renderDashboard(d2, false, r);
 }
+// 첫 화면 위 카드 두 장 (2026-10-09) — 색약: 상태는 ▲■▼ 모양 + 파랑/회색/주황
+function renderHomeTop(d, live){
+  const sg=x=>(x>0?'+':'')+x, m=d.market||{}, all=m['전체']||{}, br=d.breadth||{}, it=d.index_today||{}, md=(live&&live.mode)||d.mode||{};
+  const B={g:['g','▲ 양호'],n:['n','■ 중립'],b:['b','▼ 약화']};
+  const rows=[];
+  const add=(t,sub,v,k,click)=>rows.push({t,sub,v,k,click});
+  add('시장 국면','종목 평균 지수 · 20일선 '+(all.vs_ma20_pct!=null?sg(all.vs_ma20_pct)+'%':'-'),all.state||'-',all.state==='상승'?'g':all.state==='하락'?'b':'n');
+  if(br.pct!=null) add('시장 폭','50일선 위 비율 · 10일 '+sg(br.chg10)+'%p'+(br.weak?' · 속 약해짐':''),br.pct+'%',br.weak||br.narrow?'b':br.pct>=55?'g':'n');
+  if(br.hi60!=null) add('신고가 · 신저가','60일 기준 · 거래 30억↑',br.hi60+' · '+br.lo60,br.hi60>=br.lo60*2&&br.hi60>=10?'g':br.lo60>br.hi60?'b':'n');
+  if(m.rel!=null) add('삼전·하닉 vs 코스닥','최근 20일 · 삼하 '+sg(m.sh20)+'% · 코스닥 '+sg(m.kq20)+'%',sg(m.rel)+'%p',m.rel>=10?'b':m.rel<=-3?'g':'n');
+  if(m.sh_foreign5!=null) add('외국인','삼전·하닉 5일 순매수',(m.sh_foreign5>=0?'+':'')+Math.round(m.sh_foreign5).toLocaleString()+'억',m.sh_foreign5>0?'g':'b');
+  const good=rows.filter(r=>r.k==='g').length;
+  let vt, vk;
+  if(all.state==='하락'){ vt='쉬는 날'; vk='b'; } else if(br.weak||br.narrow){ vt='들어가도 크기 줄이기'; vk='b'; } else if(all.state==='상승'){ vt='진입 가능'; vk='g'; } else { vt='골라서 작게'; vk='n'; }
+  const when=live?`장중 ${live.as_of}`:`${(d.as_of||'').slice(5).replace('-','/')} 마감 기준`;
+  document.getElementById('hc-market').innerHTML=`<div class="hc-h"><b>시장 상태</b><span>${when}</span></div>
+    <div class="hc-verdict"><span class="hc-badge ${B[vk][0]}">${B[vk][1].split(' ')[0]}</span><b>${vt}</b></div>
+    <div class="hc-sum">근거 ${rows.length}개 중 ${good}개 양호 · 하락장은 쉬고, 폭이 줄면 크기 줄이기 (3년 확인)</div>
+    <div class="hc-bars">${rows.map(r=>`<i class="${r.k==='g'?'g':r.k==='b'?'b':''}"></i>`).join('')}</div>
+    ${rows.map(r=>`<div class="hc-row"><div class="t"><b>${r.t}</b><span>${r.sub}</span></div><div class="v">${r.v}</div><span class="hc-badge ${B[r.k][0]}">${B[r.k][1]}</span></div>`).join('')}`;
+  const ix=k=>{ const x=it[k]; if(!x) return ''; const c=x.pct>=0?'var(--up)':'var(--down)';
+    return `<div class="hc-num" style="cursor:pointer" onclick="openIndexChart('${k==='코스피'?'KOSPI':'KOSDAQ'}','${k}')"><div class="l">${k}${x.status==='OPEN'?' · 장중':''}</div><div class="v">${x.close}</div><div class="s" style="color:${c}">${sg(x.pct)}%</div></div>`; };
+  const st=d.sectors_today||{}, pill=(x,c)=>`<span class="hc-pill ${c}" title="20일 순위 ${x.rank||'-'}위 (10일 전 ${x.rank_10ago||'-'}위)">${x.family} <b style="color:${x.chg>=0?'var(--up)':'var(--down)'}">${sg(x.chg)}%</b></span>`;
+  document.getElementById('hc-today').innerHTML=`<div class="hc-h"><b>오늘</b><span>${when}</span></div>
+    <div class="hc-head">${md.title||'판단 준비 중'}</div><div class="hc-do">${md.do?'→ '+md.do:''}</div>
+    <div class="hc-nums">${ix('코스피')}${ix('코스닥')}${br.adv_pct!=null?`<div class="hc-num"><div class="l">오른 종목 비율</div><div class="v">${br.adv_pct}%</div><div class="s" style="color:var(--muted)">거래 10억↑</div></div>`:''}</div>
+    ${(st.strong||[]).length?`<div class="hc-flow"><span class="k">강함</span><div>${st.strong.map(x=>pill(x,'up')).join('')}</div><span class="k">약함</span><div>${(st.weak||[]).map(x=>pill(x,'dn')).join('')}</div></div>`:''}`;
+}
 async function renderDashboard(d, stale, live){
+  try{ renderHomeTop(d, live); }catch(e){ console.error(e); }
   const v=document.getElementById('db-verdict');
   const m=d.market||{}, all=m['전체']||{}, al=d.alert||{};
   const col={상승:'#3fb950',횡보:'#d29922',하락:'#f85149'}, ico={상승:'🟢',횡보:'🟡',하락:'🔴'};

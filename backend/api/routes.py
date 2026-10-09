@@ -1878,7 +1878,21 @@ def get_dashboard(db: Session = Depends(get_db)):
     return {"as_of": latest, "market": st, "alert": alert, "index_today": idx, "breadth": brd, "b_sectors": mp["b_sectors"], "hot": mp["hot"], "sector_day": mp["sector_day"],
             "b_count": len(b), "a_count": sum(1 for x in mp["items"] if x["a"] and not x["b"]), "best": best[:8], "best_lead": best_lead[:8], "best_swing": best_swing[:8], "heat": mp.get("heat", {}), "next": mp["next"][:10],
             "trend_doji": mp.get("trend_doji", [])[:8], "trend_big": mp.get("trend_big", [])[:10], "rest2": mp.get("rest2", [])[:10], "turn3": mp.get("turn3", [])[:30], "turn2": mp.get("turn2", [])[:12], "box_break": mp.get("box_break", [])[:10], "box_near": mp.get("box_near", [])[:10], "dip": mp.get("dip", []), "rotation": mp.get("rotation", []), "mode": mp.get("mode"), "ema_break": mp.get("ema_break", []), "ema_wait": mp.get("ema_wait", []),
-            "watch": watch, "volume": vr}
+            "watch": watch, "volume": vr, "sectors_today": _sectors_today(db)}
+
+
+def _sectors_today(db: Session) -> dict:
+    """첫 화면 '오늘' 카드: 16개 섹터 중 오늘 센 3 · 약한 3 (장중이면 실시간)."""
+    try:
+        from backend.screener.rotation import scan_live  # noqa: PLC0415
+        from backend.services.result_cache import cached  # noqa: PLC0415
+        from backend.screener.rotation import scan  # noqa: PLC0415
+        r = scan_live(db) or cached("sector_rotation", (), db, lambda: scan(db)) or {}
+        it = sorted(r.get("items", []), key=lambda x: -(x.get("chg_pct") or 0))
+        one = lambda x: {"family": x["family"], "chg": x.get("chg_pct"), "rank": x.get("rank"), "rank_10ago": x.get("rank_10ago")}  # noqa: E731
+        return {"strong": [one(x) for x in it[:3]], "weak": [one(x) for x in it[-3:][::-1]]}
+    except Exception:  # noqa: BLE001
+        return {}
 
 
 @router.get("/screener/my-pattern")
