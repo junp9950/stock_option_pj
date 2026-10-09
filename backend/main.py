@@ -63,6 +63,8 @@ def status_dashboard() -> str:
 <title>주식레이더</title>
 <link rel="icon" href="data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 100 100%22><rect width=%22100%22 height=%22100%22 rx=%2222%22 fill=%22%231f6feb%22/><text x=%2250%22 y=%2270%22 font-size=%2258%22 text-anchor=%22middle%22>%F0%9F%93%88</text></svg>">
 <style>
+:root{--bg:#0d1117;--card:#161b22;--card2:#1c2128;--line:#30363d;--line2:#21262d;--text:#e6edf3;--body:#c9d1d9;--muted:#8b949e;
+  --blue:#58a6ff;--orange:#f0883e;--up:#f85149;--down:#58a6ff;--ok-bg:rgba(56,139,253,.12);--warn-bg:rgba(240,136,62,.13)}
 *{box-sizing:border-box;margin:0;padding:0}
 body{background:#0d1117;color:#c9d1d9;font-family:'Segoe UI',sans-serif;font-size:14px}
 header{padding:16px 24px;border-bottom:1px solid #30363d;display:flex;align-items:center;justify-content:space-between}
@@ -104,6 +106,35 @@ select{background:#21262d;border:1px solid #30363d;color:#c9d1d9;padding:6px 10p
 .modal-bg.show{display:flex}
 .modal{background:#161b22;border:1px solid #30363d;border-radius:10px;padding:24px;width:min(960px,100%);max-height:90vh;overflow-y:auto}
 .modal h2{font-size:16px;font-weight:700;margin-bottom:16px;color:#e6edf3}
+/* 종목 차트 창: 왼쪽 차트 + 오른쪽 패널 (2026-10-09, 색은 :root 변수 — 나중에 밝은 화면 전환용) */
+.modal.cm-wide{width:min(1240px,100%);padding:20px}
+.cm-body{display:flex;gap:16px;align-items:flex-start}
+.cm-chart{flex:1;min-width:0}
+.cm-panel{width:330px;flex-shrink:0;display:flex;flex-direction:column;gap:10px}
+.cm-panel:empty{display:none}
+.cp-head{display:flex;gap:12px;align-items:center}
+.cp-grade{width:46px;height:46px;border-radius:10px;background:var(--card2);border:1px solid var(--line);display:flex;align-items:center;justify-content:center;font-size:22px;font-weight:800;color:var(--text)}
+.cp-gw{font-size:11px;color:var(--muted)}.cp-gw b{display:block;font-size:15px;color:var(--text)}
+.cp-price{font-size:13px;color:var(--body)}
+.cp-state{background:var(--card2);border:1px solid var(--line);border-radius:10px;padding:12px 14px}
+.cp-steps{display:flex;gap:4px;margin-bottom:10px}
+.cp-step{flex:1;text-align:center;font-size:10px;color:var(--muted)}
+.cp-step i{display:block;height:4px;border-radius:2px;background:var(--line);margin-bottom:4px}
+.cp-step.on{color:var(--text);font-weight:700}.cp-step.on i{background:var(--blue)}
+.cp-step.done i{background:rgba(88,166,255,.35)}
+.cp-title{font-size:17px;font-weight:800;color:var(--text)}
+.cp-sub{font-size:12px;color:var(--muted);margin-top:3px}
+.cp-chips{display:flex;flex-wrap:wrap;gap:5px}
+.cp-chip{font-size:11.5px;padding:3px 8px;border-radius:12px;border:1px solid}
+.cp-chip.ok{color:var(--blue);background:var(--ok-bg);border-color:rgba(56,139,253,.35)}
+.cp-chip.warn{color:var(--orange);background:var(--warn-bg);border-color:rgba(240,136,62,.4)}
+.cp-cards{display:grid;grid-template-columns:repeat(3,1fr);gap:6px}
+.cp-card{background:var(--card2);border:1px solid var(--line);border-radius:8px;padding:8px}
+.cp-card .l{font-size:10.5px;color:var(--muted)}.cp-card .v{font-size:14px;font-weight:700;color:var(--text);margin-top:2px}.cp-card .s{font-size:10.5px;color:var(--muted)}
+.cp-rows{border-top:1px solid var(--line2)}
+.cp-row{display:flex;justify-content:space-between;gap:8px;padding:6px 2px;border-bottom:1px solid var(--line2);font-size:12px}
+.cp-row .k{color:var(--muted)}.cp-row .v{color:var(--text);text-align:right}
+@media(max-width:900px){.cm-body{flex-direction:column}.cm-panel{width:100%}}
 .close-btn{float:right;cursor:pointer;color:#8b949e;font-size:18px;line-height:1}.close-btn:hover{color:#e6edf3}
 .modal-tabs{display:flex;gap:4px;margin-bottom:16px;border-bottom:1px solid #30363d;padding-bottom:0}
 .modal-tab{padding:6px 14px;font-size:13px;color:#8b949e;cursor:pointer;border-bottom:2px solid transparent;margin-bottom:-1px}
@@ -670,12 +701,17 @@ select{background:#21262d;border:1px solid #30363d;color:#c9d1d9;padding:6px 10p
 
 <!-- 캔들차트 모달 (토스증권 실시간) -->
 <div class="modal-bg" id="chart-modal-bg" onclick="if(event.target===this)closeChartModal()">
-  <div class="modal">
+  <div class="modal cm-wide">
     <span class="close-btn" onclick="closeChartModal()">✕</span>
     <h2 id="chart-modal-title">종목 차트</h2>
-    <div class="note" id="chart-modal-note" style="margin-bottom:8px"></div>
-    <canvas id="pb-candle-canvas" style="width:100%;height:340px;display:block"></canvas>
-    <canvas id="pb-volume-canvas" style="width:100%;height:100px;display:block;margin-top:4px"></canvas>
+    <div class="cm-body">
+      <div class="cm-chart">
+        <div class="note" id="chart-modal-note" style="margin-bottom:8px"></div>
+        <canvas id="pb-candle-canvas" style="width:100%;height:380px;display:block"></canvas>
+        <canvas id="pb-volume-canvas" style="width:100%;height:100px;display:block;margin-top:4px"></canvas>
+      </div>
+      <aside class="cm-panel" id="cm-panel"></aside>
+    </div>
   </div>
 </div>
 
@@ -1857,11 +1893,31 @@ let _avwapNote='';
 function clearChartCanvas(){   // 열 때 이전 종목 차트가 남아 보이던 것 지움 (2026-10-07)
   ['pb-candle-canvas','pb-volume-canvas'].forEach(id=>{ const cv=document.getElementById(id); if(cv){ const x=cv.getContext('2d'); x.setTransform(1,0,0,1,0,0); x.clearRect(0,0,cv.width,cv.height); } });
 }
+// 오른쪽 패널: 결론(상태 제목) 크게 · 단계 막대 · ✓/⚠ 칩 · 카드 · 세부 지표 (2026-10-09, Lazy Alpha식 배치)
+function renderStockPanel(p){
+  const el=document.getElementById('cm-panel');
+  if(!p||!p.ok){el.innerHTML='';return;}
+  const steps=['관찰','후보','보유','관리','청산'];
+  const sg=n=>(n>0?'+':'')+n.toFixed(2)+'%';
+  el.innerHTML=`
+    <div class="cp-head"><div class="cp-grade">${p.grade.letter}</div>
+      <div class="cp-gw">추세 등급<b>${p.grade.word}</b><span class="cp-price">${Math.round(p.close).toLocaleString()} <span style="color:${p.chg>0?'var(--up)':p.chg<0?'var(--down)':'var(--muted)'}">${sg(p.chg)}</span></span></div></div>
+    <div class="cp-state">
+      <div class="cp-steps">${steps.map((s,i)=>`<div class="cp-step ${i===p.stage?'on':i<p.stage?'done':''}"><i></i>${s}</div>`).join('')}</div>
+      <div class="cp-title">${p.title}</div><div class="cp-sub">${p.sub||''}</div>
+    </div>
+    <div class="cp-chips">${p.chips.map(c=>`<span class="cp-chip ${c.ok?'ok':'warn'}">${c.ok?'✓':'⚠'} ${c.text}</span>`).join('')}</div>
+    <div class="cp-cards">${p.cards.map(c=>`<div class="cp-card"><div class="l">${c.label}</div><div class="v">${c.value}</div><div class="s">${c.sub||''}</div></div>`).join('')}</div>
+    <div class="cp-rows">${p.rows.map(r=>`<div class="cp-row"${r.tip?` title="${r.tip}"`:''}><span class="k">${r.k}${r.tip?' ⓘ':''}</span><span class="v">${r.v}</span></div>`).join('')}</div>
+    <div class="ts" style="font-size:10.5px">일봉 ${p.date} 기준 · 종가는 정규장 15:30 · 추세 조건 8/8은 상승장 60일 +9%(3년), RS 95↑는 오히려 약했음</div>`;
+}
 async function openChartModal(code, name, spikeDate){
-  document.getElementById('chart-modal-title').textContent = `${name} (${code}) — 토스증권 실시간 일봉`;
+  document.getElementById('chart-modal-title').textContent = `${name} (${code})`;
   document.getElementById('chart-modal-note').textContent = '로딩 중…';
   clearChartCanvas();
+  document.getElementById('cm-panel').innerHTML='<div class="ts">불러오는 중…</div>';
   document.getElementById('chart-modal-bg').classList.add('show');
+  fetch(`${API}/stock/${code}/panel`).then(r=>r.ok?r.json():null).then(renderStockPanel).catch(()=>renderStockPanel(null));
   try{
     const data = await fetch(`${API}/toss/candles/${code}?interval=1d&count=150`).then(r=>r.ok?r.json():null);   // EMA 계산용으로 더 받아 오고 그림은 90개
     if(!data || !data.candles || !data.candles.length){
@@ -1878,6 +1934,7 @@ async function openChartModal(code, name, spikeDate){
 }
 // 지수 차트 (2026-10-07: 오늘 탭 지수 카드를 누르면 최근 60일 + EMA)
 async function openIndexChart(sym, name){
+  document.getElementById('cm-panel').innerHTML='';
   document.getElementById('chart-modal-title').textContent = `${name} 지수 — 일봉`;
   document.getElementById('chart-modal-note').textContent = '로딩 중…';
   clearChartCanvas();

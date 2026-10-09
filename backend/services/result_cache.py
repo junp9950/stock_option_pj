@@ -79,6 +79,13 @@ def data_version(db: Session) -> tuple:
 _inflight: dict[tuple, threading.Lock] = {}
 
 
+def peek(name: str, args: tuple = ()) -> Any:
+    """계산하지 않고 들고 있는 결과만 (없으면 None) — 다른 화면이 곁가지로 쓸 때."""
+    with _lock:
+        hit = _cache.get((name, args))
+    return hit[2] if hit else None
+
+
 def cached(name: str, args: tuple, db: Session, compute: Callable[[], Any]) -> Any:
     key = (name, args)
     version = data_version(db)

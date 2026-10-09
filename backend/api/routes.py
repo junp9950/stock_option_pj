@@ -1860,6 +1860,8 @@ def warm_caches(db: Session) -> None:
     get_volume_records(db=db)
     get_sector_rotation(db=db)
     get_sector_members_all(db=db)      # 섹터 누르면 바로 펼치게
+    from backend.services.stock_panel import rs_table  # noqa: PLC0415
+    rs_table(db)                       # 차트 창 RS (DB 날짜 바뀔 때 한 번)
     get_sector_calendar(db=db)
     get_jongbe(db=db)
     get_value_records(db=db)
@@ -1950,6 +1952,13 @@ def get_sector_calendar(db: Session = Depends(get_db)):
     from backend.screener.sector_calendar import scan  # noqa: PLC0415
     from backend.services.result_cache import cached  # noqa: PLC0415
     return cached("sector_calendar_v2", (), db, lambda: scan(db))
+
+
+@router.get("/stock/{code}/panel")
+def get_stock_panel(code: str, db: Session = Depends(get_db)):
+    """종목 차트 창 오른쪽 패널 — 상태 제목·단계·✓/⚠ 칩·카드·세부 지표 (2026-10-09)."""
+    from backend.services.stock_panel import panel  # noqa: PLC0415
+    return panel(db, code)
 
 
 @router.get("/sectors/rotation/members-all")

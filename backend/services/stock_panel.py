@@ -1,0 +1,199 @@
+"""종목 차트 창 오른쪽 패널 (2026-10-09, 사용자 "저 UI가 더 깔끔하노" — Lazy Alpha식 카드·칩·단계 막대를 우리 데이터로).
+
+결론(상태 제목)을 먼저 크게, 근거는 ✓/⚠ 칩으로. 색약이라 색이 아니라 ✓·⚠ 모양으로 나눈다.
+추세 조건 8개 = 미너비니 템플릿(150·200일선 위, 150>200, 200일선 상승, 50>150·200, 50일선 위, 52주 저점 +30%↑, 52주 고점 -25% 안, RS 70↑).
+3년 확인(/home/junp/tmp_claude/la_validate.py): 8/8이면 상승장 60일 +9.0%, 2~5점은 마이너스. RS는 90~95가 가장 좋고 95↑는 오히려 나빴다.
+"""
+from __future__ import annotations
+
+import threading
+from datetime import date
+
+import numpy as np
+import pandas as pd
+from sqlalchemy import text
+from sqlalchemy.orm import Session
+
+CYCLE_START = date(2026, 7, 30)
+_RS: dict = {"key": None, "v": {}}
+_RS_LOCK = threading.Lock()
+
+
+def rs_table(db: Session) -> dict[str, float]:
+    """전 종목 RS Rating(1~99, IBD식 0.4·3개월 + 0.2·6·9·12개월 백분위). DB 날짜가 바뀔 때만 다시 계산."""
+    latest = db.execute(text("select max(trading_date) from spot_daily_prices")).scalar()
+    if _RS["key"] == latest:
+        return _RS["v"]
+    with _RS_LOCK:
+        if _RS["key"] == latest:
+            return _RS["v"]
+        px = pd.read_sql(text("select stock_code s, trading_date d, close_price c, trading_value tv from spot_daily_prices "
+                              "where trading_date >= cast(:d as date) - 380"), db.connection(), params={"d": latest})
+        C = px.pivot(index="d", columns="s", values="c").sort_index().astype(float).ffill(limit=5)
+        TV = px.pivot(index="d", columns="s", values="tv").sort_index().astype(float)
+        r = lambda k: C.iloc[-1] / C.iloc[-1 - k] - 1 if len(C) > k else C.iloc[-1] * np.nan
+        raw = 0.4 * r(63) + 0.2 * r(126) + 0.2 * r(189) + 0.2 * r(min(252, len(C) - 1))
+        ok = (TV.iloc[-20:].mean() >= 1e9) & raw.notna()
+        rs = (raw[ok].rank(pct=True) * 98 + 1).round()
+        _RS.update(key=latest, v={k: float(v) for k, v in rs.items()})
+        return _RS["v"]
+
+
+def _grade(tt: int) -> tuple[str, str]:
+    return ("S", "강세") if tt >= 8 else ("H", "양호") if tt == 7 else ("N", "중립") if tt >= 5 else ("W", "약세") if tt >= 3 else ("D", "하락")
+
+
+def panel(db: Session, code: str) -> dict:
+    name = db.execute(text("select name from stocks where code = :c"), {"c": code}).scalar() or code
+    q = db.execute(text("select trading_date, open_price, high_price, low_price, close_price, volume from spot_daily_prices "
+                        "where stock_code = :c order by trading_date desc limit 300"), {"c": code}).all()
+    if len(q) < 30:
+        return {"code": code, "name": name, "ok": False}
+    df = pd.DataFrame(q[::-1], columns=["d", "o", "h", "l", "c", "v"]).set_index("d").astype(float)
+    C, H, L, V = df.c, df.h, df.l, df.v
+    c = float(C.iloc[-1]); prev = float(C.iloc[-2])
+    ema = {k: float(C.ewm(span=k, adjust=False).mean().iloc[-1]) for k in (5, 10, 20, 60)}
+    sma = {k: float(C.rolling(k, min_periods=int(k * .9)).mean().iloc[-1]) if len(C) >= k * .9 else np.nan for k in (20, 50, 150, 200)}
+    s200_prev = C.rolling(200, min_periods=180).mean().iloc[-22] if len(C) >= 202 else np.nan
+    hi52, lo52 = float(H.iloc[-250:].max()), float(L.iloc[-250:].min())
+    rs = rs_table(db).get(code)
+    nan = lambda x: x != x
+    tt_list = [
+        ("150·200일선 위", not nan(sma[150]) and not nan(sma[200]) and c > sma[150] and c > sma[200]),
+        ("150일선 > 200일선", not nan(sma[150]) and not nan(sma[200]) and sma[150] > sma[200]),
+        ("200일선 오르는 중", not nan(sma[200]) and not nan(s200_prev) and sma[200] > s200_prev),
+        ("50일선 > 150·200일선", not nan(sma[50]) and not nan(sma[150]) and not nan(sma[200]) and sma[50] > sma[150] and sma[50] > sma[200]),
+        ("50일선 위", not nan(sma[50]) and c > sma[50]),
+        ("52주 저점 +30%↑", c >= lo52 * 1.3),
+        ("52주 고점 -25% 안", c >= hi52 * 0.75),
+        ("RS 70↑", rs is not None and rs >= 70),
+    ]
+    tt = sum(1 for _, v in tt_list if v)
+    letter, word = _grade(tt)
+    up = ema[5] > ema[10] > ema[20] > ema[60]
+    down = ema[5] < ema[10] < ema[20] < ema[60]
+    align = "정배열" if up else "역배열" if down else "엇갈림"
+    spread = (max(ema[5], ema[10], ema[20]) / min(ema[5], ema[10], ema[20]) - 1) * 100
+    gap20 = (c / sma[20] - 1) * 100 if not nan(sma[20]) else 0.0
+    vx = float(V.iloc[-1] / V.iloc[-50:].mean()) if V.iloc[-50:].mean() else 0.0
+    r20 = (c / float(C.iloc[-21]) - 1) * 100 if len(C) > 21 else 0.0
+    since = df[df.index >= CYCLE_START]
+    hi_cyc = float(since.h.max()) if len(since) else hi52
+    support, resist = float(L.iloc[-21:-1].min()), float(H.iloc[-21:-1].max())
+
+    # 섹터 (16개 중 이 종목이 속한 것 중 순위가 가장 높은 것)
+    sector = None
+    try:
+        from backend.screener.rotation import family_members, scan, scan_live  # noqa: PLC0415
+        from backend.services.result_cache import cached  # noqa: PLC0415
+        fams = [f for f, m in family_members(db).items() if code in m]
+        rot = scan_live(db) or cached("sector_rotation", (), db, lambda: scan(db))
+        items = {x["family"]: x for x in rot.get("items", [])}
+        best = sorted((items[f] for f in fams if f in items), key=lambda x: x["rank"])
+        if best:
+            b = best[0]
+            sector = {"family": b["family"], "rank": b["rank"], "chg": b["chg_pct"], "money": b["tv1_x"], "status": b.get("status", "")}
+    except Exception:  # noqa: BLE001
+        pass
+
+    # 보유 여부 (매매 일지) · 손절선 (관심 종목 hold 줄)
+    held = None
+    try:
+        from backend.services import watchlist as W  # noqa: PLC0415
+        pos = {p["code"]: p for p in W._positions(db)}
+        if code in pos:
+            wl = {x["code"]: x for x in W._items(db)}
+            stop = float(wl[code]["level"]) if code in wl and wl[code].get("kind") == "hold" and wl[code].get("level") else 0.0
+            p = pos[code]
+            held = {"qty": p["qty"], "avg": p["avg"], "stop": stop, "gain": (c * 0.998 / p["avg"] - 1) * 100 if p["avg"] else 0.0}
+    except Exception:  # noqa: BLE001
+        pass
+
+    # 오늘 우리 후보 목록에 있나
+    tags = []
+    try:
+        from backend.services.result_cache import peek  # noqa: PLC0415
+        mp = peek("my_pattern_v6") or {}
+        for key, lab in (("box_break", "박스 돌파 (스윙)"), ("ema_break", "EMA 모임 돌파"), ("box_near", "박스 뚫기 직전")):
+            if any(x.get("code") == code for x in mp.get(key, []) or []):
+                tags.append(lab)
+        from backend.services.telegram import _get  # noqa: PLC0415
+        log = _get(db, "top3_log", {}) or {}
+        if log and code in log.get(max(log), []):
+            tags.insert(0, "오늘 종베 3")
+    except Exception:  # noqa: BLE001
+        pass
+
+    # 단계 · 상태 제목
+    if held:
+        room = (c / held["stop"] - 1) * 100 if held["stop"] else None
+        if held["stop"] and c < held["stop"]:
+            stage, title, sub = 4, "손절선 아래 마감", f"손절 {held['stop']:,.0f} · 정리 신호"
+        elif room is not None and room <= 2:
+            stage, title, sub = 3, "보유 중 · 손절선 근접", f"손절 {held['stop']:,.0f}까지 {room:.1f}%"
+        else:
+            stage, title = (3, "보유 중 · 수익") if held["gain"] >= 5 else (2, "보유 중")
+            sub = f"손절 {held['stop']:,.0f}까지 {room:.1f}%" if room is not None else "손절선 없음 — 정해 두세요"
+    elif tags:
+        stage, title, sub = 1, tags[0], " · ".join(tags[1:]) or "오늘 우리 후보 목록에 있음"
+    elif up and c > ema[10] and spread <= 4:
+        stage, title, sub = 0, "셋업 · 힘 모으는 중", f"정배열 · EMA 5·10·20 간격 {spread:.1f}% · 종가가 10일선 위"
+    else:
+        stage, title, sub = 0, "관찰 중", f"이평선 {align}"
+
+    chips = []
+    chips.append((tt >= 7, f"추세 조건 {tt}/8") if (tt >= 7 or tt <= 4) else None)
+    if rs is not None:
+        chips.append((False, f"RS {rs:.0f} · 과열권") if rs >= 95 else (True, f"RS {rs:.0f}") if rs >= 70 else (False, f"RS {rs:.0f} · 약함") if rs < 50 else None)
+    chips.append((True, "정배열") if up else (False, "역배열") if down else None)
+    chips.append((True, f"EMA 모임 {spread:.1f}%") if spread <= 4 else (False, f"EMA 벌어짐 {spread:.1f}%") if spread >= 7 else None)
+    if gap20 >= 20:
+        chips.append((False, f"20일선 +{gap20:.0f}% 과열"))
+    chips.append((True, f"거래 실림 {vx:.1f}배") if vx >= 1.5 else (False, "거래 마름") if vx <= 0.5 else None)
+    if not nan(sma[200]) and c < sma[200]:
+        chips.append((False, "200일선 아래"))
+    if sector and sector["rank"] <= 3:
+        chips.append((True, f"주도 섹터 {sector['family']}"))
+    chips = [{"ok": a, "text": b} for a, b in (x for x in chips if x)]
+
+    if held:
+        cards = [{"label": "평단", "value": f"{held['avg']:,.0f}", "sub": f"{held['qty']:,}주"},
+                 {"label": "손절선", "value": f"{held['stop']:,.0f}" if held["stop"] else "-", "sub": f"{(held['stop']/c-1)*100:+.1f}%" if held["stop"] else "정해 두세요"},
+                 {"label": "수익", "value": f"{held['gain']:+.1f}%", "sub": "세금·수수료 뺌"}]
+    else:
+        cards = [{"label": "지지 (20일 저가)", "value": f"{support:,.0f}", "sub": f"{(support/c-1)*100:+.1f}%"},
+                 {"label": "저항 (20일 고가)", "value": f"{resist:,.0f}", "sub": f"{(resist/c-1)*100:+.1f}%"},
+                 {"label": "52주 고가", "value": f"{hi52:,.0f}", "sub": f"{(hi52/c-1)*100:+.1f}%"}]
+
+    rows = [
+        {"k": "추세 조건", "v": f"{tt}/8", "tip": " · ".join(f"{'✓' if v else '✗'} {n}" for n, v in tt_list)},
+        {"k": "RS Rating", "v": f"{rs:.0f}" if rs is not None else "-"},
+        {"k": "이평선 (5·10·20·60)", "v": align},
+        {"k": "EMA 5·10·20 간격", "v": f"{spread:.1f}%"},
+        {"k": "20일 수익률", "v": f"{r20:+.1f}%"},
+        {"k": "20일선 이격", "v": f"{gap20:+.1f}%"},
+        {"k": "거래량 (50일 평균 대비)", "v": f"{vx*100:.0f}%"},
+        {"k": "52주 고점 대비", "v": f"{(c/hi52-1)*100:+.1f}%"},
+        {"k": "7/30 이후 고점 대비", "v": f"{(c/hi_cyc-1)*100:+.1f}%"},
+    ]
+    if sector:
+        rows.append({"k": "섹터", "v": f"{sector['family']} {sector['rank']}위 · 오늘 {sector['chg']:+.1f}%" + (f" · {sector['status']}" if sector["status"] else "")})
+    try:
+        from backend.services.result_cache import peek  # noqa: PLC0415
+        st = peek("dashboard_core_v6")
+        st = st[0] if isinstance(st, (list, tuple)) else None
+        if st and st.get("코스피"):
+            rows.append({"k": "시장 (코스피)", "v": st["코스피"]["state"]})
+    except Exception:  # noqa: BLE001
+        pass
+    disp_c, disp_chg = c, (c / prev - 1) * 100
+    try:      # 보여 주는 종가·등락은 정규장 15:30 기준 (DB 종가엔 시간외가 섞인다)
+        from backend.services.naver_live import krx_day  # noqa: PLC0415
+        k = krx_day(code)
+        if k and k["base"]:
+            disp_c, disp_chg = k["close"], (k["close"] / k["base"] - 1) * 100
+    except Exception:  # noqa: BLE001
+        pass
+    return {"code": code, "name": name, "ok": True, "date": str(df.index[-1]), "close": disp_c, "chg": disp_chg,
+            "grade": {"letter": letter, "word": word}, "stage": stage, "title": title, "sub": sub,
+            "chips": chips, "cards": cards, "rows": rows, "held": bool(held)}
