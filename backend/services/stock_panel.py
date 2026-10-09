@@ -133,13 +133,13 @@ def _panel(db: Session, code: str, owner: str | None = None) -> dict:
         from backend.services.result_cache import cached  # noqa: PLC0415
         from backend.screener.my_pattern import scan as mp_scan  # noqa: PLC0415
         mp = cached("my_pattern_v6", (), db, lambda: mp_scan(db)) or {}
-        for key, lab in (("box_break", "박스 돌파 (스윙)"), ("ema_break", "EMA 모임 돌파"), ("box_near", "박스 뚫기 직전")):
+        for key, lab in (("box_break", "박스 위로 돌파 (며칠 보유)"), ("ema_break", "이평선 모였다 돌파"), ("box_near", "돌파 대기 · 박스 꼭대기")):
             if any(x.get("code") == code for x in mp.get(key, []) or []):
                 tags.append(lab)
         from backend.services.telegram import _get  # noqa: PLC0415
         log = _get(db, "top3_log", {}) or {}
         if log and code in log.get(max(log), []):
-            tags.insert(0, "오늘 종베 추천")
+            tags.insert(0, "종가 매수 → 내일 매도")
     except Exception:  # noqa: BLE001
         pass
 
@@ -165,11 +165,11 @@ def _panel(db: Session, code: str, owner: str | None = None) -> dict:
     elif act:
         stage = 3 if act["half"] else 2
         title = f"진입 신호 {act['days']}일째 · {act['gain']:+.1f}%"
-        sub = f"{act['date'][5:].replace('-', '/')} 진입 {act['entry']:,.0f} · 손절 {act['stop']:,.0f}" + (" · 절반 익절함 (EMA21 아래면 나머지)" if act["half"] else " · EMA14 아래면 절반 익절")
+        sub = f"{act['date'][5:].replace('-', '/')} 진입 {act['entry']:,.0f} · 손절 {act['stop']:,.0f}" + (" · 절반 팔았음 (21일선 아래면 나머지)" if act["half"] else " · 14일선 아래로 내려오면 절반 팔기")
     elif tags:
         stage, title, sub = 1, tags[0], " · ".join(tags[1:]) or "오늘 우리 후보 목록에 있음"
     elif up and c > ema[10] and spread <= 4:
-        stage, title, sub = 0, "셋업 · 힘 모으는 중", f"정배열 · EMA 5·10·20 간격 {spread:.1f}% · 종가가 10일선 위"
+        stage, title, sub = 0, "힘 모으는 중", f"이평선 정배열 · 5·10·20일선 간격 {spread:.1f}% · 종가가 10일선 위"
     else:
         stage, title, sub = 0, "관찰 중", f"이평선 {align}"
 

@@ -89,15 +89,15 @@ def signals(db: Session, code: str, days: int = 260, owner: str | None = None) -
     def _lab(base, ser, fmt):
         return {d: f"{base}? {fmt(ser[d])}" for d in ser.index}
     near = []
-    for mask, base, val, fmt in ((near_box_vol, "박스 돌파", tvx, lambda v: f"거래 {v:.1f}배"), (near_box_w, "박스 돌파", box_w, lambda v: f"폭 {v*100:.0f}%"),
-                                 (near_ema_gap, "EMA 모임", gap_prev, lambda v: f"간격 {v*100:.1f}%"), (near_ema_vol, "EMA 모임", tvx, lambda v: f"거래 {v:.1f}배"),
-                                 (near_big, "기준봉", vx, lambda v: f"거래 {v:.1f}배")):
+    for mask, base, val, fmt in ((near_box_vol, "박스 돌파", tvx, lambda v: f"거래 부족 {v:.1f}배"), (near_box_w, "박스 돌파", box_w, lambda v: f"박스 폭 {v*100:.0f}%"),
+                                 (near_ema_gap, "이평선 돌파", gap_prev, lambda v: f"이평선 간격 {v*100:.1f}%"), (near_ema_vol, "이평선 돌파", tvx, lambda v: f"거래 부족 {v:.1f}배"),
+                                 (near_big, "급등봉", vx, lambda v: f"거래 부족 {v:.1f}배")):
         for d in mask[mask.fillna(False)].index:
-            near.append((d, f"{base}? {fmt(float(val[d]))}"))
+            near.append((d, f"아깝게 놓친 {base} ({fmt(float(val[d]))})"))
     rules = [  # (마스크, 라벨, 종류, 위/아래) — 위에서부터 우선 (한 봉에 여러 개면 앞의 것 2개까지)
-        (box, "박스 돌파", "buy", "below"), (ema, "EMA 모임 돌파", "buy", "below"), (jb, "종베 모양", "buy", "below"),
-        (park, "주차 도지", "buy", "below"), (quiet, "조용한 음봉", "rest", "below"),
-        (big, "기준봉", "info", "above"), (record, "거래 신기록", "info", "above"), (fullbear, "⚠ 꽉 찬 음봉", "warn", "above"),
+        (box, "박스 위로 돌파", "buy", "below"), (ema, "이평선 모였다 돌파", "buy", "below"), (jb, "거래 실린 양봉", "buy", "below"),
+        (park, "급등 뒤 쉬는 봉", "buy", "below"), (quiet, "거래 적은 눌림", "rest", "below"),
+        (big, "급등봉", "info", "above"), (record, "1년 최대 거래", "info", "above"), (fullbear, "⚠ 거래 많은 큰 음봉", "warn", "above"),
     ]
     start = df.index[-min(days, len(df))]
     items = []
@@ -134,9 +134,9 @@ def signals(db: Session, code: str, days: int = 260, owner: str | None = None) -
                 out = (k, f"손절 {(c/p0-1)*100:+.1f}%", "exit_bad"); break
             if not half and k - i > 1 and c < float(e14.iloc[k]):
                 half = True
-                items.append({"date": str(idx[k]), "label": f"½ 익절 {(c/p0-1)*100:+.1f}%", "kind": "exit", "pos": "above", "price": float(H.iloc[k])})
+                items.append({"date": str(idx[k]), "label": f"절반 팔기 {(c/p0-1)*100:+.1f}%", "kind": "exit", "pos": "above", "price": float(H.iloc[k])})
             if k - i > 1 and c < float(e21.iloc[k]):
-                out = (k, f"청산 {(c/p0-1)*100:+.1f}%", "exit"); break
+                out = (k, f"나머지 팔기 {(c/p0-1)*100:+.1f}%", "exit"); break
         if out:
             k, lab, kind = out
             items.append({"date": str(idx[k]), "label": lab, "kind": kind, "pos": "above", "price": float(H.iloc[k])})
@@ -149,14 +149,14 @@ def signals(db: Session, code: str, days: int = 260, owner: str | None = None) -
         if d >= start:
             items.append({"date": str(d), "label": lab, "kind": "near", "pos": "below", "price": float(L[d])})
     for d in align_start[align_start & (align_start.index >= start)].index:
-        items.append({"date": str(d), "label": "정배열 시작", "kind": "note", "pos": "above", "price": float(H[d])})
+        items.append({"date": str(d), "label": "상승 추세 시작", "kind": "note", "pos": "above", "price": float(H[d])})
     # 지금 상태 (오늘 후보 목록의 '대기') — 마지막 봉에 점선으로
     try:
         from backend.services.result_cache import cached  # noqa: PLC0415
         from backend.screener.my_pattern import scan as mp_scan  # noqa: PLC0415
         mp = cached("my_pattern_v6", (), db, lambda: mp_scan(db)) or {}
         last_d = df.index[-1]
-        for key, lab in (("ema_wait", "대기 · EMA 모임"), ("box_near", "대기 · 박스 뚫기 직전")):
+        for key, lab in (("ema_wait", "돌파 대기 · 이평선 모임"), ("box_near", "돌파 대기 · 박스 꼭대기")):
             if any(x.get("code") == code for x in mp.get(key) or []):
                 items.append({"date": str(last_d), "label": lab, "kind": "wait", "pos": "below", "price": float(L[last_d])})
     except Exception:  # noqa: BLE001
@@ -167,7 +167,7 @@ def signals(db: Session, code: str, days: int = 260, owner: str | None = None) -
         for d, cs_ in (_get(db, "top3_log", {}) or {}).items():
             dd = pd.Timestamp(d).date()
             if code in cs_ and dd in df.index and dd >= start:
-                items.append({"date": d, "label": "종베 추천 (다음 날 +2%)", "kind": "buy", "pos": "below", "price": float(L[dd])})
+                items.append({"date": d, "label": "종가 매수 → 내일 매도", "kind": "buy", "pos": "below", "price": float(L[dd])})
     except Exception:  # noqa: BLE001
         pass
     # 매매 일지 실제 매수·매도 (같은 날 같은 방향은 평균가로 묶음)
@@ -222,13 +222,13 @@ def workspace_list(db: Session) -> dict:
 
     try:      # ▲ 진입 신호가 오늘 뜬 종목 — 맨 위
         for x in entry_today(db):
-            add(x["code"], f"▲ 진입 신호 ({x['kind']})")
+            add(x["code"], f"▲ 진입 ({x['kind']})")
     except Exception:  # noqa: BLE001
         pass
     log = _get(db, "top3_log", {}) or {}
     if log:
         for c in log.get(max(log), []):
-            add(c, "종베 추천")
+            add(c, "종가 매수 → 내일 매도")
     from backend.services.result_cache import cached  # noqa: PLC0415
     from backend.screener.my_pattern import scan as mp_scan  # noqa: PLC0415
     mp = cached("my_pattern_v6", (), db, lambda: mp_scan(db)) or {}      # 재시작 직후에도 디스크에 저장된 결과를 바로 씀
@@ -236,18 +236,18 @@ def workspace_list(db: Session) -> dict:
         from backend.screener.my_pattern import cap_sectors  # noqa: PLC0415
         b = [x for x in mp.get("items", []) if x.get("b") and 1.5 <= x["tv_x"] <= 6 and x["upper_pct"] <= 10]
         for x in cap_sectors([x for x in b if (x.get("b_rank") or 99) <= 3], mp.get("heat", {}))[:5]:
-            add(x["code"], "종베 (주도 섹터)", x.get("family", ""))
+            add(x["code"], "종가 매수 (돈 몰린 섹터)", x.get("family", ""))
         for x in cap_sectors([x for x in b if 4 <= (x.get("b_rank") or 99) <= 8], mp.get("heat", {}))[:5]:
-            add(x["code"], "스윙 (올라오는 섹터)", x.get("family", ""))
+            add(x["code"], "며칠 보유 (올라오는 섹터)", x.get("family", ""))
     except Exception:  # noqa: BLE001
         pass
-    for key, tag in (("box_break", "박스 돌파"), ("ema_break", "EMA 모임 돌파"), ("box_near", "박스 뚫기 직전"), ("ema_wait", "EMA 모임 대기")):
+    for key, tag in (("box_break", "박스 위로 돌파"), ("ema_break", "이평선 모였다 돌파"), ("box_near", "돌파 대기 · 박스 꼭대기"), ("ema_wait", "돌파 대기 · 이평선 모임")):
         for x in (mp.get(key) or [])[:6]:
             add(x.get("code"), tag, x.get("family", ""))
     if (mp.get("mode") or {}).get("mode") == "과매도":
         for s in mp.get("dip", [])[:3]:
             for x in s.get("items", [])[:2]:
-                add(x.get("code"), "과매도 줍기", s.get("family", ""))
+                add(x.get("code"), "많이 빠진 날 줍기", s.get("family", ""))
     import re  # noqa: PLC0415
     wl = {x["code"]: x for x in W._items(db)}
     mine = {p["code"] for p in W._positions(db)}       # 공개 화면: 보유 종목·평단·수량은 빼고 (매매 일지 탭에서만, 2026-10-09)
@@ -351,7 +351,7 @@ def entry_today(db: Session, asof=None) -> list[dict]:
     up60 = ((C > e60) & (e20 > e60)).iloc[r]
     hit = (box | (ema & up60)) & (tt7 >= 6)
     names = dict(db.execute(text("select code, name from stocks")).all())
-    out = [{"code": c, "name": names.get(c, c), "kind": "박스 돌파" if bool(box[c]) else "EMA 모임 돌파", "close": float(C[c].iloc[r]),
+    out = [{"code": c, "name": names.get(c, c), "kind": "박스 위로 돌파" if bool(box[c]) else "이평선 모였다 돌파", "close": float(C[c].iloc[r]),
             "stop": float(L[c].iloc[r]) * 0.99, "chg": float(chg[c].iloc[r]) * 100} for c in hit[hit].index]
     out.sort(key=lambda x: -x["chg"])
     _ENTRY.update(key=latest, v=out)

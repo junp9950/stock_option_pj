@@ -160,10 +160,10 @@ select{background:#21262d;border:1px solid #30363d;color:#c9d1d9;padding:6px 10p
 /* 차트 (Lightweight Charts: 확대·이동·십자선, 2026-10-09) */
 .lwbox{position:relative}.lwc{width:100%;height:520px}
 #cm-chart.lwc{height:460px}
-.lwleg{position:absolute;left:8px;top:6px;z-index:3;font-size:11.5px;color:var(--body);pointer-events:none;line-height:1.5;background:rgba(13,17,23,.72);padding:2px 6px;border-radius:6px}
+.lwleg{font-size:11.5px;color:var(--body);line-height:1.5;min-height:52px;padding:2px 2px 4px}
 .lwleg b{color:var(--text)}
-@media(max-width:760px){.lwc,#cm-chart.lwc{height:400px}.lwleg{font-size:10.5px}
-  .mstrip{flex-wrap:nowrap;overflow-x:auto;white-space:nowrap;font-size:12px;padding:6px 10px;gap:8px;-webkit-overflow-scrolling:touch}
+@media(max-width:760px){.lwc,#cm-chart.lwc{height:400px}.lwleg{font-size:10.5px;min-height:46px}
+  .mstrip{position:static;box-shadow:none;flex-wrap:nowrap;overflow-x:auto;white-space:nowrap;font-size:12px;padding:6px 10px;gap:8px;-webkit-overflow-scrolling:touch}
   .mstrip .ix b{font-size:14px}.mstrip .rg .ts:last-child,.mstrip .sep{display:none}.mstrip .rg{padding:1px 7px;font-size:11.5px}}
 /* 시장 한 줄 (맨 위 고정, 2026-10-09) — 색약이라 ▲▼■ 모양도 같이 */
 .mstrip{position:sticky;top:0;z-index:20;display:flex;flex-wrap:wrap;align-items:center;gap:8px 14px;background:var(--card);border:1px solid var(--line);border-radius:10px;padding:8px 14px;margin-bottom:10px;font-size:13px;box-shadow:0 4px 12px rgba(0,0,0,.35)}
@@ -479,7 +479,7 @@ select{background:#21262d;border:1px solid #30363d;color:#c9d1d9;padding:6px 10p
         <div class="ws-per" id="jr-ws-tf"><button data-tf="1d" onclick="jrWsTf('1d')">일봉</button><button data-tf="1w" onclick="jrWsTf('1w')">주봉</button><button data-tf="60m" onclick="jrWsTf('60m')">60분</button><button data-tf="30m" onclick="jrWsTf('30m')">30분</button><button data-tf="15m" onclick="jrWsTf('15m')">15분</button><button data-tf="5m" onclick="jrWsTf('5m')">5분</button><button data-tf="1m" onclick="jrWsTf('1m')">1분</button></div>
       <div class="ws-per" id="jr-ws-per"><button data-n="66" onclick="jrWsPeriod(66)">3개월</button><button data-n="130" onclick="jrWsPeriod(130)">6개월</button><button data-n="250" onclick="jrWsPeriod(250)">1년</button></div>
         <div class="lwbox"><div class="lwleg" id="jr-chart-leg"></div><div id="jr-chart" class="lwc"></div></div>
-        <div class="ws-legend"><span><i style="background:#e6edf3"></i>내 매수</span><span><i style="background:#8957e5"></i>내 매도</span><span><i style="background:#1f6feb"></i>사는 자리 모양</span><span><i style="background:#2d7d6f"></i>쉬는 자리</span><span><i style="background:#484f58"></i>기준봉·거래 신기록</span><span><i style="background:#9a4d0f"></i>⚠ 위험</span></div>
+        <div class="ws-legend"><span>⬆ 흰색 = 내가 산 날 · ⬇ 보라 = 내가 판 날</span><span>▲ 진입 → ▼ 절반 팔기 · 나머지 팔기 / 손절</span><span>● 점 = 참고</span></div>
       </div>
       <aside class="cm-panel" id="jr-ws-panel"></aside>
     </div>
@@ -620,7 +620,7 @@ select{background:#21262d;border:1px solid #30363d;color:#c9d1d9;padding:6px 10p
       <div class="ws-per" id="ws-tf"><button data-tf="1d" onclick="wsTf('1d')">일봉</button><button data-tf="1w" onclick="wsTf('1w')">주봉</button><button data-tf="60m" onclick="wsTf('60m')">60분</button><button data-tf="30m" onclick="wsTf('30m')">30분</button><button data-tf="15m" onclick="wsTf('15m')">15분</button><button data-tf="5m" onclick="wsTf('5m')">5분</button><button data-tf="1m" onclick="wsTf('1m')">1분</button></div>
       <div class="ws-per" id="ws-per"><button data-n="66" onclick="wsPeriod(66)">3개월</button><button data-n="130" onclick="wsPeriod(130)">6개월</button><button data-n="250" onclick="wsPeriod(250)">1년</button></div>
       <div class="lwbox"><div class="lwleg" id="ws-chart-leg"></div><div id="ws-chart" class="lwc"></div></div>
-      <div class="ws-legend"><span><i style="background:#388bfd;outline:1px solid #e6edf3"></i>▲ 진입 신호 → ½ 익절 · 청산 / 손절 (3년 평균 +2.7%·이김 34%·14일, 하락장엔 안 냄)</span><span><i style="background:#1f6feb"></i>사는 자리 모양</span><span><i style="background:#2d7d6f"></i>쉬는 자리</span><span><i style="background:#484f58"></i>기준봉·거래 신기록</span><span><i style="background:#9a4d0f"></i>⚠ 위험</span><span>○ = 대기 · 아깝게 놓침(?) · 정배열 시작</span><span>· 두 손가락으로 확대, 끌어서 이동, 올리면 그 봉 가격</span><span>· 내 매수·매도 자리는 매매 일지 탭에서 · 차트 신호는 이 종목만 본 모양 (섹터·시장은 왼쪽 후보 목록에서)</span></div>
+      <div class="ws-legend"><span>▲ <b>진입</b> = 사기 좋은 자리 (지난 3년 평균 +2.7%, 2~3주 보유) → ▼ 절반 팔기 · 나머지 팔기 / 손절</span><span>↑ 파란 화살표 = 오를 때 자주 나온 모양</span><span>● 점 = 참고 (돌파 대기 · 아깝게 놓침 · 상승 추세 시작)</span><span>■ 회색 = 급등봉 · 1년 최대 거래</span><span>▼ 주황 = 조심</span><span>· 두 손가락으로 확대, 끌어서 이동, 누르면 그 날 가격</span></div>
     </div>
     <aside class="cm-panel" id="ws-panel"></aside>
   </div>
@@ -1996,7 +1996,7 @@ async function wsDraw(){
     if(_ws.code!==code||_ws.tf!==tf) return;
     if(!cd){ document.getElementById('ws-note').textContent=`${TF_NAME[tf]}을 못 받았습니다`; return; }
     renderLwChart('ws-chart',cd.candles,[],tf==='1w'?80:120);
-    document.getElementById('ws-note').textContent=`${TF_NAME[tf]}${tf==='1w'?'':' · 최근 약 6거래일 (네이버)'} · EMA 5·10·20·60 · 우리 신호는 일봉에만`;
+    document.getElementById('ws-note').textContent=`${TF_NAME[tf]}${tf==='1w'?'':' · 최근 약 6거래일 (네이버)'} · EMA 5·10·20·60 · 신호는 일봉에서만 보여요`;
     return;
   }
   const g=renderLwChart('ws-chart',c.cd.candles,c.sg?c.sg.items:[],_ws.per);
@@ -2082,7 +2082,7 @@ async function jrWsDraw(){
     if(_jrWs.code!==code||(_jrWs.tf||'1d')!==tf) return;
     if(!cd){ document.getElementById('jr-ws-note').textContent=`${TF_NAME[tf]}을 못 받았습니다`; return; }
     renderLwChart('jr-chart',cd.candles,[],tf==='1w'?80:120);
-    document.getElementById('jr-ws-note').textContent=`${TF_NAME[tf]} · 내 매수·매도와 우리 신호는 일봉에만`;
+    document.getElementById('jr-ws-note').textContent=`${TF_NAME[tf]} · 내가 산·판 날과 신호는 일봉에서만 보여요`;
     return;
   }
   const g=renderLwChart('jr-chart',c.cd.candles,c.sg?c.sg.items:[],_ws.per);
@@ -2130,7 +2130,7 @@ async function cmTf(tf){
   if(_cm.code!==code||_cm.tf!==tf) return;
   if(!cd){ document.getElementById('chart-modal-note').textContent=`${TF_NAME[tf]}을 못 받았습니다`; return; }
   renderLwChart('cm-chart',cd.candles,[],tf==='1w'?80:120);
-  document.getElementById('chart-modal-note').textContent=`${TF_NAME[tf]}${tf==='1w'?'':' · 최근 약 6거래일'} · 우리 신호는 일봉에만`;
+  document.getElementById('chart-modal-note').textContent=`${TF_NAME[tf]}${tf==='1w'?'':' · 최근 약 6거래일'} · 신호는 일봉에서만 보여요`;
 }
 async function openChartModal(code, name, spikeDate){
   _cm={code,tf:'1d',cache:{}}; document.getElementById('cm-tf').style.display='flex';
@@ -2220,7 +2220,7 @@ function renderLwChart(cid, allCandles, signals, per){
   const ts=new Set(data.map(d=>d.time));
   let mk=(signals||[]).filter(sg=>ts.has(sg.date));
   if(small) mk=mk.filter(sg=>!['near','note','info'].includes(sg.kind));
-  mk=mk.map(sg=>{ const [col,shape]=MC[sg.kind]||MC.info; const showTxt=!small||KEY.includes(sg.kind)||sg.label.startsWith('종베');
+  mk=mk.map(sg=>{ const [col,shape]=MC[sg.kind]||MC.info; const showTxt=!small||KEY.includes(sg.kind)||sg.label.startsWith('종가 매수');
     return {time:sg.date,position:sg.pos==='below'?'belowBar':'aboveBar',color:col,shape,text:showTxt?sg.label:'',size:sg.kind==='entry'?1.6:1}; })
     .sort((a,b)=>a.time<b.time?-1:a.time>b.time?1:0);
   cs.setMarkers(mk);
