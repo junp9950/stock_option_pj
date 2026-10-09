@@ -317,7 +317,7 @@ def _workspace_list(db: Session) -> dict:
         pass
     try:      # 급락 날 줍기 (시장 -2%↓ 날 같이 빠진 센 종목 · 손절 20일선 · 크기 절반)
         for x in dip_now(db).get("items", [])[:8]:
-            add(x["code"], "⬇ 급락 날 줍기 · 손절 20일선 · 수량 절반")
+            add(x["code"], "⬇ 급락 날 줍기 ✅" if x.get("tier") == 1 else "⬇ 급락 날 줍기 · 수량 절반")
     except Exception:  # noqa: BLE001
         pass
     log = _get(db, "top3_log", {}) or {}
@@ -658,9 +658,18 @@ def _dip_picks(db: Session, latest, live: dict | None = None, frac: float = 1.0,
         stop = float(e20[code]) * 0.99
         if stop >= float(c[code]):
             continue
-        out["items"].append({"code": code, "name": names.get(code, code), "chg": round(float(chg[code]) * 100, 2), "close": float(c[code]),
-                             "stop": round(stop), "risk": round((1 - stop / float(c[code])) * 100, 1), "rs": round(float(RS[code]))})
-    out["items"].sort(key=lambda x: x["chg"])          # 많이 빠진 것부터 (-5%↓가 가장 좋았음)
+        rk = (1 - stop / float(c[code])) * 100
+        if rk > 15:            # 12년: 손절폭 15%↑ R -0.14 (최악10% -23%) → 뺌
+            continue
+        cg = float(chg[code]) * 100
+        # 고르는 순서 (12년 v12d.py, 두 기간 모두 같은 방향): 손절폭 8%↓ + 그날 -3%↓ R +0.94/+1.20 · 손절폭 8%↓ +0.56/+0.66 ·
+        # 시장보다 더 빠짐 +0.47/+0.53 (덜 빠진 것 +0.28/+0.12) · RS 70~85가 85~95보다 나음(+0.65/+0.56 vs -0.18/-0.06)
+        tier = 1 if (rk <= 8 and cg <= -3) else 2 if rk <= 8 else 3 if (cg < mkt * 100 and rk <= 10) else 4
+        if float(RS[code]) >= 85:
+            tier += 1
+        out["items"].append({"code": code, "name": names.get(code, code), "chg": round(cg, 2), "close": float(c[code]),
+                             "stop": round(stop), "risk": round(rk, 1), "rs": round(float(RS[code])), "tier": tier})
+    out["items"].sort(key=lambda x: (x["tier"], x["risk"]))
     return out
 
 
