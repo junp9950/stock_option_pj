@@ -303,7 +303,7 @@ def workspace_list(db: Session) -> dict:
     from backend.services.result_cache import cached  # noqa: PLC0415
     now = datetime.now(ZoneInfo("Asia/Seoul"))
     if not (is_trading_day(now.date()) and 9 <= now.hour < 16):
-        return cached("workspace_list_v6", (), db, lambda: _workspace_list(db))
+        return cached("workspace_list_v7", (), db, lambda: _workspace_list(db))
     return _workspace_list(db)
 
 
@@ -372,9 +372,17 @@ def _workspace_list(db: Session) -> dict:
             add(x["code"], "며칠 보유 (올라오는 섹터)", x.get("family", ""))
     except Exception:  # noqa: BLE001
         pass
-    for key, tag in (("box_break", "박스 위로 돌파"), ("ema_break", "이평선 모였다 돌파"), ("box_near", "돌파 대기 · 박스 꼭대기"), ("ema_wait", "돌파 대기 · 이평선 모임")):
+    def _why_not(code):     # 돌파 모양인데 매수가 아닌 이유 (2026-10-09 "매수가 아니라고? 좋은 자리 아니가")
+        v_ = scores.get(code)
+        if not v_:
+            return "정배열 아님"
+        if v_.get("buy"):
+            return ""
+        return "강도 부족" if not v_["flags"][1] else "손절폭 넓음" if v_["risk"] > 0.08 else "급등봉" if not v_["flags"][4] else "조건 부족"
+    for key, tag in (("box_break", "박스 돌파 모양"), ("ema_break", "이평선 돌파 모양"), ("box_near", "돌파 대기 · 박스 꼭대기"), ("ema_wait", "돌파 대기 · 이평선 모임")):
         for x in (mp.get(key) or [])[:6]:
-            add(x.get("code"), tag, x.get("family", ""))
+            wn = _why_not(x.get("code")) if key.endswith("_break") else ""
+            add(x.get("code"), tag + (f" · 매수 아님: {wn}" if wn else ""), x.get("family", ""))
     if (mp.get("mode") or {}).get("mode") == "과매도":
         for s in mp.get("dip", [])[:3]:
             for x in s.get("items", [])[:2]:
