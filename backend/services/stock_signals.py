@@ -167,7 +167,7 @@ def signals(db: Session, code: str, days: int = 260, owner: str | None = None) -
         for d, cs_ in (_get(db, "top3_log", {}) or {}).items():
             dd = pd.Timestamp(d).date()
             if code in cs_ and dd in df.index and dd >= start:
-                items.append({"date": d, "label": "종베 3", "kind": "buy", "pos": "below", "price": float(L[dd])})
+                items.append({"date": d, "label": "종베 추천 (다음 날 +2%)", "kind": "buy", "pos": "below", "price": float(L[dd])})
     except Exception:  # noqa: BLE001
         pass
     # 매매 일지 실제 매수·매도 (같은 날 같은 방향은 평균가로 묶음)
@@ -223,7 +223,7 @@ def workspace_list(db: Session) -> dict:
     log = _get(db, "top3_log", {}) or {}
     if log:
         for c in log.get(max(log), []):
-            add(c, "종베 3")
+            add(c, "종베 추천")
     from backend.services.result_cache import cached  # noqa: PLC0415
     from backend.screener.my_pattern import scan as mp_scan  # noqa: PLC0415
     mp = cached("my_pattern_v6", (), db, lambda: mp_scan(db)) or {}      # 재시작 직후에도 디스크에 저장된 결과를 바로 씀

@@ -139,7 +139,7 @@ def _panel(db: Session, code: str, owner: str | None = None) -> dict:
         from backend.services.telegram import _get  # noqa: PLC0415
         log = _get(db, "top3_log", {}) or {}
         if log and code in log.get(max(log), []):
-            tags.insert(0, "오늘 종베 3")
+            tags.insert(0, "오늘 종베 추천")
     except Exception:  # noqa: BLE001
         pass
 
