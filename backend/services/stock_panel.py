@@ -176,8 +176,9 @@ def _panel(db: Session, code: str, owner: str | None = None) -> dict:
     elif tags:
         stage, title = 1, tags[0]
         sub = " · ".join(tags[1:]) or "오늘 우리 후보 목록에 있음"
-        if tags[0] == "종가 매수 후보":     # 파는 법 (사용자 원칙: 이익은 손절선 올려 가며 길게)
-            sub = "다음 날 +2% 못 가면 정리 · 넘으면 절반 팔고 나머지는 손절선 올려 가며 보유" + (f" · {sub}" if tags[1:] else "")
+        if tags[0].startswith(("종가 매수", "✅ 손익비", "종가 점수")):
+            # 사용자 (2026-10-09): "추세매매가 하고 싶은 거다 · 종베는 그냥 진입 시점일 뿐" → 종가에 사서 21일선까지 끌고 간다
+            sub = "종가에 진입 · 그날 저가 -1% 아래 종가면 정리 · 아니면 21일선 아래로 마감할 때까지 보유" + (f" · {sub}" if tags[1:] else "")
     elif up and c > ema[10] and spread <= 4:
         stage, title, sub = 0, "힘 모으는 중", f"이평선 정배열 · 5·10·20일선 간격 {spread:.1f}% · 종가가 10일선 위"
     else:
@@ -185,10 +186,11 @@ def _panel(db: Session, code: str, owner: str | None = None) -> dict:
 
     chips = []
     try:
-        from backend.services.stock_signals import close_scores as _cs  # noqa: PLC0415
+        from backend.services.stock_signals import close_scores_now as _cs  # noqa: PLC0415
         _sc = _cs(db).get("scores", {}).get(code)
         if _sc:
             chips.append((_sc["score"] >= 6, f"종가 점수 {_sc['score']}/7") if (_sc["score"] >= 6 or _sc["score"] <= 3) else None)
+            chips.append((_sc["risk"] <= 0.03, f"손절폭 {_sc['risk'] * 100:.1f}%") if (_sc["risk"] <= 0.03 or _sc["risk"] >= 0.08) else None)
     except Exception:  # noqa: BLE001
         pass
     chips.append((tt >= 7, f"추세 조건 {tt}/8") if (tt >= 7 or tt <= 4) else None)
@@ -216,12 +218,12 @@ def _panel(db: Session, code: str, owner: str | None = None) -> dict:
 
     csc = None
     try:
-        from backend.services.stock_signals import CLOSE_FLAGS, close_scores  # noqa: PLC0415
-        csc = close_scores(db).get("scores", {}).get(code)
+        from backend.services.stock_signals import CLOSE_FLAGS, close_scores_now  # noqa: PLC0415
+        csc = close_scores_now(db).get("scores", {}).get(code)      # 장중이면 실시간 가격 기준
     except Exception:  # noqa: BLE001
         pass
     rows = [
-        ({"k": "종가 진입 점수", "v": f"{csc['score']}/7", "tip": " · ".join(f"{'✓' if f else '✗'} {n}" for n, f in zip(CLOSE_FLAGS, csc["flags"]))}
+        ({"k": "종가 진입 점수", "v": f"{'✅ ' if csc['score'] >= 6 and csc['risk'] <= 0.03 else ''}{csc['score']}/7 · 손절폭 {csc['risk'] * 100:.1f}%", "tip": " · ".join(f"{'✓' if f else '✗'} {n}" for n, f in zip(CLOSE_FLAGS, csc["flags"]))}
          if csc else {"k": "종가 진입 점수", "v": "추세 아님 (종가 > 20일선 > 60일선 아님)"}),
         {"k": "추세 조건", "v": f"{tt}/8", "tip": " · ".join(f"{'✓' if v else '✗'} {n}" for n, v in tt_list)},
         {"k": "RS Rating", "v": f"{rs:.0f}" if rs is not None else "-"},
@@ -269,12 +271,11 @@ def _panel(db: Session, code: str, owner: str | None = None) -> dict:
         checks.append({"ok": False, "k": "신호", "v": "아직 확정 신호 없음"})
     if act:                                   # 스윙 진입: 신호 봉 저가 -1%
         stop_ref, stop_lab = act["stop"], "진입 손절"
-    elif tags and tags[0].startswith("종가 매수"):   # 종가 매수: 오늘 저가
-        stop_ref, stop_lab = float(L.iloc[-1]), "오늘 저가"
-    else:                                     # 그 밖: 최근 10일 저가
-        stop_ref, stop_lab = float(L.iloc[-10:].min()), "10일 저가"
-    dist = (c / stop_ref - 1) * 100 if stop_ref else 99
-    checks.append({"ok": dist <= 8, "k": "손절 거리", "v": f"{stop_lab} {stop_ref:,.0f}까지 {dist:.1f}%" + ("" if dist <= 8 else " (멀어서 한 번 틀리면 크게 잃음)")})
+    else:                                     # 종가 진입: 오늘 저가 -1% (3년: 손절폭 3%↓ R +1.7 · 8%↑ R 0, trend_exit.py)
+        stop_ref, stop_lab = float(L.iloc[-1]) * 0.99, "오늘 저가 -1%"
+    dist = (1 - stop_ref / c) * 100 if stop_ref else 99      # 종가에서 손절선까지 내려가는 폭 (목록의 손절폭과 같은 기준)
+    checks.append({"ok": dist <= 5, "k": "손절 거리", "v": f"{stop_lab} {stop_ref:,.0f}까지 {dist:.1f}%"
+                   + (" ✅ 손익비 좋음 (3%↓)" if dist <= 3 else "" if dist <= 5 else " (멀어서 손익비 나쁨 · 3년: 8%↑면 얻을 게 없었음)")})
     disp_c, disp_chg = c, (c / prev - 1) * 100
     try:      # 보여 주는 종가·등락은 정규장 15:30 기준 (DB 종가엔 시간외가 섞인다)
         from backend.services.naver_live import krx_day  # noqa: PLC0415

@@ -264,11 +264,15 @@ def _workspace_list(db: Session) -> dict:
     except Exception:  # noqa: BLE001
         pass
     scores = {}
-    try:      # 종가 진입 점수 6↑ (7개 조건 중) — 사용자 목표 "종가에 안전하고 확률 높은 추세 종목" (3년 이김 43%·평균 +1.5%)
-        scores = close_scores(db).get("scores", {})
-        for c_, v_ in sorted(scores.items(), key=lambda kv: -kv[1]["score"]):
-            if v_["score"] >= 6:
-                add(c_, f"종가 점수 {v_['score']}/7")
+    try:      # 종가 진입 점수 6↑ (7개 조건 중) — 사용자 목표 "추세 매매 · 진입은 종가에 손익비 좋은 자리" (2026-10-09)
+        # 3년(trend_exit.py, 21일선 아래 종가까지 보유): 6↑ 평균 +2.2%·R +0.60 · 그중 손절폭 3%↓ 평균 +3.9%·R +1.68·최악10% -7%
+        scores = close_scores_now(db).get("scores", {})      # 장중이면 실시간 가격으로 (15시대에 오늘 봉 기준 후보)
+        for c_, v_ in sorted(scores.items(), key=lambda kv: (-kv[1]["score"], kv[1]["risk"])):
+            if v_["score"] >= 6 and v_["risk"] <= 0.03:
+                add(c_, f"✅ 손익비 좋음 · 점수 {v_['score']}/7 · 손절폭 {v_['risk'] * 100:.1f}%")
+        for c_, v_ in sorted(scores.items(), key=lambda kv: (-kv[1]["score"], kv[1]["risk"])):
+            if v_["score"] >= 6 and v_["risk"] > 0.03:
+                add(c_, f"종가 점수 {v_['score']}/7 · 손절폭 {v_['risk'] * 100:.1f}%")
     except Exception:  # noqa: BLE001
         pass
     log = _get(db, "top3_log", {}) or {}
@@ -332,8 +336,10 @@ def _workspace_list(db: Session) -> dict:
         y = price(x); y["lane"] = lane(x["tags"])
         sc = scores.get(x["code"])
         y["score"] = sc["score"] if sc else None
+        y["risk"] = round(sc["risk"] * 100, 1) if sc else None
+        y["rr"] = bool(sc and sc["score"] >= 6 and sc["risk"] <= 0.03)
         cands.append(y)
-    cands.sort(key=lambda y: (y["lane"] != "entry", -(y["score"] if y["score"] is not None else -1)))
+    cands.sort(key=lambda y: (y["lane"] != "entry", not y["rr"], -(y["score"] if y["score"] is not None else -1), y["risk"] if y["risk"] is not None else 99))
     return {"as_of": str(latest), "live": live_at, "mode": mp.get("mode"),
             "candidates": cands, "watch": sorted((price(w) for w in watch), key=lambda w: -w["chg"])}
 
@@ -466,12 +472,45 @@ def close_scores(db: Session) -> dict:
     return v
 
 
-def _close_scores(db: Session, latest) -> dict:
-    px = pd.read_sql(text("select stock_code s, trading_date d, high_price h, low_price l, close_price c, volume v, trading_value tv "
-                          "from spot_daily_prices where trading_date >= cast(:d as date) - 400 and trading_date <= :d"), db.connection(), params={"d": latest})
-    P = {k: px.pivot(index="d", columns="s", values=k).sort_index().astype("float32") for k in ("h", "l", "c", "v", "tv")}
-    del px
+_CF: dict = {"key": None, "v": None}
+
+
+def _close_frames(db: Session, latest) -> dict:
+    """종가 점수용 최근 400일 고가·저가·종가·거래량·거래대금 (float32 · 약 15MB) — DB 날짜가 바뀔 때만 다시 읽는다.
+    장중 점수(2분마다)를 매번 DB에서 읽지 않게 메모리에 둔다. numpy에 바로 채워 read_sql·pivot의 큰 메모리를 피한다."""
+    if _CF["key"] == latest:
+        return _CF["v"]
+    dates = [r[0] for r in db.execute(text("select distinct trading_date from spot_daily_prices where trading_date >= cast(:d as date) - 400 "
+                                           "and trading_date <= :d order by 1"), {"d": latest}).all()]
+    codes = [r[0] for r in db.execute(text("select distinct stock_code from spot_daily_prices where trading_date = :d"), {"d": latest}).all()]
+    di, ci = {d: i for i, d in enumerate(dates)}, {c: i for i, c in enumerate(codes)}
+    A = {k: np.full((len(dates), len(codes)), np.nan, dtype="float32") for k in ("h", "l", "c", "v", "tv")}
+    for s_, d_, h_, l_, c_, v_, t_ in db.execute(text("select stock_code, trading_date, high_price, low_price, close_price, volume, trading_value "
+                                                      "from spot_daily_prices where trading_date >= cast(:d as date) - 400 and trading_date <= :d"), {"d": latest}):
+        j = ci.get(s_)
+        if j is None:
+            continue
+        i = di[d_]
+        A["h"][i, j], A["l"][i, j], A["c"][i, j] = h_ or np.nan, l_ or np.nan, c_ or np.nan
+        A["v"][i, j], A["tv"][i, j] = v_ if v_ is not None else np.nan, t_ if t_ is not None else np.nan
+    v = {k: pd.DataFrame(a, index=dates, columns=codes) for k, a in A.items()}
+    _CF.update(key=latest, v=v)
+    return v
+
+
+def _close_scores(db: Session, latest, live: dict | None = None, frac: float = 1.0) -> dict:
+    """live = 네이버 실시간 {code: {o,h,l,c,v}} 이면 오늘 줄을 붙여 장중 점수 (거래량은 frac로 나눠 마감 환산)."""
+    P = _close_frames(db, latest)
     H, L, C, V, TV = P["h"], P["l"], P["c"], P["v"], P["tv"]
+    asof = str(latest)
+    if live:
+        from datetime import date as _date  # noqa: PLC0415
+        today = _date.today()
+        row = {k: pd.Series({c: x[k] for c, x in live.items() if x.get(k)}, dtype="float32").reindex(C.columns) for k in ("h", "l", "c")}
+        vol = pd.Series({c: x["v"] / max(frac, 0.05) for c, x in live.items()}, dtype="float32").reindex(C.columns)
+        add = lambda F, ser: pd.concat([F, ser.to_frame(today).T])  # noqa: E731
+        H, L, C, V, TV = add(H, row["h"]), add(L, row["l"]), add(C, row["c"]), add(V, vol), add(TV, row["c"] * vol)
+        asof = str(today)
     liq = TV.rolling(20).mean() >= 3e9
     e5, e10, e20, e60 = (C.ewm(span=n, adjust=False).mean() for n in (5, 10, 20, 60))
     rs_raw = 0.4 * (C / C.shift(63) - 1) + 0.2 * (C / C.shift(126) - 1) + 0.2 * (C / C.shift(189) - 1) + 0.2 * (C / C.shift(252) - 1)
@@ -488,10 +527,43 @@ def _close_scores(db: Session, latest) -> dict:
     spread = (ehi - elo) / c
     flags = [hi60 >= -0.05, (RS >= 70) & (RS < 95), (vx >= 0.7) & (vx < 3), pos >= 0.7, (chg >= 0) & (chg < 0.08), gap20 < 0.15, spread < 0.06]
     out = {}
-    for code in trend[trend].index:
+    for code in trend[trend.fillna(False).astype(bool)].index:
         f = [bool(x.get(code, False)) for x in flags]
         out[code] = {"score": sum(f), "flags": f, "stop": float(l[code]) * 0.99, "risk": float(1 - l[code] * 0.99 / c[code])}
-    return {"date": str(latest), "scores": out}
+    return {"date": asof, "scores": out, "live": bool(live)}
+
+
+_CSL: dict = {"t": 0.0, "v": None}
+
+
+def close_scores_now(db: Session, max_age: float = 120) -> dict:
+    """장중(평일 9:00~DB에 오늘 시세 들어오기 전)이면 실시간 가격으로 계산한 점수(2분 캐시), 아니면 장 마감 점수.
+    사용자는 종가에 들어가니 15시대에 오늘 봉 기준 후보·손절폭을 봐야 한다 (2026-10-09)."""
+    import time  # noqa: PLC0415
+    from datetime import datetime  # noqa: PLC0415
+    from zoneinfo import ZoneInfo  # noqa: PLC0415
+    from backend.utils.dates import is_trading_day  # noqa: PLC0415
+    now = datetime.now(ZoneInfo("Asia/Seoul"))
+    latest = db.execute(text("select max(trading_date) from spot_daily_prices")).scalar()
+    if not (is_trading_day(now.date()) and 9 <= now.hour < 16 and latest < now.date()):
+        return close_scores(db)
+    hit = _CSL["v"]
+    if hit and hit.get("date") == str(now.date()) and time.time() - _CSL["t"] < max_age:
+        return hit
+    try:
+        from backend.screener.my_pattern import _day_frac  # noqa: PLC0415
+        from backend.services.naver_live import snapshot  # noqa: PLC0415
+        codes = list(_close_frames(db, latest)["c"].columns)
+        live = snapshot(codes, max_age=60)
+        if len(live) < len(codes) * 0.5:
+            return close_scores(db)
+        frac = 1.0 if (now.hour, now.minute) >= (15, 30) else _day_frac(now)
+        v = _close_scores(db, latest, live=live, frac=frac)
+        v["at"] = now.strftime("%H:%M")
+        _CSL.update(t=time.time(), v=v)
+        return v
+    except Exception:  # noqa: BLE001
+        return close_scores(db)
 
 
 _RSH: dict = {"key": None, "v": None}

@@ -369,7 +369,7 @@ def top3_lines(db: Session, r: dict) -> list[str]:
         else:
             out.append("오늘은 고를 종목 없음 → 쉬기")
     if log:
-        out.append("파는 법: 다음 날 +2% 못 가면 정리 · 넘으면 절반 덜고 나머지 손절선 올리기")
+        out.append("파는 법: 오늘 저가 -1% 아래 종가면 정리 · 아니면 21일선 아래로 마감할 때까지 보유 (종가는 진입 시점일 뿐)")
         hist = _get(db, "top3_log", {}) or {}
         hist[r["trading_date"]] = log
         _put(db, "top3_log", dict(list(hist.items())[-120:]))

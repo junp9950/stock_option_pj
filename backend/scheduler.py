@@ -343,6 +343,18 @@ def start_scheduler() -> BackgroundScheduler:
             logger.error("주간 점검 실패: %s", type(exc).__name__)
         finally:
             db.close()
+    def _close_entry() -> None:
+        from backend.services.close_entry_alert import send as ce_send  # noqa: PLC0415
+        db = SessionLocal()
+        try:
+            ce_send(db)
+        except Exception as exc:  # noqa: BLE001
+            logger.error("종가 진입 후보 알림 실패: %s", type(exc).__name__)
+        finally:
+            db.close()
+    # 15:12 종가 진입 후보 (실시간 점수 6↑ · 손절폭 짧은 순) — 종가에 들어가기 전에 볼 수 있게 (휴장일엔 실시간 점수가 없어 안 보냄)
+    scheduler.add_job(_close_entry, 'cron', day_of_week='mon-fri', hour=15, minute=12, id='close_entry_alert', replace_existing=True, max_instances=1)
+
     # 토요일 08:30 주간 점검 (규칙 어긴 매매 · 관심 종목 20일선 이탈 · 섹터 돈 흐름 · 이번 주 신호 성적)
     scheduler.add_job(_weekly, 'cron', day_of_week='sat', hour=8, minute=30, id='weekly_review', replace_existing=True, max_instances=1)
     # 14:50 과매도 줍기 점검 — 오른 섹터가 오늘 -2%↓면 종가 매수 후보

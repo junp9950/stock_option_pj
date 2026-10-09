@@ -623,7 +623,7 @@ select{background:#21262d;border:1px solid #30363d;color:#c9d1d9;padding:6px 10p
       <div class="ws-per" id="ws-tf"><button data-tf="1d" onclick="wsTf('1d')">일봉</button><button data-tf="1w" onclick="wsTf('1w')">주봉</button><button data-tf="60m" onclick="wsTf('60m')">60분</button><button data-tf="30m" onclick="wsTf('30m')">30분</button><button data-tf="15m" onclick="wsTf('15m')">15분</button><button data-tf="5m" onclick="wsTf('5m')">5분</button><button data-tf="1m" onclick="wsTf('1m')">1분</button></div>
       <div class="ws-per" id="ws-per"><button data-n="66" onclick="wsPeriod(66)">3개월</button><button data-n="130" onclick="wsPeriod(130)">6개월</button><button data-n="250" onclick="wsPeriod(250)">1년</button></div>
       <div class="lwbox"><div class="lwleg" id="ws-chart-leg"></div><div id="ws-chart" class="lwc"></div></div>
-      <div class="ws-legend"><span>▲ <b>진입</b> = 사기 좋은 자리 (지난 3년 평균 +3.4%, 2~3주 보유 · 급등봉 당일은 안 냄) → ▼ 절반 팔기 · 나머지 팔기 / 손절</span><span>● 보라 숫자 <b>6·7</b> = 종가 진입 점수 (7개 조건 중 맞은 개수 · 3년 6점↑ 이김 43%·평균 +1.5% · 손절 = 그날 저가 -1% 아래 종가 · 상승·횡보장만)</span><span>↑ <b>종가 매수</b> = 그날 종가에 살 후보 (다음 날 +2% 못 가면 정리, 넘으면 절반 팔고 나머지는 손절선 올려 가며 보유)</span><span>↑ 파란 화살표 = 박스 위로 돌파 · 이평선 모였다 돌파 (3년 10일 평균 +1.5% · +0.7%)</span><span>● 초록 = 오르던 종목의 거래 적은 눌림</span><span>· 작은 점 = 참고 (돌파 대기 · 아깝게 놓침 · 상승 추세 시작) — 봉에 올리면 위에 내용</span><span>■ 회색 = 급등봉 · 1년 최대 거래</span><span>▼ 주황 = 조심</span><span>· 두 손가락으로 확대, 끌어서 이동, 누르면 그 날 가격</span></div>
+      <div class="ws-legend"><span>▲ <b>진입</b> = 사기 좋은 자리 (지난 3년 평균 +3.4%, 2~3주 보유 · 급등봉 당일은 안 냄) → ▼ 절반 팔기 · 나머지 팔기 / 손절</span><span>● 보라 숫자 <b>6·7</b> = 종가 진입 점수 (7개 조건 중 맞은 개수 · 상승·횡보장만) → 손절 = 그날 저가 -1% 아래 종가 · 아니면 21일선 아래 마감까지 보유 (3년 평균 +2.2%, 손절폭 3%↓면 +3.9%)</span><span>↑ <b>종가 매수</b> = 그날 종가에 살 후보 (진입 시점일 뿐 · 파는 건 위와 같음)</span><span>↑ 파란 화살표 = 박스 위로 돌파 · 이평선 모였다 돌파 (3년 10일 평균 +1.5% · +0.7%)</span><span>● 초록 = 오르던 종목의 거래 적은 눌림</span><span>· 작은 점 = 참고 (돌파 대기 · 아깝게 놓침 · 상승 추세 시작) — 봉에 올리면 위에 내용</span><span>■ 회색 = 급등봉 · 1년 최대 거래</span><span>▼ 주황 = 조심</span><span>· 두 손가락으로 확대, 끌어서 이동, 누르면 그 날 가격</span></div>
     </div>
     <aside class="cm-panel" id="ws-panel"></aside>
   </div>
@@ -2022,7 +2022,7 @@ async function loadWorkspace(){
   if(!_ws.code){ const L=wsItems(_ws.tab); const f=L[0]||(d.candidates||[])[0]||(d.watch||[])[0]; if(f) wsOpen(f.code,f.name); }
 }
 function wsItems(t){ const d=_ws.data||{}; return t==='watch'?(d.watch||[]):(d.candidates||[]).filter(x=>(x.lane||'entry')===t); }
-const WS_LANE={entry:'추세추종 · 모두 종가에 자리 잡기 · 숫자 = 종가 진입 점수(7개 조건, 3년: 6↑ 이김 43%·평균 +1.5%) · 손절 = 그날 저가 아래 · 그다음은 매도 방식: 빨리 챙기기(다음 날 +2% 못 가면 정리) 또는 끌고 가기(14일선 아래 절반·21일선 아래 나머지). 3년: 종가 매수(버틴 종목)는 빨리 챙기기, ▲ 진입(돌파)은 끌고 가기가 나았음',
+const WS_LANE={entry:'추세 매매 · 진입만 종가에 · ✅ = 점수 6↑ + 손절폭 3%↓ (3년: 평균 +3.9%, 손절폭의 1.7배 벎) · 손절 = 그날 저가 -1% 아래 종가 · 아니면 21일선 아래로 마감할 때까지 보유 · 손절폭 8%↑는 얻을 게 없었음',
   wait:'아직 신호 전 · 돌파가 나오면 그때', watch:'적어 둔 관심 종목'};
 function wsTab(t){ _ws.tab=t; try{ localStorage.setItem('ws-tab',t); }catch(e){} renderWsList(); }
 function renderWsList(){
@@ -2038,7 +2038,7 @@ function renderWsList(){
     else tg=`${KIND[x.kind]||''}${x.level?' '+Math.round(x.level).toLocaleString():''}${x.note?' · '+x.note:''}`;
     const sub=_ws.tab==='held'&&x.gain!=null?`<div class="ws-tg" style="text-align:right">수익 ${x.gain>0?'+':''}${x.gain}%</div>`:'';
     return `<div class="ws-item${x.code===_ws.code?' on':''}" data-c="${x.code}" onclick="wsOpen('${x.code}','${x.name.replace(/'/g,'')}')">${wsAv(x.code,x.name)}
-      <div class="ws-txt"><div class="ws-nm">${x.name}${x.score!=null?` <span style="font-size:11px;padding:0 6px;border-radius:8px;border:1px solid ${x.score>=6?'var(--blue)':'var(--line)'};color:${x.score>=6?'var(--blue)':'var(--muted)'}" title="종가 진입 점수 (7개 조건 중) — 3년: 6↑ 이김 43%·평균 +1.5%, 3↓ 이김 20~28%">${x.score}/7</span>`:''}</div><div class="ws-tg" title="${tg.replace(/"/g,'')}">${tg}</div></div>
+      <div class="ws-txt"><div class="ws-nm">${x.name}${x.score!=null?` <span style="font-size:11px;padding:0 6px;border-radius:8px;border:1px solid ${x.score>=6?'var(--blue)':'var(--line)'};color:${x.score>=6?'var(--blue)':'var(--muted)'}" title="종가 진입 점수 (7개 조건 중) · 손절폭 = 종가에서 그날 저가 -1%까지">${x.rr?'✅ ':''}${x.score}/7${x.risk!=null?` · 손절 ${x.risk}%`:''}</span>`:''}</div><div class="ws-tg" title="${tg.replace(/"/g,'')}">${tg}</div></div>
       <div class="ws-px">${x.close?Math.round(x.close).toLocaleString():'-'}<div style="color:${x.chg>0?'var(--up)':x.chg<0?'var(--down)':'var(--muted)'}">${x.chg>0?'+':''}${(x.chg||0).toFixed(2)}%</div>${sub}</div></div>`;
   };
   if(_ws.tab==='held'){ const a=L.filter(x=>!x.long), b=L.filter(x=>x.long);
