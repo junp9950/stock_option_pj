@@ -388,3 +388,28 @@ def _entry_today(db: Session, asof=None) -> list[dict]:
             "stop": float(L[c].iloc[r]) * 0.99, "chg": float(chg[c].iloc[r]) * 100} for c in hit[hit].index]
     out.sort(key=lambda x: -x["chg"])
     return out
+
+
+_BR: dict = {"key": None, "v": None}
+
+
+def market_breadth(db: Session) -> dict:
+    """시장 폭 = 하루 거래대금 30억↑ 종목 중 50일선 위 비율, 10일 변화, '속 약해짐'(지수 20일선 위인데 폭 10일 새 5%p↓).
+    3년(entry_sig2.py): 속 약해짐일 때 진입 10일 -0.3% vs 폭 늘 때 +3.4% · 폭 40% 미만 11건 전패 (Lazy Alpha 교육 '먼저 알아챈다', 2026-10-09)."""
+    latest = db.execute(text("select max(trading_date) from spot_daily_prices")).scalar()
+    if _BR["key"] == latest:
+        return _BR["v"]
+    px = pd.read_sql(text("select stock_code s, trading_date d, close_price c, trading_value tv, change_pct ch from spot_daily_prices "
+                          "where trading_date >= cast(:d as date) - 130"), db.connection(), params={"d": latest})
+    C = px.pivot(index="d", columns="s", values="c").sort_index().astype(float)
+    TV = px.pivot(index="d", columns="s", values="tv").sort_index().astype(float)
+    CH = px.pivot(index="d", columns="s", values="ch").sort_index().astype(float).clip(-30, 30)
+    liq = TV.rolling(20).mean() >= 3e9
+    br = ((C > C.rolling(50).mean()).where(liq)).mean(axis=1)
+    lvl = (1 + CH.where(TV.rolling(20).mean() >= 1e9).mean(axis=1).fillna(0) / 100).cumprod()
+    idx_up = bool(lvl.iloc[-1] > lvl.iloc[-20:].mean())
+    now, d10 = float(br.iloc[-1]), float(br.iloc[-1] - br.iloc[-11])
+    v = {"date": str(latest), "pct": round(now * 100), "chg10": round(d10 * 100, 1), "index_up": idx_up,
+         "weak": bool(idx_up and d10 <= -0.05), "narrow": bool(now < 0.40)}
+    _BR.update(key=latest, v=v)
+    return v

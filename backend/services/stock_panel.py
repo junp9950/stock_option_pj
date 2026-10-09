@@ -228,6 +228,38 @@ def _panel(db: Session, code: str, owner: str | None = None) -> dict:
             rows.append({"k": "시장 (코스피)", "v": st["코스피"]["state"]})
     except Exception:  # noqa: BLE001
         pass
+    # 신호 앞 체크리스트 (Lazy Alpha 교육 '5초 체크리스트'를 우리 검증 기준으로): 하나라도 ⚠면 약한 고리 (2026-10-09)
+    checks = []
+    try:
+        from backend.services.stock_signals import _bull_days, market_breadth  # noqa: PLC0415
+        bull_now = _bull_days(db).get(df.index[-1], False)
+        brd = market_breadth(db)
+        if bull_now and not brd.get("weak") and not brd.get("narrow"):
+            checks.append({"ok": True, "k": "날씨", "v": f"시장 상승·횡보 · 시장 폭 {brd['pct']}%"})
+        else:
+            why = "하락 국면" if not bull_now else ("속 약해짐 (지수는 오르는데 폭 감소)" if brd.get("weak") else "시장 폭 좁음")
+            checks.append({"ok": False, "k": "날씨", "v": why})
+    except Exception:  # noqa: BLE001
+        pass
+    strong = tt >= 6 and rs is not None and 70 <= rs < 95
+    checks.append({"ok": strong, "k": "강한 종목", "v": f"추세 조건 {tt}/8 · RS {rs:.0f}" + ("" if strong else (" (RS 95↑는 과열권)" if rs is not None and rs >= 95 else ""))} if rs is not None else
+                  {"ok": False, "k": "강한 종목", "v": f"추세 조건 {tt}/8 · RS 없음"})
+    good_spot = gap20 < 15 and spread <= 7
+    checks.append({"ok": good_spot, "k": "좋은 자리", "v": f"20일선 {gap20:+.0f}% · 이평선 간격 {spread:.1f}%" + ("" if good_spot else " (멀리 옴 · 추격 주의)")})
+    if act and act["days"] == 1:
+        checks.append({"ok": True, "k": "신호", "v": "▲ 진입 · 장 마감 확정"})
+    elif tags:
+        checks.append({"ok": True, "k": "신호", "v": f"{tags[0]} · 장 마감 기준"})
+    else:
+        checks.append({"ok": False, "k": "신호", "v": "아직 확정 신호 없음"})
+    if act:                                   # 스윙 진입: 신호 봉 저가 -1%
+        stop_ref, stop_lab = act["stop"], "진입 손절"
+    elif tags and tags[0].startswith("종가 매수"):   # 종가 매수: 오늘 저가
+        stop_ref, stop_lab = float(L.iloc[-1]), "오늘 저가"
+    else:                                     # 그 밖: 최근 10일 저가
+        stop_ref, stop_lab = float(L.iloc[-10:].min()), "10일 저가"
+    dist = (c / stop_ref - 1) * 100 if stop_ref else 99
+    checks.append({"ok": dist <= 8, "k": "손절 거리", "v": f"{stop_lab} {stop_ref:,.0f}까지 {dist:.1f}%" + ("" if dist <= 8 else " (멀어서 한 번 틀리면 크게 잃음)")})
     disp_c, disp_chg = c, (c / prev - 1) * 100
     try:      # 보여 주는 종가·등락은 정규장 15:30 기준 (DB 종가엔 시간외가 섞인다)
         from backend.services.naver_live import krx_day  # noqa: PLC0415
@@ -238,4 +270,4 @@ def _panel(db: Session, code: str, owner: str | None = None) -> dict:
         pass
     return {"code": code, "name": name, "ok": True, "date": str(df.index[-1]), "close": disp_c, "chg": disp_chg,
             "grade": {"letter": letter, "word": word}, "stage": stage, "title": title, "sub": sub,
-            "chips": chips, "cards": cards, "rows": rows, "held": bool(held)}
+            "chips": chips, "cards": cards, "rows": rows, "held": bool(held), "checks": checks}

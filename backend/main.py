@@ -938,6 +938,7 @@ async function renderDashboard(d, stale, live){
     const sh=m.sh20, kq=m.kq20;
     document.getElementById('db-strip').innerHTML=`${ix('코스피')}${ix('코스닥')}<span class="sep"></span><span class="ts">국면</span>${rg('전체')}${rg('코스피')}${rg('코스닥')}`
       +(sh!=null&&kq!=null?`<span class="sep"></span><span class="ts">최근 20일</span><span>삼하 <b style="color:${sh>=0?'var(--up)':'var(--down)'}">${sg(sh)}%</b> · 코스닥 <b style="color:${kq>=0?'var(--up)':'var(--down)'}">${sg(kq)}%</b></span>`:'')
+      +(d.breadth?`<span class="sep"></span><span class="rg" style="border-color:${d.breadth.weak||d.breadth.narrow?'#f0883e':'var(--line)'}" title="거래대금 30억↑ 종목 중 50일선 위 비율 · 지수는 오르는데 이 비율이 줄면 속이 약해지는 것 (3년: 그때 진입 10일 -0.3% vs 폭 늘 때 +3.4%)"><span class="ts">시장 폭</span><b>${d.breadth.pct}%</b><span class="ts">10일 ${d.breadth.chg10>0?'+':''}${d.breadth.chg10}%p</span>${d.breadth.weak?'<b style="color:#f0883e">⚠ 속 약해짐</b>':d.breadth.narrow?'<b style="color:#f0883e">⚠ 폭 좁음</b>':''}</span>`:'')
       +(m.sh_foreign5!=null?`<span class="ts">외국인 삼하 5일 ${Math.round(m.sh_foreign5).toLocaleString()}억</span>`:''); }
   const top=[],rank=[],ref=[];
   document.getElementById('db-market').innerHTML=card('📊 시장',
@@ -2115,6 +2116,8 @@ function renderStockPanel(p, target){
       <div class="cp-steps">${steps.map((s,i)=>`<div class="cp-step ${i===p.stage?'on':i<p.stage?'done':''}"><i></i>${s}</div>`).join('')}</div>
       <div class="cp-title">${p.title}</div><div class="cp-sub">${p.sub||''}</div>
     </div>
+    ${(p.checks&&p.checks.length)?`<div class="cp-state" style="padding:10px 12px"><div style="font-size:12px;color:var(--muted);margin-bottom:4px">신호 앞 체크리스트 · ${p.checks.filter(c=>c.ok).length}/${p.checks.length} ✓${p.checks.some(c=>!c.ok)?' — ⚠ 하나라도 있으면 약한 신호':''}</div>
+      ${p.checks.map(c=>`<div style="display:flex;gap:6px;font-size:12px;padding:2px 0"><b style="color:${c.ok?'var(--blue)':'var(--orange)'};width:14px">${c.ok?'✓':'⚠'}</b><span style="color:var(--muted);width:62px;flex:none">${c.k}</span><span style="color:var(--text)">${c.v}</span></div>`).join('')}</div>`:''}
     <div class="cp-chips">${p.chips.map(c=>`<span class="cp-chip ${c.ok?'ok':'warn'}">${c.ok?'✓':'⚠'} ${c.text}</span>`).join('')}</div>
     <div class="cp-cards">${p.cards.map(c=>`<div class="cp-card"><div class="l">${c.label}</div><div class="v">${c.value}</div><div class="s">${c.sub||''}</div></div>`).join('')}</div>
     <div class="cp-rows">${p.rows.map(r=>`<div class="cp-row"${r.tip?` title="${r.tip}"`:''}><span class="k">${r.k}${r.tip?' ⓘ':''}</span><span class="v">${r.v}</span></div>`).join('')}</div>
