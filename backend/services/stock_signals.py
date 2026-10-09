@@ -652,6 +652,14 @@ def _dip_picks(db: Session, latest, live: dict | None = None, frac: float = 1.0,
     liq = TV.rolling(20).mean() >= 3e9
     rs_raw = 0.4 * (C / C.shift(63) - 1) + 0.2 * (C / C.shift(126) - 1) + 0.2 * (C / C.shift(189) - 1) + 0.2 * (C / C.shift(252) - 1)
     RS = rs_raw.where(liq).rank(axis=1, pct=True).iloc[-1] * 98 + 1
+    if RS.notna().sum() < 100:          # 지난 날짜(잘라 낸 프레임)는 1년 전 값이 모자람 → 날짜별 RS 기록(rs_hist)으로
+        try:
+            rh = rs_hist(db); dkey = str(C.index[-1])
+            if dkey in rh.get("dates", []):
+                k = rh["dates"].index(dkey)
+                RS = pd.Series({cd: float(a[k]) for cd, a in rh["rs"].items()})
+        except Exception:  # noqa: BLE001
+            pass
     c = C.iloc[-1]
     hi60 = c / H.iloc[-60:].max() - 1
     names = dict(db.execute(text("select code, name from stocks")).all())
@@ -769,7 +777,7 @@ def tracking(db: Session) -> dict:
     날짜마다 그날까지 데이터로 점수를 다시 계산한다 (signal_log가 쌓이기 전 날짜는 '다시 계산'). DB 날짜가 바뀔 때만 · 디스크 캐시."""
     latest = db.execute(text("select max(trading_date) from spot_daily_prices")).scalar()
     from backend.services.result_cache import cached  # noqa: PLC0415
-    return cached("tracking_v6", (), db, lambda: _tracking(db, latest)) or {}
+    return cached("tracking_v7", (), db, lambda: _tracking(db, latest)) or {}
 
 
 def _tracking(db: Session, latest, days: int = 20) -> dict:
