@@ -124,7 +124,9 @@ def workspace_list(db: Session) -> dict:
     if log:
         for c in log.get(max(log), []):
             add(c, "종베 3")
-    mp = (peek("dashboard_core_v6") or (None, None))[1] or peek("my_pattern_v6") or {}
+    from backend.services.result_cache import cached  # noqa: PLC0415
+    from backend.screener.my_pattern import scan as mp_scan  # noqa: PLC0415
+    mp = cached("my_pattern_v6", (), db, lambda: mp_scan(db)) or {}      # 재시작 직후에도 디스크에 저장된 결과를 바로 씀
     try:
         from backend.screener.my_pattern import cap_sectors  # noqa: PLC0415
         b = [x for x in mp.get("items", []) if x.get("b") and 1.5 <= x["tv_x"] <= 6 and x["upper_pct"] <= 10]

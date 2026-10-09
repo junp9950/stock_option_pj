@@ -1975,7 +1975,7 @@ async function wsOpen(code,name){
   document.getElementById('ws-panel').innerHTML='<div class="ts">불러오는 중…</div>';
   const [cd, sg, pn] = await Promise.all([
     fetch(`${API}/toss/candles/${code}?interval=1d&count=150`).then(r=>r.ok?r.json():null).catch(()=>null),
-    fetch(`${API}/stock/${code}/signals`).then(r=>r.ok?r.json():null).catch(()=>null),
+    fetch(`${API}/stock/${code}/chart-signals`).then(r=>r.ok?r.json():null).catch(()=>null),
     fetch(`${API}/stock/${code}/panel`).then(r=>r.ok?r.json():null).catch(()=>null)]);
   if(_ws.code!==code) return;      // 그사이 다른 종목을 눌렀으면 버림
   renderStockPanel(pn,'ws-panel');
@@ -2011,7 +2011,7 @@ async function openChartModal(code, name, spikeDate){
   fetch(`${API}/stock/${code}/panel`).then(r=>r.ok?r.json():null).then(renderStockPanel).catch(()=>renderStockPanel(null));
   try{
     const [data, sig] = await Promise.all([fetch(`${API}/toss/candles/${code}?interval=1d&count=150`).then(r=>r.ok?r.json():null),   // EMA 계산용으로 더 받아 오고 그림은 90개
-      fetch(`${API}/stock/${code}/signals`).then(r=>r.ok?r.json():null).catch(()=>null)]);
+      fetch(`${API}/stock/${code}/chart-signals`).then(r=>r.ok?r.json():null).catch(()=>null)]);
     if(!data || !data.candles || !data.candles.length){
       document.getElementById('chart-modal-note').textContent = '토스 API에서 차트 데이터를 가져오지 못했습니다.';
       return;

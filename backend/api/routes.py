@@ -1955,8 +1955,8 @@ def get_sector_calendar(db: Session = Depends(get_db)):
     return cached("sector_calendar_v2", (), db, lambda: scan(db))
 
 
-@router.get("/stock/{code}/signals")
-def get_stock_signals(code: str, db: Session = Depends(get_db)):
+@router.get("/stock/{code}/chart-signals")
+def get_stock_chart_signals(code: str, db: Session = Depends(get_db)):
     """차트에 찍을 신호 (우리 규칙을 그 종목 일봉에 거슬러 적용 + 매매 일지 매수·매도)."""
     from backend.services.stock_signals import signals  # noqa: PLC0415
     return signals(db, code)

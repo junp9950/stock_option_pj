@@ -112,8 +112,9 @@ def panel(db: Session, code: str) -> dict:
     # 오늘 우리 후보 목록에 있나
     tags = []
     try:
-        from backend.services.result_cache import peek  # noqa: PLC0415
-        mp = peek("my_pattern_v6") or {}
+        from backend.services.result_cache import cached  # noqa: PLC0415
+        from backend.screener.my_pattern import scan as mp_scan  # noqa: PLC0415
+        mp = cached("my_pattern_v6", (), db, lambda: mp_scan(db)) or {}
         for key, lab in (("box_break", "박스 돌파 (스윙)"), ("ema_break", "EMA 모임 돌파"), ("box_near", "박스 뚫기 직전")):
             if any(x.get("code") == code for x in mp.get(key, []) or []):
                 tags.append(lab)
