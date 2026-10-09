@@ -157,6 +157,11 @@ select{background:#21262d;border:1px solid #30363d;color:#c9d1d9;padding:6px 10p
 .ws-per button.on{color:var(--text);border-color:var(--blue)}
 .ws-legend{display:flex;flex-wrap:wrap;gap:6px;margin-top:6px;font-size:11px;color:var(--muted)}
 .ws-legend span{display:inline-flex;align-items:center;gap:4px}.ws-legend i{width:10px;height:10px;border-radius:3px;display:inline-block}
+/* 시장 한 줄 (맨 위 고정, 2026-10-09) — 색약이라 ▲▼■ 모양도 같이 */
+.mstrip{position:sticky;top:0;z-index:20;display:flex;flex-wrap:wrap;align-items:center;gap:8px 14px;background:var(--card);border:1px solid var(--line);border-radius:10px;padding:8px 14px;margin-bottom:10px;font-size:13px;box-shadow:0 4px 12px rgba(0,0,0,.35)}
+.mstrip .ix{cursor:pointer;display:flex;align-items:baseline;gap:6px}.mstrip .ix b{font-size:16px}
+.mstrip .sep{width:1px;height:22px;background:var(--line)}
+.mstrip .rg{display:inline-flex;align-items:center;gap:4px;padding:2px 9px;border-radius:12px;border:1px solid var(--line);font-size:12.5px}
 #db-more>summary{font-size:15px;font-weight:700;color:var(--text);cursor:pointer;margin:6px 0 10px}
 @media(max-width:1250px){.ws{grid-template-columns:260px minmax(0,1fr)}.ws #ws-panel{grid-column:1/-1}}
 @media(max-width:760px){.ws{grid-template-columns:1fr}.ws-list{max-height:320px}}
@@ -592,6 +597,7 @@ select{background:#21262d;border:1px solid #30363d;color:#c9d1d9;padding:6px 10p
 <!-- 눌림목 레이더 탭 -->
 <!-- 오늘 (대시보드, 2026-10-06) -->
 <div id="panel-home" class="panel active content">
+  <div id="db-strip" class="mstrip"><span class="ts">시장 불러오는 중…</span></div>
   <div id="db-verdict" style="border-radius:12px;padding:14px 18px;margin-bottom:14px;border:1px solid #30363d;font-size:15px">로딩 중…</div>
   <div class="ws">
     <div class="ws-list">
@@ -913,6 +919,16 @@ async function renderDashboard(d, stale, live){
     <div style="font-size:30px;font-weight:800;color:${col[x.state]||'#c9d1d9'};margin:4px 0">${ico[x.state]||''} ${x.state||'-'}</div>
     <div style="font-size:14px;color:#c9d1d9">${x.today_pct!=null?`오늘 <b style="color:${x.today_pct>=0?'#f85149':'#58a6ff'}">${sg(x.today_pct)}%</b> · `:''}20일선보다 <b>${x.vs_ma20_pct!=null?sg(x.vs_ma20_pct)+'%':'-'}</b> · 최근 20일 <b>${x.cum20_pct!=null?sg(x.cum20_pct)+'%':'-'}</b></div></div>`; };
   const rel=m.rel, relW=rel==null?0:Math.max(0,Math.min(100,(rel+15)/30*100));
+  // 시장 한 줄 (맨 위 고정): 오늘 지수 · 국면 3개 · 삼하 vs 코스닥 20일
+  { const it=d.index_today||{}, RG={상승:['▲','#3fb950'],횡보:['■','#d29922'],하락:['▼','#f85149']};
+    const ix=k=>{ const x=it[k]; if(!x) return ''; const c=x.pct>=0?'var(--up)':'var(--down)';
+      return `<span class="ix" onclick="openIndexChart('${k==='코스피'?'KOSPI':'KOSDAQ'}','${k}')" title="누르면 차트"><span class="ts">${k}${x.status==='OPEN'?' 장중':''}</span><b style="color:${c}">${x.close}</b><span style="color:${c}">${sg(x.pct)}%</span></span>`; };
+    const rg=k=>{ const x=m[k]||{}, r=RG[x.state]||['·','#8b949e'];
+      return `<span class="rg" style="border-color:${r[1]}66" title="20일선보다 ${x.vs_ma20_pct!=null?sg(x.vs_ma20_pct)+'%':'-'} · 최근 20일 ${x.cum20_pct!=null?sg(x.cum20_pct)+'%':'-'}"><span class="ts">${k}</span><b style="color:${r[1]}">${r[0]} ${x.state||'-'}</b><span class="ts">${x.vs_ma20_pct!=null?'20일선 '+sg(x.vs_ma20_pct)+'%':''}</span></span>`; };
+    const sh=m.sh20, kq=m.kq20;
+    document.getElementById('db-strip').innerHTML=`${ix('코스피')}${ix('코스닥')}<span class="sep"></span><span class="ts">국면</span>${rg('전체')}${rg('코스피')}${rg('코스닥')}`
+      +(sh!=null&&kq!=null?`<span class="sep"></span><span class="ts">최근 20일</span><span>삼하 <b style="color:${sh>=0?'var(--up)':'var(--down)'}">${sg(sh)}%</b> · 코스닥 <b style="color:${kq>=0?'var(--up)':'var(--down)'}">${sg(kq)}%</b></span>`:'')
+      +(m.sh_foreign5!=null?`<span class="ts">외국인 삼하 5일 ${Math.round(m.sh_foreign5).toLocaleString()}억</span>`:''); }
   const top=[],rank=[],ref=[];
   document.getElementById('db-market').innerHTML=card('📊 시장',
     // ① 오늘 지수 (실제 코스피·코스닥, 네이버) ② 국면(추세) — 둘을 나눠 보여 줌 (2026-10-07 "시장 상태랑 당일 지수 상태 구분 필요")
