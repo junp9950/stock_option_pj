@@ -156,8 +156,9 @@ select{background:#21262d;border:1px solid #30363d;color:#c9d1d9;padding:6px 10p
 .ws-sec{font-size:11px;color:var(--muted);margin:10px 4px 4px}
 .ws-per{display:flex;gap:4px;margin:2px 0 6px}.ws-per button{background:var(--card2);border:1px solid var(--line);color:var(--muted);border-radius:12px;padding:3px 10px;font-size:11.5px;cursor:pointer}
 .ws-per button.on{color:var(--text);border-color:var(--blue)}
-.ws-legend{display:flex;flex-wrap:wrap;gap:6px;margin-top:6px;font-size:11px;color:var(--muted)}
-.ws-legend span{display:inline-flex;align-items:center;gap:4px}.ws-legend i{width:10px;height:10px;border-radius:3px;display:inline-block}
+.ws-lg{margin-top:6px}.ws-lg summary{cursor:pointer;font-size:12px;color:var(--muted);list-style:none;display:inline-block;padding:3px 10px;border:1px solid var(--line);border-radius:12px}.ws-lg summary::-webkit-details-marker{display:none}.ws-lg[open] summary{color:var(--text);border-color:var(--blue)}
+.ws-legend{display:flex;flex-direction:column;gap:5px;margin-top:8px;font-size:12px;line-height:1.5;color:var(--muted)}
+.ws-legend span{display:block;word-break:keep-all;overflow-wrap:anywhere}.ws-legend i{width:10px;height:10px;border-radius:3px;display:inline-block}
 /* 차트 (Lightweight Charts: 확대·이동·십자선, 2026-10-09) */
 .lwbox{position:relative}.lwc{width:100%;height:520px}
 #cm-chart.lwc{height:460px}
@@ -481,7 +482,7 @@ select{background:#21262d;border:1px solid #30363d;color:#c9d1d9;padding:6px 10p
         <div class="ws-per" id="jr-ws-tf"><button data-tf="1d" onclick="jrWsTf('1d')">일봉</button><button data-tf="1w" onclick="jrWsTf('1w')">주봉</button><button data-tf="60m" onclick="jrWsTf('60m')">60분</button><button data-tf="30m" onclick="jrWsTf('30m')">30분</button><button data-tf="15m" onclick="jrWsTf('15m')">15분</button><button data-tf="5m" onclick="jrWsTf('5m')">5분</button><button data-tf="1m" onclick="jrWsTf('1m')">1분</button></div>
       <div class="ws-per" id="jr-ws-per"><button data-n="66" onclick="jrWsPeriod(66)">3개월</button><button data-n="130" onclick="jrWsPeriod(130)">6개월</button><button data-n="250" onclick="jrWsPeriod(250)">1년</button></div>
         <div class="lwbox"><div class="lwleg" id="jr-chart-leg"></div><div id="jr-chart" class="lwc"></div></div>
-        <div class="ws-legend"><span>⬆ 흰색 = 내가 산 날 · ⬇ 보라 = 내가 판 날</span><span>▲ 진입 → ▼ 절반 팔기 · 나머지 팔기 / 손절</span><span>● 보라 숫자 6·7 = 종가 진입 점수</span><span>● 점 = 참고</span></div>
+        <details class="ws-lg"><summary>ⓘ 차트 표시 설명</summary><div class="ws-legend"><span>⬆ 흰색 = 내가 산 날 · ⬇ 보라 = 내가 판 날</span><span>▲ 진입 → ▼ 절반 팔기 · 나머지 팔기 / 손절</span><span>● 보라 숫자 6·7 = 종가 진입 점수</span><span>● 점 = 참고</span></div></details>
       </div>
       <aside class="cm-panel" id="jr-ws-panel"></aside>
     </div>
@@ -625,7 +626,7 @@ select{background:#21262d;border:1px solid #30363d;color:#c9d1d9;padding:6px 10p
       <div class="ws-per" id="ws-tf"><button data-tf="1d" onclick="wsTf('1d')">일봉</button><button data-tf="1w" onclick="wsTf('1w')">주봉</button><button data-tf="60m" onclick="wsTf('60m')">60분</button><button data-tf="30m" onclick="wsTf('30m')">30분</button><button data-tf="15m" onclick="wsTf('15m')">15분</button><button data-tf="5m" onclick="wsTf('5m')">5분</button><button data-tf="1m" onclick="wsTf('1m')">1분</button></div>
       <div class="ws-per" id="ws-per"><button data-n="66" onclick="wsPeriod(66)">3개월</button><button data-n="130" onclick="wsPeriod(130)">6개월</button><button data-n="250" onclick="wsPeriod(250)">1년</button></div>
       <div class="lwbox"><div class="lwleg" id="ws-chart-leg"></div><div id="ws-chart" class="lwc"></div></div>
-      <div class="ws-legend"><span>▲ <b>진입</b> = 사기 좋은 자리 (3년 평균 +2.6%, 2~3주 보유 · 급등봉 당일은 안 냄) → 스탑로스 = 신호 봉 저가 -1% 예약 · ▼ 14일선 아래 종가 절반 · 21일선 아래 종가 나머지</span><span>● 보라 숫자 <b>6·7</b> = 종가 진입 점수 (7개 조건 중 맞은 개수 · 상승·횡보장만) → 사면 바로 스탑로스 = 그날 저가 -1% 예약 · 21일선 아래 종가면 다음 날 아침 정리 (3년 평균 +2.2% · 손절폭 3%↓면 +3.2% · 한 번 손실은 손절폭만큼으로 고정)</span><span>↑ <b>종가 매수</b> = 그날 종가에 살 후보 (진입 시점일 뿐 · 파는 건 위와 같음)</span><span>↑ 파란 화살표 = 박스 위로 돌파 · 이평선 모였다 돌파 (3년 10일 평균 +1.5% · +0.7%)</span><span>● 초록 = 오르던 종목의 거래 적은 눌림</span><span>· 작은 점 = 참고 (돌파 대기 · 아깝게 놓침 · 상승 추세 시작) — 봉에 올리면 위에 내용</span><span>■ 회색 = 급등봉 · 1년 최대 거래</span><span>▼ 주황 = 조심</span><span>· 두 손가락으로 확대, 끌어서 이동, 누르면 그 날 가격</span></div>
+      <details class="ws-lg"><summary>ⓘ 차트 표시 설명</summary><div class="ws-legend"><span>▲ <b>진입</b> = 사기 좋은 자리 (3년 평균 +2.6%, 2~3주 보유 · 급등봉 당일은 안 냄) → 스탑로스 = 신호 봉 저가 -1% 예약 · ▼ 14일선 아래 종가 절반 · 21일선 아래 종가 나머지</span><span>● 보라 숫자 <b>6·7</b> = 종가 진입 점수 (7개 조건 중 맞은 개수 · 상승·횡보장만) → 사면 바로 스탑로스 = 그날 저가 -1% 예약 · 21일선 아래 종가면 다음 날 아침 정리 (3년 평균 +2.2% · 손절폭 3%↓면 +3.2% · 한 번 손실은 손절폭만큼으로 고정)</span><span>↑ <b>종가 매수</b> = 그날 종가에 살 후보 (진입 시점일 뿐 · 파는 건 위와 같음)</span><span>↑ 파란 화살표 = 박스 위로 돌파 · 이평선 모였다 돌파 (3년 10일 평균 +1.5% · +0.7%)</span><span>● 초록 = 오르던 종목의 거래 적은 눌림</span><span>· 작은 점 = 참고 (돌파 대기 · 아깝게 놓침 · 상승 추세 시작) — 봉에 올리면 위에 내용</span><span>■ 회색 = 급등봉 · 1년 최대 거래</span><span>▼ 주황 = 조심</span><span>· 두 손가락으로 확대, 끌어서 이동, 누르면 그 날 가격</span></div></details>
     </div>
     <aside class="cm-panel" id="ws-panel"></aside>
   </div>
