@@ -196,7 +196,11 @@ def signals(db: Session, code: str, days: int = 260, owner: str | None = None) -
             # 실제로 사는 조건(점수 6↑ + 손절폭 8%↓ + 상승장)을 다 만족한 날만 '매수'로 — 숫자 6·7은 뜻이 안 읽힘 (2026-10-09 "시그널을 확실히")
             # 매수는 시장보다 센 종목(RS 70~95)만 — 다른 6개가 맞아도 RS가 낮으면 12년 R -0.27/+0.01/+0.25 (맞으면 -0.15/+0.12/+0.45, v12i.py)
             # 2026-10-09 한중엔시에스 10/2: RS 34인데 나머지 6개가 맞아 '매수'가 떴던 것
-            buy_ok = (sc >= 6) & fl[1].fillna(False) & base_ok & (rk_ <= 0.08)
+            rs_ok = fl[1].fillna(False)
+            # 이평선 모였다 돌파도 매수 (2026-10-09 "이평선 모였다 돌파 자리는 매수가 아닌 거가") — 정배열·강도 70~95·그날 +8% 미만·손절폭 8%↓
+            # 12년(v12o.py) R +0.11/+0.18/+0.67 (점수 6↑ 매수 -0.15/+0.12/+0.45보다 세 기간 모두 나음) · 둘 다면 +0.16/+0.20/+0.87
+            ema_buy = (ema & up60 & rs_ok & (chg < 0.08)).fillna(False)
+            buy_ok = (((sc >= 6) & rs_ok) | ema_buy) & base_ok & (rk_ <= 0.08)
             pos_ = {d: k for k, d in enumerate(df.index)}
             prev_on, run_best = False, None
             for k, d in enumerate(df.index):
@@ -209,7 +213,7 @@ def signals(db: Session, code: str, days: int = 260, owner: str | None = None) -
                     continue
                 miss = [CLOSE_FLAGS[j] for j, f in enumerate(fl) if not bool(f[d])]
                 good = rk_[d] <= 0.03
-                desc = (f"손절 {L[d] * 0.99:,.0f} (-{rk_[d] * 100:.1f}%)" + (" · 수량 절반" if rk_[d] > 0.05 else "")
+                desc = (("이평선 모였다 돌파 · " if bool(ema_buy[d]) else "") + f"손절 {L[d] * 0.99:,.0f} (-{rk_[d] * 100:.1f}%)" + (" · 수량 절반" if rk_[d] > 0.05 else "")
                         + f" · 점수 {int(sc[d])}/7" + (f" (빠짐: {miss[0]})" if miss else ""))
                 # 연속으로 뜨는 날: 첫날만 '매수', 이어지는 날은 '자리 유지' 점 · 손절폭이 확 짧아지면 '더 좋은 자리' (2026-10-09 "매일 뜬 이유가 뭐야")
                 if not prev_on:
@@ -290,7 +294,7 @@ def workspace_list(db: Session) -> dict:
     from backend.services.result_cache import cached  # noqa: PLC0415
     now = datetime.now(ZoneInfo("Asia/Seoul"))
     if not (is_trading_day(now.date()) and 9 <= now.hour < 16):
-        return cached("workspace_list_v5", (), db, lambda: _workspace_list(db))
+        return cached("workspace_list_v6", (), db, lambda: _workspace_list(db))
     return _workspace_list(db)
 
 
@@ -323,18 +327,18 @@ def _workspace_list(db: Session) -> dict:
         # 3년(trend_exit.py, 21일선 아래 종가까지 보유): 6↑ 평균 +2.2%·R +0.60 · 그중 손절폭 3%↓ 평균 +3.9%·R +1.68·최악10% -7%
         scores = close_scores_now(db).get("scores", {})      # 장중이면 실시간 가격으로 (15시대에 오늘 봉 기준 후보)
         for c_, v_ in sorted(scores.items(), key=lambda kv: (-kv[1]["score"], kv[1]["risk"])):
-            if v_["score"] >= 6 and v_["flags"][1] and v_["risk"] <= 0.03:
-                add(c_, "✅ 손익비 좋음")
+            if v_.get("buy") and v_["risk"] <= 0.03:
+                add(c_, "✅ 손익비 좋음" + (" · 이평선 모였다 돌파" if v_.get("ema") else ""))
         for c_, v_ in sorted(scores.items(), key=lambda kv: (-kv[1]["score"], kv[1]["risk"])):
-            if v_["score"] >= 6 and v_["flags"][1] and 0.03 < v_["risk"] <= 0.05:
-                add(c_, "종가 점수 6↑")  # 배지에 점수가 있어 짧게
+            if v_.get("buy") and 0.03 < v_["risk"] <= 0.05:
+                add(c_, "이평선 모였다 돌파 · 매수" if v_.get("ema") and v_["score"] < 6 else "종가 점수 6↑")  # 배지에 점수가 있어 짧게
         # 손절폭 5~8%는 후순위·수량 줄이기, 8%↑는 대기 (3년 예약 손절 R: 3%↓ +1.42 · 3~5% +0.55 · 5~8% +0.35(앞뒤 .32/.37) · 8%↑ +0.11, atr_stop_b.py)
         # 2026-10-09 피에스케이 7.1% "너무 높은 거 아니가" → "포함해서 들고 가도 우리 쪽이 높나" → 1R당 같은 금액이면 5~8%도 플러스
         for c_, v_ in sorted(scores.items(), key=lambda kv: kv[1]["risk"]):
-            if v_["score"] >= 6 and v_["flags"][1] and 0.05 < v_["risk"] <= 0.08:
-                add(c_, "후순위 · 수량 절반")
+            if v_.get("buy") and 0.05 < v_["risk"] <= 0.08:
+                add(c_, "후순위 · 수량 절반" + (" · 이평선 모였다 돌파" if v_.get("ema") else ""))
         for c_, v_ in sorted(scores.items(), key=lambda kv: kv[1]["risk"]):
-            if v_["score"] >= 6 and v_["flags"][1] and v_["risk"] > 0.08:
+            if (v_["score"] >= 6 or v_.get("ema")) and v_["flags"][1] and v_["risk"] > 0.08:
                 add(c_, "⏸ 폭 좁은 날 기다리기")
     except Exception:  # noqa: BLE001
         pass
@@ -401,7 +405,7 @@ def _workspace_list(db: Session) -> dict:
         return {**x, "close": c, "chg": round(ch, 2)}
     def lane(tags):
         # 2026-10-09 사용자 "오늘 정한 기준으로 바꾸고": 오늘 진입 = ▲ 진입 · 종가 점수 6↑(손절폭 8%↓)만. 그 밖(종가 매수·파란 화살표 등)은 대기에 참고로
-        return "entry" if any(t.startswith(("▲", "✅ 손익비", "종가 점수 6↑", "후순위", "⬇ 급락")) for t in tags) else "wait"
+        return "entry" if any(t.startswith(("▲", "✅ 손익비", "종가 점수 6↑", "후순위", "⬇ 급락", "이평선 모였다 돌파 · 매수")) for t in tags) else "wait"
     try:
         srank = sector_rank_of(db)
     except Exception:  # noqa: BLE001
@@ -414,10 +418,10 @@ def _workspace_list(db: Session) -> dict:
         sc = scores.get(x["code"])
         y["score"] = sc["score"] if sc else None
         y["risk"] = round(sc["risk"] * 100, 1) if sc else None
-        y["rr"] = bool(sc and sc["score"] >= 6 and sc["flags"][1] and sc["risk"] <= 0.03)
+        y["rr"] = bool(sc and sc.get("buy") and sc["risk"] <= 0.03)
         sr = srank.get(x["code"], (99, ""))
         y["sec_rank"] = sr[0]
-        if y["lane"] == "entry" and sc and sc["score"] >= 6 and sc["flags"][1]:
+        if y["lane"] == "entry" and sc and sc.get("buy"):
             if sr[0] <= 3:
                 x["tags"] = [f"뜨는 섹터 {sr[1]}"] + x["tags"]; y["tags"] = x["tags"]
             elif sr[0] <= 8:
@@ -563,7 +567,7 @@ def close_scores(db: Session) -> dict:
     점수 7 이김 46%·+1.5%. 기간을 반으로 나눠도 둘 다 점수 따라 이김 비율이 올라감(앞 26→47%, 뒤 31→46%). 디스크 캐시."""
     latest = db.execute(text("select max(trading_date) from spot_daily_prices")).scalar()
     from backend.services.result_cache import cached  # noqa: PLC0415
-    v = cached("close_scores_v1", (), db, lambda: _close_scores(db, latest)) or {}
+    v = cached("close_scores_v2", (), db, lambda: _close_scores(db, latest)) or {}
     return v
 
 
@@ -630,10 +634,20 @@ def _close_scores(db: Session, latest, live: dict | None = None, frac: float = 1
     ehi = np.maximum(np.maximum(e5.iloc[r], e10.iloc[r]), e20.iloc[r]); elo = np.minimum(np.minimum(e5.iloc[r], e10.iloc[r]), e20.iloc[r])
     spread = (ehi - elo) / c
     flags = [hi60 >= -0.05, (RS >= 70) & (RS < 95), (vx >= 0.7) & (vx < 3), pos >= 0.7, (chg >= 0) & (chg < 0.08), gap20 < 0.15, spread < 0.06]
+    # 이평선 모였다 돌파 (어제 EMA5/10/20 간격 4%↓ · 오늘 셋 다 위 · 직전 10일 고가 위 · +3%↑ · 거래대금 20일 평균 1.5배↑)
+    # 2026-10-09 "이평선 모였다 돌파 자리는 매수가 아닌 거가" → 정배열(추세 기본)·RS 70~95·그날 +8% 미만·손절폭 8%↓면 매수
+    # 12년(v12o.py) R +0.11/+0.18/+0.67 — 점수 6↑ 매수(-0.15/+0.12/+0.45)보다 세 기간 모두 나음 · 둘 다면 +0.16/+0.20/+0.87
+    gap_prev = ((np.maximum(np.maximum(e5.iloc[r - 1], e10.iloc[r - 1]), e20.iloc[r - 1])
+                 - np.minimum(np.minimum(e5.iloc[r - 1], e10.iloc[r - 1]), e20.iloc[r - 1])) / C.iloc[r - 1])
+    tvx = TV.iloc[r] / TV.iloc[-21:-1].mean()
+    ema = (gap_prev <= 0.04) & (c > ehi) & (c > H.iloc[-11:-1].max()) & (chg >= 0.03) & (chg < 0.08) & (tvx >= 1.5)
     out = {}
     for code in trend[trend.fillna(False).astype(bool)].index:
         f = [bool(x.get(code, False)) for x in flags]
-        out[code] = {"score": sum(f), "flags": f, "stop": float(l[code]) * 0.99, "risk": float(1 - l[code] * 0.99 / c[code])}
+        rk = float(1 - l[code] * 0.99 / c[code])
+        e_ = bool(ema.get(code, False))
+        out[code] = {"score": sum(f), "flags": f, "stop": float(l[code]) * 0.99, "risk": rk, "ema": e_,
+                     "buy": bool(f[1] and rk <= 0.08 and (sum(f) >= 6 or e_))}
     return {"date": asof, "scores": out, "live": bool(live)}
 
 
@@ -861,7 +875,7 @@ def tracking(db: Session) -> dict:
     날짜마다 그날까지 데이터로 점수를 다시 계산한다 (signal_log가 쌓이기 전 날짜는 '다시 계산'). DB 날짜가 바뀔 때만 · 디스크 캐시."""
     latest = db.execute(text("select max(trading_date) from spot_daily_prices")).scalar()
     from backend.services.result_cache import cached  # noqa: PLC0415
-    return cached("tracking_v8", (), db, lambda: _tracking(db, latest)) or {}
+    return cached("tracking_v9", (), db, lambda: _tracking(db, latest)) or {}
 
 
 def _tracking(db: Session, latest, days: int = 20) -> dict:
@@ -879,7 +893,7 @@ def _tracking(db: Session, latest, days: int = 20) -> dict:
         fr = {key: v.iloc[:r + 1] for key, v in P.items()}
         sc = _close_scores(db, d, frames=fr).get("scores", {})
         for code, v in sc.items():
-            if v["score"] >= 6 and v["flags"][1] and v["risk"] <= 0.08:
+            if v.get("buy"):
                 sig.setdefault(code, []).append((r, float(C[code].iloc[r]), v["stop"], v["score"]))
         try:      # 급락 날 줍기 (손절 20일선 -1%) — 2026-10-09 "여기는 안 들어가나"
             for x in _dip_picks(db, d, frames=fr).get("items", []):
