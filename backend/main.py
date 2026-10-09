@@ -1997,12 +1997,12 @@ async function wsOpen(code,name){
   document.getElementById('ws-name').textContent=name; document.getElementById('ws-sub').textContent=code;
   document.getElementById('ws-note').textContent='불러오는 중…';
   document.getElementById('ws-panel').innerHTML='<div class="ts">불러오는 중…</div>';
-  const [cd, sg, pn] = await Promise.all([
+  // 패널은 따로 — 차트는 패널을 기다리지 않고 먼저 그림 (2026-10-09 "오래 걸리노")
+  fetch(`${API}/stock/${code}/panel`).then(r=>r.ok?r.json():null).catch(()=>null).then(pn=>{ if(_ws.code===code) renderStockPanel(pn,'ws-panel'); });
+  const [cd, sg] = await Promise.all([
     fetch(`${API}/stock/${code}/candles?count=330`).then(r=>r.ok?r.json():null).catch(()=>null),   // 1년 + EMA 계산용 (DB + 토스 최근)
-    fetch(`${API}/stock/${code}/chart-signals`).then(r=>r.ok?r.json():null).catch(()=>null),
-    fetch(`${API}/stock/${code}/panel`).then(r=>r.ok?r.json():null).catch(()=>null)]);
+    fetch(`${API}/stock/${code}/chart-signals`).then(r=>r.ok?r.json():null).catch(()=>null)]);
   if(_ws.code!==code) return;      // 그사이 다른 종목을 눌렀으면 버림
-  renderStockPanel(pn,'ws-panel');
   if(!cd||!cd.candles||!cd.candles.length){ document.getElementById('ws-note').textContent='차트 데이터를 못 불러왔습니다'; return; }
   _ws.cache={[code]:{cd,sg}};
   wsDraw();
@@ -2035,12 +2035,11 @@ async function jrWsOpen(code,name){
   document.querySelectorAll('#jr-ws-items .ws-item').forEach(e=>e.classList.toggle('on',e.dataset.c===code));
   document.getElementById('jr-ws-name').textContent=name; document.getElementById('jr-ws-sub').textContent=code;
   document.getElementById('jr-ws-note').textContent='불러오는 중…'; document.getElementById('jr-ws-panel').innerHTML='<div class="ts">불러오는 중…</div>';
-  const [cd,sg,pn]=await Promise.all([
+  fetch(`${API}/stock/${code}/panel`,{headers:jrH()}).then(r=>r.ok?r.json():null).catch(()=>null).then(pn=>{ if(_jrWs.code===code) renderStockPanel(pn,'jr-ws-panel'); });
+  const [cd,sg]=await Promise.all([
     fetch(`${API}/stock/${code}/candles?count=330`).then(r=>r.ok?r.json():null).catch(()=>null),
-    fetch(`${API}/stock/${code}/chart-signals`,{headers:jrH()}).then(r=>r.ok?r.json():null).catch(()=>null),
-    fetch(`${API}/stock/${code}/panel`,{headers:jrH()}).then(r=>r.ok?r.json():null).catch(()=>null)]);
+    fetch(`${API}/stock/${code}/chart-signals`,{headers:jrH()}).then(r=>r.ok?r.json():null).catch(()=>null)]);
   if(_jrWs.code!==code) return;
-  renderStockPanel(pn,'jr-ws-panel');
   if(!cd||!cd.candles||!cd.candles.length){ document.getElementById('jr-ws-note').textContent='차트 데이터를 못 불러왔습니다'; return; }
   _jrWs.cache={code,cd,sg}; jrWsDraw();
 }

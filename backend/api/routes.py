@@ -1861,6 +1861,14 @@ def get_chart_candidates(min_cap: float = 0, db: Session = Depends(get_db)):
 
 def warm_caches(db: Session) -> None:
     """화면 기본값으로 미리 계산해 둔다. 데이터가 그대로면 즉시 끝난다."""
+    # 첫 화면(작업대)에 쓰는 것부터 — 재시작 직후 차트 창 패널이 늦던 것 (2026-10-09)
+    try:
+        get_my_pattern(db=db)
+        from backend.services.stock_panel import rs_table as _rs  # noqa: PLC0415
+        _rs(db)
+        get_workspace_list(db=db)
+    except Exception:  # noqa: BLE001
+        pass
     get_chart_candidates(min_cap=0, db=db)
     get_volume_records(db=db)
     get_sector_rotation(db=db)
