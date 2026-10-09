@@ -480,16 +480,17 @@ select{background:#21262d;border:1px solid #30363d;color:#c9d1d9;padding:6px 10p
         <div class="ws-per" id="jr-ws-tf"><button data-tf="1d" onclick="jrWsTf('1d')">일봉</button><button data-tf="1w" onclick="jrWsTf('1w')">주봉</button><button data-tf="60m" onclick="jrWsTf('60m')">60분</button><button data-tf="30m" onclick="jrWsTf('30m')">30분</button><button data-tf="15m" onclick="jrWsTf('15m')">15분</button><button data-tf="5m" onclick="jrWsTf('5m')">5분</button><button data-tf="1m" onclick="jrWsTf('1m')">1분</button></div>
       <div class="ws-per" id="jr-ws-per"><button data-n="66" onclick="jrWsPeriod(66)">3개월</button><button data-n="130" onclick="jrWsPeriod(130)">6개월</button><button data-n="250" onclick="jrWsPeriod(250)">1년</button></div>
         <div class="lwbox"><div class="lwleg" id="jr-chart-leg"></div><div id="jr-chart" class="lwc"></div></div>
-        <div class="ws-legend"><span>⬆ 흰색 = 내가 산 날 · ⬇ 보라 = 내가 판 날</span><span>▲ 진입 → ▼ 절반 팔기 · 나머지 팔기 / 손절</span><span>● 점 = 참고</span></div>
+        <div class="ws-legend"><span>⬆ 흰색 = 내가 산 날 · ⬇ 보라 = 내가 판 날</span><span>▲ 진입 → ▼ 절반 팔기 · 나머지 팔기 / 손절</span><span>● 보라 숫자 6·7 = 종가 진입 점수</span><span>● 점 = 참고</span></div>
       </div>
       <aside class="cm-panel" id="jr-ws-panel"></aside>
     </div>
     <div id="jr-holding"></div>
 
     <div style="font-size:12px;color:#8b949e;margin:6px 0">📒 청산 기록
-      <label style="margin-left:8px"><select id="jr-kindf" onchange="jrRenderTrips()" style="background:#0d1117;border:1px solid #30363d;color:#c9d1d9;border-radius:6px;padding:2px 6px"><option value="">전체</option></select></label></div>
+      <label style="margin-left:8px"><select id="jr-kindf" onchange="jrRenderTrips()" style="background:#0d1117;border:1px solid #30363d;color:#c9d1d9;border-radius:6px;padding:2px 6px"><option value="">전체</option></select></label>
+      <span style="margin-left:8px">규칙: 손절선 = 산 날 저가 -1% 아래 종가 → 다음 날까지 정리 · 급등(+8%↑) 날 추격 금지 · 물타기 금지 · R = 번 값 ÷ 손절폭 (1이면 손절폭만큼 범) · 장중 매매는 빼고 봄</span></div>
     <table class="pb-table" style="margin-bottom:18px">
-      <thead><tr><th>종목</th><th>유형</th><th>산 날 → 판 날</th><th>매수 → 매도</th><th>수익률</th><th>산 날 상태</th></tr></thead>
+      <thead><tr><th>종목</th><th>유형</th><th>산 날 → 판 날</th><th>매수 → 매도</th><th>수익률</th><th>규칙 · R</th><th>산 날 상태</th></tr></thead>
       <tbody id="jr-trips"></tbody>
     </table>
 
@@ -622,7 +623,7 @@ select{background:#21262d;border:1px solid #30363d;color:#c9d1d9;padding:6px 10p
       <div class="ws-per" id="ws-tf"><button data-tf="1d" onclick="wsTf('1d')">일봉</button><button data-tf="1w" onclick="wsTf('1w')">주봉</button><button data-tf="60m" onclick="wsTf('60m')">60분</button><button data-tf="30m" onclick="wsTf('30m')">30분</button><button data-tf="15m" onclick="wsTf('15m')">15분</button><button data-tf="5m" onclick="wsTf('5m')">5분</button><button data-tf="1m" onclick="wsTf('1m')">1분</button></div>
       <div class="ws-per" id="ws-per"><button data-n="66" onclick="wsPeriod(66)">3개월</button><button data-n="130" onclick="wsPeriod(130)">6개월</button><button data-n="250" onclick="wsPeriod(250)">1년</button></div>
       <div class="lwbox"><div class="lwleg" id="ws-chart-leg"></div><div id="ws-chart" class="lwc"></div></div>
-      <div class="ws-legend"><span>▲ <b>진입</b> = 사기 좋은 자리 (지난 3년 평균 +3.4%, 2~3주 보유 · 급등봉 당일은 안 냄) → ▼ 절반 팔기 · 나머지 팔기 / 손절</span><span>↑ <b>종가 매수</b> = 그날 종가에 살 후보 (다음 날 +2% 못 가면 정리, 넘으면 절반 팔고 나머지는 손절선 올려 가며 보유)</span><span>↑ 파란 화살표 = 박스 위로 돌파 · 이평선 모였다 돌파 (3년 10일 평균 +1.5% · +0.7%)</span><span>● 초록 = 오르던 종목의 거래 적은 눌림</span><span>· 작은 점 = 참고 (돌파 대기 · 아깝게 놓침 · 상승 추세 시작) — 봉에 올리면 위에 내용</span><span>■ 회색 = 급등봉 · 1년 최대 거래</span><span>▼ 주황 = 조심</span><span>· 두 손가락으로 확대, 끌어서 이동, 누르면 그 날 가격</span></div>
+      <div class="ws-legend"><span>▲ <b>진입</b> = 사기 좋은 자리 (지난 3년 평균 +3.4%, 2~3주 보유 · 급등봉 당일은 안 냄) → ▼ 절반 팔기 · 나머지 팔기 / 손절</span><span>● 보라 숫자 <b>6·7</b> = 종가 진입 점수 (7개 조건 중 맞은 개수 · 3년 6점↑ 이김 43%·평균 +1.5% · 손절 = 그날 저가 -1% 아래 종가 · 상승·횡보장만)</span><span>↑ <b>종가 매수</b> = 그날 종가에 살 후보 (다음 날 +2% 못 가면 정리, 넘으면 절반 팔고 나머지는 손절선 올려 가며 보유)</span><span>↑ 파란 화살표 = 박스 위로 돌파 · 이평선 모였다 돌파 (3년 10일 평균 +1.5% · +0.7%)</span><span>● 초록 = 오르던 종목의 거래 적은 눌림</span><span>· 작은 점 = 참고 (돌파 대기 · 아깝게 놓침 · 상승 추세 시작) — 봉에 올리면 위에 내용</span><span>■ 회색 = 급등봉 · 1년 최대 거래</span><span>▼ 주황 = 조심</span><span>· 두 손가락으로 확대, 끌어서 이동, 누르면 그 날 가격</span></div>
     </div>
     <aside class="cm-panel" id="ws-panel"></aside>
   </div>
@@ -1327,7 +1328,7 @@ function jrRender(){
     +card('손익 합계',jrWon(all.pnl),`투입 대비 ${all.ret_on_cost_pct}%`)+card('최고 / 최악',`${jrPct(all.best_pct)} / ${jrPct(all.worst_pct)}`,'')
     +(s.pool_cmp?card('내 선택 vs 같은 날 후보',`${jrPct(s.pool_cmp.my_avg_pct)} / ${jrPct(s.pool_cmp.pool_avg_pct)}`,`${s.pool_cmp.count}건 중 후보 평균 이김 ${s.pool_cmp.beat_pct}%`):'');
   document.getElementById('jr-insights').innerHTML='<b style="color:#e6edf3">🔎 숫자로 보이는 것</b><br>'+(_jr.insights.length?_jr.insights.map(x=>'· '+x).join('<br>'):'<span class="ts">아직 없음</span>');
-  const groups={by_kind:'유형별',by_state:'산 날 상태별',by_user_tag:'내 근거별',by_family:'섹터별',by_day:'날짜별 실현손익',by_month:'월별 실현손익'};
+  const groups={by_rule:'규칙별',by_kind:'유형별',by_state:'산 날 상태별',by_user_tag:'내 근거별',by_family:'섹터별',by_day:'날짜별 실현손익',by_month:'월별 실현손익'};
   document.getElementById('jr-groupbtns').innerHTML=Object.entries(groups).map(([k,v])=>`<button class="btn btn-sm" style="${k===_jrGroup?'border-color:#58a6ff;color:#58a6ff':''}" onclick="_jrGroup='${k}';jrRender()">${v}</button>`).join('');
   document.getElementById('jr-gname').textContent=groups[_jrGroup];
   const g=Object.entries(s[_jrGroup]||{}).sort((a,b)=>(_jrGroup==='by_month'||_jrGroup==='by_day')?b[0].localeCompare(a[0]):b[1].count-a[1].count);
@@ -1361,8 +1362,9 @@ function jrRenderTrips(){
     return `<tr style="${t.excluded?'opacity:.45':''}"><td><b style="cursor:pointer" onclick="openChartModal('${t.code}','${t.name}','')">${t.name}</b>${t.user_tags.length?` <span class="ts">${t.user_tags.join(', ')}</span>`:''}${t.excluded?' <span class="ts">(분석 제외)</span>':''}</td>
       <td data-label="유형">${t.kind}</td><td data-label="산 날 → 판 날">${t.buy_date?t.buy_date.slice(5):'?'} → ${t.sell_date.slice(5)}${t.days!=null?` <span class="ts">${t.days}일</span>`:''}</td>
       <td data-label="매수 → 매도">${Math.round(t.buy_px).toLocaleString()} → ${Math.round(t.sell_px).toLocaleString()} <span class="ts">${t.qty}주</span></td>
-      <td data-label="수익률">${jrPct(t.pct)}<br>${jrWon(t.pnl)}</td><td data-label="산 날 상태" style="font-size:11.5px;max-width:340px">${tags}${det}${pl}</td></tr>`;}).join('')
-    :'<tr><td colspan="6" class="ts" style="text-align:center;padding:14px">없음</td></tr>';
+      <td data-label="수익률">${jrPct(t.pct)}<br>${jrWon(t.pnl)}</td>
+      <td data-label="규칙 · R" style="font-size:11.5px">${t.rules?(t.rules.broke.length?t.rules.broke.map(b=>`<div style="color:#f0883e">${b}</div>`).join(''):'<div>✅ 지킴</div>')+`<span class="ts">R ${t.rules.r==null?'-':(t.rules.r>0?'+':'')+t.rules.r} · 손절선 ${t.rules.stop.toLocaleString()}</span>`:'<span class="ts">-</span>'}</td><td data-label="산 날 상태" style="font-size:11.5px;max-width:340px">${tags}${det}${pl}</td></tr>`;}).join('')
+    :'<tr><td colspan="7" class="ts" style="text-align:center;padding:14px">없음</td></tr>';
 }
 async function jrImport(preview){
   const text=document.getElementById('jr-text').value, msg=document.getElementById('jr-import-msg');
@@ -2224,7 +2226,7 @@ function renderLwChart(cid, allCandles, signals, per){
     const lv=av[av.length-1].value, lc=closes[closes.length-1]; _avwapNote=` · ${lab} ${data[ai].time.slice(5)} VWAP ${Math.round(lv).toLocaleString()} ${lc>=lv?'위 ✓':'아래 ⚠'}`; }
   // 신호 → 화살표 표시 (폰에선 진입·청산·손절·종베 추천·매수매도·위험만 글자)
   const MC={entry:['#58a6ff','arrowUp'],exit:['#c9d1d9','arrowDown'],exit_bad:['#f0883e','arrowDown'],buy:['#1f6feb','arrowUp'],rest:['#2d9c87','circle'],info:['#8b949e','square'],
-            warn:['#f0883e','arrowDown'],trade_buy:['#ffffff','arrowUp'],trade_sell:['#bc8cff','arrowDown'],wait:['#58a6ff','circle'],near:['#6e7681','circle'],note:['#8b949e','circle']};
+            warn:['#f0883e','arrowDown'],trade_buy:['#ffffff','arrowUp'],trade_sell:['#bc8cff','arrowDown'],wait:['#58a6ff','circle'],near:['#6e7681','circle'],note:['#8b949e','circle'],score:['#d2a8ff','circle']};
   const KEY=['entry','exit','exit_bad','trade_buy','trade_sell','warn'];
   const ts=new Set(data.map(d=>d.time));
   let mk=(signals||[]).filter(sg=>ts.has(sg.date));
@@ -2232,6 +2234,7 @@ function renderLwChart(cid, allCandles, signals, per){
   const DOT=['near','note','wait'];     // 참고 점: 작게 점만 — 글자는 봉에 올리면 위 정보 줄에 (2026-10-09 "점 뜨는 거 뭐고", 글자 겹침)
   mk=mk.map(sg=>{ const [col,shape]=MC[sg.kind]||MC.info; const dot=DOT.includes(sg.kind);
     const showTxt=!dot&&(!small||KEY.includes(sg.kind)||sg.label.startsWith('종가 매수'));
+    if(sg.kind==='score') return {time:sg.date,position:'belowBar',color:col,shape,text:String(sg.score),size:0.5};   // 종가 점수 6·7 — 숫자만 (글자 겹침 방지)
     return {time:sg.date,position:sg.pos==='below'?'belowBar':'aboveBar',color:col,shape,text:showTxt?sg.label:'',size:sg.kind==='entry'?1.6:dot?0.4:1}; })
     .sort((a,b)=>a.time<b.time?-1:a.time>b.time?1:0);
   cs.setMarkers(mk);

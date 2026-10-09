@@ -1872,6 +1872,8 @@ def warm_caches(db: Session) -> None:
         from backend.services.stock_panel import rs_table as _rs  # noqa: PLC0415
         _rs(db)
         get_workspace_list(db=db)
+        from backend.services.stock_signals import rs_hist  # noqa: PLC0415
+        rs_hist(db)                    # 차트의 지난 날짜 종가 점수용 RS (하루 한 번, 약 5초)
     except Exception:  # noqa: BLE001
         pass
     get_chart_candidates(min_cap=0, db=db)

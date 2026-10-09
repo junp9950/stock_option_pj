@@ -153,6 +153,24 @@ def signals(db: Session, code: str, days: int = 260, owner: str | None = None) -
             last_c = float(C.iloc[-1])
             active = {"date": str(d), "entry": p0, "stop": stop, "days": len(idx) - i, "gain": (last_c / p0 - 1) * 100, "half": half}
             break
+    # 종가 진입 점수 6↑ 자리 (close_scores와 같은 7개 조건, 상승·횡보장만) — 사용자 목표 "종가에 안전하고 확률 높은 추세 종목".
+    # ▲ 진입은 '거래 실린 돌파일'만 잡아서 거래 없이 계단식으로 오르는 종목(SK이노베이션 9~10월)은 비어 보였다 (2026-10-09).
+    try:
+        rh = rs_hist(db)
+        rs_arr = rh.get("rs", {}).get(code)
+        if rs_arr is not None:
+            RS = pd.Series(rs_arr.astype(float), index=[pd.Timestamp(x).date() for x in rh["dates"]]).reindex(df.index)
+            ehi_t = pd.concat([e5, e10, e20], axis=1).max(axis=1); elo_t = pd.concat([e5, e10, e20], axis=1).min(axis=1)
+            fl = [C / H.rolling(60).max() - 1 >= -0.05, (RS >= 70) & (RS < 95), (vx >= 0.7) & (vx < 3), (C - L) / rng >= 0.7,
+                  (chg >= 0) & (chg < 0.08), C / ma20 - 1 < 0.15, (ehi_t - elo_t) / C < 0.06]
+            base_ok = (C > e20) & (e20 > e60) & (TV.rolling(20).mean() >= 3e9) & bull
+            sc = sum(f.fillna(False).astype(int) for f in fl)
+            for d in sc[(sc >= 6) & base_ok & (sc.index >= start)].index:
+                miss = [CLOSE_FLAGS[j] for j, f in enumerate(fl) if not bool(f[d])]
+                items.append({"date": str(d), "label": f"종가 점수 {int(sc[d])}/7" + (f" (빠짐: {miss[0]})" if miss else ""), "kind": "score",
+                              "pos": "below", "price": float(L[d]), "score": int(sc[d])})
+    except Exception:  # noqa: BLE001
+        pass
     for d, lab in near:
         if d >= start:
             items.append({"date": str(d), "label": lab, "kind": "near", "pos": "below", "price": float(L[d])})
@@ -474,3 +492,41 @@ def _close_scores(db: Session, latest) -> dict:
         f = [bool(x.get(code, False)) for x in flags]
         out[code] = {"score": sum(f), "flags": f, "stop": float(l[code]) * 0.99, "risk": float(1 - l[code] * 0.99 / c[code])}
     return {"date": str(latest), "scores": out}
+
+
+_RSH: dict = {"key": None, "v": None}
+
+
+def rs_hist(db: Session) -> dict:
+    """날짜별 RS(1~99) — 차트에 지난 날짜의 종가 진입 점수를 찍으려면 그날의 전 종목 순위가 필요하다 (2026-10-09 SK이노베이션
+    "진입 신호가 하나도 안 떴는데"). {"dates": [...최근 270거래일], "rs": {code: float16 배열}}. 하루 한 번 계산 · 디스크 캐시."""
+    latest = db.execute(text("select max(trading_date) from spot_daily_prices")).scalar()
+    if _RSH["key"] == latest:
+        return _RSH["v"]
+    from backend.services.result_cache import cached  # noqa: PLC0415
+    v = cached("rs_hist_v1", (), db, lambda: _rs_hist(db, latest)) or {}
+    if v.get("date") == str(latest):
+        _RSH.update(key=latest, v=v)
+    return v
+
+
+def _rs_hist(db: Session, latest, keep: int = 270) -> dict:
+    # 메모리 아끼기 (pandas read_sql·pivot이 500MB 넘게 씀): 최근 400일 안에 하루라도 30억↑ 거래된 종목만, numpy 배열에 바로 채운다
+    codes = [r[0] for r in db.execute(text("select stock_code from spot_daily_prices where trading_date >= cast(:d as date) - 400 "
+                                           "group by 1 having max(trading_value) >= 3e9"), {"d": latest}).all()]
+    dates = [r[0] for r in db.execute(text("select distinct trading_date from spot_daily_prices where trading_date >= cast(:d as date) - 800 "
+                                           "and trading_date <= :d order by 1"), {"d": latest}).all()]
+    ci, di = {c: i for i, c in enumerate(codes)}, {d: i for i, d in enumerate(dates)}
+    ac = np.full((len(dates), len(codes)), np.nan, dtype="float32"); at = ac.copy()
+    for s_, d_, c_, t_ in db.execute(text("select stock_code, trading_date, close_price, trading_value from spot_daily_prices "
+                                          "where trading_date >= cast(:d as date) - 800 and trading_date <= :d and stock_code = any(:cs)"),
+                                     {"d": latest, "cs": codes}):
+        ac[di[d_], ci[s_]] = c_ if c_ else np.nan
+        at[di[d_], ci[s_]] = t_ if t_ is not None else np.nan
+    C, TV = pd.DataFrame(ac, index=dates, columns=codes), pd.DataFrame(at, index=dates, columns=codes)
+    liq = TV.rolling(20).mean() >= 3e9
+    del TV
+    raw = 0.4 * (C / C.shift(63) - 1) + 0.2 * (C / C.shift(126) - 1) + 0.2 * (C / C.shift(189) - 1) + 0.2 * (C / C.shift(252) - 1)
+    RS = (raw.where(liq).iloc[-keep:].rank(axis=1, pct=True) * 98 + 1)
+    return {"date": str(latest), "dates": [str(d) for d in RS.index],
+            "rs": {c: RS[c].to_numpy(dtype="float16") for c in RS.columns if RS[c].notna().any()}}

@@ -321,6 +321,30 @@ def start_scheduler() -> BackgroundScheduler:
         finally:
             db.close()
     scheduler.add_job(_store_hourly, 'cron', day_of_week='mon-fri', hour=20, minute=20, id='store_hourly', replace_existing=True, max_instances=1)
+
+    def _log_signals() -> None:
+        from backend.services.weekly_review import log_signals  # noqa: PLC0415
+        db = SessionLocal()
+        try:
+            logger.info("마감 신호 기록: %s", log_signals(db))
+        except Exception as exc:  # noqa: BLE001
+            logger.error("마감 신호 기록 실패: %s", type(exc).__name__)
+        finally:
+            db.close()
+    # 18:30 그날 ▲ 진입·종가 점수 6↑ 기록 (18:00 시세 다시 받은 뒤) — 차트는 지금 규칙으로 다시 그린 것이라 실제로 뜬 신호를 따로 쌓는다
+    scheduler.add_job(_log_signals, 'cron', day_of_week='mon-fri', hour=18, minute=30, id='signal_log', replace_existing=True, max_instances=1)
+
+    def _weekly() -> None:
+        from backend.services.weekly_review import send_weekly  # noqa: PLC0415
+        db = SessionLocal()
+        try:
+            send_weekly(db)
+        except Exception as exc:  # noqa: BLE001
+            logger.error("주간 점검 실패: %s", type(exc).__name__)
+        finally:
+            db.close()
+    # 토요일 08:30 주간 점검 (규칙 어긴 매매 · 관심 종목 20일선 이탈 · 섹터 돈 흐름 · 이번 주 신호 성적)
+    scheduler.add_job(_weekly, 'cron', day_of_week='sat', hour=8, minute=30, id='weekly_review', replace_existing=True, max_instances=1)
     # 14:50 과매도 줍기 점검 — 오른 섹터가 오늘 -2%↓면 종가 매수 후보
     scheduler.add_job(lambda: _tg("send_dip_live"), 'cron', day_of_week='mon-fri', hour=14, minute=50, id='dip_live',
                       replace_existing=True, max_instances=1)

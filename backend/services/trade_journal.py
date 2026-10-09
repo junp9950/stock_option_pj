@@ -358,8 +358,12 @@ def analyze(db: Session, owner: str) -> dict:
 
     lots = defaultdict(list)    # code → [[date, qty, price, exec]]
     raw_trips = []
+    watered = set()             # 물타기: 들고 있는 평균가보다 2% 넘게 낮은 값에 더 산 매수
     for e in sorted(ex, key=order):
         if e.side == "매수":
+            op = [x for x in lots[e.code] if x[1] > 0]
+            if op and e.price < sum(x[1] * x[2] for x in op) / sum(x[1] for x in op) * 0.98:
+                watered.add(e.id)
             lots[e.code].append([e.trade_date, e.qty, e.price, e])
             continue
         left = e.qty
@@ -403,7 +407,8 @@ def analyze(db: Session, owner: str) -> dict:
                       "sell_date": g["sell_date"].isoformat(), "days": days, "kind": g["kind_set"] or _kind(days),
                       "qty": g["qty"], "buy_px": round(buy_px, 1), "sell_px": round(g["sell_amount"] / g["qty"], 1),
                       "buy_amount": round(g["buy_amount"]), "pnl": round(pnl), "pct": round(pnl / g["buy_amount"] * 100, 2),
-                      "user_tags": user_tags, "state": st, "excluded": g["code"] in excl or "장투" in user_tags})
+                      "user_tags": user_tags, "state": st, "excluded": g["code"] in excl or "장투" in user_tags,
+                      "rules": _rules(ctx, tidx, g, buy_px, g["sell_amount"] / g["qty"], days, st, watered)})
     trips.sort(key=lambda t: (t["sell_date"], t["buy_date"] or ""), reverse=True)
     _attach_pool(ctx, trips)
 
@@ -427,8 +432,11 @@ def analyze(db: Session, owner: str) -> dict:
 
     use = [t for t in trips if not t["excluded"]]
     by = lambda key: {k: _stats(v) for k, v in key.items()}  # noqa: E731
-    g_kind, g_tag, g_user, g_month, g_fam, g_day = (defaultdict(list) for _ in range(6))
+    g_kind, g_tag, g_user, g_month, g_fam, g_day, g_rule = (defaultdict(list) for _ in range(7))
     for t in use:
+        if t["rules"]:
+            for b in t["rules"]["broke"] or ["✅ 규칙 지킴"]:
+                g_rule[b.split(" (")[0]].append(t)
         g_kind[t["kind"]].append(t)
         g_month[t["sell_date"][:7]].append(t)
         g_day[t["sell_date"]].append(t)
@@ -447,10 +455,64 @@ def analyze(db: Session, owner: str) -> dict:
                     "beat_pct": round(sum(t["pct"] > t["pool"]["avg_pct"] for t in pooled) / len(pooled) * 100),
                     "in_pool": sum(t["pool"]["in_pool"] for t in pooled)}
     summary = {"pool_cmp": pool_cmp, "all": _stats(use), "by_kind": by(g_kind), "by_state": by(g_tag), "by_user_tag": by(g_user),
-               "by_month": by(g_month), "by_day": by(g_day), "by_family": by(g_fam)}
+               "by_month": by(g_month), "by_day": by(g_day), "by_family": by(g_fam), "by_rule": by(g_rule), "rules": _rule_summary(use)}
     return {"executions": list(reversed(execs)), "trips": trips, "holding": holding, "summary": summary,
-            "insights": ([f"⚠️ 체결가가 그날 시세 범위 밖인 기록 {len(warn)}건 — 날짜나 가격을 확인해 주세요 (체결 내역 보기에 표시)"] if warn else []) + _insights(use, g_tag, g_kind), "cfg": cfg, "user_tags": USER_TAGS, "kinds": KINDS,
+            "insights": _rule_insight(summary["rules"]) + ([f"⚠️ 체결가가 그날 시세 범위 밖인 기록 {len(warn)}건 — 날짜나 가격을 확인해 주세요 (체결 내역 보기에 표시)"] if warn else []) + _insights(use, g_tag, g_kind), "cfg": cfg, "user_tags": USER_TAGS, "kinds": KINDS,
             "as_of": last.isoformat()}
+
+
+RULE_STOP = "⛔ 손절선 아래 마감 뒤 들고 있음"
+RULE_CHASE = "⛔ 급등 날 추격"
+RULE_WATER = "⛔ 물타기"
+
+
+def _rules(ctx, tidx: dict, g: dict, buy_px: float, sell_px: float, days: int | None, st: dict | None, watered: set) -> dict | None:
+    """규칙 지켰나 (2026-10-09 사용자 "R + 규칙 지켰나"). 장중 매매·기록 전 보유분은 뺀다.
+    손절선 = 산 날 저가 -1% (종가 판단 · 사이트 진입 신호와 같은 기준). R = (판 값 - 산 값) / (산 값 - 손절선).
+      손절선 아래 마감: 그 다음 날까지 팔면 지킨 것, 이틀 넘게 더 들고 있으면 어김.
+      급등 날 추격: 산 날 +8%↑ (3년: 이런 날 진입은 최악10% -17%로 커짐). 20일선 이격만 큰 것은 넣지 않음 —
+        사용자 기록에선 이격 큰 날 매수가 오히려 +1.8%·이김 65%였다 (추세 종목을 사는 방식이라).
+      물타기: 들고 있던 평균가보다 2% 넘게 낮게 더 삼."""
+    d0, d1, code = g["buy_date"], g["sell_date"], g["code"]
+    C, L = ctx["P"]["c"], ctx["P"]["l"]
+    if d0 is None or not days or code not in C.columns or d0 not in tidx or d1 not in tidx:
+        return None
+    low = float(L.at[d0, code])
+    if low != low:
+        return None
+    stop = low * 0.99
+    risk = buy_px - stop
+    r = round((sell_px - buy_px) / risk, 2) if risk > buy_px * 0.003 else None
+    broke = []
+    i0, i1 = tidx[d0], tidx[d1]
+    for k in range(i0 + 1, i1):
+        c = float(C.iat[k, C.columns.get_loc(code)])
+        if c == c and c < stop:
+            if i1 - k >= 2:
+                broke.append(f"{RULE_STOP} ({ctx['dates'][k].strftime('%m/%d')}부터 {i1 - k - 1}일 더)")
+            break
+    if st and st["change_pct"] >= 8:
+        broke.append(f"{RULE_CHASE} (그날 {st['change_pct']:+.1f}%)")
+    if any(b.id in watered for b in g["buys"]):
+        broke.append(f"{RULE_WATER} (평균가보다 낮게 더 삼)")
+    return {"stop": round(stop), "r": r, "broke": broke}
+
+
+def _rule_summary(use: list[dict]) -> dict | None:
+    ok = [t for t in use if t["rules"] and not t["rules"]["broke"]]
+    bad = [t for t in use if t["rules"] and t["rules"]["broke"]]
+    if not ok and not bad:
+        return None
+    rr = lambda ts: round(sum(t["rules"]["r"] for t in ts if t["rules"]["r"] is not None) / max(1, sum(t["rules"]["r"] is not None for t in ts)), 2)  # noqa: E731
+    return {"kept": _stats(ok), "broken": _stats(bad), "r_kept": rr(ok), "r_broken": rr(bad), "r_all": rr(ok + bad)}
+
+
+def _rule_insight(rs: dict | None) -> list[str]:
+    if not rs or not rs["broken"]["count"]:
+        return []
+    k, b = rs["kept"], rs["broken"]
+    return [f"규칙 지킨 매매 {k['count']}건 평균 {k.get('avg_pct', 0):+.2f}% (R {rs['r_kept']:+.2f}) · 어긴 매매 {b['count']}건 평균 {b['avg_pct']:+.2f}% "
+            f"(R {rs['r_broken']:+.2f}) — 아래 '규칙별'에서 어느 규칙이 손해였는지"]
 
 
 def _attach_pool(ctx, trips: list[dict]) -> None:
