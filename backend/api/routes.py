@@ -1862,6 +1862,7 @@ def warm_caches(db: Session) -> None:
     get_sector_members_all(db=db)      # 섹터 누르면 바로 펼치게
     from backend.services.stock_panel import rs_table  # noqa: PLC0415
     rs_table(db)                       # 차트 창 RS (DB 날짜 바뀔 때 한 번)
+    get_workspace_list(db=db)          # 첫 화면 목록 (정규장 종가 캐시)
     get_sector_calendar(db=db)
     get_jongbe(db=db)
     get_value_records(db=db)
@@ -1952,6 +1953,20 @@ def get_sector_calendar(db: Session = Depends(get_db)):
     from backend.screener.sector_calendar import scan  # noqa: PLC0415
     from backend.services.result_cache import cached  # noqa: PLC0415
     return cached("sector_calendar_v2", (), db, lambda: scan(db))
+
+
+@router.get("/stock/{code}/signals")
+def get_stock_signals(code: str, db: Session = Depends(get_db)):
+    """차트에 찍을 신호 (우리 규칙을 그 종목 일봉에 거슬러 적용 + 매매 일지 매수·매도)."""
+    from backend.services.stock_signals import signals  # noqa: PLC0415
+    return signals(db, code)
+
+
+@router.get("/workspace/list")
+def get_workspace_list(db: Session = Depends(get_db)):
+    """첫 화면 왼쪽 목록: 오늘 후보 · 보유 · 관심."""
+    from backend.services.stock_signals import workspace_list  # noqa: PLC0415
+    return workspace_list(db)
 
 
 @router.get("/stock/{code}/panel")

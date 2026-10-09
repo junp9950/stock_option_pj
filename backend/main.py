@@ -135,6 +135,29 @@ select{background:#21262d;border:1px solid #30363d;color:#c9d1d9;padding:6px 10p
 .cp-row{display:flex;justify-content:space-between;gap:8px;padding:6px 2px;border-bottom:1px solid var(--line2);font-size:12px}
 .cp-row .k{color:var(--muted)}.cp-row .v{color:var(--text);text-align:right}
 @media(max-width:900px){.cm-body{flex-direction:column}.cm-panel{width:100%}}
+/* 첫 화면 작업대: 종목 목록 | 신호 찍힌 차트 | 패널 (2026-10-09, Lazy Alpha식) */
+.ws{display:grid;grid-template-columns:270px minmax(0,1fr) 320px;gap:14px;align-items:start;margin-bottom:14px}
+.ws-list,.ws-main{background:var(--card);border:1px solid var(--line);border-radius:10px;padding:10px}
+.ws-list{max-height:660px;overflow-y:auto}
+.ws-main{min-width:0;padding:12px}
+.ws #ws-panel{background:var(--card);border:1px solid var(--line);border-radius:10px;padding:12px}
+.ws-tabs{display:flex;gap:6px;margin-bottom:6px}
+.ws-tabs button{flex:1;background:var(--card2);border:1px solid var(--line);color:var(--muted);border-radius:16px;padding:6px 0;font-size:12.5px;cursor:pointer}
+.ws-tabs button.on{background:var(--text);color:var(--bg);font-weight:700;border-color:var(--text)}
+.ws-item{display:flex;align-items:center;gap:10px;padding:8px 6px;border-radius:8px;cursor:pointer}
+.ws-item:hover{background:var(--card2)}.ws-item.on{background:var(--card2);box-shadow:inset 3px 0 0 var(--blue)}
+.ws-av{width:30px;height:30px;border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:12px;font-weight:700;color:#fff;flex-shrink:0}
+.ws-txt{min-width:0;flex:1}.ws-nm{font-weight:700;color:var(--text);font-size:13.5px}
+.ws-tg{font-size:11px;color:var(--muted);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.ws-px{text-align:right;font-size:12.5px;color:var(--text);white-space:nowrap}
+.ws-head{display:flex;align-items:baseline;gap:8px;flex-wrap:wrap;margin-bottom:4px}
+.ws-head b{font-size:17px;color:var(--text)}
+.ws-sec{font-size:11px;color:var(--muted);margin:10px 4px 4px}
+.ws-legend{display:flex;flex-wrap:wrap;gap:6px;margin-top:6px;font-size:11px;color:var(--muted)}
+.ws-legend span{display:inline-flex;align-items:center;gap:4px}.ws-legend i{width:10px;height:10px;border-radius:3px;display:inline-block}
+#db-more>summary{font-size:15px;font-weight:700;color:var(--text);cursor:pointer;margin:6px 0 10px}
+@media(max-width:1250px){.ws{grid-template-columns:260px minmax(0,1fr)}.ws #ws-panel{grid-column:1/-1}}
+@media(max-width:760px){.ws{grid-template-columns:1fr}.ws-list{max-height:320px}}
 .close-btn{float:right;cursor:pointer;color:#8b949e;font-size:18px;line-height:1}.close-btn:hover{color:#e6edf3}
 .modal-tabs{display:flex;gap:4px;margin-bottom:16px;border-bottom:1px solid #30363d;padding-bottom:0}
 .modal-tab{padding:6px 14px;font-size:13px;color:#8b949e;cursor:pointer;border-bottom:2px solid transparent;margin-bottom:-1px}
@@ -555,12 +578,29 @@ select{background:#21262d;border:1px solid #30363d;color:#c9d1d9;padding:6px 10p
 <!-- 오늘 (대시보드, 2026-10-06) -->
 <div id="panel-home" class="panel active content">
   <div id="db-verdict" style="border-radius:12px;padding:14px 18px;margin-bottom:14px;border:1px solid #30363d;font-size:15px">로딩 중…</div>
+  <div class="ws">
+    <div class="ws-list">
+      <div class="ws-tabs"><button data-t="candidates" onclick="wsTab('candidates')">오늘 후보</button><button data-t="held" onclick="wsTab('held')">보유</button><button data-t="watch" onclick="wsTab('watch')">관심</button></div>
+      <div class="ts" id="ws-asof" style="margin:0 4px 4px"></div>
+      <div id="ws-items"><div class="ts" style="padding:10px">불러오는 중…</div></div>
+    </div>
+    <div class="ws-main">
+      <div class="ws-head"><b id="ws-name">종목을 고르세요</b><span class="ts" id="ws-sub"></span></div>
+      <div class="note" id="ws-note" style="margin-bottom:6px"></div>
+      <canvas id="ws-candle" style="width:100%;height:400px;display:block"></canvas>
+      <canvas id="ws-volume" style="width:100%;height:90px;display:block;margin-top:4px"></canvas>
+      <div class="ws-legend"><span><i style="background:#1f6feb"></i>사는 자리 모양</span><span><i style="background:#2d7d6f"></i>쉬는 자리</span><span><i style="background:#484f58"></i>기준봉·거래 신기록</span><span><i style="background:#9a4d0f"></i>⚠ 위험</span><span><i style="background:#e6edf3"></i>내 매수</span><span><i style="background:#8957e5"></i>내 매도</span><span>· 차트 신호는 이 종목만 본 모양 (섹터·시장은 왼쪽 후보 목록에서)</span></div>
+    </div>
+    <aside class="cm-panel" id="ws-panel"></aside>
+  </div>
+  <details id="db-more"><summary>📋 오늘 판단 자세히 — 시장 카드 · 장세별 자리 · 참고 (눌러서 펼치기)</summary>
   <div id="db-market" style="margin-bottom:12px"></div>
   <div id="db-top" style="display:grid;grid-template-columns:repeat(auto-fit,minmax(320px,1fr));gap:12px;margin-bottom:6px;align-items:stretch"></div>
   <div style="font-size:15px;font-weight:700;color:#e6edf3;margin:14px 0 8px">🎯 오늘 볼 자리 — 장세에 맞는 순서로 3개</div>
   <div id="db-rank"></div>
   <details style="margin-top:14px"><summary style="font-size:15px;font-weight:700;color:#e6edf3;cursor:pointer">📎 참고 — 내일 후보 · 관심 종목 선 · 대량거래 · 내 원칙 (눌러서 펼치기)</summary>
   <div id="db-ref" style="display:grid;grid-template-columns:repeat(auto-fit,minmax(320px,1fr));gap:12px;align-items:start;margin-top:10px"></div></details>
+  </details>
 </div>
 
 <div id="panel-candidates" class="panel content">
@@ -791,7 +831,7 @@ function switchTab(id) {
   if(id==='calendar')loadSectorCal();
   if(id==='heatmap')loadHeatmap();
   if(id==='candidates')loadCandidates();
-  if(id==='home')loadDashboard();
+  if(id==='home'){loadDashboard();loadWorkspace();}
   if(id==='suggest')document.getElementById('suggest-frame').src='/suggestions';
   if(id==='discussion'&&!document.getElementById('discussion-frame').src)document.getElementById('discussion-frame').src='/discussion';
 }
@@ -1893,9 +1933,60 @@ let _avwapNote='';
 function clearChartCanvas(){   // 열 때 이전 종목 차트가 남아 보이던 것 지움 (2026-10-07)
   ['pb-candle-canvas','pb-volume-canvas'].forEach(id=>{ const cv=document.getElementById(id); if(cv){ const x=cv.getContext('2d'); x.setTransform(1,0,0,1,0,0); x.clearRect(0,0,cv.width,cv.height); } });
 }
+// ── 첫 화면 작업대: 종목 목록 → 신호 찍힌 차트 → 패널 (2026-10-09) ──
+let _ws={tab:null,data:null,code:null};
+const WS_PAL=['#3b5bdb','#c2255c','#2b8a3e','#e8590c','#5f3dc4','#0b7285','#a61e4d','#5c940d','#d9480f','#364fc7'];
+function wsAv(code,name){ let h=0; for(const ch of code) h=(h*31+ch.charCodeAt(0))%997; return `<div class="ws-av" style="background:${WS_PAL[h%WS_PAL.length]}">${(name||'?').slice(0,1)}</div>`; }
+async function loadWorkspace(){
+  const d=await fetch(`${API}/workspace/list`).then(r=>r.ok?r.json():null).catch(()=>null);
+  if(!d){ document.getElementById('ws-items').innerHTML='<div class="ts" style="padding:10px">목록을 못 불러왔습니다</div>'; return; }
+  _ws.data=d;
+  if(!_ws.tab){ let t=null; try{ t=localStorage.getItem('ws-tab'); }catch(e){} _ws.tab=t||(d.candidates.length?'candidates':'held'); }
+  document.getElementById('ws-asof').textContent = d.live ? `장중 ${d.live} 가격` : `${d.as_of} 정규장 종가`;
+  renderWsList();
+  if(!_ws.code){ const L=wsItems(_ws.tab); const f=L[0]||d.held[0]||d.candidates[0]; if(f) wsOpen(f.code,f.name); }
+}
+function wsItems(t){ const d=_ws.data||{}; return t==='held'?(d.held||[]):t==='watch'?(d.watch||[]):(d.candidates||[]); }
+function wsTab(t){ _ws.tab=t; try{ localStorage.setItem('ws-tab',t); }catch(e){} renderWsList(); }
+function renderWsList(){
+  document.querySelectorAll('.ws-tabs button').forEach(b=>{ const n=wsItems(b.dataset.t).length; b.classList.toggle('on',b.dataset.t===_ws.tab); b.innerHTML=`${{candidates:'오늘 후보',held:'보유',watch:'관심'}[b.dataset.t]} ${n}`; });
+  const L=wsItems(_ws.tab), el=document.getElementById('ws-items');
+  if(!L.length){ el.innerHTML=`<div class="ts" style="padding:12px">${_ws.tab==='candidates'?'오늘은 고를 종목이 없습니다 (쉬는 날)':'없음'}</div>`; return; }
+  const KIND={above:'선 위 마감 대기',near:'수렴 자리',hold:'지지선',watch:'봉 보기'};
+  const row=x=>{
+    let tg='';
+    if(_ws.tab==='candidates') tg=x.tags.join(' · ')+(x.family?` · ${x.family}`:'');
+    else if(_ws.tab==='held') tg=(x.stop?`손절 ${Math.round(x.stop).toLocaleString()}${x.room!=null?` · ${x.room<0?'⛔ 이탈':x.room<=2?'⚠ '+x.room+'% 남음':x.room+'% 남음'}`:''}`:'손절선 없음')+(x.long?' · 장기':'');
+    else tg=`${KIND[x.kind]||''}${x.level?' '+Math.round(x.level).toLocaleString():''}${x.note?' · '+x.note:''}`;
+    const sub=_ws.tab==='held'&&x.gain!=null?`<div class="ws-tg" style="text-align:right">수익 ${x.gain>0?'+':''}${x.gain}%</div>`:'';
+    return `<div class="ws-item${x.code===_ws.code?' on':''}" data-c="${x.code}" onclick="wsOpen('${x.code}','${x.name.replace(/'/g,'')}')">${wsAv(x.code,x.name)}
+      <div class="ws-txt"><div class="ws-nm">${x.name}</div><div class="ws-tg" title="${tg.replace(/"/g,'')}">${tg}</div></div>
+      <div class="ws-px">${x.close?Math.round(x.close).toLocaleString():'-'}<div style="color:${x.chg>0?'var(--up)':x.chg<0?'var(--down)':'var(--muted)'}">${x.chg>0?'+':''}${(x.chg||0).toFixed(2)}%</div>${sub}</div></div>`;
+  };
+  if(_ws.tab==='held'){ const a=L.filter(x=>!x.long), b=L.filter(x=>x.long);
+    el.innerHTML=a.map(row).join('')+(b.length?`<div class="ws-sec">장기 보유</div>`+b.map(row).join(''):''); }
+  else el.innerHTML=L.map(row).join('');
+}
+async function wsOpen(code,name){
+  _ws.code=code;
+  document.querySelectorAll('.ws-item').forEach(e=>e.classList.toggle('on',e.dataset.c===code));
+  document.getElementById('ws-name').textContent=name; document.getElementById('ws-sub').textContent=code;
+  document.getElementById('ws-note').textContent='불러오는 중…';
+  document.getElementById('ws-panel').innerHTML='<div class="ts">불러오는 중…</div>';
+  const [cd, sg, pn] = await Promise.all([
+    fetch(`${API}/toss/candles/${code}?interval=1d&count=150`).then(r=>r.ok?r.json():null).catch(()=>null),
+    fetch(`${API}/stock/${code}/signals`).then(r=>r.ok?r.json():null).catch(()=>null),
+    fetch(`${API}/stock/${code}/panel`).then(r=>r.ok?r.json():null).catch(()=>null)]);
+  if(_ws.code!==code) return;      // 그사이 다른 종목을 눌렀으면 버림
+  renderStockPanel(pn,'ws-panel');
+  if(!cd||!cd.candles||!cd.candles.length){ document.getElementById('ws-note').textContent='차트 데이터를 못 불러왔습니다'; return; }
+  const g=drawCandleChart(cd.candles,null,90,{cId:'ws-candle',vId:'ws-volume',signals:sg?sg.items:[]});
+  document.getElementById('ws-note').textContent=`최근 90거래일 · EMA 5·10·20·60`+(g!=null?` · EMA 5·10·20 간격 ${g.toFixed(1)}% ${g<=4?'(모임 ✓)':g>=7?'(벌어짐 ⚠)':''}`:'')+_avwapNote;
+}
+window.addEventListener('resize',()=>{ clearTimeout(window._wsRz); window._wsRz=setTimeout(()=>{ if(_ws.code&&document.getElementById('panel-home').classList.contains('active')){ const it=wsItems(_ws.tab).concat(wsItems('held'),wsItems('candidates'),wsItems('watch')).find(x=>x.code===_ws.code); wsOpen(_ws.code,it?it.name:document.getElementById('ws-name').textContent); } },400); });
 // 오른쪽 패널: 결론(상태 제목) 크게 · 단계 막대 · ✓/⚠ 칩 · 카드 · 세부 지표 (2026-10-09, Lazy Alpha식 배치)
-function renderStockPanel(p){
-  const el=document.getElementById('cm-panel');
+function renderStockPanel(p, target){
+  const el=document.getElementById(target||'cm-panel');
   if(!p||!p.ok){el.innerHTML='';return;}
   const steps=['관찰','후보','보유','관리','청산'];
   const sg=n=>(n>0?'+':'')+n.toFixed(2)+'%';
@@ -1919,12 +2010,13 @@ async function openChartModal(code, name, spikeDate){
   document.getElementById('chart-modal-bg').classList.add('show');
   fetch(`${API}/stock/${code}/panel`).then(r=>r.ok?r.json():null).then(renderStockPanel).catch(()=>renderStockPanel(null));
   try{
-    const data = await fetch(`${API}/toss/candles/${code}?interval=1d&count=150`).then(r=>r.ok?r.json():null);   // EMA 계산용으로 더 받아 오고 그림은 90개
+    const [data, sig] = await Promise.all([fetch(`${API}/toss/candles/${code}?interval=1d&count=150`).then(r=>r.ok?r.json():null),   // EMA 계산용으로 더 받아 오고 그림은 90개
+      fetch(`${API}/stock/${code}/signals`).then(r=>r.ok?r.json():null).catch(()=>null)]);
     if(!data || !data.candles || !data.candles.length){
       document.getElementById('chart-modal-note').textContent = '토스 API에서 차트 데이터를 가져오지 못했습니다.';
       return;
     }
-    const g = drawCandleChart(data.candles, spikeDate);
+    const g = drawCandleChart(data.candles, spikeDate, 90, {signals: sig?sig.items:[]});
     document.getElementById('chart-modal-note').textContent = (spikeDate ? `스파이크일: ${spikeDate}` : `최근 90거래일 일봉`)
       + (g!=null ? ` · EMA 5·10·20 간격 ${g.toFixed(1)}% ${g<=4?'(모임 ✓)':g>=7?'(벌어짐 ⚠)':''}` : '') + _avwapNote;
   }catch(e){
@@ -1949,7 +2041,8 @@ async function openIndexChart(sym, name){
 function closeChartModal(){ document.getElementById('chart-modal-bg').classList.remove('show'); }
 
 // 외부 라이브러리 없이 순수 canvas로 캔들차트 + 거래량 + 눌림목 지지선 그리기
-function drawCandleChart(allCandles, spikeDate, show){
+function drawCandleChart(allCandles, spikeDate, show, opt){
+  opt=opt||{};
   // 단기 EMA 5·10·20 (2026-10-07 사용자 "EMA를 내 눈으로 확인할 수 없나") — 앞쪽 캔들로 미리 계산하고 최근 90개만 그림
   const emaOf=(arr,n)=>{ const k=2/(n+1); let e=arr[0]; return arr.map(v=>(e=v*k+e*(1-k))); };
   const closesAll=allCandles.map(c=>+c.closePrice);
@@ -1957,15 +2050,15 @@ function drawCandleChart(allCandles, spikeDate, show){
   const off=Math.max(0,allCandles.length-(show||90));
   const candles=allCandles.slice(off);
   const ES=EMA.map(a=>a.slice(off));
-  const cvCandle = document.getElementById('pb-candle-canvas');
-  const cvVol = document.getElementById('pb-volume-canvas');
+  const cvCandle = document.getElementById(opt.cId||'pb-candle-canvas');
+  const cvVol = document.getElementById(opt.vId||'pb-volume-canvas');
   const dpr = window.devicePixelRatio || 1;
   const W = cvCandle.clientWidth || 760;
-  [[cvCandle,340],[cvVol,100]].forEach(([cv,h])=>{ cv.width=W*dpr; cv.height=h*dpr; });
+  const H = cvCandle.clientHeight || 340, HV = cvVol.clientHeight || 100;
+  [[cvCandle,H],[cvVol,HV]].forEach(([cv,h])=>{ cv.width=W*dpr; cv.height=h*dpr; });
 
   const ctxC = cvCandle.getContext('2d'); ctxC.scale(dpr,dpr);
   const ctxV = cvVol.getContext('2d'); ctxV.scale(dpr,dpr);
-  const H = 340, HV = 100;
   ctxC.clearRect(0,0,W,H); ctxV.clearRect(0,0,W,HV);
   ctxC.fillStyle = '#0d1117'; ctxC.fillRect(0,0,W,H);
   ctxV.fillStyle = '#0d1117'; ctxV.fillRect(0,0,W,HV);
@@ -1975,7 +2068,8 @@ function drawCandleChart(allCandles, spikeDate, show){
   const lows = candles.map(c=>+c.lowPrice), highs = candles.map(c=>+c.highPrice);
   const minP = Math.min(...lows, ...ES.flat()), maxP = Math.max(...highs, ...ES.flat());
   const pad = (maxP-minP)*0.06 || 1;
-  const yP = p => H - 10 - (p-(minP-pad))/((maxP+pad)-(minP-pad))*(H-20);
+  const sigOn = opt.signals && opt.signals.length, mt = sigOn?40:22, mb = sigOn?34:10;   // 신호 라벨 들어갈 자리
+  const yP = p => H - mb - (p-(minP-pad))/((maxP+pad)-(minP-pad))*(H-mt-mb);
   const maxV = Math.max(...candles.map(c=>+c.volume), 1);
   const yV = v => HV - 4 - (v/maxV)*(HV-8);
 
@@ -2052,6 +2146,25 @@ function drawCandleChart(allCandles, spikeDate, show){
     ctxC.fillStyle='#f0883e'; ctxC.fillText(anchorLab, 8+4*62, 16);
     const lv=av[av.length-1], lc=+allCandles[allCandles.length-1].closePrice;
     _avwapNote=` · ${anchorLab==='기준봉 VWAP'?'기준봉':'최대거래 양봉'} ${(allCandles[ai].timestamp||'').slice(5,10)} VWAP ${Math.round(lv).toLocaleString()} ${lc>=lv?'위 ✓':'아래 ⚠'}`;
+  }
+  // 신호 라벨 (2026-10-09 "차트에 조건들 넣어서 신호") — 사는 자리 아래, 기준봉·위험 위. 겹치면 비켜 쌓고 한 봉 한쪽에 2개까지
+  if(sigOn){
+    const idxOf={}; candles.forEach((c,i)=>{ idxOf[(c.timestamp||'').slice(0,10)]=i; });
+    const COL={buy:['#1f6feb','#fff'],rest:['#2d7d6f','#fff'],info:['#484f58','#e6edf3'],warn:['#9a4d0f','#fff'],trade_buy:['#e6edf3','#0d1117'],trade_sell:['#8957e5','#fff']};
+    const placed=[], cnt={}; ctxC.font='11px sans-serif'; ctxC.lineWidth=1;
+    const rr=(x,y,w,h,r)=>{ ctxC.beginPath(); if(ctxC.roundRect) ctxC.roundRect(x,y,w,h,r); else ctxC.rect(x,y,w,h); };
+    opt.signals.forEach(sg=>{
+      const i=idxOf[sg.date]; if(i===undefined) return;
+      const k=i+sg.pos; cnt[k]=(cnt[k]||0)+1; if(cnt[k]>2 && !sg.kind.startsWith('trade')) return;
+      const c=candles[i], x=i*cw+cw/2, tw=ctxC.measureText(sg.label).width+10, th=16, below=sg.pos==='below';
+      const anchor = below ? yP(+c.lowPrice)+2 : yP(+c.highPrice)-2;
+      let y = below ? anchor+8 : anchor-8-th, bx=Math.min(Math.max(x-tw/2,2),W-tw-2);
+      for(let t=0;t<8;t++){ if(!placed.some(r=>bx<r.x+r.w+2 && bx+tw+2>r.x && y<r.y+r.h+1 && y+th+1>r.y)) break; y += below ? th+3 : -(th+3); }
+      y=Math.max(20,Math.min(H-th-1,y)); placed.push({x:bx,y,w:tw,h:th});
+      const [bg,fg]=COL[sg.kind]||COL.info;
+      ctxC.strokeStyle=bg; ctxC.beginPath(); ctxC.moveTo(x,anchor); ctxC.lineTo(x, below?y:y+th); ctxC.stroke();
+      ctxC.fillStyle=bg; rr(bx,y,tw,th,5); ctxC.fill(); ctxC.fillStyle=fg; ctxC.fillText(sg.label,bx+5,y+12);
+    });
   }
   const last=ES.slice(0,3).map(a=>a[a.length-1]), cl=+candles[n-1].closePrice;   // 간격은 5·10·20만
   return cl ? (Math.max(...last)-Math.min(...last))/cl*100 : null;
