@@ -190,10 +190,14 @@ def signals(db: Session, code: str, days: int = 260, owner: str | None = None) -
                   (chg >= 0) & (chg < 0.08), C / ma20 - 1 < 0.15, (ehi_t - elo_t) / C < 0.06]
             base_ok = (C > e20) & (e20 > e60) & (TV.rolling(20).mean() >= 3e9) & bull
             sc = sum(f.fillna(False).astype(int) for f in fl)
-            for d in sc[(sc >= 6) & base_ok & (sc.index >= start)].index:
+            rk_ = 1 - L * 0.99 / C
+            # 실제로 사는 조건(점수 6↑ + 손절폭 8%↓ + 상승장)을 다 만족한 날만 '매수'로 — 숫자 6·7은 뜻이 안 읽힘 (2026-10-09 "시그널을 확실히")
+            for d in sc[(sc >= 6) & base_ok & (rk_ <= 0.08) & (sc.index >= start)].index:
                 miss = [CLOSE_FLAGS[j] for j, f in enumerate(fl) if not bool(f[d])]
-                items.append({"date": str(d), "label": f"종가 점수 {int(sc[d])}/7" + (f" (빠짐: {miss[0]})" if miss else ""), "kind": "score",
-                              "pos": "below", "price": float(L[d]), "score": int(sc[d])})
+                good = rk_[d] <= 0.03
+                items.append({"date": str(d), "label": f"{'✅ ' if good else ''}종가 매수 · 손절 {L[d] * 0.99:,.0f} (-{rk_[d] * 100:.1f}%)"
+                              + (" · 수량 절반" if rk_[d] > 0.05 else "") + f" · 점수 {int(sc[d])}/7" + (f" (빠짐: {miss[0]})" if miss else ""),
+                              "kind": "score", "pos": "below", "price": float(L[d]), "score": int(sc[d]), "good": bool(good)})
     except Exception:  # noqa: BLE001
         pass
     for d, lab in near:
@@ -218,7 +222,7 @@ def signals(db: Session, code: str, days: int = 260, owner: str | None = None) -
         for d, cs_ in (_get(db, "top3_log", {}) or {}).items():
             dd = pd.Timestamp(d).date()
             if code in cs_ and dd in df.index and dd >= start:
-                items.append({"date": d, "label": "종가 매수", "kind": "buy", "pos": "below", "price": float(L[dd])})
+                items.append({"date": d, "label": "버틴 종목 · 텔레그램 종베 (참고)", "kind": "note", "pos": "below", "price": float(L[dd])})
     except Exception:  # noqa: BLE001
         pass
     # 매매 일지 실제 매수·매도 (같은 날 같은 방향은 평균가로 묶음)
@@ -316,7 +320,7 @@ def _workspace_list(db: Session) -> dict:
     log = _get(db, "top3_log", {}) or {}
     if log:
         for c in log.get(max(log), []):
-            add(c, "종가 매수")
+            add(c, "버틴 종목 (참고)")
     from backend.services.result_cache import cached  # noqa: PLC0415
     from backend.screener.my_pattern import scan as mp_scan  # noqa: PLC0415
     mp = cached("my_pattern_v6", (), db, lambda: mp_scan(db)) or {}      # 재시작 직후에도 디스크에 저장된 결과를 바로 씀
