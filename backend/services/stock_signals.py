@@ -112,7 +112,7 @@ def signals(db: Session, code: str, days: int = 260, owner: str | None = None) -
             price = float(L[d]) if pos == "below" else float(H[d])
             items.append({"date": str(d), "label": lab, "kind": kind, "pos": pos, "price": price})
     # ▲ 진입 신호 (2026-10-09 "우리도 진입 신호 같은 건 좀"): (박스 돌파 또는 EMA 모임 돌파·정배열) + 상승·횡보장 + 추세 조건 6/7↑
-    # 3년(entry_sig.py, 종가 진입): 2,433건 평균 +2.7% · 이김 34% · 평균 14일 / 하락장이면 -1.7%라 안 냄.
+    # 3년(entry_sig.py, 종가 진입): 1,223건 평균 +3.4% · 이김 36% · 평균 14일 / 하락장이면 -1.7%라 안 냄.
     # 흐름: 손절 = 신호 봉 저가 -1% 아래 종가 · ½ 익절 = EMA14 아래 종가 · 청산 = EMA21 아래 종가. 들고 있는 동안은 새 진입 안 냄.
     e14, e21 = C.ewm(span=14, adjust=False).mean(), C.ewm(span=21, adjust=False).mean()
     s50, s150 = C.rolling(50).mean(), C.rolling(150, min_periods=135).mean()
@@ -122,7 +122,9 @@ def signals(db: Session, code: str, days: int = 260, owner: str | None = None) -
     up60 = (C > e60) & (e20 > e60)
     bulls = _bull_days(db)
     bull = pd.Series([bulls.get(d, False) for d in df.index], index=df.index)
-    entry_m = (box | (ema & up60)) & bull & (tt7 >= 6)
+    # 급등봉·과열 당일은 진입 안 냄 (2026-10-09 LG에너지솔루션 4/21 +11.4% 진입 → 손절): 그날 +8% 미만 · 20일선 +15% 안
+    # 3년: 1,223건 평균 +3.4% · 이김 36% · 최악10% -10.9% (빠진 급등봉·과열 진입은 +2.1% · 최악10% -17%) — entry_sig2.py
+    entry_m = (box | (ema & up60)) & bull & (tt7 >= 6) & (chg < 0.08) & (C / ma20 - 1 < 0.15)
     active = None
     idx = list(df.index)
     i = idx.index(start) if start in idx else 0
@@ -345,7 +347,7 @@ def entry_today(db: Session, asof=None) -> list[dict]:
     if _ENTRY["key"] == latest:
         return _ENTRY["v"]
     from backend.services.result_cache import cached  # noqa: PLC0415
-    v = cached("entry_today_v1", (), db, lambda: {"date": str(latest), "items": _entry_today(db, latest)}) or {}
+    v = cached("entry_today_v2", (), db, lambda: {"date": str(latest), "items": _entry_today(db, latest)}) or {}
     if v.get("date") == str(latest):
         _ENTRY.update(key=latest, v=v["items"])
     return v.get("items", [])
@@ -353,7 +355,7 @@ def entry_today(db: Session, asof=None) -> list[dict]:
 
 def _entry_today(db: Session, asof=None) -> list[dict]:
     """전 종목에 ▲ 진입 규칙을 돌려 가장 최근 거래일에 신호가 뜬 종목 (DB 날짜가 바뀔 때만 계산, 약 2~4초).
-    규칙은 signals()와 같다: (박스 돌파 또는 EMA 모임 돌파·정배열) + 상승·횡보장 + 추세 조건 6/7↑. 하루 거래대금 20일 평균 30억↑만."""
+    규칙은 signals()와 같다: (박스 돌파 또는 EMA 모임 돌파·정배열) + 상승·횡보장 + 추세 조건 6/7↑ + 그날 +8% 미만 · 20일선 +15% 안. 하루 거래대금 20일 평균 30억↑만."""
     latest = asof or db.execute(text("select max(trading_date) from spot_daily_prices")).scalar()
     if not _bull_days(db).get(latest, False):
         return []
@@ -379,7 +381,8 @@ def _entry_today(db: Session, asof=None) -> list[dict]:
     box = ((hi20p / lo20p - 1 <= 0.20) & (C > hi20p) & (chg >= 0.05) & (tvx >= 2) & (C > ma200)).iloc[r]
     ema = ((gap_prev <= 0.04) & (C > ehi) & (C > hi10p) & (chg >= 0.03) & (chg < 0.29) & (tvx >= 1.5)).iloc[r]
     up60 = ((C > e60) & (e20 > e60)).iloc[r]
-    hit = (box | (ema & up60)) & (tt7 >= 6)
+    calm = (chg.iloc[r] < 0.08) & ((C / C.rolling(20).mean() - 1).iloc[r] < 0.15)      # 급등봉·과열 당일 제외
+    hit = (box | (ema & up60)) & (tt7 >= 6) & calm
     names = dict(db.execute(text("select code, name from stocks")).all())
     out = [{"code": c, "name": names.get(c, c), "kind": "박스 위로 돌파" if bool(box[c]) else "이평선 모였다 돌파", "close": float(C[c].iloc[r]),
             "stop": float(L[c].iloc[r]) * 0.99, "chg": float(chg[c].iloc[r]) * 100} for c in hit[hit].index]

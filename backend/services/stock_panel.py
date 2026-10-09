@@ -168,7 +168,7 @@ def _panel(db: Session, code: str, owner: str | None = None) -> dict:
             stage, title = (3, "보유 중 · 수익") if held["gain"] >= 5 else (2, "보유 중")
             sub = f"손절 {held['stop']:,.0f}까지 {room:.1f}%" if room is not None else "손절선 없음 — 정해 두세요"
     elif act and act["days"] == 1:
-        stage, title, sub = 1, "▲ 진입 신호 · 이번 봉", f"진입 {act['entry']:,.0f} · 손절 {act['stop']:,.0f} ({(act['stop']/act['entry']-1)*100:+.1f}%) · 3년 평균 +2.7% · 이김 34%"
+        stage, title, sub = 1, "▲ 진입 신호 · 이번 봉", f"진입 {act['entry']:,.0f} · 손절 {act['stop']:,.0f} ({(act['stop']/act['entry']-1)*100:+.1f}%) · 3년 평균 +3.4% · 이김 36%"
     elif act:
         stage = 3 if act["half"] else 2
         title = f"진입 신호 {act['days']}일째 · {act['gain']:+.1f}%"
