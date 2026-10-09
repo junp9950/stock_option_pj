@@ -149,7 +149,7 @@ select{background:#21262d;border:1px solid #30363d;color:#c9d1d9;padding:6px 10p
 .ws-item:hover{background:var(--card2)}.ws-item.on{background:var(--card2);box-shadow:inset 3px 0 0 var(--blue)}
 .ws-av{width:30px;height:30px;border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:12px;font-weight:700;color:#fff;flex-shrink:0}
 .ws-txt{min-width:0;flex:1}.ws-nm{font-weight:700;color:var(--text);font-size:13.5px;display:flex;align-items:center;gap:5px;min-width:0}.ws-nm .n{overflow:hidden;text-overflow:ellipsis;white-space:nowrap;min-width:0}.ws-nm .b{flex:none;font-size:11px;font-weight:600;padding:0 6px;border-radius:8px;border:1px solid var(--line);color:var(--muted);white-space:nowrap}
-.ws-tg{font-size:11px;color:var(--muted);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.ws-tg{font-size:11px;color:var(--muted);line-height:1.35;overflow:hidden;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;word-break:keep-all;overflow-wrap:anywhere}
 .ws-px{text-align:right;font-size:12.5px;color:var(--text);white-space:nowrap}
 .ws-head{display:flex;align-items:baseline;gap:8px;flex-wrap:wrap;margin-bottom:4px}
 .ws-head b{font-size:17px;color:var(--text)}
@@ -2025,19 +2025,19 @@ async function loadWorkspace(){
   if(!_ws.code){ const L=wsItems(_ws.tab); const f=L[0]||(d.candidates||[])[0]||(d.track||[])[0]; if(f) wsOpen(f.code,f.name); }
 }
 function wsItems(t){ const d=_ws.data||{}; return t==='track'?(d.track||[]):(d.candidates||[]).filter(x=>(x.lane||'entry')===t); }
-const WS_LANE={entry:'추세 매매 · 종가에 진입 · ✅ = 점수 6↑ + 손절폭 3%↓ · 손절폭 5~8%는 후순위·수량 절반 이하 · 사면 바로 스탑로스(그날 저가 -1%) 예약 · 21일선 아래 종가면 다음 날 아침 정리',
-  wait:'아직 신호 전 · 돌파가 나오면 그때 · ⏸ = 점수는 좋은데 손절폭 8%↑ (3년: 얻을 게 거의 없었음) → 하루 폭 좁게 고가 쪽 마감하는 날 기다리기', track:'내 매매 아님 · 사이트 신호만 · 최근 20거래일 점수 6↑ 신호를 규칙대로 따라간 것 (그날까지 데이터로 다시 계산) · 스탑로스 안 맞고 21일선 위 = 아직 들고 갈 자리 · ⚠ = 오늘 21일선 아래 마감 → 내일 아침 정리'};
+const WS_LANE={entry:'종가에 진입 · ✅ 손절폭 3%↓ 먼저 · 5~8%는 수량 절반 · 사면 스탑로스(그날 저가 -1%) 예약 · 21일선 아래 종가면 다음 날 아침 정리',
+  wait:'신호 전 · 돌파 나오면 그때 · ⏸ 손절폭 8%↑는 폭 좁은 날 기다리기 · 참고 = 다른 기준 신호', track:'내 매매 아님 · 최근 20일 사이트 신호를 규칙대로 따라간 것 · ⚠ = 내일 아침 정리'};
 function wsTab(t){ _ws.tab=t; try{ localStorage.setItem('ws-tab',t); }catch(e){} renderWsList(); }
 function renderWsList(){
   document.querySelectorAll('.ws-tabs button').forEach(b=>{ const n=wsItems(b.dataset.t).length; b.classList.toggle('on',b.dataset.t===_ws.tab); b.innerHTML=`${{entry:'오늘 진입',wait:'대기',track:'신호 추적'}[b.dataset.t]} ${n}`; });
   const td=(_ws.data||{}).track_done||{};
-  document.getElementById('ws-lane-note').textContent=(WS_LANE[_ws.tab]||'')+(_ws.tab==='track'&&(td.stop||td.exit)?` · 그사이 끝난 것: 스탑로스 ${td.stop||0} · 21일선 정리 ${td.exit||0}`:'');
+  document.getElementById('ws-lane-note').textContent=(WS_LANE[_ws.tab]||'')+(_ws.tab==='track'&&(td.stop||td.exit)?` · 끝난 것: 스탑 ${td.stop||0} · 21선 ${td.exit||0}`:'');
   const L=wsItems(_ws.tab), el=document.getElementById('ws-items');
   if(!L.length){ el.innerHTML=`<div class="ts" style="padding:12px">${_ws.tab==='track'?'없음':'오늘은 없습니다'}</div>`; return; }
   const KIND={above:'선 위 마감 대기',near:'수렴 자리',hold:'지지선',watch:'봉 보기'};
   const row=x=>{
     let tg='';
-    if(_ws.tab==='track') tg=(x.sell_tmr?'⚠ 21일선 아래 마감 → 내일 아침 정리 · ':'')+`${x.date.slice(5).replace('-','/')} 진입 ${Math.round(x.entry).toLocaleString()} · 스탑 ${x.stop.toLocaleString()} · 21일선 ${x.to21>0?'+':''}${x.to21}%`;
+    if(_ws.tab==='track') tg=(x.sell_tmr?'⚠ 내일 아침 정리 · ':'')+`${x.date.slice(5).replace('-','/')} ${Math.round(x.entry).toLocaleString()} · 스탑 ${x.stop.toLocaleString()} · 21선 ${x.to21>0?'+':''}${x.to21}%`;
     else if(_ws.tab!=='watch') tg=(x.risk!=null?`손절 ${x.risk}% · `:'')+x.tags.join(' · ')+(x.family?` · ${x.family}`:'');   // 손절폭 = 종가에서 그날 저가 -1%까지
     else if(_ws.tab==='held') tg=(x.stop?`손절 ${Math.round(x.stop).toLocaleString()}${x.room!=null?` · ${x.room<0?'⛔ 이탈':x.room<=2?'⚠ '+x.room+'% 남음':x.room+'% 남음'}`:''}`:'손절선 없음')+(x.long?' · 장기':'');
     else tg=`${KIND[x.kind]||''}${x.level?' '+Math.round(x.level).toLocaleString():''}${x.note?' · '+x.note:''}`;
