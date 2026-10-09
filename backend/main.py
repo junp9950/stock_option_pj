@@ -2024,8 +2024,8 @@ async function loadWorkspace(){
   if(!_ws.code){ const L=wsItems(_ws.tab); const f=L[0]||(d.candidates||[])[0]||(d.watch||[])[0]; if(f) wsOpen(f.code,f.name); }
 }
 function wsItems(t){ const d=_ws.data||{}; return t==='watch'?(d.watch||[]):(d.candidates||[]).filter(x=>(x.lane||'entry')===t); }
-const WS_LANE={entry:'추세 매매 · 종가에 진입 · ✅ = 점수 6↑ + 손절폭 3%↓ · 사면 바로 스탑로스(그날 저가 -1%) 예약 · 21일선 아래 종가면 다음 날 아침 정리',
-  wait:'아직 신호 전 · 돌파가 나오면 그때 · ⏸ = 점수는 좋은데 손절폭 5%↑ (3년: 얻을 게 거의 없었음) → 하루 폭 좁게 고가 쪽 마감하는 날 기다리기', watch:'적어 둔 관심 종목'};
+const WS_LANE={entry:'추세 매매 · 종가에 진입 · ✅ = 점수 6↑ + 손절폭 3%↓ · 손절폭 5~8%는 후순위·수량 절반 이하 · 사면 바로 스탑로스(그날 저가 -1%) 예약 · 21일선 아래 종가면 다음 날 아침 정리',
+  wait:'아직 신호 전 · 돌파가 나오면 그때 · ⏸ = 점수는 좋은데 손절폭 8%↑ (3년: 얻을 게 거의 없었음) → 하루 폭 좁게 고가 쪽 마감하는 날 기다리기', watch:'적어 둔 관심 종목'};
 function wsTab(t){ _ws.tab=t; try{ localStorage.setItem('ws-tab',t); }catch(e){} renderWsList(); }
 function renderWsList(){
   document.querySelectorAll('.ws-tabs button').forEach(b=>{ const n=wsItems(b.dataset.t).length; b.classList.toggle('on',b.dataset.t===_ws.tab); b.innerHTML=`${{entry:'오늘 진입',wait:'대기',watch:'관심'}[b.dataset.t]} ${n}`; });

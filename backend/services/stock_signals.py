@@ -275,10 +275,14 @@ def _workspace_list(db: Session) -> dict:
         for c_, v_ in sorted(scores.items(), key=lambda kv: (-kv[1]["score"], kv[1]["risk"])):
             if v_["score"] >= 6 and 0.03 < v_["risk"] <= 0.05:
                 add(c_, "종가 점수 6↑")
-        # 손절폭 5%↑는 진입에서 뺀다 (3년 R: 5~8% +0.34 · 8%↑ +0.04 vs 3%↓ +1.68) — 2026-10-09 피에스케이 7.1% "너무 높은 거 아니가"
+        # 손절폭 5~8%는 후순위·수량 줄이기, 8%↑는 대기 (3년 예약 손절 R: 3%↓ +1.42 · 3~5% +0.55 · 5~8% +0.35(앞뒤 .32/.37) · 8%↑ +0.11, atr_stop_b.py)
+        # 2026-10-09 피에스케이 7.1% "너무 높은 거 아니가" → "포함해서 들고 가도 우리 쪽이 높나" → 1R당 같은 금액이면 5~8%도 플러스
         for c_, v_ in sorted(scores.items(), key=lambda kv: kv[1]["risk"]):
-            if v_["score"] >= 6 and v_["risk"] > 0.05:
-                add(c_, "⏸ 손절폭 넓음 · 폭 좁은 날 기다리기")
+            if v_["score"] >= 6 and 0.05 < v_["risk"] <= 0.08:
+                add(c_, "종가 점수 6↑ · 손절폭 넓음 → 후순위 · 수량 절반 이하")
+        for c_, v_ in sorted(scores.items(), key=lambda kv: kv[1]["risk"]):
+            if v_["score"] >= 6 and v_["risk"] > 0.08:
+                add(c_, "⏸ 손절폭 8%↑ · 폭 좁은 날 기다리기")
     except Exception:  # noqa: BLE001
         pass
     log = _get(db, "top3_log", {}) or {}
@@ -344,10 +348,10 @@ def _workspace_list(db: Session) -> dict:
         y["score"] = sc["score"] if sc else None
         y["risk"] = round(sc["risk"] * 100, 1) if sc else None
         y["rr"] = bool(sc and sc["score"] >= 6 and sc["risk"] <= 0.03)
-        if y["lane"] == "entry" and sc and sc["risk"] > 0.05 and not any(t.startswith("▲") for t in x["tags"]):
+        if y["lane"] == "entry" and sc and sc["risk"] > 0.08 and not any(t.startswith("▲") for t in x["tags"]):
             y["lane"] = "wait"            # 다른 이유로 올라왔어도 손절폭 5%↑면 대기로
         cands.append(y)
-    cands.sort(key=lambda y: (y["lane"] != "entry", not y["rr"], -(y["score"] if y["score"] is not None else -1), y["risk"] if y["risk"] is not None else 99))
+    cands.sort(key=lambda y: (y["lane"] != "entry", not y["rr"], (y["risk"] or 0) > 5, -(y["score"] if y["score"] is not None else -1), y["risk"] if y["risk"] is not None else 99))
     return {"as_of": str(latest), "live": live_at, "mode": mp.get("mode"),
             "candidates": cands, "watch": sorted((price(w) for w in watch), key=lambda w: -w["chg"])}
 
