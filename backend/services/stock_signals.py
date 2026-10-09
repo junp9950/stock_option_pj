@@ -20,7 +20,7 @@ from sqlalchemy import text
 from sqlalchemy.orm import Session
 
 
-def signals(db: Session, code: str, days: int = 160) -> dict:
+def signals(db: Session, code: str, days: int = 260) -> dict:
     q = db.execute(text("select trading_date, open_price, high_price, low_price, close_price, volume, trading_value from spot_daily_prices "
                         "where stock_code = :c order by trading_date desc limit 520"), {"c": code}).all()
     if len(q) < 60:
@@ -70,6 +70,15 @@ def signals(db: Session, code: str, days: int = 160) -> dict:
         for d in mask[mask.fillna(False) & (mask.index >= start)].index:
             price = float(L[d]) if pos == "below" else float(H[d])
             items.append({"date": str(d), "label": lab, "kind": kind, "pos": pos, "price": price})
+    # 매일 고른 종베 3 (settings top3_log) — 그날 우리가 실제로 꼽은 자리
+    try:
+        from backend.services.telegram import _get  # noqa: PLC0415
+        for d, cs_ in (_get(db, "top3_log", {}) or {}).items():
+            dd = pd.Timestamp(d).date()
+            if code in cs_ and dd in df.index and dd >= start:
+                items.append({"date": d, "label": "종베 3", "kind": "buy", "pos": "below", "price": float(L[dd])})
+    except Exception:  # noqa: BLE001
+        pass
     # 매매 일지 실제 매수·매도 (같은 날 같은 방향은 평균가로 묶음)
     try:
         for d, side, qty, amt in db.execute(text(

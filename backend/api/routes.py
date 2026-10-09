@@ -1955,6 +1955,22 @@ def get_sector_calendar(db: Session = Depends(get_db)):
     return cached("sector_calendar_v2", (), db, lambda: scan(db))
 
 
+@router.get("/stock/{code}/candles")
+def get_stock_candles(code: str, count: int = 330, db: Session = Depends(get_db)):
+    """긴 일봉 (토스는 200봉까지라 앞은 DB, 최근 며칠은 토스 실시간으로 덮음) — 첫 화면 1년 차트용 (2026-10-09)."""
+    rows = db.execute(text("select trading_date, open_price, high_price, low_price, close_price, volume from spot_daily_prices "
+                           "where stock_code = :c order by trading_date desc limit :n"), {"c": code, "n": min(count, 600)}).all()
+    out = {str(r[0]): {"timestamp": f"{r[0]}T00:00:00.000+09:00", "openPrice": str(r[1]), "highPrice": str(r[2]), "lowPrice": str(r[3]),
+                       "closePrice": str(r[4]), "volume": str(int(r[5] or 0))} for r in rows[::-1]}
+    try:
+        live = get_toss_candles(code, interval="1d", count=10)
+        for c in live.get("candles", []):
+            out[c["timestamp"][:10]] = c
+    except Exception:  # noqa: BLE001
+        pass
+    return {"code": code, "candles": [out[k] for k in sorted(out)]}
+
+
 @router.get("/stock/{code}/chart-signals")
 def get_stock_chart_signals(code: str, db: Session = Depends(get_db)):
     """차트에 찍을 신호 (우리 규칙을 그 종목 일봉에 거슬러 적용 + 매매 일지 매수·매도)."""

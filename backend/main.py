@@ -153,6 +153,8 @@ select{background:#21262d;border:1px solid #30363d;color:#c9d1d9;padding:6px 10p
 .ws-head{display:flex;align-items:baseline;gap:8px;flex-wrap:wrap;margin-bottom:4px}
 .ws-head b{font-size:17px;color:var(--text)}
 .ws-sec{font-size:11px;color:var(--muted);margin:10px 4px 4px}
+.ws-per{display:flex;gap:4px;margin:2px 0 6px}.ws-per button{background:var(--card2);border:1px solid var(--line);color:var(--muted);border-radius:12px;padding:3px 10px;font-size:11.5px;cursor:pointer}
+.ws-per button.on{color:var(--text);border-color:var(--blue)}
 .ws-legend{display:flex;flex-wrap:wrap;gap:6px;margin-top:6px;font-size:11px;color:var(--muted)}
 .ws-legend span{display:inline-flex;align-items:center;gap:4px}.ws-legend i{width:10px;height:10px;border-radius:3px;display:inline-block}
 #db-more>summary{font-size:15px;font-weight:700;color:var(--text);cursor:pointer;margin:6px 0 10px}
@@ -587,7 +589,8 @@ select{background:#21262d;border:1px solid #30363d;color:#c9d1d9;padding:6px 10p
     <div class="ws-main">
       <div class="ws-head"><b id="ws-name">종목을 고르세요</b><span class="ts" id="ws-sub"></span></div>
       <div class="note" id="ws-note" style="margin-bottom:6px"></div>
-      <canvas id="ws-candle" style="width:100%;height:400px;display:block"></canvas>
+      <div class="ws-per" id="ws-per"><button data-n="66" onclick="wsPeriod(66)">3개월</button><button data-n="130" onclick="wsPeriod(130)">6개월</button><button data-n="250" onclick="wsPeriod(250)">1년</button></div>
+      <canvas id="ws-candle" style="width:100%;height:480px;display:block"></canvas>
       <canvas id="ws-volume" style="width:100%;height:90px;display:block;margin-top:4px"></canvas>
       <div class="ws-legend"><span><i style="background:#1f6feb"></i>사는 자리 모양</span><span><i style="background:#2d7d6f"></i>쉬는 자리</span><span><i style="background:#484f58"></i>기준봉·거래 신기록</span><span><i style="background:#9a4d0f"></i>⚠ 위험</span><span><i style="background:#e6edf3"></i>내 매수</span><span><i style="background:#8957e5"></i>내 매도</span><span>· 차트 신호는 이 종목만 본 모양 (섹터·시장은 왼쪽 후보 목록에서)</span></div>
     </div>
@@ -1934,7 +1937,15 @@ function clearChartCanvas(){   // 열 때 이전 종목 차트가 남아 보이�
   ['pb-candle-canvas','pb-volume-canvas'].forEach(id=>{ const cv=document.getElementById(id); if(cv){ const x=cv.getContext('2d'); x.setTransform(1,0,0,1,0,0); x.clearRect(0,0,cv.width,cv.height); } });
 }
 // ── 첫 화면 작업대: 종목 목록 → 신호 찍힌 차트 → 패널 (2026-10-09) ──
-let _ws={tab:null,data:null,code:null};
+let _ws={tab:null,data:null,code:null,per:130,cache:{}};
+try{ _ws.per=+localStorage.getItem('ws-per')||130; }catch(e){}
+function wsPeriod(n){ _ws.per=n; try{ localStorage.setItem('ws-per',n); }catch(e){} wsDraw(); }
+function wsDraw(){
+  document.querySelectorAll('#ws-per button').forEach(b=>b.classList.toggle('on',+b.dataset.n===_ws.per));
+  const c=_ws.cache[_ws.code]; if(!c||!c.cd) return;
+  const g=drawCandleChart(c.cd.candles,null,_ws.per,{cId:'ws-candle',vId:'ws-volume',signals:c.sg?c.sg.items:[]});
+  document.getElementById('ws-note').textContent=`최근 ${_ws.per}거래일 · EMA 5·10·20·60`+(g!=null?` · EMA 5·10·20 간격 ${g.toFixed(1)}% ${g<=4?'(모임 ✓)':g>=7?'(벌어짐 ⚠)':''}`:'')+_avwapNote;
+}
 const WS_PAL=['#3b5bdb','#c2255c','#2b8a3e','#e8590c','#5f3dc4','#0b7285','#a61e4d','#5c940d','#d9480f','#364fc7'];
 function wsAv(code,name){ let h=0; for(const ch of code) h=(h*31+ch.charCodeAt(0))%997; return `<div class="ws-av" style="background:${WS_PAL[h%WS_PAL.length]}">${(name||'?').slice(0,1)}</div>`; }
 async function loadWorkspace(){
@@ -1974,16 +1985,16 @@ async function wsOpen(code,name){
   document.getElementById('ws-note').textContent='불러오는 중…';
   document.getElementById('ws-panel').innerHTML='<div class="ts">불러오는 중…</div>';
   const [cd, sg, pn] = await Promise.all([
-    fetch(`${API}/toss/candles/${code}?interval=1d&count=150`).then(r=>r.ok?r.json():null).catch(()=>null),
+    fetch(`${API}/stock/${code}/candles?count=330`).then(r=>r.ok?r.json():null).catch(()=>null),   // 1년 + EMA 계산용 (DB + 토스 최근)
     fetch(`${API}/stock/${code}/chart-signals`).then(r=>r.ok?r.json():null).catch(()=>null),
     fetch(`${API}/stock/${code}/panel`).then(r=>r.ok?r.json():null).catch(()=>null)]);
   if(_ws.code!==code) return;      // 그사이 다른 종목을 눌렀으면 버림
   renderStockPanel(pn,'ws-panel');
   if(!cd||!cd.candles||!cd.candles.length){ document.getElementById('ws-note').textContent='차트 데이터를 못 불러왔습니다'; return; }
-  const g=drawCandleChart(cd.candles,null,90,{cId:'ws-candle',vId:'ws-volume',signals:sg?sg.items:[]});
-  document.getElementById('ws-note').textContent=`최근 90거래일 · EMA 5·10·20·60`+(g!=null?` · EMA 5·10·20 간격 ${g.toFixed(1)}% ${g<=4?'(모임 ✓)':g>=7?'(벌어짐 ⚠)':''}`:'')+_avwapNote;
+  _ws.cache={[code]:{cd,sg}};
+  wsDraw();
 }
-window.addEventListener('resize',()=>{ clearTimeout(window._wsRz); window._wsRz=setTimeout(()=>{ if(_ws.code&&document.getElementById('panel-home').classList.contains('active')){ const it=wsItems(_ws.tab).concat(wsItems('held'),wsItems('candidates'),wsItems('watch')).find(x=>x.code===_ws.code); wsOpen(_ws.code,it?it.name:document.getElementById('ws-name').textContent); } },400); });
+window.addEventListener('resize',()=>{ clearTimeout(window._wsRz); window._wsRz=setTimeout(()=>{ if(_ws.code&&document.getElementById('panel-home').classList.contains('active')) wsDraw(); },300); });
 // 오른쪽 패널: 결론(상태 제목) 크게 · 단계 막대 · ✓/⚠ 칩 · 카드 · 세부 지표 (2026-10-09, Lazy Alpha식 배치)
 function renderStockPanel(p, target){
   const el=document.getElementById(target||'cm-panel');
@@ -2064,15 +2075,26 @@ function drawCandleChart(allCandles, spikeDate, show, opt){
   ctxV.fillStyle = '#0d1117'; ctxV.fillRect(0,0,W,HV);
 
   const n = candles.length;
-  const cw = W/n, bw = Math.max(1, cw*0.6);
+  const AX = 66;                       // 오른쪽 가격축·이평선 값 자리 (2026-10-09)
+  const PW = W - AX;
+  const cw = PW/n, bw = Math.max(1, cw*0.62);
   const lows = candles.map(c=>+c.lowPrice), highs = candles.map(c=>+c.highPrice);
   const minP = Math.min(...lows, ...ES.flat()), maxP = Math.max(...highs, ...ES.flat());
   const pad = (maxP-minP)*0.06 || 1;
-  const sigOn = opt.signals && opt.signals.length, mt = sigOn?40:22, mb = sigOn?34:10;   // 신호 라벨 들어갈 자리
+  const sigOn = opt.signals && opt.signals.length, mt = sigOn?40:22, mb = (sigOn?34:12)+14;   // 신호 라벨 + 아래 날짜 자리
   const yP = p => H - mb - (p-(minP-pad))/((maxP+pad)-(minP-pad))*(H-mt-mb);
   const maxV = Math.max(...candles.map(c=>+c.volume), 1);
   const yV = v => HV - 4 - (v/maxV)*(HV-8);
 
+  // 가격 눈금(오른쪽) · 가로 격자 · 날짜(아래, 달 바뀌는 봉)
+  { const lo=minP-pad, hi=maxP+pad, raw=(hi-lo)/6, mag=Math.pow(10,Math.floor(Math.log10(raw))), stp=[1,2,2.5,5,10].map(m=>m*mag).find(v=>v>=raw)||raw;
+    ctxC.font='11px sans-serif'; ctxC.textAlign='left';
+    for(let v=Math.ceil(lo/stp)*stp; v<=hi; v+=stp){ const y=yP(v); if(y<mt-6||y>H-mb+2) continue;
+      ctxC.strokeStyle='rgba(139,148,158,.12)'; ctxC.beginPath(); ctxC.moveTo(0,y); ctxC.lineTo(PW,y); ctxC.stroke();
+      ctxC.fillStyle='#6e7681'; ctxC.fillText(Math.round(v).toLocaleString(), PW+6, y+4); }
+    let pm=''; candles.forEach((c,i)=>{ const d=(c.timestamp||'').slice(0,10), m=d.slice(5,7);
+      if(m && m!==pm){ if(pm){ const x=i*cw; ctxC.strokeStyle='rgba(139,148,158,.10)'; ctxC.beginPath(); ctxC.moveTo(x,mt-10); ctxC.lineTo(x,H-14); ctxC.stroke();
+        ctxC.fillStyle='#6e7681'; ctxC.fillText(`${+m}월`, x+3, H-3); } pm=m; } }); }
   const UP='#f85149', DOWN='#3b82f6'; // 국내 관례: 상승=빨강, 하락=파랑
   let spikeIdx = -1, spikeLow = null;
   candles.forEach((c,i)=>{
@@ -2158,7 +2180,7 @@ function drawCandleChart(allCandles, spikeDate, show, opt){
       const k=i+sg.pos; cnt[k]=(cnt[k]||0)+1; if(cnt[k]>2 && !sg.kind.startsWith('trade')) return;
       const c=candles[i], x=i*cw+cw/2, tw=ctxC.measureText(sg.label).width+10, th=16, below=sg.pos==='below';
       const anchor = below ? yP(+c.lowPrice)+2 : yP(+c.highPrice)-2;
-      let y = below ? anchor+8 : anchor-8-th, bx=Math.min(Math.max(x-tw/2,2),W-tw-2);
+      let y = below ? anchor+8 : anchor-8-th, bx=Math.min(Math.max(x-tw/2,2),PW-tw-2);
       for(let t=0;t<8;t++){ if(!placed.some(r=>bx<r.x+r.w+2 && bx+tw+2>r.x && y<r.y+r.h+1 && y+th+1>r.y)) break; y += below ? th+3 : -(th+3); }
       y=Math.max(20,Math.min(H-th-1,y)); placed.push({x:bx,y,w:tw,h:th});
       const [bg,fg]=COL[sg.kind]||COL.info;
@@ -2166,6 +2188,11 @@ function drawCandleChart(allCandles, spikeDate, show, opt){
       ctxC.fillStyle=bg; rr(bx,y,tw,th,5); ctxC.fill(); ctxC.fillStyle=fg; ctxC.fillText(sg.label,bx+5,y+12);
     });
   }
+  { const tags=[[+candles[n-1].closePrice,(+candles[n-1].closePrice>=+candles[n-1].openPrice)?UP:DOWN,'현재']].concat(ES.map((a,k)=>[a[a.length-1],EC[k],EN[k]]));
+    tags.sort((a,b)=>b[0]-a[0]); let py=-99; ctxC.font='10.5px sans-serif';
+    tags.forEach(([v,col])=>{ let y=Math.max(yP(v)-7, py+14); y=Math.min(y,H-mb); py=y;
+      ctxC.fillStyle=col; ctxC.beginPath(); if(ctxC.roundRect) ctxC.roundRect(PW+2,y,AX-4,14,3); else ctxC.rect(PW+2,y,AX-4,14); ctxC.fill();
+      ctxC.fillStyle='#0d1117'; ctxC.fillText(Math.round(v).toLocaleString(), PW+6, y+11); }); }
   const last=ES.slice(0,3).map(a=>a[a.length-1]), cl=+candles[n-1].closePrice;   // 간격은 5·10·20만
   return cl ? (Math.max(...last)-Math.min(...last))/cl*100 : null;
 }
