@@ -614,7 +614,7 @@ select{background:#21262d;border:1px solid #30363d;color:#c9d1d9;padding:6px 10p
   <div class="ws">
     <div class="ws-list">
       <div class="ws-search"><input id="ws-q" placeholder="🔍 종목 검색 (이름·코드·초성)" autocomplete="off" oninput="wsSearch(this.value)" onkeydown="if(event.key==='Enter'){const f=document.querySelector('#ws-sr .ws-item');if(f)f.click();}else if(event.key==='Escape'){this.value='';wsSearch('');}"><div id="ws-sr"></div></div>
-      <div class="ws-tabs"><button data-t="entry" onclick="wsTab('entry')">오늘 진입</button><button data-t="wait" onclick="wsTab('wait')">대기</button><button data-t="watch" onclick="wsTab('watch')">관심</button></div>
+      <div class="ws-tabs"><button data-t="entry" onclick="wsTab('entry')">오늘 진입</button><button data-t="wait" onclick="wsTab('wait')">대기</button><button data-t="track" onclick="wsTab('track')">진행 중</button></div>
       <div class="ts" id="ws-lane-note" style="margin:0 4px 4px"></div>
       <div class="ts" id="ws-asof" style="margin:0 4px 4px"></div>
       <div id="ws-items"><div class="ts" style="padding:10px">불러오는 중…</div></div>
@@ -2018,30 +2018,32 @@ async function loadWorkspace(){
   if(!d){ document.getElementById('ws-items').innerHTML='<div class="ts" style="padding:10px">목록을 못 불러왔습니다</div>'; return; }
   _ws.data=d;
   if(!_ws.tab){ let t=null; try{ t=localStorage.getItem('ws-tab'); }catch(e){}
-    _ws.tab=['entry','wait','watch'].includes(t)?t:(['entry','wait'].find(k=>wsItems(k).length)||'watch'); }
+    _ws.tab=['entry','wait','track'].includes(t)?t:(['entry','wait'].find(k=>wsItems(k).length)||'track'); }
   document.getElementById('ws-asof').textContent = d.live ? `장중 ${d.live} 가격` : `${d.as_of} 정규장 종가`;
   renderWsList();
-  if(!_ws.code){ const L=wsItems(_ws.tab); const f=L[0]||(d.candidates||[])[0]||(d.watch||[])[0]; if(f) wsOpen(f.code,f.name); }
+  if(!_ws.code){ const L=wsItems(_ws.tab); const f=L[0]||(d.candidates||[])[0]||(d.track||[])[0]; if(f) wsOpen(f.code,f.name); }
 }
-function wsItems(t){ const d=_ws.data||{}; return t==='watch'?(d.watch||[]):(d.candidates||[]).filter(x=>(x.lane||'entry')===t); }
+function wsItems(t){ const d=_ws.data||{}; return t==='track'?(d.track||[]):(d.candidates||[]).filter(x=>(x.lane||'entry')===t); }
 const WS_LANE={entry:'추세 매매 · 종가에 진입 · ✅ = 점수 6↑ + 손절폭 3%↓ · 손절폭 5~8%는 후순위·수량 절반 이하 · 사면 바로 스탑로스(그날 저가 -1%) 예약 · 21일선 아래 종가면 다음 날 아침 정리',
-  wait:'아직 신호 전 · 돌파가 나오면 그때 · ⏸ = 점수는 좋은데 손절폭 8%↑ (3년: 얻을 게 거의 없었음) → 하루 폭 좁게 고가 쪽 마감하는 날 기다리기', watch:'적어 둔 관심 종목'};
+  wait:'아직 신호 전 · 돌파가 나오면 그때 · ⏸ = 점수는 좋은데 손절폭 8%↑ (3년: 얻을 게 거의 없었음) → 하루 폭 좁게 고가 쪽 마감하는 날 기다리기', track:'최근 20거래일 점수 6↑ 신호를 규칙대로 따라간 것 (그날까지 데이터로 다시 계산) · 스탑로스 안 맞고 21일선 위 = 아직 들고 갈 자리 · ⚠ = 오늘 21일선 아래 마감 → 내일 아침 정리'};
 function wsTab(t){ _ws.tab=t; try{ localStorage.setItem('ws-tab',t); }catch(e){} renderWsList(); }
 function renderWsList(){
-  document.querySelectorAll('.ws-tabs button').forEach(b=>{ const n=wsItems(b.dataset.t).length; b.classList.toggle('on',b.dataset.t===_ws.tab); b.innerHTML=`${{entry:'오늘 진입',wait:'대기',watch:'관심'}[b.dataset.t]} ${n}`; });
-  document.getElementById('ws-lane-note').textContent=WS_LANE[_ws.tab]||'';
+  document.querySelectorAll('.ws-tabs button').forEach(b=>{ const n=wsItems(b.dataset.t).length; b.classList.toggle('on',b.dataset.t===_ws.tab); b.innerHTML=`${{entry:'오늘 진입',wait:'대기',track:'진행 중'}[b.dataset.t]} ${n}`; });
+  const td=(_ws.data||{}).track_done||{};
+  document.getElementById('ws-lane-note').textContent=(WS_LANE[_ws.tab]||'')+(_ws.tab==='track'&&(td.stop||td.exit)?` · 그사이 끝난 것: 스탑로스 ${td.stop||0} · 21일선 정리 ${td.exit||0}`:'');
   const L=wsItems(_ws.tab), el=document.getElementById('ws-items');
-  if(!L.length){ el.innerHTML=`<div class="ts" style="padding:12px">${_ws.tab==='watch'?'없음':'오늘은 없습니다'}</div>`; return; }
+  if(!L.length){ el.innerHTML=`<div class="ts" style="padding:12px">${_ws.tab==='track'?'없음':'오늘은 없습니다'}</div>`; return; }
   const KIND={above:'선 위 마감 대기',near:'수렴 자리',hold:'지지선',watch:'봉 보기'};
   const row=x=>{
     let tg='';
-    if(_ws.tab!=='watch') tg=(x.risk!=null?`손절 ${x.risk}% · `:'')+x.tags.join(' · ')+(x.family?` · ${x.family}`:'');   // 손절폭 = 종가에서 그날 저가 -1%까지
+    if(_ws.tab==='track') tg=(x.sell_tmr?'⚠ 21일선 아래 마감 → 내일 아침 정리 · ':'')+`${x.date.slice(5).replace('-','/')} 진입 ${Math.round(x.entry).toLocaleString()} · 스탑 ${x.stop.toLocaleString()} · 21일선 ${x.to21>0?'+':''}${x.to21}%`;
+    else if(_ws.tab!=='watch') tg=(x.risk!=null?`손절 ${x.risk}% · `:'')+x.tags.join(' · ')+(x.family?` · ${x.family}`:'');   // 손절폭 = 종가에서 그날 저가 -1%까지
     else if(_ws.tab==='held') tg=(x.stop?`손절 ${Math.round(x.stop).toLocaleString()}${x.room!=null?` · ${x.room<0?'⛔ 이탈':x.room<=2?'⚠ '+x.room+'% 남음':x.room+'% 남음'}`:''}`:'손절선 없음')+(x.long?' · 장기':'');
     else tg=`${KIND[x.kind]||''}${x.level?' '+Math.round(x.level).toLocaleString():''}${x.note?' · '+x.note:''}`;
     const sub=_ws.tab==='held'&&x.gain!=null?`<div class="ws-tg" style="text-align:right">수익 ${x.gain>0?'+':''}${x.gain}%</div>`:'';
     return `<div class="ws-item${x.code===_ws.code?' on':''}" data-c="${x.code}" onclick="wsOpen('${x.code}','${x.name.replace(/'/g,'')}')">${wsAv(x.code,x.name)}
       <div class="ws-txt"><div class="ws-nm"><span class="n">${x.name}</span>${x.score!=null?`<span class="b" style="${x.score>=6?'border-color:var(--blue);color:var(--blue)':''}" title="종가 진입 점수 (7개 조건 중)">${x.rr?'✅':''}${x.score}/7</span>`:''}</div><div class="ws-tg" title="${tg.replace(/"/g,'')}">${tg}</div></div>
-      <div class="ws-px">${x.close?Math.round(x.close).toLocaleString():'-'}<div style="color:${x.chg>0?'var(--up)':x.chg<0?'var(--down)':'var(--muted)'}">${x.chg>0?'+':''}${(x.chg||0).toFixed(2)}%</div>${sub}</div></div>`;
+      <div class="ws-px">${x.close?Math.round(x.close).toLocaleString():'-'}${_ws.tab==='track'?`<div style="color:${x.gain>0?'var(--up)':x.gain<0?'var(--down)':'var(--muted)'}" title="진입 뒤">${x.gain>0?'+':''}${x.gain}%</div>`:`<div style="color:${x.chg>0?'var(--up)':x.chg<0?'var(--down)':'var(--muted)'}">${x.chg>0?'+':''}${(x.chg||0).toFixed(2)}%</div>`}${sub}</div></div>`;
   };
   if(_ws.tab==='held'){ const a=L.filter(x=>!x.long), b=L.filter(x=>x.long);
     el.innerHTML=a.map(row).join('')+(b.length?`<div class="ws-sec">장기 보유</div>`+b.map(row).join(''):''); }

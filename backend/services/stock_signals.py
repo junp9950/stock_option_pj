@@ -237,7 +237,7 @@ def workspace_list(db: Session) -> dict:
     from backend.services.result_cache import cached  # noqa: PLC0415
     now = datetime.now(ZoneInfo("Asia/Seoul"))
     if not (is_trading_day(now.date()) and 9 <= now.hour < 16):
-        return cached("workspace_list_v4", (), db, lambda: _workspace_list(db))
+        return cached("workspace_list_v5", (), db, lambda: _workspace_list(db))
     return _workspace_list(db)
 
 
@@ -316,7 +316,11 @@ def _workspace_list(db: Session) -> dict:
               "note": re.sub(r"^[\s·]+|[\s·]+$", "", re.sub(r"(\s*·\s*)+", " · ", private.sub("", x.get("note", ""))))}
              for x in wl.values() if x["code"] not in mine]
     held = []
-    codes = list({*cand, *(w["code"] for w in watch)})
+    try:
+        _trk = [a["code"] for a in tracking(db).get("items", [])]
+    except Exception:  # noqa: BLE001
+        _trk = []
+    codes = list({*cand, *_trk})
     latest = db.execute(text("select max(trading_date) from spot_daily_prices")).scalar()
     px = {r[0]: (float(r[1]), float(r[2] or 0)) for r in db.execute(text(
         "select stock_code, close_price, change_pct from spot_daily_prices where trading_date = :d and stock_code = any(:c)"), {"d": latest, "c": codes}).all()}
@@ -337,12 +341,13 @@ def _workspace_list(db: Session) -> dict:
     def price(x):
         c, ch = px.get(x["code"], (0.0, 0.0))
         return {**x, "close": c, "chg": round(ch, 2)}
-    def lane(tags):      # 종가 매수(1~5일) / 스윙(2~3주) / 대기 — 2026-10-09 "레이더 목적이 종베냐 추세추종이냐" → 두 갈래로 나눔
-        t = tags[0] if tags else ""
-        # 사용자: "결국 원하는 건 추세추종, 종가는 자리 잡는 시점, 익절하든 끌고 가든 매도 방식 차이" → 진입은 한 칸으로
-        return "wait" if t.startswith(("돌파 대기", "⏸")) else "entry"
+    def lane(tags):
+        # 2026-10-09 사용자 "오늘 정한 기준으로 바꾸고": 오늘 진입 = ▲ 진입 · 종가 점수 6↑(손절폭 8%↓)만. 그 밖(종가 매수·파란 화살표 등)은 대기에 참고로
+        return "entry" if any(t.startswith(("▲", "✅ 손익비", "종가 점수 6↑")) for t in tags) else "wait"
     cands = []
     for x in cand.values():
+        if lane(x["tags"]) == "wait" and not x["tags"][0].startswith(("돌파 대기", "⏸")):
+            x["tags"] = ["참고"] + x["tags"]
         y = price(x); y["lane"] = lane(x["tags"])
         sc = scores.get(x["code"])
         y["score"] = sc["score"] if sc else None
@@ -353,7 +358,7 @@ def _workspace_list(db: Session) -> dict:
         cands.append(y)
     cands.sort(key=lambda y: (y["lane"] != "entry", not y["rr"], (y["risk"] or 0) > 5, -(y["score"] if y["score"] is not None else -1), y["risk"] if y["risk"] is not None else 99))
     return {"as_of": str(latest), "live": live_at, "mode": mp.get("mode"),
-            "candidates": cands, "watch": sorted((price(w) for w in watch), key=lambda w: -w["chg"])}
+            "candidates": cands, "track": _track_rows(db, px), "track_done": (tracking(db) or {}).get("done", {})}
 
 
 def holdings(db: Session, owner: str) -> dict:
@@ -510,9 +515,10 @@ def _close_frames(db: Session, latest) -> dict:
     return v
 
 
-def _close_scores(db: Session, latest, live: dict | None = None, frac: float = 1.0) -> dict:
-    """live = 네이버 실시간 {code: {o,h,l,c,v}} 이면 오늘 줄을 붙여 장중 점수 (거래량은 frac로 나눠 마감 환산)."""
-    P = _close_frames(db, latest)
+def _close_scores(db: Session, latest, live: dict | None = None, frac: float = 1.0, frames: dict | None = None) -> dict:
+    """live = 네이버 실시간 {code: {o,h,l,c,v}} 이면 오늘 줄을 붙여 장중 점수 (거래량은 frac로 나눠 마감 환산).
+    frames = 앞에서 잘라 낸 프레임이면 그 마지막 날 기준 점수 (지난 날짜 다시 계산용)."""
+    P = frames or _close_frames(db, latest)
     H, L, C, V, TV = P["h"], P["l"], P["c"], P["v"], P["tv"]
     asof = str(latest)
     if live:
@@ -614,3 +620,69 @@ def _rs_hist(db: Session, latest, keep: int = 270) -> dict:
     RS = (raw.where(liq).iloc[-keep:].rank(axis=1, pct=True) * 98 + 1)
     return {"date": str(latest), "dates": [str(d) for d in RS.index],
             "rs": {c: RS[c].to_numpy(dtype="float16") for c in RS.columns if RS[c].notna().any()}}
+
+
+def tracking(db: Session) -> dict:
+    """최근 20거래일 종가 진입 신호(점수 6↑ · 손절폭 8%↓)를 우리 규칙대로 따라가 본 것 — 첫 화면 '진행 중' 탭 (2026-10-09 관심 탭 대신).
+    규칙: 신호 날 종가 진입 · 스탑로스 = 그날 저가 -1% (장중 닿으면 끝) · 21일선 아래 종가면 다음 날 아침 정리.
+    날짜마다 그날까지 데이터로 점수를 다시 계산한다 (signal_log가 쌓이기 전 날짜는 '다시 계산'). DB 날짜가 바뀔 때만 · 디스크 캐시."""
+    latest = db.execute(text("select max(trading_date) from spot_daily_prices")).scalar()
+    from backend.services.result_cache import cached  # noqa: PLC0415
+    return cached("tracking_v2", (), db, lambda: _tracking(db, latest)) or {}
+
+
+def _tracking(db: Session, latest, days: int = 20) -> dict:
+    P = _close_frames(db, latest)
+    C, H, L = P["c"], P["h"], P["l"]
+    e21 = C.ewm(span=21, adjust=False).mean()
+    bulls = _bull_days(db)
+    n = len(C.index)
+    sig: dict[str, list] = {}
+    for k in range(days - 1, -1, -1):             # 오래된 날부터
+        r = n - 1 - k
+        d = C.index[r]
+        if not bulls.get(d, False):
+            continue
+        sc = _close_scores(db, d, frames={key: v.iloc[:r + 1] for key, v in P.items()}).get("scores", {})
+        for code, v in sc.items():
+            if v["score"] >= 6 and v["risk"] <= 0.08:
+                sig.setdefault(code, []).append((r, float(C[code].iloc[r]), v["stop"], v["score"]))
+    names = dict(db.execute(text("select code, name from stocks")).all())
+    alive, done = [], {"stop": 0, "exit": 0, "win": 0}
+    for code, lst in sig.items():
+        free_from = -1                             # 정리한 뒤에 나온 신호부터 다시 따라간다
+        for r0, p0, stop, score in lst:
+            if r0 <= free_from:
+                continue
+            status, end = "hold", n - 1
+            for m in range(r0 + 1, n):
+                lo, c = float(L[code].iloc[m]), float(C[code].iloc[m])
+                if lo == lo and lo < stop:
+                    status, end = "stop", m; break
+                if m - r0 > 1 and c == c and c < float(e21[code].iloc[m]):
+                    status, end = ("exit" if m < n - 1 else "exit_tmr"), m; break
+            if status in ("stop", "exit"):
+                done[status] += 1
+                px_out = stop if status == "stop" else float(C[code].iloc[end])
+                done["win"] += px_out > p0
+                free_from = end
+                continue
+            c_now = float(C[code].iloc[-1])
+            alive.append({"code": code, "name": names.get(code, code), "date": str(C.index[r0]), "entry": p0, "stop": round(stop), "score": score,
+                          "gain": round((c_now / p0 - 1) * 100, 1), "to21": round((c_now / float(e21[code].iloc[-1]) - 1) * 100, 1),
+                          "sell_tmr": status == "exit_tmr", "days": n - 1 - r0})
+            break
+    alive.sort(key=lambda a: (not a["sell_tmr"], -a["gain"]))
+    return {"date": str(latest), "items": alive, "done": done}
+
+
+def _track_rows(db: Session, px: dict) -> list[dict]:
+    try:
+        t = tracking(db)
+    except Exception:  # noqa: BLE001
+        return []
+    out = []
+    for a in t.get("items", []):
+        c, ch = px.get(a["code"], (0.0, 0.0))
+        out.append({**a, "close": c or a["entry"], "chg": round(ch, 2), "tags": []})
+    return out
