@@ -1802,8 +1802,11 @@ def get_dashboard(db: Session = Depends(get_db)):
                 tag = "🚀 수렴 위로 돌파" if gap > 3 and (chg_today.get(x["code"]) or 0) >= 3 else ("👀 기준 근처" if abs(gap) <= 3 else None)
             if tag:
                 bx = box_info(*hl[x["code"]], c) if x["code"] in hl else {}
+                import re as _re  # noqa: PLC0415
+                _note = _re.sub(r"보유\s*[\d,]+\s*주|평단\s*[\d,]+(\s*\([\d/]+\))?|[\d,]+\s*주", "", x.get("note", ""))   # 공개 화면: 수량·평단 지움
+                _note = _re.sub(r"^[\s·]+|[\s·]+$", "", _re.sub(r"(\s*·\s*)+", " · ", _note))
                 watch.append({"code": x["code"], "name": x["name"], "tag": tag, "close": round(c), "level": lv, "gap_pct": round(gap, 1),
-                              "note": x.get("note", ""), **{k: v for k, v in bx.items() if k != "box_high"}})
+                              "note": _note, **{k: v for k, v in bx.items() if k != "box_high"}})
     order = {"⚠ 이탈": 0, "✅ 선 위 마감": 1, "🚀 수렴 위로 돌파": 1, "👀 코앞": 2, "👀 선 근처": 3, "👀 기준 근처": 4}
     watch.sort(key=lambda w: order.get(w["tag"], 9))
     vr = {}
@@ -1971,11 +1974,32 @@ def get_stock_candles(code: str, count: int = 330, db: Session = Depends(get_db)
     return {"code": code, "candles": [out[k] for k in sorted(out)]}
 
 
+def _journal_owner_opt(request: Request, db: Session) -> str | None:
+    """매매 일지 로그인 헤더가 맞으면 이름, 없거나 틀리면 None (공개 화면은 None으로 — 금액·보유 정보 안 보냄)."""
+    from urllib.parse import unquote  # noqa: PLC0415
+    from backend.services.trade_journal import auth  # noqa: PLC0415
+    owner = unquote(request.headers.get("x-owner", "")).strip()[:20]
+    pin = unquote(request.headers.get("x-pin", ""))
+    if not owner or not pin:
+        return None
+    try:
+        return owner if auth(db, owner, pin) == "ok" else None
+    except Exception:  # noqa: BLE001
+        return None
+
+
 @router.get("/stock/{code}/chart-signals")
-def get_stock_chart_signals(code: str, db: Session = Depends(get_db)):
-    """차트에 찍을 신호 (우리 규칙을 그 종목 일봉에 거슬러 적용 + 매매 일지 매수·매도)."""
+def get_stock_chart_signals(code: str, request: Request, db: Session = Depends(get_db)):
+    """차트에 찍을 신호 (우리 규칙을 그 종목 일봉에 거슬러 적용). 매매 일지 로그인 헤더가 있으면 내 매수·매도도."""
     from backend.services.stock_signals import signals  # noqa: PLC0415
-    return signals(db, code)
+    return signals(db, code, owner=_journal_owner_opt(request, db))
+
+
+@router.get("/journal/holdings")
+def get_journal_holdings(request: Request, db: Session = Depends(get_db)):
+    """매매 일지 탭 보유 종목 목록 (로그인 필요)."""
+    from backend.services.stock_signals import holdings  # noqa: PLC0415
+    return holdings(db, _journal_owner(request, db))
 
 
 @router.get("/workspace/list")
@@ -1986,10 +2010,10 @@ def get_workspace_list(db: Session = Depends(get_db)):
 
 
 @router.get("/stock/{code}/panel")
-def get_stock_panel(code: str, db: Session = Depends(get_db)):
-    """종목 차트 창 오른쪽 패널 — 상태 제목·단계·✓/⚠ 칩·카드·세부 지표 (2026-10-09)."""
+def get_stock_panel(code: str, request: Request, db: Session = Depends(get_db)):
+    """종목 차트 창 오른쪽 패널 — 상태 제목·단계·✓/⚠ 칩·카드·세부 지표. 평단·수익은 매매 일지 로그인 때만."""
     from backend.services.stock_panel import panel  # noqa: PLC0415
-    return panel(db, code)
+    return panel(db, code, owner=_journal_owner_opt(request, db))
 
 
 @router.get("/sectors/rotation/members-all")

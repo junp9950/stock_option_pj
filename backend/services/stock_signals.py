@@ -20,7 +20,7 @@ from sqlalchemy import text
 from sqlalchemy.orm import Session
 
 
-def signals(db: Session, code: str, days: int = 260) -> dict:
+def signals(db: Session, code: str, days: int = 260, owner: str | None = None) -> dict:
     q = db.execute(text("select trading_date, open_price, high_price, low_price, close_price, volume, trading_value from spot_daily_prices "
                         "where stock_code = :c order by trading_date desc limit 520"), {"c": code}).all()
     if len(q) < 60:
@@ -81,9 +81,9 @@ def signals(db: Session, code: str, days: int = 260) -> dict:
         pass
     # 매매 일지 실제 매수·매도 (같은 날 같은 방향은 평균가로 묶음)
     try:
-        for d, side, qty, amt in db.execute(text(
-                "select trade_date, side, sum(qty), sum(amount) from trade_executions where owner = 'junp' and code = :c and trade_date >= :s "
-                "group by 1, 2 order by 1"), {"c": code, "s": start}).all():
+        for d, side, qty, amt in (db.execute(text(
+                "select trade_date, side, sum(qty), sum(amount) from trade_executions where owner = :o and code = :c and trade_date >= :s "
+                "group by 1, 2 order by 1"), {"o": owner, "c": code, "s": start}).all() if owner else []):     # 매매 일지 로그인했을 때만
             if qty:
                 items.append({"date": str(d), "label": f"{'매수' if side == '매수' else '매도'} {amt / qty:,.0f}", "kind": "trade_buy" if side == "매수" else "trade_sell",
                               "pos": "below" if side == "매수" else "above", "price": float(amt / qty)})
@@ -152,16 +152,15 @@ def workspace_list(db: Session) -> dict:
         for s in mp.get("dip", [])[:3]:
             for x in s.get("items", [])[:2]:
                 add(x.get("code"), "과매도 줍기", s.get("family", ""))
-    skip = set(_get(db, "held_exclude", None) or W.HELD_EXCLUDE)
+    import re  # noqa: PLC0415
     wl = {x["code"]: x for x in W._items(db)}
+    mine = {p["code"] for p in W._positions(db)}       # 공개 화면: 보유 종목·평단·수량은 빼고 (매매 일지 탭에서만, 2026-10-09)
+    private = re.compile(r"보유\s*[\d,]+\s*주|평단\s*[\d,]+(\s*\([\d/]+\))?|[\d,]+\s*주")
+    watch = [{"code": x["code"], "name": x["name"], "kind": x.get("kind"), "level": x.get("level") or 0,
+              "note": re.sub(r"^[\s·]+|[\s·]+$", "", re.sub(r"(\s*·\s*)+", " · ", private.sub("", x.get("note", ""))))}
+             for x in wl.values() if x["code"] not in mine]
     held = []
-    for p in W._positions(db):
-        w = wl.get(p["code"], {})
-        held.append({"code": p["code"], "name": p["name"], "avg": round(p["avg"]), "qty": p["qty"], "long": p["code"] in skip,
-                     "stop": float(w["level"]) if w.get("kind") == "hold" and w.get("level") else 0.0})
-    watch = [{"code": x["code"], "name": x["name"], "kind": x.get("kind"), "level": x.get("level") or 0, "note": x.get("note", "")}
-             for x in wl.values() if x["code"] not in {h["code"] for h in held}]
-    codes = list({*cand, *(h["code"] for h in held), *(w["code"] for w in watch)})
+    codes = list({*cand, *(w["code"] for w in watch)})
     latest = db.execute(text("select max(trading_date) from spot_daily_prices")).scalar()
     px = {r[0]: (float(r[1]), float(r[2] or 0)) for r in db.execute(text(
         "select stock_code, close_price, change_pct from spot_daily_prices where trading_date = :d and stock_code = any(:c)"), {"d": latest, "c": codes}).all()}
@@ -181,10 +180,40 @@ def workspace_list(db: Session) -> dict:
     def price(x):
         c, ch = px.get(x["code"], (0.0, 0.0))
         return {**x, "close": c, "chg": round(ch, 2)}
-    held = [price(h) for h in held]
-    for h in held:
-        h["gain"] = round((h["close"] * 0.998 / h["avg"] - 1) * 100, 1) if h["avg"] and h["close"] else None
-        h["room"] = round((h["close"] / h["stop"] - 1) * 100, 1) if h["stop"] and h["close"] else None
-    held.sort(key=lambda h: (h["long"], h["room"] if h["room"] is not None else 99))
     return {"as_of": str(latest), "live": live_at, "mode": mp.get("mode"),
-            "candidates": [price(x) for x in cand.values()], "held": held, "watch": sorted((price(w) for w in watch), key=lambda w: -w["chg"])}
+            "candidates": [price(x) for x in cand.values()], "watch": sorted((price(w) for w in watch), key=lambda w: -w["chg"])}
+
+
+def holdings(db: Session, owner: str) -> dict:
+    """매매 일지(로그인) 보유 종목: 평단·손절선·남은 여유·수익 (정규장 종가, 장중이면 실시간)."""
+    from datetime import datetime  # noqa: PLC0415
+    from zoneinfo import ZoneInfo  # noqa: PLC0415
+    from backend.services import watchlist as W  # noqa: PLC0415
+    from backend.services.telegram import _get  # noqa: PLC0415
+    skip = set(_get(db, "held_exclude", None) or W.HELD_EXCLUDE)
+    wl = {x["code"]: x for x in W._items(db)}
+    held = [{"code": p["code"], "name": p["name"], "avg": round(p["avg"]), "qty": p["qty"], "long": p["code"] in skip,
+             "stop": float(wl[p["code"]]["level"]) if wl.get(p["code"], {}).get("kind") == "hold" and wl[p["code"]].get("level") else 0.0}
+            for p in W._positions(db, owner)]
+    codes = [h["code"] for h in held]
+    latest = db.execute(text("select max(trading_date) from spot_daily_prices")).scalar()
+    px = {r[0]: (float(r[1]), float(r[2] or 0)) for r in db.execute(text(
+        "select stock_code, close_price, change_pct from spot_daily_prices where trading_date = :d and stock_code = any(:c)"), {"d": latest, "c": codes}).all()}
+    px.update(_krx_closes(codes, str(latest)))
+    now = datetime.now(ZoneInfo("Asia/Seoul"))
+    live_at = None
+    if now.weekday() < 5 and 9 <= now.hour < 16 and latest < now.date():
+        try:
+            from backend.services.naver_live import snapshot  # noqa: PLC0415
+            lv = snapshot(sorted(codes), max_age=30)
+            for c, v in lv.items():
+                px[c] = (v["c"], v["chg"] or 0.0)
+            live_at = now.strftime("%H:%M") if lv else None
+        except Exception:  # noqa: BLE001
+            pass
+    for h in held:
+        c, ch = px.get(h["code"], (0.0, 0.0))
+        h.update(close=c, chg=round(ch, 2), gain=round((c * 0.998 / h["avg"] - 1) * 100, 1) if h["avg"] and c else None,
+                 room=round((c / h["stop"] - 1) * 100, 1) if h["stop"] and c else None)
+    held.sort(key=lambda h: (h["long"], h["room"] if h["room"] is not None else 99))
+    return {"as_of": str(latest), "live": live_at, "held": held}

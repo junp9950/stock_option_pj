@@ -231,12 +231,12 @@ def report(db: Session, force: bool = False) -> str | None:
     return "\n".join(out)
 
 
-def _positions(db: Session) -> list[dict]:
+def _positions(db: Session, owner: str = "junp") -> list[dict]:
     """매매 일지로 지금 보유 수량·평단(이동평균) — 판 만큼 수량만 줄인다."""
     from sqlalchemy import text  # noqa: PLC0415
     pos: dict[str, dict] = {}
     for code, name, side, qty, price in db.execute(text(
-            "select code, name, side, qty, price from trade_executions where owner = 'junp' order by trade_date, seq, id")).all():
+            "select code, name, side, qty, price from trade_executions where owner = :o order by trade_date, seq, id"), {"o": owner}).all():
         p = pos.setdefault(code, {"code": code, "name": name, "qty": 0, "avg": 0.0})
         if side == "매수":
             tot = p["qty"] + qty

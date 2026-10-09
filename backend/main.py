@@ -456,6 +456,19 @@ select{background:#21262d;border:1px solid #30363d;color:#c9d1d9;padding:6px 10p
       <tbody id="jr-group"></tbody>
     </table>
 
+    <div style="font-size:15px;font-weight:700;color:var(--text);margin:18px 0 8px">📈 보유 종목 차트 — 내 매수·매도 자리 표시</div>
+    <div class="ws" id="jr-ws">
+      <div class="ws-list"><div class="ts" id="jr-ws-asof" style="margin:0 4px 4px"></div><div id="jr-ws-items"><div class="ts" style="padding:10px">불러오는 중…</div></div></div>
+      <div class="ws-main">
+        <div class="ws-head"><b id="jr-ws-name">종목을 고르세요</b><span class="ts" id="jr-ws-sub"></span></div>
+        <div class="note" id="jr-ws-note" style="margin-bottom:6px"></div>
+        <div class="ws-per" id="jr-ws-per"><button data-n="66" onclick="jrWsPeriod(66)">3개월</button><button data-n="130" onclick="jrWsPeriod(130)">6개월</button><button data-n="250" onclick="jrWsPeriod(250)">1년</button></div>
+        <canvas id="jr-candle" style="width:100%;height:440px;display:block"></canvas>
+        <canvas id="jr-volume" style="width:100%;height:80px;display:block;margin-top:4px"></canvas>
+        <div class="ws-legend"><span><i style="background:#e6edf3"></i>내 매수</span><span><i style="background:#8957e5"></i>내 매도</span><span><i style="background:#1f6feb"></i>사는 자리 모양</span><span><i style="background:#2d7d6f"></i>쉬는 자리</span><span><i style="background:#484f58"></i>기준봉·거래 신기록</span><span><i style="background:#9a4d0f"></i>⚠ 위험</span></div>
+      </div>
+      <aside class="cm-panel" id="jr-ws-panel"></aside>
+    </div>
     <div id="jr-holding"></div>
 
     <div style="font-size:12px;color:#8b949e;margin:6px 0">📒 청산 기록
@@ -582,7 +595,7 @@ select{background:#21262d;border:1px solid #30363d;color:#c9d1d9;padding:6px 10p
   <div id="db-verdict" style="border-radius:12px;padding:14px 18px;margin-bottom:14px;border:1px solid #30363d;font-size:15px">로딩 중…</div>
   <div class="ws">
     <div class="ws-list">
-      <div class="ws-tabs"><button data-t="candidates" onclick="wsTab('candidates')">오늘 후보</button><button data-t="held" onclick="wsTab('held')">보유</button><button data-t="watch" onclick="wsTab('watch')">관심</button></div>
+      <div class="ws-tabs"><button data-t="candidates" onclick="wsTab('candidates')">오늘 후보</button><button data-t="watch" onclick="wsTab('watch')">관심</button></div>
       <div class="ts" id="ws-asof" style="margin:0 4px 4px"></div>
       <div id="ws-items"><div class="ts" style="padding:10px">불러오는 중…</div></div>
     </div>
@@ -592,7 +605,7 @@ select{background:#21262d;border:1px solid #30363d;color:#c9d1d9;padding:6px 10p
       <div class="ws-per" id="ws-per"><button data-n="66" onclick="wsPeriod(66)">3개월</button><button data-n="130" onclick="wsPeriod(130)">6개월</button><button data-n="250" onclick="wsPeriod(250)">1년</button></div>
       <canvas id="ws-candle" style="width:100%;height:480px;display:block"></canvas>
       <canvas id="ws-volume" style="width:100%;height:90px;display:block;margin-top:4px"></canvas>
-      <div class="ws-legend"><span><i style="background:#1f6feb"></i>사는 자리 모양</span><span><i style="background:#2d7d6f"></i>쉬는 자리</span><span><i style="background:#484f58"></i>기준봉·거래 신기록</span><span><i style="background:#9a4d0f"></i>⚠ 위험</span><span><i style="background:#e6edf3"></i>내 매수</span><span><i style="background:#8957e5"></i>내 매도</span><span>· 차트 신호는 이 종목만 본 모양 (섹터·시장은 왼쪽 후보 목록에서)</span></div>
+      <div class="ws-legend"><span><i style="background:#1f6feb"></i>사는 자리 모양</span><span><i style="background:#2d7d6f"></i>쉬는 자리</span><span><i style="background:#484f58"></i>기준봉·거래 신기록</span><span><i style="background:#9a4d0f"></i>⚠ 위험</span><span>· 내 매수·매도 자리는 매매 일지 탭에서 · 차트 신호는 이 종목만 본 모양 (섹터·시장은 왼쪽 후보 목록에서)</span></div>
     </div>
     <aside class="cm-panel" id="ws-panel"></aside>
   </div>
@@ -1293,7 +1306,7 @@ function jrRender(){
   document.getElementById('jr-group').innerHTML=g.length?g.map(([k,v])=>`<tr><td><b>${k}</b></td><td data-label="건수">${v.count}</td><td data-label="이긴 비율">${v.win_pct}%</td><td data-label="평균">${jrPct(v.avg_pct)}</td>
     <td data-label="평균 이익 / 손실"><span class="ts">${v.avg_win_pct??'-'}% / ${v.avg_loss_pct??'-'}%</span></td><td data-label="손익" style="text-align:right">${jrWon(v.pnl)}</td></tr>`).join('')
     :'<tr><td colspan="6" class="ts" style="text-align:center;padding:14px">없음</td></tr>';
-  jrRenderHolding();
+  jrRenderHolding(); jrWsLoad();
   const kf=document.getElementById('jr-kindf'), kinds=[...new Set(_jr.trips.map(t=>t.kind))];
   const cur=kf.value; kf.innerHTML='<option value="">전체</option>'+kinds.map(k=>`<option ${k===cur?'selected':''}>${k}</option>`).join('');
   jrRenderTrips();
@@ -1952,15 +1965,15 @@ async function loadWorkspace(){
   const d=await fetch(`${API}/workspace/list`).then(r=>r.ok?r.json():null).catch(()=>null);
   if(!d){ document.getElementById('ws-items').innerHTML='<div class="ts" style="padding:10px">목록을 못 불러왔습니다</div>'; return; }
   _ws.data=d;
-  if(!_ws.tab){ let t=null; try{ t=localStorage.getItem('ws-tab'); }catch(e){} _ws.tab=t||(d.candidates.length?'candidates':'held'); }
+  if(!_ws.tab){ let t=null; try{ t=localStorage.getItem('ws-tab'); }catch(e){} _ws.tab=(t==='watch'?'watch':(d.candidates.length?'candidates':'watch')); }
   document.getElementById('ws-asof').textContent = d.live ? `장중 ${d.live} 가격` : `${d.as_of} 정규장 종가`;
   renderWsList();
-  if(!_ws.code){ const L=wsItems(_ws.tab); const f=L[0]||d.held[0]||d.candidates[0]; if(f) wsOpen(f.code,f.name); }
+  if(!_ws.code){ const L=wsItems(_ws.tab); const f=L[0]||d.candidates[0]||(d.watch||[])[0]; if(f) wsOpen(f.code,f.name); }
 }
-function wsItems(t){ const d=_ws.data||{}; return t==='held'?(d.held||[]):t==='watch'?(d.watch||[]):(d.candidates||[]); }
+function wsItems(t){ const d=_ws.data||{}; return t==='watch'?(d.watch||[]):(d.candidates||[]); }
 function wsTab(t){ _ws.tab=t; try{ localStorage.setItem('ws-tab',t); }catch(e){} renderWsList(); }
 function renderWsList(){
-  document.querySelectorAll('.ws-tabs button').forEach(b=>{ const n=wsItems(b.dataset.t).length; b.classList.toggle('on',b.dataset.t===_ws.tab); b.innerHTML=`${{candidates:'오늘 후보',held:'보유',watch:'관심'}[b.dataset.t]} ${n}`; });
+  document.querySelectorAll('.ws-tabs button').forEach(b=>{ const n=wsItems(b.dataset.t).length; b.classList.toggle('on',b.dataset.t===_ws.tab); b.innerHTML=`${{candidates:'오늘 후보',watch:'관심'}[b.dataset.t]} ${n}`; });
   const L=wsItems(_ws.tab), el=document.getElementById('ws-items');
   if(!L.length){ el.innerHTML=`<div class="ts" style="padding:12px">${_ws.tab==='candidates'?'오늘은 고를 종목이 없습니다 (쉬는 날)':'없음'}</div>`; return; }
   const KIND={above:'선 위 마감 대기',near:'수렴 자리',hold:'지지선',watch:'봉 보기'};
@@ -1994,7 +2007,43 @@ async function wsOpen(code,name){
   _ws.cache={[code]:{cd,sg}};
   wsDraw();
 }
-window.addEventListener('resize',()=>{ clearTimeout(window._wsRz); window._wsRz=setTimeout(()=>{ if(_ws.code&&document.getElementById('panel-home').classList.contains('active')) wsDraw(); },300); });
+window.addEventListener('resize',()=>{ clearTimeout(window._wsRz); window._wsRz=setTimeout(()=>{ if(_ws.code&&document.getElementById('panel-home').classList.contains('active')) wsDraw(); if(_jrWs.code&&document.getElementById('panel-journal').classList.contains('active')) jrWsDraw(); },300); });
+// ── 매매 일지: 보유 종목 차트 (로그인 헤더로 평단·손절·내 매수·매도까지, 2026-10-09) ──
+let _jrWs={code:null,data:null,cache:null};
+async function jrWsLoad(){
+  const d=await fetch(`${API}/journal/holdings`,{headers:jrH()}).then(r=>r.ok?r.json():null).catch(()=>null);
+  const el=document.getElementById('jr-ws-items');
+  if(!d){ el.innerHTML='<div class="ts" style="padding:10px">못 불러왔습니다</div>'; return; }
+  _jrWs.data=d; document.getElementById('jr-ws-asof').textContent=d.live?`장중 ${d.live} 가격`:`${d.as_of} 정규장 종가`;
+  const row=x=>{ const tg=(x.stop?`손절 ${Math.round(x.stop).toLocaleString()}${x.room!=null?` · ${x.room<0?'⛔ 이탈':x.room<=2?'⚠ '+x.room+'% 남음':x.room+'% 남음'}`:''}`:'손절선 없음');
+    return `<div class="ws-item${x.code===_jrWs.code?' on':''}" data-c="${x.code}" onclick="jrWsOpen('${x.code}','${x.name.replace(/'/g,'')}')">${wsAv(x.code,x.name)}
+      <div class="ws-txt"><div class="ws-nm">${x.name}</div><div class="ws-tg">${tg}</div></div>
+      <div class="ws-px">${x.close?Math.round(x.close).toLocaleString():'-'}<div style="color:${x.chg>0?'var(--up)':x.chg<0?'var(--down)':'var(--muted)'}">${x.chg>0?'+':''}${(x.chg||0).toFixed(2)}%</div>${x.gain!=null?`<div class="ws-tg">수익 ${x.gain>0?'+':''}${x.gain}%</div>`:''}</div></div>`; };
+  const a=d.held.filter(x=>!x.long), b=d.held.filter(x=>x.long);
+  el.innerHTML=(a.map(row).join('')+(b.length?'<div class="ws-sec">장기 보유</div>'+b.map(row).join(''):''))||'<div class="ts" style="padding:10px">보유 종목 없음</div>';
+  if(!_jrWs.code&&d.held.length) jrWsOpen(d.held[0].code,d.held[0].name);
+}
+function jrWsPeriod(n){ _ws.per=n; try{ localStorage.setItem('ws-per',n); }catch(e){} jrWsDraw(); }
+function jrWsDraw(){
+  document.querySelectorAll('#jr-ws-per button').forEach(b=>b.classList.toggle('on',+b.dataset.n===_ws.per));
+  const c=_jrWs.cache; if(!c||!c.cd||c.code!==_jrWs.code) return;
+  const g=drawCandleChart(c.cd.candles,null,_ws.per,{cId:'jr-candle',vId:'jr-volume',signals:c.sg?c.sg.items:[]});
+  document.getElementById('jr-ws-note').textContent=`최근 ${_ws.per}거래일 · EMA 5·10·20·60`+(g!=null?` · EMA 5·10·20 간격 ${g.toFixed(1)}%`:'')+_avwapNote;
+}
+async function jrWsOpen(code,name){
+  _jrWs.code=code;
+  document.querySelectorAll('#jr-ws-items .ws-item').forEach(e=>e.classList.toggle('on',e.dataset.c===code));
+  document.getElementById('jr-ws-name').textContent=name; document.getElementById('jr-ws-sub').textContent=code;
+  document.getElementById('jr-ws-note').textContent='불러오는 중…'; document.getElementById('jr-ws-panel').innerHTML='<div class="ts">불러오는 중…</div>';
+  const [cd,sg,pn]=await Promise.all([
+    fetch(`${API}/stock/${code}/candles?count=330`).then(r=>r.ok?r.json():null).catch(()=>null),
+    fetch(`${API}/stock/${code}/chart-signals`,{headers:jrH()}).then(r=>r.ok?r.json():null).catch(()=>null),
+    fetch(`${API}/stock/${code}/panel`,{headers:jrH()}).then(r=>r.ok?r.json():null).catch(()=>null)]);
+  if(_jrWs.code!==code) return;
+  renderStockPanel(pn,'jr-ws-panel');
+  if(!cd||!cd.candles||!cd.candles.length){ document.getElementById('jr-ws-note').textContent='차트 데이터를 못 불러왔습니다'; return; }
+  _jrWs.cache={code,cd,sg}; jrWsDraw();
+}
 // 오른쪽 패널: 결론(상태 제목) 크게 · 단계 막대 · ✓/⚠ 칩 · 카드 · 세부 지표 (2026-10-09, Lazy Alpha식 배치)
 function renderStockPanel(p, target){
   const el=document.getElementById(target||'cm-panel');

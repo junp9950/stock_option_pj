@@ -43,7 +43,8 @@ def _grade(tt: int) -> tuple[str, str]:
     return ("S", "강세") if tt >= 8 else ("H", "양호") if tt == 7 else ("N", "중립") if tt >= 5 else ("W", "약세") if tt >= 3 else ("D", "하락")
 
 
-def panel(db: Session, code: str) -> dict:
+def panel(db: Session, code: str, owner: str | None = None) -> dict:
+    """owner(매매 일지 로그인)가 있을 때만 평단·손절·수익을 넣는다 — 공개 화면엔 금액·보유 정보 금지 (2026-10-09)."""
     name = db.execute(text("select name from stocks where code = :c"), {"c": code}).scalar() or code
     q = db.execute(text("select trading_date, open_price, high_price, low_price, close_price, volume from spot_daily_prices "
                         "where stock_code = :c order by trading_date desc limit 300"), {"c": code}).all()
@@ -100,7 +101,7 @@ def panel(db: Session, code: str) -> dict:
     held = None
     try:
         from backend.services import watchlist as W  # noqa: PLC0415
-        pos = {p["code"]: p for p in W._positions(db)}
+        pos = {p["code"]: p for p in W._positions(db, owner)} if owner else {}
         if code in pos:
             wl = {x["code"]: x for x in W._items(db)}
             stop = float(wl[code]["level"]) if code in wl and wl[code].get("kind") == "hold" and wl[code].get("level") else 0.0
