@@ -142,7 +142,7 @@ select{background:#21262d;border:1px solid #30363d;color:#c9d1d9;padding:6px 10p
 .ws-main{min-width:0;padding:12px}
 .ws #ws-panel{background:var(--card);border:1px solid var(--line);border-radius:10px;padding:12px}
 .ws-tabs{display:flex;gap:6px;margin-bottom:6px}
-.ws-tabs button{flex:1;background:var(--card2);border:1px solid var(--line);color:var(--muted);border-radius:16px;padding:6px 0;font-size:12.5px;cursor:pointer}
+.ws-tabs button{flex:1;background:var(--card2);border:1px solid var(--line);color:var(--muted);border-radius:16px;padding:6px 0;font-size:12px;cursor:pointer;white-space:nowrap}
 .ws-tabs button.on{background:var(--text);color:var(--bg);font-weight:700;border-color:var(--text)}
 .ws-item{display:flex;align-items:center;gap:10px;padding:8px 6px;border-radius:8px;cursor:pointer}
 .ws-item:hover{background:var(--card2)}.ws-item.on{background:var(--card2);box-shadow:inset 3px 0 0 var(--blue)}
@@ -611,7 +611,8 @@ select{background:#21262d;border:1px solid #30363d;color:#c9d1d9;padding:6px 10p
   <div id="db-verdict" style="border-radius:12px;padding:14px 18px;margin-bottom:14px;border:1px solid #30363d;font-size:15px">로딩 중…</div>
   <div class="ws">
     <div class="ws-list">
-      <div class="ws-tabs"><button data-t="candidates" onclick="wsTab('candidates')">오늘 후보</button><button data-t="watch" onclick="wsTab('watch')">관심</button></div>
+      <div class="ws-tabs"><button data-t="entry" onclick="wsTab('entry')">오늘 진입</button><button data-t="wait" onclick="wsTab('wait')">대기</button><button data-t="watch" onclick="wsTab('watch')">관심</button></div>
+      <div class="ts" id="ws-lane-note" style="margin:0 4px 4px"></div>
       <div class="ts" id="ws-asof" style="margin:0 4px 4px"></div>
       <div id="ws-items"><div class="ts" style="padding:10px">불러오는 중…</div></div>
     </div>
@@ -2012,21 +2013,25 @@ async function loadWorkspace(){
   const d=await fetch(`${API}/workspace/list`).then(r=>r.ok?r.json():null).catch(()=>null);
   if(!d){ document.getElementById('ws-items').innerHTML='<div class="ts" style="padding:10px">목록을 못 불러왔습니다</div>'; return; }
   _ws.data=d;
-  if(!_ws.tab){ let t=null; try{ t=localStorage.getItem('ws-tab'); }catch(e){} _ws.tab=(t==='watch'?'watch':(d.candidates.length?'candidates':'watch')); }
+  if(!_ws.tab){ let t=null; try{ t=localStorage.getItem('ws-tab'); }catch(e){}
+    _ws.tab=['entry','wait','watch'].includes(t)?t:(['entry','wait'].find(k=>wsItems(k).length)||'watch'); }
   document.getElementById('ws-asof').textContent = d.live ? `장중 ${d.live} 가격` : `${d.as_of} 정규장 종가`;
   renderWsList();
-  if(!_ws.code){ const L=wsItems(_ws.tab); const f=L[0]||d.candidates[0]||(d.watch||[])[0]; if(f) wsOpen(f.code,f.name); }
+  if(!_ws.code){ const L=wsItems(_ws.tab); const f=L[0]||(d.candidates||[])[0]||(d.watch||[])[0]; if(f) wsOpen(f.code,f.name); }
 }
-function wsItems(t){ const d=_ws.data||{}; return t==='watch'?(d.watch||[]):(d.candidates||[]); }
+function wsItems(t){ const d=_ws.data||{}; return t==='watch'?(d.watch||[]):(d.candidates||[]).filter(x=>(x.lane||'entry')===t); }
+const WS_LANE={entry:'추세추종 · 모두 종가에 자리 잡기 · 손절 = 그날 저가 아래 · 그다음은 매도 방식: 빨리 챙기기(다음 날 +2% 못 가면 정리) 또는 끌고 가기(14일선 아래 절반·21일선 아래 나머지). 3년: 종가 매수(버틴 종목)는 빨리 챙기기, ▲ 진입(돌파)은 끌고 가기가 나았음',
+  wait:'아직 신호 전 · 돌파가 나오면 그때', watch:'적어 둔 관심 종목'};
 function wsTab(t){ _ws.tab=t; try{ localStorage.setItem('ws-tab',t); }catch(e){} renderWsList(); }
 function renderWsList(){
-  document.querySelectorAll('.ws-tabs button').forEach(b=>{ const n=wsItems(b.dataset.t).length; b.classList.toggle('on',b.dataset.t===_ws.tab); b.innerHTML=`${{candidates:'오늘 후보',watch:'관심'}[b.dataset.t]} ${n}`; });
+  document.querySelectorAll('.ws-tabs button').forEach(b=>{ const n=wsItems(b.dataset.t).length; b.classList.toggle('on',b.dataset.t===_ws.tab); b.innerHTML=`${{entry:'오늘 진입',wait:'대기',watch:'관심'}[b.dataset.t]} ${n}`; });
+  document.getElementById('ws-lane-note').textContent=WS_LANE[_ws.tab]||'';
   const L=wsItems(_ws.tab), el=document.getElementById('ws-items');
-  if(!L.length){ el.innerHTML=`<div class="ts" style="padding:12px">${_ws.tab==='candidates'?'오늘은 고를 종목이 없습니다 (쉬는 날)':'없음'}</div>`; return; }
+  if(!L.length){ el.innerHTML=`<div class="ts" style="padding:12px">${_ws.tab==='watch'?'없음':'오늘은 없습니다'}</div>`; return; }
   const KIND={above:'선 위 마감 대기',near:'수렴 자리',hold:'지지선',watch:'봉 보기'};
   const row=x=>{
     let tg='';
-    if(_ws.tab==='candidates') tg=x.tags.join(' · ')+(x.family?` · ${x.family}`:'');
+    if(_ws.tab!=='watch') tg=x.tags.join(' · ')+(x.family?` · ${x.family}`:'');
     else if(_ws.tab==='held') tg=(x.stop?`손절 ${Math.round(x.stop).toLocaleString()}${x.room!=null?` · ${x.room<0?'⛔ 이탈':x.room<=2?'⚠ '+x.room+'% 남음':x.room+'% 남음'}`:''}`:'손절선 없음')+(x.long?' · 장기':'');
     else tg=`${KIND[x.kind]||''}${x.level?' '+Math.round(x.level).toLocaleString():''}${x.note?' · '+x.note:''}`;
     const sub=_ws.tab==='held'&&x.gain!=null?`<div class="ws-tg" style="text-align:right">수익 ${x.gain>0?'+':''}${x.gain}%</div>`:'';

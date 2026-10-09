@@ -217,7 +217,7 @@ def workspace_list(db: Session) -> dict:
     from backend.services.result_cache import cached  # noqa: PLC0415
     now = datetime.now(ZoneInfo("Asia/Seoul"))
     if not (is_trading_day(now.date()) and 9 <= now.hour < 16):
-        return cached("workspace_list_v1", (), db, lambda: _workspace_list(db))
+        return cached("workspace_list_v3", (), db, lambda: _workspace_list(db))
     return _workspace_list(db)
 
 
@@ -297,8 +297,15 @@ def _workspace_list(db: Session) -> dict:
     def price(x):
         c, ch = px.get(x["code"], (0.0, 0.0))
         return {**x, "close": c, "chg": round(ch, 2)}
+    def lane(tags):      # 종가 매수(1~5일) / 스윙(2~3주) / 대기 — 2026-10-09 "레이더 목적이 종베냐 추세추종이냐" → 두 갈래로 나눔
+        t = tags[0] if tags else ""
+        # 사용자: "결국 원하는 건 추세추종, 종가는 자리 잡는 시점, 익절하든 끌고 가든 매도 방식 차이" → 진입은 한 칸으로
+        return "wait" if t.startswith("돌파 대기") else "entry"
+    cands = []
+    for x in cand.values():
+        y = price(x); y["lane"] = lane(x["tags"]); cands.append(y)
     return {"as_of": str(latest), "live": live_at, "mode": mp.get("mode"),
-            "candidates": [price(x) for x in cand.values()], "watch": sorted((price(w) for w in watch), key=lambda w: -w["chg"])}
+            "candidates": cands, "watch": sorted((price(w) for w in watch), key=lambda w: -w["chg"])}
 
 
 def holdings(db: Session, owner: str) -> dict:
