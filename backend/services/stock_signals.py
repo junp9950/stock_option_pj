@@ -117,7 +117,7 @@ def signals(db: Session, code: str, days: int = 260, owner: str | None = None) -
     rules = [  # (마스크, 라벨, 종류, 위/아래) — 위에서부터 우선 (한 봉에 여러 개면 앞의 것 2개까지)
         # 3년 상승장 10일: 박스 돌파 +1.5% · 이평선 돌파 +0.7% · 거래 적은 눌림 +0.7% (기준 +0.2%) — 사는 자리로 표시
         # 거래 실린 양봉(섹터 조건 없이 5일 -0.05%)·급등 뒤 쉬는 봉(-0.3%)은 검증이 약해 참고 점으로 내림 (2026-10-09)
-        (box, "박스 위로 돌파", "buy", "below"), (ema, "이평선 모였다 돌파", "buy", "below"), (quiet, "거래 적은 눌림", "rest", "below"),
+        (box, "박스 위로 돌파 모양 (참고)", "buy", "below"), (ema, "이평선 모였다 돌파 모양 (참고)", "buy", "below"), (quiet, "거래 적은 눌림", "rest", "below"),
         (park_sell, "⚠ 급등 뒤 윗꼬리 매물", "warn", "above"),
         (park & ~park_sell, "급등 뒤 쉬는 봉 (참고)", "note", "below"), (jb, "거래 실린 양봉 (참고)", "note", "below"),
         (big, "급등봉", "info", "above"), (record, "1년 최대 거래", "info", "above"), (fullbear, "⚠ 거래 많은 큰 음봉", "warn", "above"),
@@ -213,20 +213,29 @@ def signals(db: Session, code: str, days: int = 260, owner: str | None = None) -
                     continue
                 miss = [CLOSE_FLAGS[j] for j, f in enumerate(fl) if not bool(f[d])]
                 good = rk_[d] <= 0.03
+                # 매수 근거 (2026-10-09 "매수별로 매수 근거가 필요하다") — 봉에 올리면 한 줄에 하나씩
+                why = ["시장 상승·횡보장 · 종가 > 20일선 > 60일선 (정배열)"]
+                if bool(ema_buy[d]):
+                    why.append(f"이평선 모였다 돌파 · 어제 이평선 간격 {float(gap_prev[d]) * 100:.1f}% → 오늘 셋 다 위로 · 거래대금 {float(tvx[d]):.1f}배")
+                if int(sc[d]) >= 6:
+                    why.append(f"종가 점수 {int(sc[d])}/7" + (f" · 빠진 것: {', '.join(miss)}" if miss else " · 다 맞음"))
+                why.append(f"강도 RS {float(RS[d]):.0f} (시장보다 센 쪽 · 70~95)")
+                why.append(f"손절폭 {rk_[d] * 100:.1f}% · 스탑로스 {L[d] * 0.99:,.0f} (오늘 저가 -1%)"
+                           + (" → ✅ 짧음" if good else " → 수량 절반" if rk_[d] > 0.05 else ""))
                 desc = (("이평선 모였다 돌파 · " if bool(ema_buy[d]) else "") + f"손절 {L[d] * 0.99:,.0f} (-{rk_[d] * 100:.1f}%)" + (" · 수량 절반" if rk_[d] > 0.05 else "")
                         + f" · 점수 {int(sc[d])}/7" + (f" (빠짐: {miss[0]})" if miss else ""))
                 # 연속으로 뜨는 날: 첫날만 '매수', 이어지는 날은 '자리 유지' 점 · 손절폭이 확 짧아지면 '더 좋은 자리' (2026-10-09 "매일 뜬 이유가 뭐야")
                 if not prev_on:
                     items.append({"date": str(d), "label": f"{'✅ ' if good else ''}종가 매수 · {desc}", "kind": "score", "pos": "below",
-                                  "price": float(L[d]), "score": int(sc[d]), "good": bool(good)})
+                                  "price": float(L[d]), "score": int(sc[d]), "good": bool(good), "why": why})
                     run_best = rk_[d]
                 elif rk_[d] <= run_best * 0.75 or (good and run_best > 0.03):
                     items.append({"date": str(d), "label": f"더 좋은 자리 (손절폭 짧아짐) · {desc}", "kind": "score_better", "pos": "below",
-                                  "price": float(L[d]), "score": int(sc[d])})
+                                  "price": float(L[d]), "score": int(sc[d]), "why": why})
                     run_best = rk_[d]
                 else:
                     items.append({"date": str(d), "label": f"매수 자리 유지 · {desc}", "kind": "score_keep", "pos": "below",
-                                  "price": float(L[d]), "score": int(sc[d])})
+                                  "price": float(L[d]), "score": int(sc[d]), "why": why})
                 prev_on = True
     except Exception:  # noqa: BLE001
         pass

@@ -194,6 +194,10 @@ select{background:#21262d;border:1px solid #30363d;color:#c9d1d9;padding:6px 10p
 .lwleg{font-size:11.5px;color:var(--body);line-height:1.5;height:56px;overflow:hidden;padding:2px 2px 4px}
 .lwleg>div{white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 .lwleg b{color:var(--text)}
+.lwwhy{display:none;position:absolute;left:6px;top:62px;z-index:5;max-width:min(560px,calc(100% - 70px));pointer-events:none;font-size:11.5px;line-height:1.55;
+  color:var(--text);background:var(--card);opacity:.96;border:1px solid #d2a8ff;border-radius:6px;padding:6px 9px}
+.lwwhy b{color:#d2a8ff}.lwwhy div{white-space:normal}
+@media(max-width:760px){.lwwhy{top:54px;font-size:10.5px;max-width:calc(100% - 60px)}}
 @media(max-width:760px){.lwc,#cm-chart.lwc{height:400px}.lwleg{font-size:10.5px;height:50px}
   .mstrip{position:static;box-shadow:none;flex-wrap:nowrap;overflow-x:auto;white-space:nowrap;font-size:12px;padding:6px 10px;gap:8px;-webkit-overflow-scrolling:touch}
   .mstrip .ix b{font-size:14px}.mstrip .rg .ts:last-child,.mstrip .sep{display:none}.mstrip .rg{padding:1px 7px;font-size:11.5px}}
@@ -634,7 +638,7 @@ select{background:#21262d;border:1px solid #30363d;color:#c9d1d9;padding:6px 10p
       <div class="ws-ctl"><div class="ws-per" id="ws-tf"><button data-tf="1d" onclick="wsTf('1d')">일봉</button><button data-tf="1w" onclick="wsTf('1w')">주봉</button><button data-tf="60m" onclick="wsTf('60m')">60분</button><button data-tf="30m" onclick="wsTf('30m')">30분</button><button data-tf="15m" onclick="wsTf('15m')">15분</button><button data-tf="5m" onclick="wsTf('5m')">5분</button><button data-tf="1m" onclick="wsTf('1m')">1분</button></div>
       <div class="ws-per" id="ws-per"><button data-n="66" onclick="wsPeriod(66)">3개월</button><button data-n="130" onclick="wsPeriod(130)">6개월</button><button data-n="250" onclick="wsPeriod(250)">1년</button></div></div>
       <div class="lwbox"><div class="lwleg" id="ws-chart-leg"></div><div id="ws-chart" class="lwc"></div></div>
-      <details class="ws-lg"><summary>ⓘ 차트 표시 설명</summary><div class="ws-legend"><span>▲ <b>진입</b> = 사기 좋은 자리 (2~3주 보유 · 급등봉 당일은 안 냄) → 스탑로스 = 신호 봉 저가 -1% 예약 · ▼ 14일선 아래 종가 절반 · 21일선 아래 종가 나머지</span><span>↑ 하늘색 <b>줍기</b> = 급락 날 줍기 · 시험 중 (상승장에서 시장 -2%↓ 날 · 뜨는 섹터 3곳의 주도주가 같이 빠졌을 때 · 손절 20일선 · 수량 절반)</span><span>↑ 보라 <b>매수</b> = 종가 매수 신호 (점수 6↑ · 강도 70~95 · 손절폭 8%↓ · 상승장, ✅ = 손절폭 3%↓) · 다음 날도 이어지면 작은 보라 점 = 자리 유지, ↑ <b>더 좋음</b> = 손절폭이 확 짧아진 날 · 점수는 봉에 올리면 위에 표시 — (7개 조건 중 맞은 개수 · 상승·횡보장만) → 사면 바로 스탑로스 = 그날 저가 -1% 예약 · 21일선 아래 종가면 다음 날 아침 정리</span><span>· 회색 점 = 버틴 종목(텔레그램 종베, 참고)</span><span>↑ 파란 화살표 = 박스 위로 돌파 · 이평선 모였다 돌파</span><span>● 초록 = 오르던 종목의 거래 적은 눌림</span><span>· 작은 점 = 참고 (돌파 대기 · 아깝게 놓침 · 상승 추세 시작) — 봉에 올리면 위에 내용</span><span>■ 회색 = 급등봉 · 1년 최대 거래</span><span>▼ 주황 = 조심</span><span>· 두 손가락으로 확대, 끌어서 이동, 누르면 그 날 가격</span></div></details>
+      <details class="ws-lg"><summary>ⓘ 차트 표시 설명</summary><div class="ws-legend"><span>▲ <b>진입</b> = 사기 좋은 자리 (2~3주 보유 · 급등봉 당일은 안 냄) → 스탑로스 = 신호 봉 저가 -1% 예약 · ▼ 14일선 아래 종가 절반 · 21일선 아래 종가 나머지</span><span>↑ 하늘색 <b>줍기</b> = 급락 날 줍기 · 시험 중 (상승장에서 시장 -2%↓ 날 · 뜨는 섹터 3곳의 주도주가 같이 빠졌을 때 · 손절 20일선 · 수량 절반)</span><span>↑ 보라 <b>매수</b> = 종가 매수 신호 (점수 6↑ · 강도 70~95 · 손절폭 8%↓ · 상승장, ✅ = 손절폭 3%↓) · 다음 날도 이어지면 작은 보라 점 = 자리 유지, ↑ <b>더 좋음</b> = 손절폭이 확 짧아진 날 · 봉에 올리면 위에 매수 근거 (점수 6↑ 또는 이평선 모였다 돌파 + 정배열 · 강도 · 손절폭) → 사면 바로 스탑로스 = 그날 저가 -1% 예약 · 21일선 아래 종가면 다음 날 아침 정리</span><span>· 회색 점 = 버틴 종목(텔레그램 종베, 참고)</span><span>↑ 파란 화살표 = 박스 위로 돌파 · 이평선 모였다 돌파 모양 (참고 · 매수 아님 — 정배열·강도·손절폭까지 맞으면 보라 매수로 뜸)</span><span>● 초록 = 오르던 종목의 거래 적은 눌림</span><span>· 작은 점 = 참고 (돌파 대기 · 아깝게 놓침 · 상승 추세 시작) — 봉에 올리면 위에 내용</span><span>■ 회색 = 급등봉 · 1년 최대 거래</span><span>▼ 주황 = 조심</span><span>· 두 손가락으로 확대, 끌어서 이동, 누르면 그 날 가격</span></div></details>
     </div>
     <aside class="cm-panel" id="ws-panel"></aside>
   </div>
@@ -2326,13 +2330,17 @@ function renderLwChart(cid, allCandles, signals, per){
   cs.setMarkers(mk);
   // 십자선 → 위에 그 봉 정보
   const leg=document.getElementById(cid+'-leg'), byT={}; data.forEach((d,i)=>byT[d.time]=i);
-  const sigBy={}; (signals||[]).forEach(sg=>{ (sigBy[sg.date]=sigBy[sg.date]||[]).push(sg.label); });   // 올린 봉의 우리 신호도 글자로
-  const show=i=>{ if(!leg||i==null||i<0) return; const d=data[i], pc=i>0?data[i-1].close:d.open, ch=(d.close/pc-1)*100, c=ch>=0?'#f85149':'#58a6ff';
+  const sigBy={}, whyBy={}; (signals||[]).forEach(sg=>{ (sigBy[sg.date]=sigBy[sg.date]||[]).push(sg.label); if(sg.why) whyBy[sg.date]=sg.why; });   // 올린 봉의 우리 신호도 글자로 · 매수면 근거 (한 줄에 하나)
+  const show=(i,hov)=>{ if(!leg||i==null||i<0) return; const d=data[i], pc=i>0?data[i-1].close:d.open, ch=(d.close/pc-1)*100, c=ch>=0?'#f85149':'#58a6ff';
     leg.innerHTML=`<div><b>${d.lab}</b> 시 ${Math.round(d.open).toLocaleString()} 고 ${Math.round(d.high).toLocaleString()} 저 ${Math.round(d.low).toLocaleString()} 종 <b style="color:${c}">${Math.round(d.close).toLocaleString()} (${ch>=0?'+':''}${ch.toFixed(2)}%)</b> · 거래 ${Math.round(d.vol).toLocaleString()}</div>`
       +`<div>${EN.map((n,k)=>`<span style="color:${EC[k]}">EMA${n} ${Math.round(ES[k][i]).toLocaleString()}</span>`).join(' · ')}</div>`
-      +`<div><b style="color:#58a6ff">${sigBy[d.time]?'신호: '+sigBy[d.time].join(' · '):'&nbsp;'}</b></div>`; };
+      +`<div><b style="color:#58a6ff">${sigBy[d.time]?'신호: '+sigBy[d.time].join(' · '):'&nbsp;'}</b></div>`;
+    // 매수 근거 — 매수 봉에 올렸을 때만 차트 위 상자로 (2026-10-09 "매수별로 매수 근거가 필요하다") · 한 줄에 하나
+    let wb=el.parentNode.querySelector('.lwwhy'); if(!wb){ wb=document.createElement('div'); wb.className='lwwhy'; el.parentNode.appendChild(wb); }
+    const w=hov&&whyBy[d.time]; wb.style.display=w?'block':'none';
+    if(w) wb.innerHTML=`<b>매수 근거 · ${d.lab}</b>`+w.map(x=>`<div>· ${String(x).replace(/</g,'&lt;')}</div>`).join(''); };
   show(data.length-1);
-  chart.subscribeCrosshairMove(p=>{ show(p&&p.time&&byT[p.time]!=null?byT[p.time]:data.length-1); });
+  chart.subscribeCrosshairMove(p=>{ const h=p&&p.time&&byT[p.time]!=null; show(h?byT[p.time]:data.length-1,h); });
   const n=data.length; chart.timeScale().setVisibleLogicalRange({from:Math.max(0,n-(per||90)),to:n+2});
   const ro=new ResizeObserver(()=>chart.applyOptions({width:el.clientWidth,height:el.clientHeight})); ro.observe(el);
   _lw[cid]={chart,ro};
