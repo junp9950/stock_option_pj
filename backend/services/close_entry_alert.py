@@ -18,7 +18,9 @@ def text_now(db: Session, k: int = 8) -> str | None:
     if not sc.get("live"):
         return None
     names = dict(db.execute(text("select code, name from stocks")).all())
-    rows = sorted(((c, v) for c, v in sc["scores"].items() if v["score"] >= 6), key=lambda cv: (cv[1]["risk"] > 0.03, cv[1]["risk"]))
+    allr = [(c, v) for c, v in sc["scores"].items() if v["score"] >= 6]
+    wide = [cv for cv in allr if cv[1]["risk"] > 0.05]          # 손절폭 5%↑는 뺀다 (3년 R +0.04~0.34)
+    rows = sorted((cv for cv in allr if cv[1]["risk"] <= 0.05), key=lambda cv: (cv[1]["risk"] > 0.03, cv[1]["risk"]))
     out = [f"⏱ <b>종가 진입 후보</b> {sc.get('at', '')} 기준 (봉 확정 전)"]
     try:
         st = market_status(db) or {}
@@ -33,10 +35,10 @@ def text_now(db: Session, k: int = 8) -> str | None:
     except Exception:  # noqa: BLE001
         pass
     if not rows:
-        out.append("점수 6↑ 종목 없음 → 쉬기")
+        out.append("점수 6↑ · 손절폭 5%↓ 종목 없음 → 쉬기" + (f" (손절폭 넓어서 뺀 것 {len(wide)}개)" if wide else ""))
         return "\n".join(out)
     good = [r for r in rows if r[1]["risk"] <= 0.03]
-    out.append(f"점수 6↑ {len(rows)}개 · 그중 ✅ 손절폭 3%↓ {len(good)}개")
+    out.append(f"점수 6↑ · 손절폭 5%↓ {len(rows)}개 · 그중 ✅ 3%↓ {len(good)}개" + (f" · 손절폭 넓어서 뺀 것 {len(wide)}개" if wide else ""))
     for c, v in rows[:k]:
         out.append(f"{'✅' if v['risk'] <= 0.03 else '·'} <b>{names.get(c, c)}</b> {v['score']}/7 · 스탑로스 {v['stop']:,.0f} (-{v['risk'] * 100:.1f}%)")
     out.append("파는 법: 사면 바로 스탑로스 예약 (정규장만) · 21일선 아래 종가면 다음 날 아침 정리")

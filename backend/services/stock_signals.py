@@ -273,8 +273,12 @@ def _workspace_list(db: Session) -> dict:
             if v_["score"] >= 6 and v_["risk"] <= 0.03:
                 add(c_, "✅ 손익비 좋음")
         for c_, v_ in sorted(scores.items(), key=lambda kv: (-kv[1]["score"], kv[1]["risk"])):
-            if v_["score"] >= 6 and v_["risk"] > 0.03:
+            if v_["score"] >= 6 and 0.03 < v_["risk"] <= 0.05:
                 add(c_, "종가 점수 6↑")
+        # 손절폭 5%↑는 진입에서 뺀다 (3년 R: 5~8% +0.34 · 8%↑ +0.04 vs 3%↓ +1.68) — 2026-10-09 피에스케이 7.1% "너무 높은 거 아니가"
+        for c_, v_ in sorted(scores.items(), key=lambda kv: kv[1]["risk"]):
+            if v_["score"] >= 6 and v_["risk"] > 0.05:
+                add(c_, "⏸ 손절폭 넓음 · 폭 좁은 날 기다리기")
     except Exception:  # noqa: BLE001
         pass
     log = _get(db, "top3_log", {}) or {}
@@ -332,7 +336,7 @@ def _workspace_list(db: Session) -> dict:
     def lane(tags):      # 종가 매수(1~5일) / 스윙(2~3주) / 대기 — 2026-10-09 "레이더 목적이 종베냐 추세추종이냐" → 두 갈래로 나눔
         t = tags[0] if tags else ""
         # 사용자: "결국 원하는 건 추세추종, 종가는 자리 잡는 시점, 익절하든 끌고 가든 매도 방식 차이" → 진입은 한 칸으로
-        return "wait" if t.startswith("돌파 대기") else "entry"
+        return "wait" if t.startswith(("돌파 대기", "⏸")) else "entry"
     cands = []
     for x in cand.values():
         y = price(x); y["lane"] = lane(x["tags"])
@@ -340,6 +344,8 @@ def _workspace_list(db: Session) -> dict:
         y["score"] = sc["score"] if sc else None
         y["risk"] = round(sc["risk"] * 100, 1) if sc else None
         y["rr"] = bool(sc and sc["score"] >= 6 and sc["risk"] <= 0.03)
+        if y["lane"] == "entry" and sc and sc["risk"] > 0.05 and not any(t.startswith("▲") for t in x["tags"]):
+            y["lane"] = "wait"            # 다른 이유로 올라왔어도 손절폭 5%↑면 대기로
         cands.append(y)
     cands.sort(key=lambda y: (y["lane"] != "entry", not y["rr"], -(y["score"] if y["score"] is not None else -1), y["risk"] if y["risk"] is not None else 99))
     return {"as_of": str(latest), "live": live_at, "mode": mp.get("mode"),
