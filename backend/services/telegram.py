@@ -225,8 +225,25 @@ _idx_cache: dict = {}
 def index_today() -> dict:
     """오늘 실제 지수 (네이버, 1분 캐시) — 시장 국면(추세)과 따로 보여 주려고 (2026-10-07 사용자: 둘 다 빠졌는데 '상승'이면 헷갈림)."""
     import time as _t  # noqa: PLC0415
-    if _idx_cache.get("v") and _t.time() - _idx_cache["t"] < 60:
+    ttl = 60 if is_market_time() else 1800        # 장 밖엔 지수가 안 바뀜 — 매번 네이버 부르지 않게 (2026-10-09 '오늘' 탭 1~4초)
+    if _idx_cache.get("v") and _t.time() - _idx_cache["t"] < ttl:
         return _idx_cache["v"]
+    if _idx_cache.get("v") and not _idx_cache.get("busy"):     # 낡았으면 우선 보여 주고 뒤에서 새로 받기
+        import threading as _th  # noqa: PLC0415
+        _idx_cache["busy"] = True
+        def _bg():
+            try:
+                _idx_cache["t"] = 0
+                _index_fetch()
+            finally:
+                _idx_cache["busy"] = False
+        _th.Thread(target=_bg, daemon=True).start()
+        return _idx_cache["v"]
+    return _index_fetch()
+
+
+def _index_fetch() -> dict:
+    import time as _t  # noqa: PLC0415
     out = {}
     for k, code in (("코스피", "KOSPI"), ("코스닥", "KOSDAQ")):
         try:

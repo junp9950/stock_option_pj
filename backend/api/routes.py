@@ -1874,6 +1874,10 @@ def warm_caches(db: Session) -> None:
         get_workspace_list(db=db)
         from backend.services.stock_signals import rs_hist  # noqa: PLC0415
         rs_hist(db)                    # 차트의 지난 날짜 종가 점수용 RS (하루 한 번, 약 5초)
+        from backend.services.telegram import index_today  # noqa: PLC0415
+        index_today()                  # '오늘' 탭 지수 (네이버) — 첫 사람이 기다리지 않게
+        from backend.services.live_themes import live_themes  # noqa: PLC0415
+        live_themes(db)                # 섹터 실시간 (토스)
     except Exception:  # noqa: BLE001
         pass
     get_chart_candidates(min_cap=0, db=db)

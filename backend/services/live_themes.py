@@ -108,9 +108,26 @@ def _build(db: Session) -> dict:
 
 
 def live_themes(db: Session) -> dict:
+    """장중 1분 · 장 밖 30분 캐시. 낡은 결과가 있으면 기다리지 않고 그걸 주고 뒤에서 새로 만든다 (2026-10-09 섹터 탭 1~4초)."""
+    from backend.services.telegram import is_market_time  # noqa: PLC0415
+    ttl = _TTL if is_market_time() else 1800
+    if _cache["data"] is not None and time.time() - _cache["at"] < ttl:
+        return _cache["data"]
+    if _cache["data"] is not None:
+        if _lock.acquire(blocking=False):
+            def _bg():
+                from backend.db.database import SessionLocal  # noqa: PLC0415
+                s2 = SessionLocal()
+                try:
+                    _cache.update(at=time.time(), data=_build(s2))
+                except Exception:  # noqa: BLE001
+                    pass
+                finally:
+                    s2.close()
+                    _lock.release()
+            threading.Thread(target=_bg, daemon=True).start()
+        return _cache["data"]
     with _lock:
-        if _cache["data"] is not None and time.time() - _cache["at"] < _TTL:
-            return _cache["data"]
-        data = _build(db)
-        _cache.update(at=time.time(), data=data)
-        return data
+        if _cache["data"] is None:
+            _cache.update(at=time.time(), data=_build(db))
+        return _cache["data"]

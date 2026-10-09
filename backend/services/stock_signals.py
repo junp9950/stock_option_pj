@@ -269,10 +269,10 @@ def _workspace_list(db: Session) -> dict:
         scores = close_scores_now(db).get("scores", {})      # 장중이면 실시간 가격으로 (15시대에 오늘 봉 기준 후보)
         for c_, v_ in sorted(scores.items(), key=lambda kv: (-kv[1]["score"], kv[1]["risk"])):
             if v_["score"] >= 6 and v_["risk"] <= 0.03:
-                add(c_, f"✅ 손익비 좋음 · 점수 {v_['score']}/7 · 손절폭 {v_['risk'] * 100:.1f}%")
+                add(c_, "✅ 손익비 좋음")
         for c_, v_ in sorted(scores.items(), key=lambda kv: (-kv[1]["score"], kv[1]["risk"])):
             if v_["score"] >= 6 and v_["risk"] > 0.03:
-                add(c_, f"종가 점수 {v_['score']}/7 · 손절폭 {v_['risk'] * 100:.1f}%")
+                add(c_, "종가 점수 6↑")
     except Exception:  # noqa: BLE001
         pass
     log = _get(db, "top3_log", {}) or {}

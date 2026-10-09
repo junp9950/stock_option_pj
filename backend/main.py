@@ -147,7 +147,7 @@ select{background:#21262d;border:1px solid #30363d;color:#c9d1d9;padding:6px 10p
 .ws-item{display:flex;align-items:center;gap:10px;padding:8px 6px;border-radius:8px;cursor:pointer}
 .ws-item:hover{background:var(--card2)}.ws-item.on{background:var(--card2);box-shadow:inset 3px 0 0 var(--blue)}
 .ws-av{width:30px;height:30px;border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:12px;font-weight:700;color:#fff;flex-shrink:0}
-.ws-txt{min-width:0;flex:1}.ws-nm{font-weight:700;color:var(--text);font-size:13.5px}
+.ws-txt{min-width:0;flex:1}.ws-nm{font-weight:700;color:var(--text);font-size:13.5px;display:flex;align-items:center;gap:5px;min-width:0}.ws-nm .n{overflow:hidden;text-overflow:ellipsis;white-space:nowrap;min-width:0}.ws-nm .b{flex:none;font-size:11px;font-weight:600;padding:0 6px;border-radius:8px;border:1px solid var(--line);color:var(--muted);white-space:nowrap}
 .ws-tg{font-size:11px;color:var(--muted);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 .ws-px{text-align:right;font-size:12.5px;color:var(--text);white-space:nowrap}
 .ws-head{display:flex;align-items:baseline;gap:8px;flex-wrap:wrap;margin-bottom:4px}
@@ -2022,7 +2022,7 @@ async function loadWorkspace(){
   if(!_ws.code){ const L=wsItems(_ws.tab); const f=L[0]||(d.candidates||[])[0]||(d.watch||[])[0]; if(f) wsOpen(f.code,f.name); }
 }
 function wsItems(t){ const d=_ws.data||{}; return t==='watch'?(d.watch||[]):(d.candidates||[]).filter(x=>(x.lane||'entry')===t); }
-const WS_LANE={entry:'추세 매매 · 진입만 종가에 · ✅ = 점수 6↑ + 손절폭 3%↓ (3년: 평균 +3.9%, 손절폭의 1.7배 벎) · 손절 = 그날 저가 -1% 아래 종가 · 아니면 21일선 아래로 마감할 때까지 보유 · 손절폭 8%↑는 얻을 게 없었음',
+const WS_LANE={entry:'추세 매매 · 종가에 진입 · ✅ = 점수 6↑ + 손절폭 3%↓ (3년 평균 +3.9%) · 손절선 아래 종가면 정리, 아니면 21일선 아래 마감까지 보유',
   wait:'아직 신호 전 · 돌파가 나오면 그때', watch:'적어 둔 관심 종목'};
 function wsTab(t){ _ws.tab=t; try{ localStorage.setItem('ws-tab',t); }catch(e){} renderWsList(); }
 function renderWsList(){
@@ -2033,12 +2033,12 @@ function renderWsList(){
   const KIND={above:'선 위 마감 대기',near:'수렴 자리',hold:'지지선',watch:'봉 보기'};
   const row=x=>{
     let tg='';
-    if(_ws.tab!=='watch') tg=x.tags.join(' · ')+(x.family?` · ${x.family}`:'');
+    if(_ws.tab!=='watch') tg=(x.risk!=null?`손절 ${x.risk}% · `:'')+x.tags.join(' · ')+(x.family?` · ${x.family}`:'');   // 손절폭 = 종가에서 그날 저가 -1%까지
     else if(_ws.tab==='held') tg=(x.stop?`손절 ${Math.round(x.stop).toLocaleString()}${x.room!=null?` · ${x.room<0?'⛔ 이탈':x.room<=2?'⚠ '+x.room+'% 남음':x.room+'% 남음'}`:''}`:'손절선 없음')+(x.long?' · 장기':'');
     else tg=`${KIND[x.kind]||''}${x.level?' '+Math.round(x.level).toLocaleString():''}${x.note?' · '+x.note:''}`;
     const sub=_ws.tab==='held'&&x.gain!=null?`<div class="ws-tg" style="text-align:right">수익 ${x.gain>0?'+':''}${x.gain}%</div>`:'';
     return `<div class="ws-item${x.code===_ws.code?' on':''}" data-c="${x.code}" onclick="wsOpen('${x.code}','${x.name.replace(/'/g,'')}')">${wsAv(x.code,x.name)}
-      <div class="ws-txt"><div class="ws-nm">${x.name}${x.score!=null?` <span style="font-size:11px;padding:0 6px;border-radius:8px;border:1px solid ${x.score>=6?'var(--blue)':'var(--line)'};color:${x.score>=6?'var(--blue)':'var(--muted)'}" title="종가 진입 점수 (7개 조건 중) · 손절폭 = 종가에서 그날 저가 -1%까지">${x.rr?'✅ ':''}${x.score}/7${x.risk!=null?` · 손절 ${x.risk}%`:''}</span>`:''}</div><div class="ws-tg" title="${tg.replace(/"/g,'')}">${tg}</div></div>
+      <div class="ws-txt"><div class="ws-nm"><span class="n">${x.name}</span>${x.score!=null?`<span class="b" style="${x.score>=6?'border-color:var(--blue);color:var(--blue)':''}" title="종가 진입 점수 (7개 조건 중)">${x.rr?'✅':''}${x.score}/7</span>`:''}</div><div class="ws-tg" title="${tg.replace(/"/g,'')}">${tg}</div></div>
       <div class="ws-px">${x.close?Math.round(x.close).toLocaleString():'-'}<div style="color:${x.chg>0?'var(--up)':x.chg<0?'var(--down)':'var(--muted)'}">${x.chg>0?'+':''}${(x.chg||0).toFixed(2)}%</div>${sub}</div></div>`;
   };
   if(_ws.tab==='held'){ const a=L.filter(x=>!x.long), b=L.filter(x=>x.long);

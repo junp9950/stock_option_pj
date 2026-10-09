@@ -252,10 +252,10 @@ def _panel(db: Session, code: str, owner: str | None = None) -> dict:
         bull_now = _bull_days(db).get(df.index[-1], False)
         brd = market_breadth(db)
         if bull_now and not brd.get("weak") and not brd.get("narrow"):
-            checks.append({"ok": True, "k": "날씨", "v": f"시장 상승·횡보 · 시장 폭 {brd['pct']}%"})
+            checks.append({"ok": True, "k": "시장 상태", "v": f"시장 상승·횡보 · 시장 폭 {brd['pct']}%"})
         else:
             why = "하락 국면" if not bull_now else ("속 약해짐 (지수는 오르는데 폭 감소)" if brd.get("weak") else "시장 폭 좁음")
-            checks.append({"ok": False, "k": "날씨", "v": why})
+            checks.append({"ok": False, "k": "시장 상태", "v": why})
     except Exception:  # noqa: BLE001
         pass
     strong = tt >= 6 and rs is not None and 70 <= rs < 95
