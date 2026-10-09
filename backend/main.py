@@ -143,23 +143,23 @@ select{background:#21262d;border:1px solid #30363d;color:#c9d1d9;padding:6px 10p
 .ws #ws-panel{background:var(--card);border:1px solid var(--line);border-radius:10px;padding:12px}
 .ws-search{position:relative;margin-bottom:6px}.ws-search input{width:100%;box-sizing:border-box;background:var(--card2);border:1px solid var(--line);color:var(--text);border-radius:16px;padding:7px 12px;font-size:13px;outline:none}.ws-search input:focus{border-color:var(--blue)}#ws-sr{position:absolute;left:0;right:0;top:100%;z-index:30;background:var(--card);border:1px solid var(--line);border-radius:10px;margin-top:4px;max-height:360px;overflow:auto;display:none;box-shadow:0 6px 18px rgba(0,0,0,.4)}#ws-sr.on{display:block}
 .htop{display:grid;grid-template-columns:minmax(0,1.25fr) minmax(0,1fr);gap:14px;margin-bottom:14px}
-.hc-spark{position:relative;height:130px;margin:2px 0 10px}.hc-spark svg{width:100%;height:100%;display:block}
+.hc-spark{position:relative;height:92px;margin:2px 0 8px}.hc-spark svg{width:100%;height:100%;display:block}
 .hc-sx{display:flex;justify-content:space-between;font-size:10.5px;color:var(--muted);margin-top:-6px;margin-bottom:10px}
 .hc-tg{display:flex;gap:4px}.hc-tg button{background:none;border:1px solid var(--line);color:var(--muted);border-radius:10px;font-size:11px;padding:1px 8px;cursor:pointer}.hc-tg button.on{color:var(--text);border-color:var(--blue)}
-.hcard{background:var(--card);border:1px solid var(--line);border-radius:14px;padding:18px 20px;min-width:0}
+.hcard{background:var(--card);border:1px solid var(--line);border-radius:14px;padding:14px 18px;min-width:0}
 .hc-h{display:flex;justify-content:space-between;align-items:baseline;gap:8px;margin-bottom:10px}.hc-h b{font-size:15px;color:var(--text)}.hc-h span{font-size:11.5px;color:var(--muted)}
-.hc-head{font-size:20px;font-weight:800;color:var(--text);line-height:1.35;margin:2px 0 4px;word-break:keep-all}
-.hc-do{font-size:13px;color:var(--muted);margin-bottom:14px;word-break:keep-all}
-.hc-nums{display:flex;gap:0;margin-bottom:14px}.hc-num{flex:1;min-width:0;padding:0 14px;border-left:1px solid var(--line)}.hc-num:first-child{padding-left:0;border-left:none}
-.hc-num .l{font-size:11.5px;color:var(--muted)}.hc-num .v{font-size:22px;font-weight:800;color:var(--text);margin:2px 0}.hc-num .s{font-size:12.5px;font-weight:600}
+.hc-head{font-size:18px;font-weight:800;color:var(--text);line-height:1.35;margin:2px 0 4px;word-break:keep-all}
+.hc-do{font-size:12.5px;color:var(--muted);margin-bottom:10px;word-break:keep-all}
+.hc-nums{display:flex;gap:0;margin-bottom:10px}.hc-num{flex:1;min-width:0;padding:0 14px;border-left:1px solid var(--line)}.hc-num:first-child{padding-left:0;border-left:none}
+.hc-num .l{font-size:11.5px;color:var(--muted)}.hc-num .v{font-size:20px;font-weight:800;color:var(--text);margin:2px 0}.hc-num .s{font-size:12.5px;font-weight:600}
 .hc-flow{display:grid;grid-template-columns:40px 1fr;gap:6px 8px;align-items:center;font-size:12px}.hc-flow .k{color:var(--muted)}
 .hc-pill{display:inline-block;margin:0 5px 4px 0;padding:3px 10px;border-radius:12px;border:1px solid var(--line);font-size:12px;color:var(--text);white-space:nowrap}
 .hc-pill.up{border-color:rgba(248,81,73,.45)}.hc-pill.dn{border-color:rgba(88,166,255,.45)}
 .hc-verdict{display:flex;align-items:center;gap:8px;margin:2px 0 4px}.hc-verdict b{font-size:17px;color:var(--text)}
 .hc-sum{font-size:12.5px;color:var(--muted);margin-bottom:8px}
-.hc-bars{display:flex;gap:4px;margin:6px 0 12px}.hc-bars i{flex:1;height:5px;border-radius:3px;background:var(--line)}
+.hc-bars{display:flex;gap:4px;margin:4px 0 8px}.hc-bars i{flex:1;height:5px;border-radius:3px;background:var(--line)}
 .hc-bars i.g{background:var(--blue)}.hc-bars i.b{background:var(--orange)}
-.hc-row{display:flex;align-items:center;gap:10px;padding:8px 0;border-top:1px solid var(--line2)}
+.hc-row{display:flex;align-items:center;gap:10px;padding:6px 0;border-top:1px solid var(--line2)}
 .hc-row .t{flex:1;min-width:0}.hc-row .t b{display:block;font-size:13.5px;color:var(--text)}.hc-row .t span{font-size:11.5px;color:var(--muted)}
 .hc-row .v{font-size:16px;font-weight:700;color:var(--text);white-space:nowrap}
 .hc-badge{font-size:11px;font-weight:700;padding:2px 8px;border-radius:10px;white-space:nowrap;border:1px solid}
@@ -167,6 +167,7 @@ select{background:#21262d;border:1px solid #30363d;color:#c9d1d9;padding:6px 10p
 .hc-badge.n{color:var(--muted);border-color:var(--line)}
 .hc-badge.b{color:var(--orange);border-color:rgba(240,136,62,.5);background:rgba(240,136,62,.10)}
 @media(max-width:900px){.htop{grid-template-columns:1fr}.hc-head{font-size:18px}.hc-num .v{font-size:19px}.hcard{padding:16px}}
+#ws-lane-note{display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden;cursor:pointer}#ws-lane-note.open{display:block}
 .ws-tabs{display:flex;gap:6px;margin-bottom:6px}
 .ws-tabs button{flex:1;background:var(--card2);border:1px solid var(--line);color:var(--muted);border-radius:16px;padding:6px 0;font-size:12px;cursor:pointer;white-space:nowrap}
 .ws-tabs button.on{background:var(--text);color:var(--bg);font-weight:700;border-color:var(--text)}
@@ -179,13 +180,14 @@ select{background:#21262d;border:1px solid #30363d;color:#c9d1d9;padding:6px 10p
 .ws-head{display:flex;align-items:baseline;gap:8px;flex-wrap:wrap;margin-bottom:4px}
 .ws-head b{font-size:17px;color:var(--text)}
 .ws-sec{font-size:11px;color:var(--muted);margin:10px 4px 4px}
+.ws-ctl{display:flex;flex-wrap:wrap;gap:4px 14px;align-items:center;margin:2px 0 6px}.ws-ctl .ws-per{margin:0}
 .ws-per{display:flex;gap:4px;margin:2px 0 6px}.ws-per button{background:var(--card2);border:1px solid var(--line);color:var(--muted);border-radius:12px;padding:3px 10px;font-size:11.5px;cursor:pointer}
 .ws-per button.on{color:var(--text);border-color:var(--blue)}
 .ws-lg{margin-top:6px}.ws-lg summary{cursor:pointer;font-size:12px;color:var(--muted);list-style:none;display:inline-block;padding:3px 10px;border:1px solid var(--line);border-radius:12px}.ws-lg summary::-webkit-details-marker{display:none}.ws-lg[open] summary{color:var(--text);border-color:var(--blue)}
 .ws-legend{display:flex;flex-direction:column;gap:5px;margin-top:8px;font-size:12px;line-height:1.5;color:var(--muted)}
 .ws-legend span{display:block;word-break:keep-all;overflow-wrap:anywhere}.ws-legend i{width:10px;height:10px;border-radius:3px;display:inline-block}
 /* 차트 (Lightweight Charts: 확대·이동·십자선, 2026-10-09) */
-.lwbox{position:relative}.lwc{width:100%;height:520px}
+.lwbox{position:relative}.lwc{width:100%;height:clamp(380px,calc(100vh - 330px),520px)}
 #cm-chart.lwc{height:460px}
 .lwleg{font-size:11.5px;color:var(--body);line-height:1.5;height:56px;overflow:hidden;padding:2px 2px 4px}
 .lwleg>div{white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
@@ -643,15 +645,15 @@ select{background:#21262d;border:1px solid #30363d;color:#c9d1d9;padding:6px 10p
     <div class="ws-list">
       <div class="ws-search"><input id="ws-q" placeholder="🔍 종목 검색 (이름·코드·초성)" autocomplete="off" oninput="wsSearch(this.value)" onkeydown="if(event.key==='Enter'){const f=document.querySelector('#ws-sr .ws-item');if(f)f.click();}else if(event.key==='Escape'){this.value='';wsSearch('');}"><div id="ws-sr"></div></div>
       <div class="ws-tabs"><button data-t="entry" onclick="wsTab('entry')">오늘 진입</button><button data-t="wait" onclick="wsTab('wait')">대기</button><button data-t="track" onclick="wsTab('track')">신호 추적</button></div>
-      <div class="ts" id="ws-lane-note" style="margin:0 4px 4px"></div>
+      <div class="ts" id="ws-lane-note" style="margin:0 4px 4px" title="눌러서 펼치기" onclick="this.classList.toggle('open')"></div>
       <div class="ts" id="ws-asof" style="margin:0 4px 4px"></div>
       <div id="ws-items"><div class="ts" style="padding:10px">불러오는 중…</div></div>
     </div>
     <div class="ws-main">
       <div class="ws-head"><b id="ws-name">종목을 고르세요</b><span class="ts" id="ws-sub"></span></div>
       <div class="note" id="ws-note" style="margin-bottom:6px"></div>
-      <div class="ws-per" id="ws-tf"><button data-tf="1d" onclick="wsTf('1d')">일봉</button><button data-tf="1w" onclick="wsTf('1w')">주봉</button><button data-tf="60m" onclick="wsTf('60m')">60분</button><button data-tf="30m" onclick="wsTf('30m')">30분</button><button data-tf="15m" onclick="wsTf('15m')">15분</button><button data-tf="5m" onclick="wsTf('5m')">5분</button><button data-tf="1m" onclick="wsTf('1m')">1분</button></div>
-      <div class="ws-per" id="ws-per"><button data-n="66" onclick="wsPeriod(66)">3개월</button><button data-n="130" onclick="wsPeriod(130)">6개월</button><button data-n="250" onclick="wsPeriod(250)">1년</button></div>
+      <div class="ws-ctl"><div class="ws-per" id="ws-tf"><button data-tf="1d" onclick="wsTf('1d')">일봉</button><button data-tf="1w" onclick="wsTf('1w')">주봉</button><button data-tf="60m" onclick="wsTf('60m')">60분</button><button data-tf="30m" onclick="wsTf('30m')">30분</button><button data-tf="15m" onclick="wsTf('15m')">15분</button><button data-tf="5m" onclick="wsTf('5m')">5분</button><button data-tf="1m" onclick="wsTf('1m')">1분</button></div>
+      <div class="ws-per" id="ws-per"><button data-n="66" onclick="wsPeriod(66)">3개월</button><button data-n="130" onclick="wsPeriod(130)">6개월</button><button data-n="250" onclick="wsPeriod(250)">1년</button></div></div>
       <div class="lwbox"><div class="lwleg" id="ws-chart-leg"></div><div id="ws-chart" class="lwc"></div></div>
       <details class="ws-lg"><summary>ⓘ 차트 표시 설명</summary><div class="ws-legend"><span>▲ <b>진입</b> = 사기 좋은 자리 (3년 평균 +2.6%, 2~3주 보유 · 급등봉 당일은 안 냄) → 스탑로스 = 신호 봉 저가 -1% 예약 · ▼ 14일선 아래 종가 절반 · 21일선 아래 종가 나머지</span><span>● 보라 숫자 <b>6·7</b> = 종가 진입 점수 (7개 조건 중 맞은 개수 · 상승·횡보장만) → 사면 바로 스탑로스 = 그날 저가 -1% 예약 · 21일선 아래 종가면 다음 날 아침 정리 (3년 평균 +2.2% · 손절폭 3%↓면 +3.2% · 한 번 손실은 손절폭만큼으로 고정)</span><span>↑ <b>종가 매수</b> = 그날 종가에 살 후보 (진입 시점일 뿐 · 파는 건 위와 같음)</span><span>↑ 파란 화살표 = 박스 위로 돌파 · 이평선 모였다 돌파 (3년 10일 평균 +1.5% · +0.7%)</span><span>● 초록 = 오르던 종목의 거래 적은 눌림</span><span>· 작은 점 = 참고 (돌파 대기 · 아깝게 놓침 · 상승 추세 시작) — 봉에 올리면 위에 내용</span><span>■ 회색 = 급등봉 · 1년 최대 거래</span><span>▼ 주황 = 조심</span><span>· 두 손가락으로 확대, 끌어서 이동, 누르면 그 날 가격</span></div></details>
     </div>
@@ -963,7 +965,7 @@ async function hcSpark(sym){
   const box=document.getElementById('hc-spark'); if(!box) return;
   const d=await fetch(`${API}/index/intraday/${_hcSym}`).then(r=>r.ok?r.json():null).catch(()=>null);
   if(!d||!d.points||d.points.length<2){ box.innerHTML='<div class="ts" style="padding:40px 0;text-align:center">지수 선을 못 불러왔습니다</div>'; return; }
-  const P=d.points.map(p=>p[1]), lo=Math.min(...P,d.prev), hi=Math.max(...P,d.prev), W=600, H=130, pad=6;
+  const P=d.points.map(p=>p[1]), lo=Math.min(...P,d.prev), hi=Math.max(...P,d.prev), W=600, H=92, pad=6;
   const x=i=>{ const t=d.points[i][0], m=(+t.slice(0,2)-9)*60+(+t.slice(2)); return m/390*W; }, y=v=>pad+(hi-v)/((hi-lo)||1)*(H-pad*2);
   const line=P.map((v,i)=>`${x(i).toFixed(1)},${y(v).toFixed(1)}`).join(' ');
   const c=d.close>=d.prev?'var(--up)':'var(--down)', fill=d.close>=d.prev?'rgba(248,81,73,.10)':'rgba(88,166,255,.12)';
