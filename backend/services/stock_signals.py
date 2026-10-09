@@ -117,7 +117,7 @@ def signals(db: Session, code: str, days: int = 260, owner: str | None = None) -
     rules = [  # (마스크, 라벨, 종류, 위/아래) — 위에서부터 우선 (한 봉에 여러 개면 앞의 것 2개까지)
         # 3년 상승장 10일: 박스 돌파 +1.5% · 이평선 돌파 +0.7% · 거래 적은 눌림 +0.7% (기준 +0.2%) — 사는 자리로 표시
         # 거래 실린 양봉(섹터 조건 없이 5일 -0.05%)·급등 뒤 쉬는 봉(-0.3%)은 검증이 약해 참고 점으로 내림 (2026-10-09)
-        (box, "박스 위로 돌파 모양 (참고)", "buy", "below"), (ema, "이평선 모였다 돌파 모양 (참고)", "buy", "below"), (quiet, "거래 적은 눌림", "rest", "below"),
+        (box, "박스 돌파 모양 · 매수 아님", "shape", "below"), (ema, "이평선 돌파 모양 · 매수 아님", "shape", "below"), (quiet, "거래 적은 눌림", "rest", "below"),
         (park_sell, "⚠ 급등 뒤 윗꼬리 매물", "warn", "above"),
         (park & ~park_sell, "급등 뒤 쉬는 봉 (참고)", "note", "below"), (jb, "거래 실린 양봉 (참고)", "note", "below"),
         (big, "급등봉", "info", "above"), (record, "1년 최대 거래", "info", "above"), (fullbear, "⚠ 거래 많은 큰 음봉", "warn", "above"),
@@ -262,6 +262,20 @@ def signals(db: Session, code: str, days: int = 260, owner: str | None = None) -
                     items.append({"date": str(d), "label": f"매수 자리 유지 · {desc}", "kind": "score_keep", "pos": "below",
                                   "price": float(L[d]), "score": int(sc[d]), "why": why})
                 prev_on = True
+        # 돌파 모양인데 매수가 아닌 날 → 작은 회색 점 + 이유 (2026-10-09 "파란 화살표는 좀 애매한데") · 매수와 겹치면 지움
+        # 12년: 이평선 돌파 전부 R -0.11/0.00/+0.16 · 정배열 아닌 바닥 돌파 -0.18/-0.03/+0.06 → 화살표로 띄울 만한 자리가 아님
+        keep = []
+        for it in items:
+            if it["kind"] == "shape":
+                d = next((x for x in df.index if str(x) == it["date"]), None)
+                if d is None or bool(buy_ok[d]):
+                    continue
+                why_n = ("상승장 아님" if not bool(bull[d]) else "정배열 아님" if not bool(base_ok[d]) else
+                         f"강도 RS {float(RS[d]):.0f}" if not bool(rs_ok[d]) else "급등봉 (+8%↑)" if float(chg[d]) >= 0.08 else
+                         f"손절폭 {rk_[d] * 100:.0f}%" if rk_[d] > 0.08 else "조건 부족")
+                it["label"] += f": {why_n}"
+            keep.append(it)
+        items[:] = keep
     except Exception:  # noqa: BLE001
         pass
     for d, lab in near:
