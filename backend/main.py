@@ -605,7 +605,7 @@ select{background:#21262d;border:1px solid #30363d;color:#c9d1d9;padding:6px 10p
       <div class="ws-per" id="ws-per"><button data-n="66" onclick="wsPeriod(66)">3개월</button><button data-n="130" onclick="wsPeriod(130)">6개월</button><button data-n="250" onclick="wsPeriod(250)">1년</button></div>
       <canvas id="ws-candle" style="width:100%;height:480px;display:block"></canvas>
       <canvas id="ws-volume" style="width:100%;height:90px;display:block;margin-top:4px"></canvas>
-      <div class="ws-legend"><span><i style="background:#1f6feb"></i>사는 자리 모양</span><span><i style="background:#2d7d6f"></i>쉬는 자리</span><span><i style="background:#484f58"></i>기준봉·거래 신기록</span><span><i style="background:#9a4d0f"></i>⚠ 위험</span><span>┆점선 = 대기 · 아깝게 놓침(?) · 정배열 시작</span><span>· 내 매수·매도 자리는 매매 일지 탭에서 · 차트 신호는 이 종목만 본 모양 (섹터·시장은 왼쪽 후보 목록에서)</span></div>
+      <div class="ws-legend"><span><i style="background:#388bfd;outline:1px solid #e6edf3"></i>▲ 진입 신호 → ½ 익절 · 청산 / 손절 (3년 평균 +2.7%·이김 34%·14일, 하락장엔 안 냄)</span><span><i style="background:#1f6feb"></i>사는 자리 모양</span><span><i style="background:#2d7d6f"></i>쉬는 자리</span><span><i style="background:#484f58"></i>기준봉·거래 신기록</span><span><i style="background:#9a4d0f"></i>⚠ 위험</span><span>┆점선 = 대기 · 아깝게 놓침(?) · 정배열 시작</span><span>· 내 매수·매도 자리는 매매 일지 탭에서 · 차트 신호는 이 종목만 본 모양 (섹터·시장은 왼쪽 후보 목록에서)</span></div>
     </div>
     <aside class="cm-panel" id="ws-panel"></aside>
   </div>
@@ -1957,7 +1957,9 @@ function wsDraw(){
   document.querySelectorAll('#ws-per button').forEach(b=>b.classList.toggle('on',+b.dataset.n===_ws.per));
   const c=_ws.cache[_ws.code]; if(!c||!c.cd) return;
   const g=drawCandleChart(c.cd.candles,null,_ws.per,{cId:'ws-candle',vId:'ws-volume',signals:c.sg?c.sg.items:[]});
-  document.getElementById('ws-note').textContent=`최근 ${_ws.per}거래일 · EMA 5·10·20·60`+(g!=null?` · EMA 5·10·20 간격 ${g.toFixed(1)}% ${g<=4?'(모임 ✓)':g>=7?'(벌어짐 ⚠)':''}`:'')+_avwapNote;
+  const a=c.sg&&c.sg.active;
+  document.getElementById('ws-note').innerHTML=(a?`<b style="color:var(--blue)">▲ 진입 신호 ${a.date.slice(5).replace('-','/')} ${Math.round(a.entry).toLocaleString()} · ${a.days}일째 · ${a.gain>0?'+':''}${a.gain.toFixed(1)}% · 손절 ${Math.round(a.stop).toLocaleString()}${a.half?' · 절반 익절함':''}</b> · `:'')
+    +`최근 ${_ws.per}거래일 · EMA 5·10·20·60`+(g!=null?` · EMA 5·10·20 간격 ${g.toFixed(1)}% ${g<=4?'(모임 ✓)':g>=7?'(벌어짐 ⚠)':''}`:'')+_avwapNote;
 }
 const WS_PAL=['#3b5bdb','#c2255c','#2b8a3e','#e8590c','#5f3dc4','#0b7285','#a61e4d','#5c940d','#d9480f','#364fc7'];
 function wsAv(code,name){ let h=0; for(const ch of code) h=(h*31+ch.charCodeAt(0))%997; return `<div class="ws-av" style="background:${WS_PAL[h%WS_PAL.length]}">${(name||'?').slice(0,1)}</div>`; }
@@ -2220,10 +2222,11 @@ function drawCandleChart(allCandles, spikeDate, show, opt){
   // 신호 라벨 (2026-10-09 "차트에 조건들 넣어서 신호") — 사는 자리 아래, 기준봉·위험 위. 겹치면 비켜 쌓고 한 봉 한쪽에 2개까지
   if(sigOn){
     const idxOf={}; candles.forEach((c,i)=>{ idxOf[(c.timestamp||'').slice(0,10)]=i; });
-    const COL={buy:['#1f6feb','#fff'],rest:['#2d7d6f','#fff'],info:['#484f58','#e6edf3'],warn:['#9a4d0f','#fff'],trade_buy:['#e6edf3','#0d1117'],trade_sell:['#8957e5','#fff']};
+    const COL={buy:['#1f6feb','#fff'],rest:['#2d7d6f','#fff'],info:['#484f58','#e6edf3'],warn:['#9a4d0f','#fff'],trade_buy:['#e6edf3','#0d1117'],trade_sell:['#8957e5','#fff'],
+               entry:['#388bfd','#fff'],exit:['#21262d','#e6edf3'],exit_bad:['#bd561d','#fff']};
     const placed=[], cnt={}; ctxC.font='11px sans-serif'; ctxC.lineWidth=1;
     const rr=(x,y,w,h,r)=>{ ctxC.beginPath(); if(ctxC.roundRect) ctxC.roundRect(x,y,w,h,r); else ctxC.rect(x,y,w,h); };
-    const PR={trade_buy:0,trade_sell:0,buy:1,warn:2,rest:3,info:4,wait:5,near:6,note:7};
+    const PR={trade_buy:0,trade_sell:0,entry:0,exit:0,exit_bad:0,buy:1,warn:2,rest:3,info:4,wait:5,near:6,note:7};
     [...opt.signals].sort((a,b)=>(PR[a.kind]??9)-(PR[b.kind]??9)).forEach(sg=>{
       const i=idxOf[sg.date]; if(i===undefined) return;
       const k=i+sg.pos; cnt[k]=(cnt[k]||0)+1; if(cnt[k]>2 && !sg.kind.startsWith('trade')) return;
@@ -2240,7 +2243,9 @@ function drawCandleChart(allCandles, spikeDate, show, opt){
       }
       const [bg,fg]=COL[sg.kind]||COL.info;
       ctxC.strokeStyle=bg; ctxC.beginPath(); ctxC.moveTo(x,anchor); ctxC.lineTo(x, below?y:y+th); ctxC.stroke();
-      ctxC.fillStyle=bg; rr(bx,y,tw,th,5); ctxC.fill(); ctxC.fillStyle=fg; ctxC.fillText(sg.label,bx+5,y+12);
+      ctxC.fillStyle=bg; rr(bx,y,tw,th,5); ctxC.fill();
+      if(sg.kind==='entry'||sg.kind==='exit'){ ctxC.strokeStyle='#e6edf3'; ctxC.lineWidth=1.2; rr(bx,y,tw,th,5); ctxC.stroke(); ctxC.lineWidth=1; }
+      ctxC.fillStyle=fg; ctxC.fillText(sg.label,bx+5,y+12);
     });
   }
   { const tags=[[+candles[n-1].closePrice,(+candles[n-1].closePrice>=+candles[n-1].openPrice)?UP:DOWN,'현재']].concat(ES.map((a,k)=>[a[a.length-1],EC[k],EN[k]]));

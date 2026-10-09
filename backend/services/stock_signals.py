@@ -20,6 +20,22 @@ from sqlalchemy import text
 from sqlalchemy.orm import Session
 
 
+_REG: dict = {"key": None, "v": {}}
+
+
+def _bull_days(db: Session) -> dict:
+    """날짜별 시장 국면이 상승·횡보인가 (전 종목 평균 등락으로 regime_series) — DB 날짜가 바뀔 때만 계산."""
+    latest = db.execute(text("select max(trading_date) from spot_daily_prices")).scalar()
+    if _REG["key"] == latest:
+        return _REG["v"]
+    from backend.screener.market_regime import regime_series  # noqa: PLC0415
+    rows = db.execute(text("select trading_date, avg(greatest(least(change_pct, 30), -30)) from spot_daily_prices "
+                           "where trading_date >= cast(:d as date) - 900 and trading_value >= 1e9 and change_pct <> 'NaN' group by 1 order by 1"), {"d": latest}).all()
+    reg = regime_series({d: float(v) for d, v in rows if v is not None})
+    _REG.update(key=latest, v={d: r["state"] in ("상승", "횡보") for d, r in reg.items()})
+    return _REG["v"]
+
+
 def signals(db: Session, code: str, days: int = 260, owner: str | None = None) -> dict:
     q = db.execute(text("select trading_date, open_price, high_price, low_price, close_price, volume, trading_value from spot_daily_prices "
                         "where stock_code = :c order by trading_date desc limit 520"), {"c": code}).all()
@@ -89,6 +105,46 @@ def signals(db: Session, code: str, days: int = 260, owner: str | None = None) -
         for d in mask[mask.fillna(False) & (mask.index >= start)].index:
             price = float(L[d]) if pos == "below" else float(H[d])
             items.append({"date": str(d), "label": lab, "kind": kind, "pos": pos, "price": price})
+    # ▲ 진입 신호 (2026-10-09 "우리도 진입 신호 같은 건 좀"): (박스 돌파 또는 EMA 모임 돌파·정배열) + 상승·횡보장 + 추세 조건 6/7↑
+    # 3년(entry_sig.py, 종가 진입): 2,433건 평균 +2.7% · 이김 34% · 평균 14일 / 하락장이면 -1.7%라 안 냄.
+    # 흐름: 손절 = 신호 봉 저가 -1% 아래 종가 · ½ 익절 = EMA14 아래 종가 · 청산 = EMA21 아래 종가. 들고 있는 동안은 새 진입 안 냄.
+    e14, e21 = C.ewm(span=14, adjust=False).mean(), C.ewm(span=21, adjust=False).mean()
+    s50, s150 = C.rolling(50).mean(), C.rolling(150, min_periods=135).mean()
+    hi52, lo52 = H.rolling(250, min_periods=200).max(), L.rolling(250, min_periods=200).min()
+    tt7 = (((C > s150) & (C > ma200)).astype(int) + (s150 > ma200).astype(int) + (ma200 > ma200.shift(21)).astype(int)
+           + ((s50 > s150) & (s50 > ma200)).astype(int) + (C > s50).astype(int) + (C >= lo52 * 1.3).astype(int) + (C >= hi52 * 0.75).astype(int))
+    up60 = (C > e60) & (e20 > e60)
+    bulls = _bull_days(db)
+    bull = pd.Series([bulls.get(d, False) for d in df.index], index=df.index)
+    entry_m = (box | (ema & up60)) & bull & (tt7 >= 6)
+    active = None
+    idx = list(df.index)
+    i = idx.index(start) if start in idx else 0
+    while i < len(idx):
+        d = idx[i]
+        if not entry_m.iloc[i]:
+            i += 1
+            continue
+        p0, stop = float(C.iloc[i]), float(L.iloc[i]) * 0.99
+        items.append({"date": str(d), "label": f"▲ 진입 {p0:,.0f}", "kind": "entry", "pos": "below", "price": float(L.iloc[i])})
+        half, out = False, None
+        for k in range(i + 1, len(idx)):
+            c = float(C.iloc[k])
+            if c < stop:
+                out = (k, f"손절 {(c/p0-1)*100:+.1f}%", "exit_bad"); break
+            if not half and k - i > 1 and c < float(e14.iloc[k]):
+                half = True
+                items.append({"date": str(idx[k]), "label": f"½ 익절 {(c/p0-1)*100:+.1f}%", "kind": "exit", "pos": "above", "price": float(H.iloc[k])})
+            if k - i > 1 and c < float(e21.iloc[k]):
+                out = (k, f"청산 {(c/p0-1)*100:+.1f}%", "exit"); break
+        if out:
+            k, lab, kind = out
+            items.append({"date": str(idx[k]), "label": lab, "kind": kind, "pos": "above", "price": float(H.iloc[k])})
+            i = k + 1
+        else:
+            last_c = float(C.iloc[-1])
+            active = {"date": str(d), "entry": p0, "stop": stop, "days": len(idx) - i, "gain": (last_c / p0 - 1) * 100, "half": half}
+            break
     for d, lab in near:
         if d >= start:
             items.append({"date": str(d), "label": lab, "kind": "near", "pos": "below", "price": float(L[d])})
@@ -125,7 +181,7 @@ def signals(db: Session, code: str, days: int = 260, owner: str | None = None) -
     except Exception:  # noqa: BLE001
         pass
     items.sort(key=lambda x: x["date"])
-    return {"code": code, "items": items}
+    return {"code": code, "items": items, "active": active, "bull_today": bool(bull.iloc[-1]), "tt7": int(tt7.iloc[-1])}
 
 
 _KRX: dict = {"key": None, "v": {}}
