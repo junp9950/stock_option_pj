@@ -640,6 +640,14 @@ def _close_scores(db: Session, latest, live: dict | None = None, frac: float = 1
     e5, e10, e20, e60 = (C.ewm(span=n, adjust=False).mean() for n in (5, 10, 20, 60))
     rs_raw = 0.4 * (C / C.shift(63) - 1) + 0.2 * (C / C.shift(126) - 1) + 0.2 * (C / C.shift(189) - 1) + 0.2 * (C / C.shift(252) - 1)
     RS = rs_raw.where(liq).rank(axis=1, pct=True).iloc[-1] * 98 + 1
+    if frames is not None and not live:     # 지난 날짜(잘라 낸 프레임)는 1년 전 값이 모자라 RS가 비어 '강도 부족'으로 빠졌음 → 날짜별 RS 기록으로 (2026-10-09 HPSP 9월)
+        try:
+            rh = rs_hist(db); dkey = str(C.index[-1])
+            if dkey in rh.get("dates", []):
+                k_ = rh["dates"].index(dkey)
+                RS = pd.Series({cd: float(a[k_]) for cd, a in rh["rs"].items()}).reindex(C.columns)
+        except Exception:  # noqa: BLE001
+            pass
     r = -1
     c, h, l = C.iloc[r], H.iloc[r], L.iloc[r]
     chg = c / C.iloc[r - 1] - 1
@@ -892,7 +900,7 @@ def tracking(db: Session) -> dict:
     날짜마다 그날까지 데이터로 점수를 다시 계산한다 (signal_log가 쌓이기 전 날짜는 '다시 계산'). DB 날짜가 바뀔 때만 · 디스크 캐시."""
     latest = db.execute(text("select max(trading_date) from spot_daily_prices")).scalar()
     from backend.services.result_cache import cached  # noqa: PLC0415
-    return cached("tracking_v9", (), db, lambda: _tracking(db, latest)) or {}
+    return cached("tracking_v10", (), db, lambda: _tracking(db, latest)) or {}
 
 
 def _tracking(db: Session, latest, days: int = 20) -> dict:
