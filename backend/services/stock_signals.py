@@ -14,6 +14,8 @@
 """
 from __future__ import annotations
 
+import threading
+
 import numpy as np
 import pandas as pd
 from sqlalchemy import text
@@ -527,6 +529,7 @@ def close_scores(db: Session) -> dict:
 
 
 _CF: dict = {"key": None, "v": None}
+_CF_LOCK = threading.Lock()
 
 
 def _close_frames(db: Session, latest) -> dict:
@@ -534,6 +537,13 @@ def _close_frames(db: Session, latest) -> dict:
     장중 점수(2분마다)를 매번 DB에서 읽지 않게 메모리에 둔다. numpy에 바로 채워 read_sql·pivot의 큰 메모리를 피한다."""
     if _CF["key"] == latest:
         return _CF["v"]
+    with _CF_LOCK:        # 여러 요청이 동시에 400일 치를 각자 읽지 않게 (2026-10-09 배포 직후 DB 연결 바닥)
+        if _CF["key"] == latest:
+            return _CF["v"]
+        return _close_frames_load(db, latest)
+
+
+def _close_frames_load(db: Session, latest) -> dict:
     dates = [r[0] for r in db.execute(text("select distinct trading_date from spot_daily_prices where trading_date >= cast(:d as date) - 400 "
                                            "and trading_date <= :d order by 1"), {"d": latest}).all()]
     codes = [r[0] for r in db.execute(text("select distinct stock_code from spot_daily_prices where trading_date = :d"), {"d": latest}).all()]
@@ -688,11 +698,26 @@ _DIP: dict = {"t": 0.0, "v": None, "key": None}
 _DIPH: dict = {"key": None, "v": {}}
 
 
-def _dip_history(db: Session) -> dict:
-    """최근 400일 상승장 급락 날마다 _dip_picks 결과 {날짜: {종목: 손절가}} — 차트 표시용, DB 날짜가 바뀔 때만."""
+_DIPH_LOCK = threading.Lock()
+
+
+def _dip_history(db: Session, block: bool = False) -> dict:
+    """최근 400일 상승장 급락 날마다 _dip_picks 결과 {날짜: {종목: 손절가}} — 차트 표시용, DB 날짜가 바뀔 때만.
+    계산 중이면 기다리지 않고 직전 결과(없으면 빈 것)를 준다 — 화면 요청이 줄줄이 DB 연결을 붙잡지 않게. 미리 계산은 warm_caches(block=True)."""
     latest = db.execute(text("select max(trading_date) from spot_daily_prices")).scalar()
     if _DIPH["key"] == latest:
         return _DIPH["v"]
+    if not _DIPH_LOCK.acquire(blocking=block):
+        return _DIPH["v"] or {}
+    try:
+        if _DIPH["key"] == latest:
+            return _DIPH["v"]
+        return _dip_history_calc(db, latest)
+    finally:
+        _DIPH_LOCK.release()
+
+
+def _dip_history_calc(db: Session, latest) -> dict:
     P = _close_frames(db, latest)
     mk = _market_chg(db); bulls = _bull_days(db)
     idx = list(P["c"].index); out = {}

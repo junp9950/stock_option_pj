@@ -1963,8 +1963,9 @@ def warm_caches(db: Session) -> None:
         get_workspace_list(db=db)
         from backend.services.stock_signals import rs_hist  # noqa: PLC0415
         rs_hist(db)                    # 차트의 지난 날짜 종가 점수용 RS (하루 한 번, 약 5초)
-        from backend.services.stock_signals import tracking  # noqa: PLC0415
-        tracking(db)                   # 첫 화면 '진행 중' (최근 20일 신호 따라가기, 하루 한 번 약 15초)
+        from backend.services.stock_signals import tracking, _dip_history  # noqa: PLC0415
+        _dip_history(db, block=True)   # 차트의 지난 급락 날 줍기 표시 (하루 한 번)
+        tracking(db)                   # 첫 화면 '신호 추적' (최근 20일 신호 따라가기, 하루 한 번 약 15초)
         from backend.services.telegram import index_today  # noqa: PLC0415
         index_today()                  # '오늘' 탭 지수 (네이버) — 첫 사람이 기다리지 않게
         from backend.services.live_themes import live_themes  # noqa: PLC0415
