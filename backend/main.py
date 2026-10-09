@@ -157,6 +157,14 @@ select{background:#21262d;border:1px solid #30363d;color:#c9d1d9;padding:6px 10p
 .ws-per button.on{color:var(--text);border-color:var(--blue)}
 .ws-legend{display:flex;flex-wrap:wrap;gap:6px;margin-top:6px;font-size:11px;color:var(--muted)}
 .ws-legend span{display:inline-flex;align-items:center;gap:4px}.ws-legend i{width:10px;height:10px;border-radius:3px;display:inline-block}
+/* 차트 (Lightweight Charts: 확대·이동·십자선, 2026-10-09) */
+.lwbox{position:relative}.lwc{width:100%;height:520px}
+#cm-chart.lwc{height:460px}
+.lwleg{position:absolute;left:8px;top:6px;z-index:3;font-size:11.5px;color:var(--body);pointer-events:none;line-height:1.5;background:rgba(13,17,23,.72);padding:2px 6px;border-radius:6px}
+.lwleg b{color:var(--text)}
+@media(max-width:760px){.lwc,#cm-chart.lwc{height:400px}.lwleg{font-size:10.5px}
+  .mstrip{flex-wrap:nowrap;overflow-x:auto;white-space:nowrap;font-size:12px;padding:6px 10px;gap:8px;-webkit-overflow-scrolling:touch}
+  .mstrip .ix b{font-size:14px}.mstrip .rg .ts:last-child,.mstrip .sep{display:none}.mstrip .rg{padding:1px 7px;font-size:11.5px}}
 /* 시장 한 줄 (맨 위 고정, 2026-10-09) — 색약이라 ▲▼■ 모양도 같이 */
 .mstrip{position:sticky;top:0;z-index:20;display:flex;flex-wrap:wrap;align-items:center;gap:8px 14px;background:var(--card);border:1px solid var(--line);border-radius:10px;padding:8px 14px;margin-bottom:10px;font-size:13px;box-shadow:0 4px 12px rgba(0,0,0,.35)}
 .mstrip .ix{cursor:pointer;display:flex;align-items:baseline;gap:6px}.mstrip .ix b{font-size:16px}
@@ -247,6 +255,7 @@ select{background:#21262d;border:1px solid #30363d;color:#c9d1d9;padding:6px 10p
 }
 </style>
 <script src="https://cdn.jsdelivr.net/npm/chart.js@4/dist/chart.umd.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/lightweight-charts@4.2.0/dist/lightweight-charts.standalone.production.js"></script>
 </head>
 <body>
 <header>
@@ -468,8 +477,7 @@ select{background:#21262d;border:1px solid #30363d;color:#c9d1d9;padding:6px 10p
         <div class="ws-head"><b id="jr-ws-name">종목을 고르세요</b><span class="ts" id="jr-ws-sub"></span></div>
         <div class="note" id="jr-ws-note" style="margin-bottom:6px"></div>
         <div class="ws-per" id="jr-ws-per"><button data-n="66" onclick="jrWsPeriod(66)">3개월</button><button data-n="130" onclick="jrWsPeriod(130)">6개월</button><button data-n="250" onclick="jrWsPeriod(250)">1년</button></div>
-        <canvas id="jr-candle" style="width:100%;height:440px;display:block"></canvas>
-        <canvas id="jr-volume" style="width:100%;height:80px;display:block;margin-top:4px"></canvas>
+        <div class="lwbox"><div class="lwleg" id="jr-chart-leg"></div><div id="jr-chart" class="lwc"></div></div>
         <div class="ws-legend"><span><i style="background:#e6edf3"></i>내 매수</span><span><i style="background:#8957e5"></i>내 매도</span><span><i style="background:#1f6feb"></i>사는 자리 모양</span><span><i style="background:#2d7d6f"></i>쉬는 자리</span><span><i style="background:#484f58"></i>기준봉·거래 신기록</span><span><i style="background:#9a4d0f"></i>⚠ 위험</span></div>
       </div>
       <aside class="cm-panel" id="jr-ws-panel"></aside>
@@ -609,9 +617,8 @@ select{background:#21262d;border:1px solid #30363d;color:#c9d1d9;padding:6px 10p
       <div class="ws-head"><b id="ws-name">종목을 고르세요</b><span class="ts" id="ws-sub"></span></div>
       <div class="note" id="ws-note" style="margin-bottom:6px"></div>
       <div class="ws-per" id="ws-per"><button data-n="66" onclick="wsPeriod(66)">3개월</button><button data-n="130" onclick="wsPeriod(130)">6개월</button><button data-n="250" onclick="wsPeriod(250)">1년</button></div>
-      <canvas id="ws-candle" style="width:100%;height:480px;display:block"></canvas>
-      <canvas id="ws-volume" style="width:100%;height:90px;display:block;margin-top:4px"></canvas>
-      <div class="ws-legend"><span><i style="background:#388bfd;outline:1px solid #e6edf3"></i>▲ 진입 신호 → ½ 익절 · 청산 / 손절 (3년 평균 +2.7%·이김 34%·14일, 하락장엔 안 냄)</span><span><i style="background:#1f6feb"></i>사는 자리 모양</span><span><i style="background:#2d7d6f"></i>쉬는 자리</span><span><i style="background:#484f58"></i>기준봉·거래 신기록</span><span><i style="background:#9a4d0f"></i>⚠ 위험</span><span>┆점선 = 대기 · 아깝게 놓침(?) · 정배열 시작</span><span>· 내 매수·매도 자리는 매매 일지 탭에서 · 차트 신호는 이 종목만 본 모양 (섹터·시장은 왼쪽 후보 목록에서)</span></div>
+      <div class="lwbox"><div class="lwleg" id="ws-chart-leg"></div><div id="ws-chart" class="lwc"></div></div>
+      <div class="ws-legend"><span><i style="background:#388bfd;outline:1px solid #e6edf3"></i>▲ 진입 신호 → ½ 익절 · 청산 / 손절 (3년 평균 +2.7%·이김 34%·14일, 하락장엔 안 냄)</span><span><i style="background:#1f6feb"></i>사는 자리 모양</span><span><i style="background:#2d7d6f"></i>쉬는 자리</span><span><i style="background:#484f58"></i>기준봉·거래 신기록</span><span><i style="background:#9a4d0f"></i>⚠ 위험</span><span>○ = 대기 · 아깝게 놓침(?) · 정배열 시작</span><span>· 두 손가락으로 확대, 끌어서 이동, 올리면 그 봉 가격</span><span>· 내 매수·매도 자리는 매매 일지 탭에서 · 차트 신호는 이 종목만 본 모양 (섹터·시장은 왼쪽 후보 목록에서)</span></div>
     </div>
     <aside class="cm-panel" id="ws-panel"></aside>
   </div>
@@ -769,8 +776,7 @@ select{background:#21262d;border:1px solid #30363d;color:#c9d1d9;padding:6px 10p
     <div class="cm-body">
       <div class="cm-chart">
         <div class="note" id="chart-modal-note" style="margin-bottom:8px"></div>
-        <canvas id="pb-candle-canvas" style="width:100%;height:380px;display:block"></canvas>
-        <canvas id="pb-volume-canvas" style="width:100%;height:100px;display:block;margin-top:4px"></canvas>
+        <div class="lwbox"><div class="lwleg" id="cm-chart-leg"></div><div id="cm-chart" class="lwc"></div></div>
       </div>
       <aside class="cm-panel" id="cm-panel"></aside>
     </div>
@@ -1972,7 +1978,7 @@ function wsPeriod(n){ _ws.per=n; try{ localStorage.setItem('ws-per',n); }catch(e
 function wsDraw(){
   document.querySelectorAll('#ws-per button').forEach(b=>b.classList.toggle('on',+b.dataset.n===_ws.per));
   const c=_ws.cache[_ws.code]; if(!c||!c.cd) return;
-  const g=drawCandleChart(c.cd.candles,null,_ws.per,{cId:'ws-candle',vId:'ws-volume',signals:c.sg?c.sg.items:[]});
+  const g=renderLwChart('ws-chart',c.cd.candles,c.sg?c.sg.items:[],_ws.per);
   const a=c.sg&&c.sg.active;
   document.getElementById('ws-note').innerHTML=(a?`<b style="color:var(--blue)">▲ 진입 신호 ${a.date.slice(5).replace('-','/')} ${Math.round(a.entry).toLocaleString()} · ${a.days}일째 · ${a.gain>0?'+':''}${a.gain.toFixed(1)}% · 손절 ${Math.round(a.stop).toLocaleString()}${a.half?' · 절반 익절함':''}</b> · `:'')
     +`최근 ${_ws.per}거래일 · EMA 5·10·20·60`+(g!=null?` · EMA 5·10·20 간격 ${g.toFixed(1)}% ${g<=4?'(모임 ✓)':g>=7?'(벌어짐 ⚠)':''}`:'')+_avwapNote;
@@ -2025,7 +2031,7 @@ async function wsOpen(code,name){
   _ws.cache={[code]:{cd,sg}};
   wsDraw();
 }
-window.addEventListener('resize',()=>{ clearTimeout(window._wsRz); window._wsRz=setTimeout(()=>{ if(_ws.code&&document.getElementById('panel-home').classList.contains('active')) wsDraw(); if(_jrWs.code&&document.getElementById('panel-journal').classList.contains('active')) jrWsDraw(); },300); });
+
 // ── 매매 일지: 보유 종목 차트 (로그인 헤더로 평단·손절·내 매수·매도까지, 2026-10-09) ──
 let _jrWs={code:null,data:null,cache:null};
 async function jrWsLoad(){
@@ -2045,7 +2051,7 @@ function jrWsPeriod(n){ _ws.per=n; try{ localStorage.setItem('ws-per',n); }catch
 function jrWsDraw(){
   document.querySelectorAll('#jr-ws-per button').forEach(b=>b.classList.toggle('on',+b.dataset.n===_ws.per));
   const c=_jrWs.cache; if(!c||!c.cd||c.code!==_jrWs.code) return;
-  const g=drawCandleChart(c.cd.candles,null,_ws.per,{cId:'jr-candle',vId:'jr-volume',signals:c.sg?c.sg.items:[]});
+  const g=renderLwChart('jr-chart',c.cd.candles,c.sg?c.sg.items:[],_ws.per);
   document.getElementById('jr-ws-note').textContent=`최근 ${_ws.per}거래일 · EMA 5·10·20·60`+(g!=null?` · EMA 5·10·20 간격 ${g.toFixed(1)}%`:'')+_avwapNote;
 }
 async function jrWsOpen(code,name){
@@ -2082,18 +2088,18 @@ function renderStockPanel(p, target){
 async function openChartModal(code, name, spikeDate){
   document.getElementById('chart-modal-title').textContent = `${name} (${code})`;
   document.getElementById('chart-modal-note').textContent = '로딩 중…';
-  clearChartCanvas();
+  lwClear('cm-chart');
   document.getElementById('cm-panel').innerHTML='<div class="ts">불러오는 중…</div>';
   document.getElementById('chart-modal-bg').classList.add('show');
   fetch(`${API}/stock/${code}/panel`).then(r=>r.ok?r.json():null).then(renderStockPanel).catch(()=>renderStockPanel(null));
   try{
-    const [data, sig] = await Promise.all([fetch(`${API}/toss/candles/${code}?interval=1d&count=150`).then(r=>r.ok?r.json():null),   // EMA 계산용으로 더 받아 오고 그림은 90개
+    const [data, sig] = await Promise.all([fetch(`${API}/stock/${code}/candles?count=330`).then(r=>r.ok?r.json():null),   // 1년 (DB + 토스 최근) — 확대·이동으로 볼 수 있게
       fetch(`${API}/stock/${code}/chart-signals`).then(r=>r.ok?r.json():null).catch(()=>null)]);
     if(!data || !data.candles || !data.candles.length){
       document.getElementById('chart-modal-note').textContent = '토스 API에서 차트 데이터를 가져오지 못했습니다.';
       return;
     }
-    const g = drawCandleChart(data.candles, spikeDate, 90, {signals: sig?sig.items:[]});
+    const g = renderLwChart('cm-chart', data.candles, sig?sig.items:[], 90);
     document.getElementById('chart-modal-note').textContent = (spikeDate ? `스파이크일: ${spikeDate}` : `최근 90거래일 일봉`)
       + (g!=null ? ` · EMA 5·10·20 간격 ${g.toFixed(1)}% ${g<=4?'(모임 ✓)':g>=7?'(벌어짐 ⚠)':''}` : '') + _avwapNote;
   }catch(e){
@@ -2106,18 +2112,80 @@ async function openIndexChart(sym, name){
   document.getElementById('cm-panel').innerHTML='';
   document.getElementById('chart-modal-title').textContent = `${name} 지수 — 일봉`;
   document.getElementById('chart-modal-note').textContent = '로딩 중…';
-  clearChartCanvas();
+  lwClear('cm-chart');
   document.getElementById('chart-modal-bg').classList.add('show');
   const data = await fetch(`${API}/index/candles/${sym}?count=150`).then(r=>r.ok?r.json():null).catch(()=>null);
   if(!data || !data.candles || !data.candles.length){ document.getElementById('chart-modal-note').textContent='지수 데이터를 가져오지 못했습니다'; return; }
-  const g = drawCandleChart(data.candles, null, 60);
+  const g = renderLwChart('cm-chart', data.candles, [], 60);
   const c=data.candles, last=+c[c.length-1].closePrice, prev=+c[c.length-2].closePrice;
   document.getElementById('chart-modal-note').textContent = `최근 60거래일 · 마지막 ${last.toLocaleString()} (${((last/prev-1)*100).toFixed(2)}%)`
     + (g!=null ? ` · EMA 5·10·20 간격 ${g.toFixed(1)}% ${g<=4?'(모임 ✓)':g>=7?'(벌어짐 ⚠)':''}` : '');
 }
 function closeChartModal(){ document.getElementById('chart-modal-bg').classList.remove('show'); }
 
-// 외부 라이브러리 없이 순수 canvas로 캔들차트 + 거래량 + 눌림목 지지선 그리기
+// ── Lightweight Charts 차트: 손가락으로 확대·이동, 올리면 그 봉 가격·거래량·이평선 (2026-10-09) ──
+const _lw={};
+function lwClear(cid){ if(_lw[cid]){ try{ _lw[cid].ro.disconnect(); _lw[cid].chart.remove(); }catch(e){} delete _lw[cid]; } const el=document.getElementById(cid); if(el) el.innerHTML=''; const lg=document.getElementById(cid+'-leg'); if(lg) lg.innerHTML=''; }
+function renderLwChart(cid, allCandles, signals, per){
+  const el=document.getElementById(cid);
+  if(!el) return null;
+  if(!window.LightweightCharts){ el.innerHTML='<div class="ts" style="padding:20px">차트 라이브러리를 못 불러왔습니다 (새로고침)</div>'; return null; }
+  lwClear(cid);
+  const data=allCandles.map(c=>({time:(c.timestamp||'').slice(0,10),open:+c.openPrice,high:+c.highPrice,low:+c.lowPrice,close:+c.closePrice,vol:+c.volume})).filter(d=>d.time);
+  if(!data.length) return null;
+  const small=el.clientWidth<600;
+  const chart=LightweightCharts.createChart(el,{width:el.clientWidth,height:el.clientHeight,
+    layout:{background:{type:'solid',color:'#0d1117'},textColor:'#8b949e',fontSize:small?10:11},
+    grid:{vertLines:{color:'rgba(139,148,158,.07)'},horzLines:{color:'rgba(139,148,158,.10)'}},
+    rightPriceScale:{borderColor:'#30363d',scaleMargins:{top:0.08,bottom:0.24}},
+    timeScale:{borderColor:'#30363d',rightOffset:3,barSpacing:small?5:7,minBarSpacing:2},
+    crosshair:{mode:0,vertLine:{color:'#6e7681',labelBackgroundColor:'#30363d'},horzLine:{color:'#6e7681',labelBackgroundColor:'#30363d'}},
+    localization:{priceFormatter:p=>Math.round(p).toLocaleString(),dateFormat:'yy/MM/dd'},
+    handleScroll:{mouseWheel:true,pressedMouseMove:true,horzTouchDrag:true,vertTouchDrag:false},handleScale:{axisPressedMouseMove:true,mouseWheel:true,pinch:true}});
+  const cs=chart.addCandlestickSeries({upColor:'#f85149',downColor:'#3b82f6',borderVisible:false,wickUpColor:'#f85149',wickDownColor:'#3b82f6'});
+  cs.setData(data.map(d=>({time:d.time,open:d.open,high:d.high,low:d.low,close:d.close})));
+  const vs=chart.addHistogramSeries({priceFormat:{type:'volume'},priceScaleId:'vol',lastValueVisible:false,priceLineVisible:false});
+  chart.priceScale('vol').applyOptions({scaleMargins:{top:0.8,bottom:0}});
+  vs.setData(data.map(d=>({time:d.time,value:d.vol,color:d.close>=d.open?'rgba(248,81,73,.5)':'rgba(59,130,246,.5)'})));
+  const emaOf=(arr,n)=>{ const k=2/(n+1); let e=arr[0]; return arr.map(v=>(e=v*k+e*(1-k))); };
+  const closes=data.map(d=>d.close), EN=[5,10,20,60], EC=['#f778ba','#e3b341','#56d4dd','#3fb950'];
+  const ES=EN.map(n=>emaOf(closes,n));
+  ES.forEach((a,k)=>{ const ls=chart.addLineSeries({color:EC[k],lineWidth:k===3?2:1,priceLineVisible:false,lastValueVisible:!small,crosshairMarkerVisible:false}); ls.setData(a.map((v,i)=>({time:data[i].time,value:v}))); });
+  // 기준봉 VWAP (7/30 뒤 +8%·거래 3배 양봉, 없으면 거래 가장 많은 양봉부터)
+  _avwapNote='';
+  let cyc=data.findIndex(d=>d.time>='2026-07-30'); if(cyc<0) cyc=data.length;
+  const st=Math.max(20,cyc); let ai=-1, lab='기준봉';
+  for(let i=data.length-1;i>=st;i--){ const avg=data.slice(i-20,i).reduce((a,b)=>a+b.vol,0)/20; if(data[i].close>=data[i-1].close*1.08&&data[i].close>data[i].open&&avg>0&&data[i].vol>=avg*3){ai=i;break;} }
+  if(ai<0){ let b=-1; for(let i=Math.max(st,1);i<data.length;i++){ if(data[i].close>data[i].open&&data[i].close>data[i-1].close&&(b<0||data[i].vol>data[b].vol)) b=i; } if(b>=0){ai=b;lab='최대거래 양봉';} }
+  if(ai>=0){ let pv=0,vv=0; const av=[]; for(let i=ai;i<data.length;i++){ const tp=(data[i].high+data[i].low+data[i].close)/3; pv+=tp*data[i].vol; vv+=data[i].vol; av.push({time:data[i].time,value:vv?pv/vv:tp}); }
+    const ls=chart.addLineSeries({color:'#f0883e',lineWidth:2,lineStyle:2,priceLineVisible:false,lastValueVisible:false,crosshairMarkerVisible:false}); ls.setData(av);
+    const lv=av[av.length-1].value, lc=closes[closes.length-1]; _avwapNote=` · ${lab} ${data[ai].time.slice(5)} VWAP ${Math.round(lv).toLocaleString()} ${lc>=lv?'위 ✓':'아래 ⚠'}`; }
+  // 신호 → 화살표 표시 (폰에선 진입·청산·손절·종베 추천·매수매도·위험만 글자)
+  const MC={entry:['#58a6ff','arrowUp'],exit:['#c9d1d9','arrowDown'],exit_bad:['#f0883e','arrowDown'],buy:['#1f6feb','arrowUp'],rest:['#2d9c87','circle'],info:['#8b949e','square'],
+            warn:['#f0883e','arrowDown'],trade_buy:['#ffffff','arrowUp'],trade_sell:['#bc8cff','arrowDown'],wait:['#58a6ff','circle'],near:['#6e7681','circle'],note:['#8b949e','circle']};
+  const KEY=['entry','exit','exit_bad','trade_buy','trade_sell','warn'];
+  const ts=new Set(data.map(d=>d.time));
+  let mk=(signals||[]).filter(sg=>ts.has(sg.date));
+  if(small) mk=mk.filter(sg=>!['near','note','info'].includes(sg.kind));
+  mk=mk.map(sg=>{ const [col,shape]=MC[sg.kind]||MC.info; const showTxt=!small||KEY.includes(sg.kind)||sg.label.startsWith('종베');
+    return {time:sg.date,position:sg.pos==='below'?'belowBar':'aboveBar',color:col,shape,text:showTxt?sg.label:'',size:sg.kind==='entry'?1.6:1}; })
+    .sort((a,b)=>a.time<b.time?-1:a.time>b.time?1:0);
+  cs.setMarkers(mk);
+  // 십자선 → 위에 그 봉 정보
+  const leg=document.getElementById(cid+'-leg'), byT={}; data.forEach((d,i)=>byT[d.time]=i);
+  const sigBy={}; (signals||[]).forEach(sg=>{ (sigBy[sg.date]=sigBy[sg.date]||[]).push(sg.label); });   // 올린 봉의 우리 신호도 글자로
+  const show=i=>{ if(!leg||i==null||i<0) return; const d=data[i], pc=i>0?data[i-1].close:d.open, ch=(d.close/pc-1)*100, c=ch>=0?'#f85149':'#58a6ff';
+    leg.innerHTML=`<b>${d.time.slice(2).replace(/-/g,'/')}</b> 시 ${Math.round(d.open).toLocaleString()} 고 ${Math.round(d.high).toLocaleString()} 저 ${Math.round(d.low).toLocaleString()} 종 <b style="color:${c}">${Math.round(d.close).toLocaleString()} (${ch>=0?'+':''}${ch.toFixed(2)}%)</b> · 거래 ${Math.round(d.vol).toLocaleString()}`
+      +`<br>${EN.map((n,k)=>`<span style="color:${EC[k]}">EMA${n} ${Math.round(ES[k][i]).toLocaleString()}</span>`).join(' · ')}`
+      +(sigBy[d.time]?`<br><b style="color:#58a6ff">신호: ${sigBy[d.time].join(' · ')}</b>`:''); };
+  show(data.length-1);
+  chart.subscribeCrosshairMove(p=>{ show(p&&p.time&&byT[p.time]!=null?byT[p.time]:data.length-1); });
+  const n=data.length; chart.timeScale().setVisibleLogicalRange({from:Math.max(0,n-(per||90)),to:n+2});
+  const ro=new ResizeObserver(()=>chart.applyOptions({width:el.clientWidth,height:el.clientHeight})); ro.observe(el);
+  _lw[cid]={chart,ro};
+  const last=ES.slice(0,3).map(a=>a[a.length-1]); return closes.length?(Math.max(...last)-Math.min(...last))/closes[closes.length-1]*100:null;
+}
+// 외부 라이브러리 없이 순수 canvas로 캔들차트 + 거래량 + 눌림목 지지선 그리기 (지금은 안 씀 — Lightweight Charts로 바꿈)
 function drawCandleChart(allCandles, spikeDate, show, opt){
   opt=opt||{};
   // 단기 EMA 5·10·20 (2026-10-07 사용자 "EMA를 내 눈으로 확인할 수 없나") — 앞쪽 캔들로 미리 계산하고 최근 90개만 그림
