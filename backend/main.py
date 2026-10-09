@@ -141,6 +141,7 @@ select{background:#21262d;border:1px solid #30363d;color:#c9d1d9;padding:6px 10p
 .ws-list{max-height:660px;overflow-y:auto}
 .ws-main{min-width:0;padding:12px}
 .ws #ws-panel{background:var(--card);border:1px solid var(--line);border-radius:10px;padding:12px}
+.ws-search{position:relative;margin-bottom:6px}.ws-search input{width:100%;box-sizing:border-box;background:var(--card2);border:1px solid var(--line);color:var(--text);border-radius:16px;padding:7px 12px;font-size:13px;outline:none}.ws-search input:focus{border-color:var(--blue)}#ws-sr{position:absolute;left:0;right:0;top:100%;z-index:30;background:var(--card);border:1px solid var(--line);border-radius:10px;margin-top:4px;max-height:360px;overflow:auto;display:none;box-shadow:0 6px 18px rgba(0,0,0,.4)}#ws-sr.on{display:block}
 .ws-tabs{display:flex;gap:6px;margin-bottom:6px}
 .ws-tabs button{flex:1;background:var(--card2);border:1px solid var(--line);color:var(--muted);border-radius:16px;padding:6px 0;font-size:12px;cursor:pointer;white-space:nowrap}
 .ws-tabs button.on{background:var(--text);color:var(--bg);font-weight:700;border-color:var(--text)}
@@ -612,6 +613,7 @@ select{background:#21262d;border:1px solid #30363d;color:#c9d1d9;padding:6px 10p
   <div id="db-verdict" style="border-radius:12px;padding:14px 18px;margin-bottom:14px;border:1px solid #30363d;font-size:15px">로딩 중…</div>
   <div class="ws">
     <div class="ws-list">
+      <div class="ws-search"><input id="ws-q" placeholder="🔍 종목 검색 (이름·코드·초성)" autocomplete="off" oninput="wsSearch(this.value)" onkeydown="if(event.key==='Enter'){const f=document.querySelector('#ws-sr .ws-item');if(f)f.click();}else if(event.key==='Escape'){this.value='';wsSearch('');}"><div id="ws-sr"></div></div>
       <div class="ws-tabs"><button data-t="entry" onclick="wsTab('entry')">오늘 진입</button><button data-t="wait" onclick="wsTab('wait')">대기</button><button data-t="watch" onclick="wsTab('watch')">관심</button></div>
       <div class="ts" id="ws-lane-note" style="margin:0 4px 4px"></div>
       <div class="ts" id="ws-asof" style="margin:0 4px 4px"></div>
@@ -2045,6 +2047,26 @@ function renderWsList(){
     el.innerHTML=a.map(row).join('')+(b.length?`<div class="ws-sec">장기 보유</div>`+b.map(row).join(''):''); }
   else el.innerHTML=L.map(row).join('');
 }
+let _wsQT=null;
+function wsSearch(v){      // 종목 검색 (2026-10-09) — 이름·코드·초성, 고르면 오른쪽에 차트·패널
+  clearTimeout(_wsQT); const box=document.getElementById('ws-sr');
+  if(!v.trim()){ box.classList.remove('on'); box.innerHTML=''; return; }
+  _wsQT=setTimeout(async()=>{
+    const d=await fetch(`${API}/stocks/search?q=${encodeURIComponent(v)}`).then(r=>r.ok?r.json():null).catch(()=>null);
+    if(document.getElementById('ws-q').value!==v) return;
+    const L=(d&&d.items)||[];
+    box.innerHTML=L.length?L.map(x=>`<div class="ws-item" onclick="wsPick('${x.code}','${x.name.replace(/'/g,'')}')">${wsAv(x.code,x.name)}<div class="ws-txt"><div class="ws-nm"><span class="n">${x.name}</span></div><div class="ws-tg">${x.code}</div></div>
+      <div class="ws-px">${x.close?Math.round(x.close).toLocaleString():'-'}<div style="color:${x.chg>0?'var(--up)':x.chg<0?'var(--down)':'var(--muted)'}">${x.chg>0?'+':''}${(x.chg||0).toFixed(2)}%</div></div></div>`).join('')
+      :'<div class="ts" style="padding:10px">찾는 종목이 없습니다</div>';
+    box.classList.add('on');
+  },200);
+}
+function wsPick(code,name){
+  const q=document.getElementById('ws-q'); q.value=''; q.blur(); wsSearch('');
+  wsOpen(code,name);
+  const m=document.querySelector('.ws-main'); if(m&&window.innerWidth<900) m.scrollIntoView({behavior:'smooth',block:'start'});
+}
+document.addEventListener('click',e=>{ if(!e.target.closest('.ws-search')){ const b=document.getElementById('ws-sr'); if(b) b.classList.remove('on'); } });
 async function wsOpen(code,name){
   _ws.code=code;
   document.querySelectorAll('.ws-item').forEach(e=>e.classList.toggle('on',e.dataset.c===code));

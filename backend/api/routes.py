@@ -1680,6 +1680,50 @@ def get_labels(owner: str = "", day: str = "", db: Session = Depends(get_db)):
     return {"stats": stats, "day": today, "missed": missed}
 
 
+_SEARCH: dict = {"t": 0.0, "rows": []}
+_CHO = "ㄱㄲㄴㄷㄸㄹㅁㅂㅃㅅㅆㅇㅈㅉㅊㅋㅌㅍㅎ"
+
+
+def _chosung(s: str) -> str:
+    return "".join(_CHO[(ord(ch) - 0xAC00) // 588] if "가" <= ch <= "힣" else ch for ch in s)
+
+
+@router.get("/stocks/search")
+def search_stocks(q: str = "", db: Session = Depends(get_db)):
+    """종목 검색 — 이름·코드·초성(ㅅㅇㄴ → SK이노베이션) (2026-10-09 사용자 "종목 검색을 할 수 있게"). 최근 시세 있는 종목만, 12개."""
+    import time as _t  # noqa: PLC0415
+    from backend.services.watchlist import ALIAS  # noqa: PLC0415
+    nick = {"하닉": "SK하이닉스", "삼전": "삼성전자", "삼전우": "삼성전자우", "엔솔": "LG에너지솔루션", "엘엔솔": "LG에너지솔루션", "현차": "현대차",
+            "삼바": "삼성바이오로직스", "셀트": "셀트리온", "카뱅": "카카오뱅크", "한전": "한국전력", "두에빌": "두산에너빌리티", "한화에어로": "한화에어로스페이스",
+            **ALIAS}
+    q = nick.get(q.strip(), q).strip().upper().replace(" ", "")
+    if not q:
+        return {"items": []}
+    if _t.time() - _SEARCH["t"] > 600:
+        latest = db.execute(text("select max(trading_date) from spot_daily_prices")).scalar()
+        rows = db.execute(text("select s.code, s.name, p.close_price, p.change_pct, p.trading_value from stocks s join spot_daily_prices p "
+                               "on p.stock_code = s.code and p.trading_date = :d"), {"d": latest}).all()
+        _SEARCH.update(t=_t.time(), rows=[(c, n, n.upper().replace(" ", ""), _chosung(n.upper().replace(" ", "")), float(px or 0), float(ch or 0), float(tv or 0))
+                                          for c, n, px, ch, tv in rows if n])
+    hits = []
+    for c, n, nu, cho, px, ch, tv in _SEARCH["rows"]:
+        if q == c or q == nu:
+            rank = 0
+        elif c.startswith(q) or nu.startswith(q):
+            rank = 1
+        elif q in nu:
+            rank = 2
+        elif cho.startswith(q):
+            rank = 3
+        elif q in cho:
+            rank = 4
+        else:
+            continue
+        hits.append((rank, -tv, c, n, px, ch))
+    hits.sort()
+    return {"items": [{"code": c, "name": n, "close": px, "chg": round(ch, 2)} for _, _, c, n, px, ch in hits[:12]]}
+
+
 @router.get("/stocks/short-watch")
 def get_short_watch(q: str = "", db: Session = Depends(get_db)):
     """공매도·대차잔고 감시: 종목명이나 코드(쉼표, 최대 8개)."""
