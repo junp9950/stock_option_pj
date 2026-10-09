@@ -620,7 +620,7 @@ select{background:#21262d;border:1px solid #30363d;color:#c9d1d9;padding:6px 10p
       <div class="ws-per" id="ws-tf"><button data-tf="1d" onclick="wsTf('1d')">일봉</button><button data-tf="1w" onclick="wsTf('1w')">주봉</button><button data-tf="60m" onclick="wsTf('60m')">60분</button><button data-tf="30m" onclick="wsTf('30m')">30분</button><button data-tf="15m" onclick="wsTf('15m')">15분</button><button data-tf="5m" onclick="wsTf('5m')">5분</button><button data-tf="1m" onclick="wsTf('1m')">1분</button></div>
       <div class="ws-per" id="ws-per"><button data-n="66" onclick="wsPeriod(66)">3개월</button><button data-n="130" onclick="wsPeriod(130)">6개월</button><button data-n="250" onclick="wsPeriod(250)">1년</button></div>
       <div class="lwbox"><div class="lwleg" id="ws-chart-leg"></div><div id="ws-chart" class="lwc"></div></div>
-      <div class="ws-legend"><span>▲ <b>진입</b> = 사기 좋은 자리 (지난 3년 평균 +2.7%, 2~3주 보유) → ▼ 절반 팔기 · 나머지 팔기 / 손절</span><span>↑ <b>종가 매수</b> = 그날 종가에 살 후보 (다음 날 +2% 못 가면 정리, 넘으면 절반 팔고 나머지는 손절선 올려 가며 보유)</span><span>↑ 파란 화살표 = 오를 때 자주 나온 모양</span><span>● 점 = 참고 (돌파 대기 · 아깝게 놓침 · 상승 추세 시작)</span><span>■ 회색 = 급등봉 · 1년 최대 거래</span><span>▼ 주황 = 조심</span><span>· 두 손가락으로 확대, 끌어서 이동, 누르면 그 날 가격</span></div>
+      <div class="ws-legend"><span>▲ <b>진입</b> = 사기 좋은 자리 (지난 3년 평균 +2.7%, 2~3주 보유) → ▼ 절반 팔기 · 나머지 팔기 / 손절</span><span>↑ <b>종가 매수</b> = 그날 종가에 살 후보 (다음 날 +2% 못 가면 정리, 넘으면 절반 팔고 나머지는 손절선 올려 가며 보유)</span><span>↑ 파란 화살표 = 오를 때 자주 나온 모양</span><span>· 작은 점 = 참고 (돌파 대기 · 아깝게 놓침 · 상승 추세 시작) — 봉에 올리면 위에 내용</span><span>■ 회색 = 급등봉 · 1년 최대 거래</span><span>▼ 주황 = 조심</span><span>· 두 손가락으로 확대, 끌어서 이동, 누르면 그 날 가격</span></div>
     </div>
     <aside class="cm-panel" id="ws-panel"></aside>
   </div>
@@ -2219,9 +2219,11 @@ function renderLwChart(cid, allCandles, signals, per){
   const KEY=['entry','exit','exit_bad','trade_buy','trade_sell','warn'];
   const ts=new Set(data.map(d=>d.time));
   let mk=(signals||[]).filter(sg=>ts.has(sg.date));
-  if(small) mk=mk.filter(sg=>!['near','note','info'].includes(sg.kind));
-  mk=mk.map(sg=>{ const [col,shape]=MC[sg.kind]||MC.info; const showTxt=!small||KEY.includes(sg.kind)||sg.label.startsWith('종가 매수');
-    return {time:sg.date,position:sg.pos==='below'?'belowBar':'aboveBar',color:col,shape,text:showTxt?sg.label:'',size:sg.kind==='entry'?1.6:1}; })
+  if(small) mk=mk.filter(sg=>sg.kind!=='info');
+  const DOT=['near','note','wait'];     // 참고 점: 작게 점만 — 글자는 봉에 올리면 위 정보 줄에 (2026-10-09 "점 뜨는 거 뭐고", 글자 겹침)
+  mk=mk.map(sg=>{ const [col,shape]=MC[sg.kind]||MC.info; const dot=DOT.includes(sg.kind);
+    const showTxt=!dot&&(!small||KEY.includes(sg.kind)||sg.label.startsWith('종가 매수'));
+    return {time:sg.date,position:sg.pos==='below'?'belowBar':'aboveBar',color:col,shape,text:showTxt?sg.label:'',size:sg.kind==='entry'?1.6:dot?0.4:1}; })
     .sort((a,b)=>a.time<b.time?-1:a.time>b.time?1:0);
   cs.setMarkers(mk);
   // 십자선 → 위에 그 봉 정보
