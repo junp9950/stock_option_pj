@@ -203,11 +203,26 @@ def signals(db: Session, code: str, days: int = 260, owner: str | None = None) -
             buy_ok = (((sc >= 6) & rs_ok) | ema_buy) & base_ok & (rk_ <= 0.08)
             pos_ = {d: k for k, d in enumerate(df.index)}
             prev_on, run_best = False, None
+            # 들고 있는 동안 또 뜬 매수 (2026-10-09 팬오션 "비쌀 때 사서 싸게 파는 정석" → "좋은 자리에서 피라미딩할 수도") — 12년(v12s/v12t.py):
+            # 첫 매수 +1R↑일 때 같은 크기 더 사고 손절을 새 신호 저가 -1%로 올리면 묶음당 R +1.91/+2.61/+3.61 (그냥 들고 감 +1.98/+2.54/+3.04)
+            # 첫 매수가 손실 중에 또 사면 -0.45/-0.34/+0.36 → '더 사지 않기'. 보유 = 첫 매수부터 손절(저가 -1%) 닿거나 21일선 아래 종가까지.
+            hold = None      # {"k": 산 날, "p": 산 값, "rk": 손절폭, "stop": 지금 손절가}
             for k, d in enumerate(df.index):
+                if hold and k > hold["k"]:
+                    if float(L.iloc[k]) < hold["stop"] or (k - hold["k"] > 1 and float(C.iloc[k]) < float(e21.iloc[k])):
+                        hold = None
                 on = bool(buy_ok.iloc[k])
                 if not on:
                     prev_on, run_best = False, None
                     continue
+                add_r = None
+                if not prev_on:
+                    if hold is None:
+                        hold = {"k": k, "p": float(C.iloc[k]), "rk": float(rk_.iloc[k]), "stop": float(L.iloc[k]) * 0.99}
+                    else:
+                        add_r = (float(C.iloc[k]) / hold["p"] - 1) / hold["rk"]
+                        if add_r >= 1:
+                            hold["stop"] = max(hold["stop"], float(L.iloc[k]) * 0.99)
                 if d < start:
                     prev_on, run_best = True, (rk_[d] if run_best is None else min(run_best, rk_[d]))
                     continue
@@ -225,7 +240,17 @@ def signals(db: Session, code: str, days: int = 260, owner: str | None = None) -
                 desc = (("이평선 모였다 돌파 · " if bool(ema_buy[d]) else "") + f"손절 {L[d] * 0.99:,.0f} (-{rk_[d] * 100:.1f}%)" + (" · 수량 절반" if rk_[d] > 0.05 else "")
                         + f" · 점수 {int(sc[d])}/7" + (f" (빠짐: {miss[0]})" if miss else ""))
                 # 연속으로 뜨는 날: 첫날만 '매수', 이어지는 날은 '자리 유지' 점 · 손절폭이 확 짧아지면 '더 좋은 자리' (2026-10-09 "매일 뜬 이유가 뭐야")
-                if not prev_on:
+                if not prev_on and add_r is not None:
+                    if add_r >= 1:
+                        why.append(f"들고 있는 첫 매수 {add_r:+.1f}R → 같은 크기까지 더 사도 됨 · 전체 손절을 {L[d] * 0.99:,.0f}로 올리기")
+                        items.append({"date": str(d), "label": f"더 사기 가능 (첫 매수 {add_r:+.1f}R) · 손절 올리기 {L[d] * 0.99:,.0f} · {desc}", "kind": "score_add",
+                                      "pos": "below", "price": float(L[d]), "score": int(sc[d]), "why": why})
+                    else:
+                        why.append(f"들고 있는 첫 매수 {add_r:+.1f}R (+1R 안 됨) → 더 사지 않기 · 안 들고 있으면 새로 사도 되는 자리")
+                        items.append({"date": str(d), "label": f"보유 중 · 더 사지 않기 (첫 매수 {add_r:+.1f}R) · 새로 사는 사람은 매수 · {desc}", "kind": "score_hold",
+                                      "pos": "below", "price": float(L[d]), "score": int(sc[d]), "why": why})
+                    run_best = rk_[d]
+                elif not prev_on:
                     items.append({"date": str(d), "label": f"{'✅ ' if good else ''}종가 매수 · {desc}", "kind": "score", "pos": "below",
                                   "price": float(L[d]), "score": int(sc[d]), "good": bool(good), "why": why})
                     run_best = rk_[d]
