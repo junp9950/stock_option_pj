@@ -55,7 +55,7 @@ def _lazy_today(db: Session, latest) -> dict:
     import numpy as np  # noqa: PLC0415
     from backend.services.stock_signals import _bull_days  # noqa: PLC0415
     if not _bull_days(db).get(latest, False):
-        return {"entry": [], "pull": []}
+        return {"entry": [], "pull": [], "breakout": []}
     dates = [r[0] for r in db.execute(text("select distinct trading_date from spot_daily_prices where trading_date >= cast(:d as date) - 200 "
                                            "and trading_date <= :d order by 1"), {"d": latest}).all()]
     codes = [r[0] for r in db.execute(text("select distinct stock_code from spot_daily_prices where trading_date = :d"), {"d": latest}).all()]
@@ -71,7 +71,7 @@ def _lazy_today(db: Session, latest) -> dict:
     C = pd.DataFrame(A["c"])
     e8, e14, e21, e55 = (C.ewm(span=n, adjust=False).mean().values for n in (8, 14, 21, 55))
     O, L, Cn, V = A["o"], A["l"], A["c"], A["v"]
-    liq = pd.DataFrame(A["t"]).rolling(20).mean().values >= 3e9
+    liq = pd.DataFrame(A["t"]).rolling(20).mean().values >= 1e9      # Lazy Alpha는 작은 종목도 잡아서 10억까지 넓게 (2026-10-09 미래반도체 17억·대성에너지 29억)
     al = (e8 > e14) & (e14 > e21) & (e21 > e55)
     def ent(r):
         reclaim = al[r] & al[r - 1] & (Cn[r] > e21[r]) & (Cn[r - 1] <= e21[r - 1])
@@ -83,8 +83,11 @@ def _lazy_today(db: Session, latest) -> dict:
     for k in range(1, 11):
         recent |= ent(r - k)
     pull = recent & al[r] & ((L[r] <= e8[r] * 1.01) | (L[r] <= e14[r] * 1.01)) & (Cn[r] > O[r]) & (V[r] > V[r - 1]) & (Cn[r] > e14[r]) & liq[r]
+    # 돌파 진입 = 오늘 처음 EMA8>14>21>55 정배열 + 거래량 50일 평균(오늘 포함) 1.5배↑ + 양봉 (역산 7/7 일치, project_lazy_alpha)
+    v50 = pd.DataFrame(V).rolling(50).mean().values
+    brk = al[r] & ~al[r - 1] & (V[r] >= v50[r] * 1.5) & (Cn[r] > O[r]) & liq[r]
     pick = lambda m: [{"code": codes[j], "close": float(Cn[r, j]), "stop": round(float(L[r, j]) * 0.99)} for j in np.where(m)[0]]  # noqa: E731
-    return {"entry": pick(e_now), "pull": pick(pull)}
+    return {"entry": pick(e_now), "pull": pick(pull), "breakout": pick(brk)}
 
 
 def _closes(db: Session, codes: list[str], since: date) -> pd.DataFrame:
