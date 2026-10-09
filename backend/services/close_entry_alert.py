@@ -49,9 +49,16 @@ def text_now(db: Session, k: int = 8) -> str | None:
         return "\n".join(out)
     good = [r for r in rows if r[1]["risk"] <= 0.03]
     out.append(f"점수 6↑ {len(rows)}개 · ✅ 손절폭 3%↓ {len(good)}개" + (f" · 8%↑라 뺀 것 {len(wide)}개" if wide else ""))
+    try:
+        from backend.services.stock_signals import sector_rank_of  # noqa: PLC0415
+        srk = sector_rank_of(db)
+    except Exception:  # noqa: BLE001
+        srk = {}
+    rows = sorted(rows, key=lambda cv: (srk.get(cv[0], (99, ""))[0] > 8, cv[1]["risk"]))     # 섹터 1~8위 먼저
     for c, v in rows[:k]:
         out.append(f"{'✅' if v['risk'] <= 0.03 else '·'} <b>{names.get(c, c)}</b> {v['score']}/7 · 스탑로스 {v['stop']:,.0f} (-{v['risk'] * 100:.1f}%)"
-                   + (" · 후순위, 수량 절반 이하" if v["risk"] > 0.05 else ""))
+                   + (" · 후순위, 수량 절반 이하" if v["risk"] > 0.05 else "")
+                   + (f" · {srk[c][1]} {srk[c][0]}위" if srk.get(c, (99,))[0] <= 8 else " · 섹터 밖"))
     out.append("파는 법: 사면 바로 스탑로스 예약 (정규장만) · 21일선 아래 종가면 다음 날 아침 정리")
     out.append("<i>3년(같은 위험 금액당): 손절폭 3%↓ 1.4배 · 3~5% 0.55배 · 5~8% 0.35배 · 8%↑ 0.1배 벎 → 수량은 손절폭에 맞춰</i>")
     return "\n".join(out)

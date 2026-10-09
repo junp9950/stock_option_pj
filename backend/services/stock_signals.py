@@ -380,6 +380,10 @@ def _workspace_list(db: Session) -> dict:
     def lane(tags):
         # 2026-10-09 사용자 "오늘 정한 기준으로 바꾸고": 오늘 진입 = ▲ 진입 · 종가 점수 6↑(손절폭 8%↓)만. 그 밖(종가 매수·파란 화살표 등)은 대기에 참고로
         return "entry" if any(t.startswith(("▲", "✅ 손익비", "종가 점수 6↑", "후순위", "⬇ 급락")) for t in tags) else "wait"
+    try:
+        srank = sector_rank_of(db)
+    except Exception:  # noqa: BLE001
+        srank = {}
     cands = []
     for x in cand.values():
         if lane(x["tags"]) == "wait" and not x["tags"][0].startswith(("돌파 대기", "⏸")):
@@ -389,10 +393,21 @@ def _workspace_list(db: Session) -> dict:
         y["score"] = sc["score"] if sc else None
         y["risk"] = round(sc["risk"] * 100, 1) if sc else None
         y["rr"] = bool(sc and sc["score"] >= 6 and sc["flags"][1] and sc["risk"] <= 0.03)
+        sr = srank.get(x["code"], (99, ""))
+        y["sec_rank"] = sr[0]
+        if y["lane"] == "entry" and sc and sc["score"] >= 6 and sc["flags"][1]:
+            if sr[0] <= 3:
+                x["tags"] = [f"뜨는 섹터 {sr[1]}"] + x["tags"]; y["tags"] = x["tags"]
+            elif sr[0] <= 8:
+                x["tags"] = [f"올라오는 섹터 {sr[1]}"] + x["tags"]; y["tags"] = x["tags"]
+            else:
+                x["tags"] = ["섹터 밖 · 후순위"] + x["tags"]; y["tags"] = x["tags"]
         if y["lane"] == "entry" and sc and sc["risk"] > 0.08 and not any(t.startswith("▲") for t in x["tags"]):
             y["lane"] = "wait"            # 다른 이유로 올라왔어도 손절폭 5%↑면 대기로
         cands.append(y)
-    cands.sort(key=lambda y: (y["lane"] != "entry", not y["rr"], (y["risk"] or 0) > 5, -(y["score"] if y["score"] is not None else -1), y["risk"] if y["risk"] is not None else 99))
+    # 정렬: 매수 칸 → 섹터 1~8위 먼저 → 손절폭 3%↓ → 5% 안 → 점수 → 손절폭
+    cands.sort(key=lambda y: (y["lane"] != "entry", (y.get("sec_rank") or 99) > 8, not y["rr"], (y["risk"] or 0) > 5,
+                              -(y["score"] if y["score"] is not None else -1), y["risk"] if y["risk"] is not None else 99))
     return {"as_of": str(latest), "live": live_at, "mode": mp.get("mode"),
             "candidates": cands, "track": _track_rows(db, px), "track_done": (tracking(db) or {}).get("done", {})}
 
@@ -693,6 +708,22 @@ def _dip_picks(db: Session, latest, live: dict | None = None, frac: float = 1.0,
             out["items"].append({"code": code, "name": names.get(code, code), "chg": round(float(chg[code]) * 100, 2), "close": float(c[code]),
                                  "stop": round(stop), "risk": round((1 - stop / float(c[code])) * 100, 1), "family": f})
     out["items"].sort(key=lambda x: x["risk"])          # 손절이 가까운 것부터 보여 줌 (순서일 뿐, 거르지는 않음)
+    return out
+
+
+def sector_rank_of(db: Session) -> dict:
+    """종목 → (가장 좋은 섹터 20일 순위, 섹터 이름). 장중이면 실시간 섹터 순위. 매수 정렬용 (2026-10-09 강도×섹터:
+    2023~ 섹터 1~8위 안이면 같은 강도라도 R +0.59 더 (우연 0%), 그 전 장에선 차이 없음 → 가산점으로만)."""
+    from backend.screener.rotation import family_members, scan, scan_live  # noqa: PLC0415
+    from backend.services.result_cache import cached  # noqa: PLC0415
+    r = scan_live(db) or cached("sector_rotation", (), db, lambda: scan(db)) or {}
+    rank = {x["family"]: x.get("rank") or 99 for x in r.get("items", [])}
+    out: dict = {}
+    for f, mem in family_members(db).items():
+        rk = rank.get(f, 99)
+        for c in mem:
+            if c not in out or rk < out[c][0]:
+                out[c] = (rk, f)
     return out
 
 

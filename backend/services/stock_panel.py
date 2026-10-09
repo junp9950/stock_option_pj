@@ -146,7 +146,21 @@ def _panel(db: Session, code: str, owner: str | None = None) -> dict:
         from backend.services.telegram import _get  # noqa: PLC0415
         log = _get(db, "top3_log", {}) or {}
         if log and code in log.get(max(log), []):
-            tags.insert(0, "종가 매수 후보")
+            tags.append("참고 · 버틴 종목 (텔레그램 종베)")
+    except Exception:  # noqa: BLE001
+        pass
+    try:      # 사이트 매수 신호(목록과 같은 기준) — 패널 맨 위 단계에 바로 보이게 (2026-10-09 "시그널을 확실히")
+        from backend.services.stock_signals import _bull_days, close_scores_now, dip_now, sector_rank_of  # noqa: PLC0415
+        latest_ = db.execute(text("select max(trading_date) from spot_daily_prices")).scalar()
+        if _bull_days(db).get(latest_, False):
+            sc_ = close_scores_now(db).get("scores", {}).get(code)
+            if sc_ and sc_["score"] >= 6 and sc_["flags"][1] and sc_["risk"] <= 0.08:
+                rk_ = sc_["risk"]
+                tags.insert(0, "✅ 손익비 좋음" if rk_ <= 0.03 else "종가 점수 6↑" if rk_ <= 0.05 else "후순위 · 수량 절반")
+                sr_ = sector_rank_of(db).get(code, (99, ""))
+                tags.insert(1, f"뜨는 섹터 {sr_[1]}" if sr_[0] <= 3 else f"올라오는 섹터 {sr_[1]}" if sr_[0] <= 8 else "섹터 밖 · 후순위")
+            if any(x["code"] == code for x in dip_now(db).get("items", [])):
+                tags.insert(0, "⬇ 급락 날 줍기 (시험 중)")
     except Exception:  # noqa: BLE001
         pass
 
@@ -174,7 +188,7 @@ def _panel(db: Session, code: str, owner: str | None = None) -> dict:
         title = f"진입 신호 {act['days']}일째 · {act['gain']:+.1f}%"
         sub = f"{act['date'][5:].replace('-', '/')} 진입 {act['entry']:,.0f} · 스탑로스 {act['stop']:,.0f}" + (" · 절반 팔았음 (21일선 아래 종가면 다음 날 아침 나머지)" if act["half"] else " · 14일선 아래로 내려오면 절반 팔기")
     elif tags:
-        stage, title = 1, tags[0]
+        stage, title = 1, ("종가 매수 신호 · " + tags[0] if tags[0].startswith(("✅ 손익비", "종가 점수", "후순위")) else tags[0])
         sub = " · ".join(tags[1:]) or "오늘 우리 후보 목록에 있음"
         if tags[0].startswith("⬇ 급락"):
             sub = f"시장 급락에 같이 빠진 센 종목 · 손절 20일선 {float(ema[20]) * 0.99:,.0f}원 (-1%) · 수량 절반 · 21일선 아래 종가면 다음 날 아침 정리"
