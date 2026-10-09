@@ -899,9 +899,11 @@ function renderHomeTop(d, live){
   const sg=x=>(x>0?'+':'')+x, m=d.market||{}, all=m['전체']||{}, br=d.breadth||{}, it=d.index_today||{}, md=(live&&live.mode)||d.mode||{};
   const B={g:['g','▲ 양호'],n:['n','■ 중립'],b:['b','▼ 약화']};
   const rows=[];
-  const add=(t,sub,v,k,click)=>rows.push({t,sub,v,k,click});
+  const add=(t,sub,v,k,click,bt)=>rows.push({t,sub,v,k,click,bt});
   add('시장 국면','종목 평균 지수 · 20일선 '+(all.vs_ma20_pct!=null?sg(all.vs_ma20_pct)+'%':'-'),all.state||'-',all.state==='상승'?'g':all.state==='하락'?'b':'n');
   if(br.pct!=null) add('시장 폭','50일선 위 비율 · 10일 '+sg(br.chg10)+'%p'+(br.weak?' · 곧 흔들릴 수 있음':''),br.pct+'%',br.narrow?'b':br.weak?'n':br.pct>=55?'g':'n');
+  // 과매수·과매도 — 판단은 사용자, 사이트는 온도만 (2026-10-09) · 색 대신 모양·글자로 (색약)
+  if(br.temp) add('과매수 · 과매도','20일선 위 '+br.br20+'% · 20일선 +20% 넘은 종목 '+br.hot20+'% · 3일 '+sg(br.c3)+'%'+(br.temp_say?' · '+br.temp_say:''),br.temp,'n',null,br.temp_k==='up'?'⚠ 과매수':br.temp_k?'⬇ 과매도':'■ 보통');
   if(br.hi60!=null) add('신고가 · 신저가','최근 60일 최고 · 최저 종가 종목 수',br.hi60+' · '+br.lo60,br.hi60>=br.lo60*2&&br.hi60>=10?'g':br.lo60>br.hi60?'b':'n');
   if(m.rel!=null) add('삼전·하닉 vs 코스닥','최근 20일 · 삼하 '+sg(m.sh20)+'% · 코스닥 '+sg(m.kq20)+'%',sg(m.rel)+'%p',m.rel>=10?'b':m.rel<=-3?'g':'n');
   if(m.sh_foreign5!=null) add('외국인','삼전·하닉 5일 순매수',(Math.abs(m.sh_foreign5)>=10000?(m.sh_foreign5>=0?'+':'-')+(Math.abs(m.sh_foreign5)/10000).toFixed(1)+'조':(m.sh_foreign5>=0?'+':'')+Math.round(m.sh_foreign5).toLocaleString()+'억'),m.sh_foreign5>0?'g':'b');
@@ -914,7 +916,7 @@ function renderHomeTop(d, live){
     <div class="hc-verdict"><span class="hc-badge ${B[vk][0]}">${B[vk][1].split(' ')[0]}</span><b>${vt}</b></div>
     <div class="hc-sum">근거 ${rows.length}개 중 ${good}개 양호 · 하락장은 쉬고, 시장이 -2% 넘게 빠지는 날은 센 종목 줍기</div>
     <div class="hc-bars">${rows.map(r=>`<i class="${r.k==='g'?'g':r.k==='b'?'b':''}"></i>`).join('')}</div>
-    ${rows.map(r=>`<div class="hc-row"><div class="t"><b>${r.t}</b><span>${r.sub}</span></div><div class="v">${r.v}</div><span class="hc-badge ${B[r.k][0]}">${B[r.k][1]}</span></div>`).join('')}`;
+    ${rows.map(r=>`<div class="hc-row"><div class="t"><b>${r.t}</b><span>${r.sub}</span></div><div class="v">${r.v}</div><span class="hc-badge ${B[r.k][0]}">${r.bt||B[r.k][1]}</span></div>`).join('')}`;
   const ix=k=>{ const x=it[k]; if(!x) return ''; const c=x.pct>=0?'var(--up)':'var(--down)';
     return `<div class="hc-num" style="cursor:pointer" onclick="openIndexChart('${k==='코스피'?'KOSPI':'KOSDAQ'}','${k}')"><div class="l">${k}${x.status==='OPEN'?' · 장중':''}</div><div class="v">${x.close}</div><div class="s" style="color:${c}">${sg(x.pct)}%</div></div>`; };
   const st=d.sectors_today||{}, pill=(x,c)=>`<span class="hc-pill ${c}" title="20일 순위 ${x.rank||'-'}위 (10일 전 ${x.rank_10ago||'-'}위)">${x.family} <b style="color:${x.chg>=0?'var(--up)':'var(--down)'}">${sg(x.chg)}%</b></span>`;

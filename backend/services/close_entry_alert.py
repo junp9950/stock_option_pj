@@ -30,6 +30,8 @@ def text_now(db: Session, k: int = 8) -> str | None:
         pass
     try:
         br = market_breadth(db)
+        if br.get("temp") and br["temp"] != "보통":
+            out.append(f"{'⚠' if br.get('temp_k') == 'up' else '⬇'} 시장 {br['temp']} (어제 마감 기준) — {br.get('temp_say', '')}")
         if br.get("weak") or br.get("narrow"):
             out.append(f"⚠ 시장 폭 {br['pct']}% ({br['chg10']:+.1f}%p) — 곧 흔들릴 수 있음 · 새로 쫓지 말고 빠지는 날 줍기 준비")
     except Exception:  # noqa: BLE001

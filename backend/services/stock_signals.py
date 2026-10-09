@@ -617,8 +617,25 @@ def market_breadth(db: Session) -> dict:
     l1 = TV.rolling(20).mean().iloc[-1] >= 1e9
     hi60 = int(((C.iloc[-1] >= C.iloc[-60:].max()) & liq.iloc[-1]).sum()); lo60 = int(((C.iloc[-1] <= C.iloc[-60:].min()) & liq.iloc[-1]).sum())
     adv = float((CH.iloc[-1][l1] > 0).mean())
+    # 과매수·과매도 (2026-10-09 사용자 "급락은 내가 판단하고 니는 추세추종 · 시장이 과매도·과매수인지 정도만 알려 줘")
+    # 12년(obos.py, 아무 날 20일 뒤 시장 +1.7% · 오른 비율 63%): 3일 -8%↓ +15.2%·79% / 20일선 위 종목 15%↓ +9.6%·73% / 3일 -5%↓ +6.1%·73%
+    # 20일선 +20%↑ 종목 15%↑(과열 넓음) +2.5%·오른 비율 46% (반반) · 20일선 위 85%↑는 오히려 +6.4%·71% (힘이 센 것, 과매수 아님)
+    br20 = float((C > C.rolling(20).mean()).where(liq).mean(axis=1).iloc[-1])
+    hot20 = float(((C / C.rolling(20).mean() - 1 >= 0.20) & liq).iloc[-1].sum() / max(int(liq.iloc[-1].sum()), 1))
+    c3 = float(lvl.iloc[-1] / lvl.iloc[-4] - 1)
+    if c3 <= -0.08:
+        temp = ("크게 과매도", "dn2", "3일 새 크게 빠짐 · 반등이 나오기 쉬운 자리")
+    elif br20 <= 0.15:
+        temp = ("과매도", "dn", "20일선 위 종목이 아주 적음 · 반등이 나오기 쉬운 자리")
+    elif c3 <= -0.05:
+        temp = ("약간 과매도", "dn", "3일 새 많이 빠짐")
+    elif hot20 >= 0.15:
+        temp = ("과매수", "up", "20일선보다 20% 넘게 뜬 종목이 많음 · 흔들리기 쉬운 자리")
+    else:
+        temp = ("보통", "", "")
     v = {"date": str(latest), "pct": round(now * 100), "chg10": round(d10 * 100, 1), "index_up": idx_up,
-         "weak": bool(idx_up and d10 <= -0.05), "narrow": bool(now < 0.40), "hi60": hi60, "lo60": lo60, "adv_pct": round(adv * 100)}
+         "weak": bool(idx_up and d10 <= -0.05), "narrow": bool(now < 0.40), "hi60": hi60, "lo60": lo60, "adv_pct": round(adv * 100),
+         "br20": round(br20 * 100), "hot20": round(hot20 * 100), "c3": round(c3 * 100, 1), "temp": temp[0], "temp_k": temp[1], "temp_say": temp[2]}
     _BR.update(key=latest, v=v)
     return v
 
