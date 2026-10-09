@@ -37,10 +37,54 @@ def log_signals(db: Session) -> str:
         "entry": [{"code": x["code"], "name": x["name"], "kind": x["kind"], "close": x["close"], "stop": round(x["stop"])} for x in entries],
         "score": [{"code": c, "name": names.get(c, c), "score": v["score"], "stop": round(v["stop"])} for c, v in sc.items() if v["score"] >= 6],
     }
+    try:      # 비교용 뒷기록 (화면·텔레그램엔 안 보임, 2026-10-09 사용자 "뒤로 백데이터로 · 어디에 뜨게는 하지 말고")
+        log[str(latest)]["lazy"] = _lazy_today(db, latest)
+    except Exception as exc:  # noqa: BLE001
+        logger.warning("Lazy식 신호 기록 실패: %s", exc)
     for k in sorted(log)[:-400]:                 # 400일만 들고 있는다
         log.pop(k)
     _put(db, LOG_KEY, log)
     return f"진입 {len(log[str(latest)]['entry'])} · 점수6↑ {len(log[str(latest)]['score'])}"
+
+
+def _lazy_today(db: Session, latest) -> dict:
+    """Lazy Alpha 툴팁 규칙을 역산한 진입·눌림 진입 (lazy_reentry.py와 같은 규칙) — 우리 신호와 앞으로의 데이터로 비교하려고 매일 남긴다.
+    진입 = EMA8>14>21>55 정배열이 어제·오늘 유지 + (종가 21선 재돌파 또는 저가가 14·21선 0.5% 안 닿고 종가 14선 위 양봉).
+    눌림 = 최근 10일 안 진입 뒤 저가가 8·14선 1% 안 + 양봉 + 거래량 전날보다 늘고 + 종가 14선 위. 거래대금 20일 평균 30억↑ · 상승·횡보장.
+    3년 뒤돌아보기(같은 매도): 진입 R +0.10 · 눌림 +0.15 vs 우리 점수 6↑ +0.57."""
+    import numpy as np  # noqa: PLC0415
+    from backend.services.stock_signals import _bull_days  # noqa: PLC0415
+    if not _bull_days(db).get(latest, False):
+        return {"entry": [], "pull": []}
+    dates = [r[0] for r in db.execute(text("select distinct trading_date from spot_daily_prices where trading_date >= cast(:d as date) - 200 "
+                                           "and trading_date <= :d order by 1"), {"d": latest}).all()]
+    codes = [r[0] for r in db.execute(text("select distinct stock_code from spot_daily_prices where trading_date = :d"), {"d": latest}).all()]
+    di, ci = {d: i for i, d in enumerate(dates)}, {c: i for i, c in enumerate(codes)}
+    A = {k: np.full((len(dates), len(codes)), np.nan, dtype="float64") for k in ("o", "l", "c", "v", "t")}
+    for s_, d_, o_, l_, c_, v_, t_ in db.execute(text("select stock_code, trading_date, open_price, low_price, close_price, volume, trading_value "
+                                                      "from spot_daily_prices where trading_date >= cast(:d as date) - 200 and trading_date <= :d"), {"d": latest}):
+        j = ci.get(s_)
+        if j is None:
+            continue
+        i = di[d_]
+        A["o"][i, j], A["l"][i, j], A["c"][i, j], A["v"][i, j], A["t"][i, j] = o_ or np.nan, l_ or np.nan, c_ or np.nan, v_ or np.nan, t_ or np.nan
+    C = pd.DataFrame(A["c"])
+    e8, e14, e21, e55 = (C.ewm(span=n, adjust=False).mean().values for n in (8, 14, 21, 55))
+    O, L, Cn, V = A["o"], A["l"], A["c"], A["v"]
+    liq = pd.DataFrame(A["t"]).rolling(20).mean().values >= 3e9
+    al = (e8 > e14) & (e14 > e21) & (e21 > e55)
+    def ent(r):
+        reclaim = al[r] & al[r - 1] & (Cn[r] > e21[r]) & (Cn[r - 1] <= e21[r - 1])
+        sup = al[r] & al[r - 1] & ((L[r] <= e14[r] * 1.005) | (L[r] <= e21[r] * 1.005)) & (Cn[r] > e14[r]) & (Cn[r] > O[r])
+        return (reclaim | sup) & liq[r]
+    r = len(dates) - 1
+    e_now = ent(r)
+    recent = np.zeros(len(codes), bool)
+    for k in range(1, 11):
+        recent |= ent(r - k)
+    pull = recent & al[r] & ((L[r] <= e8[r] * 1.01) | (L[r] <= e14[r] * 1.01)) & (Cn[r] > O[r]) & (V[r] > V[r - 1]) & (Cn[r] > e14[r]) & liq[r]
+    pick = lambda m: [{"code": codes[j], "close": float(Cn[r, j]), "stop": round(float(L[r, j]) * 0.99)} for j in np.where(m)[0]]  # noqa: E731
+    return {"entry": pick(e_now), "pull": pick(pull)}
 
 
 def _closes(db: Session, codes: list[str], since: date) -> pd.DataFrame:
