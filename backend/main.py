@@ -1003,7 +1003,7 @@ async function renderDashboard(d, stale, live){
   // EMA(5·10·20) 모임/벌어짐 표시 (2026-10-07 ema_squeeze.py: 모임 4%↓ 돌파 5일 +0.9~1.0%, 벌어짐 7%↑ -0.2~-1.4%)
   const emaTag=x=>x.ema_gap==null?'':x.ema_gap<=4?` <b style="color:#3fb950;font-size:11px" title="돌파 전날 5·10·20일 EMA 간격 ${x.ema_gap}%">EMA 모임✓</b>`:x.ema_gap>=7?` <b style="color:#d29922;font-size:11px" title="돌파 전날 5·10·20일 EMA 간격 ${x.ema_gap}% — 벌어진 상태 돌파는 5일 평균 마이너스였음">⚠EMA 벌어짐</b>`:'';
   const bchip=x=>chip(x,x.retail_only?'#f85149':'#9e6a03',` <span style="color:#f85149">${sg(x.change_pct)}%</span> <span class="ts">${x.tv_x}배 · ${x.family}</span>${emaTag(x)}${x.retail_only?' <b style="color:#f85149;font-size:11px">⚠개인만</b>':''}${isHot(x)?' <b style="color:#ff7b72;font-size:11px" title="섹터 종목 중 20일선보다 20% 넘게 뜬 비율 '+H[x.family]+'%">🔥과열·다음 날 정리만</b>':''}`);
-  const hotNote=[...(d.best_lead||[]),...(d.best_swing||[])].some(isHot)?'<div class="ts" style="color:#ff7b72;margin-top:4px">🔥과열 섹터 = 섹터 종목 25% 넘게 20일선보다 20%↑ 뜸 → 다음 날은 좋았지만 5~10일 들고 가면 나빴음(5일 -5%↓ 26~31%)</div>':'';
+  const hotNote=[...(d.best_lead||[]),...(d.best_swing||[])].some(isHot)?'<div class="ts" style="color:#ff7b72;margin-top:4px">🔥과열 섹터 = 섹터 종목 25% 넘게 20일선보다 20%↑ 뜸 → 다음 날은 좋았지만 5~10일 들고 가면 나빴음</div>':'';
   const anyRetail=(d.best||[]).some(x=>x.retail_only)?'<div class="ts" style="color:#f85149;margin-top:4px">⚠개인만 = 외인·기관 둘 다 팔았는데 오른 날 — 빼는 게 좋음</div>':'';
   const C={};   // 카드 모음 → 장세(md.mode)에 맞는 순서로 번호 매김
   const LV=live?`<div class="ts" style="margin-bottom:6px;color:#58a6ff">⏱ 장중 ${live.as_of} 가격 · 거래는 마감 환산</div>`:'';
@@ -1013,7 +1013,7 @@ async function renderDashboard(d, stale, live){
     '20일 동안 눌려 있던 고점을 <b>종가로</b> 뚫음 · 섹터에 돈 몰린 날 · 200일선 위 · 거래 2배↑ · <b>손절 = 뚫은 고점 아래로 마감</b>',
     LV+(all.state==='하락'?'<div style="color:#f85149;font-size:12.5px;margin-bottom:4px">하락장 — 보기만</div>':'')
     +((d.box_break||[]).map(boxchip).join('')||'<span class="ts">없음</span>')
-    +`<div class="ts" style="margin:8px 0 4px">뚫기 직전 — 고점 -3% 안까지 붙여 마감 (10일 +6~8% · 표본 적어 보조)</div>`
+    +`<div class="ts" style="margin:8px 0 4px">뚫기 직전 — 고점 -3% 안까지 붙여 마감 (보조)</div>`
     +((d.box_near||[]).map(x=>chip(x,'#9e6a03',` <span class="ts">고점 ${x.line.toLocaleString()} (${sg(x.line_pct)}%)</span>`)).join('')||'<span class="ts">없음</span>')
     +'<div class="ts" style="margin-top:4px">같은 섹터에서 여러 개 나오면 한두 개만 — 섹터가 꺾이면 같이 꺾임</div>'];
   C.lead=['#e3b341','⭐ 주도 섹터의 힘 있는 양봉 → 종베',
@@ -1204,7 +1204,7 @@ function renderJongbe(){
       +(arr.length?shown.map(rowHtml).join(''):'<tr><td colspan="5" class="ts" style="text-align:center;padding:10px">오늘은 없습니다</td></tr>')
       +(arr.length>8?`<tr><td colspan="5" style="text-align:center;border:none"><a href="#" style="color:#58a6ff;font-size:12.5px" onclick="_jbOpen['${key}']=!_jbOpen['${key}'];renderJongbe();return false">${open?'접기':`${arr.length-8}개 더 보기`}</a></td></tr>`:'');
   };
-  document.getElementById('jb-charts').innerHTML=grp('🚀 돌파형','120일 박스 상단 처음 넘음 (20일 +5.1%p)·-3% 이내 (+2.4%p)',brk,'b')+grp('🎯 돌파 임박 (가온전선형)','종가 고점은 넘고 옛 꼬리 끝 아래서 횡보 · 꼬리 끝 위로 종가 마감하는 날이 매수 자리 (20일 안 돌파 -5% 이내 63~78%) · 🔥 = 뜨는 섹터',nr,'n')+grp('🌱 선취매형','터지기 전 조용한 눌림·저가 지킴·버팀 (20일 +1.3~2.2%p)',pre,'p');
+  document.getElementById('jb-charts').innerHTML=grp('🚀 돌파형','120일 박스 상단을 처음 넘음 · 또는 -3% 안까지 붙음',brk,'b')+grp('🎯 돌파 임박 (가온전선형)','종가 고점은 넘고 옛 꼬리 끝 아래서 횡보 · 꼬리 끝 위로 종가 마감하는 날이 매수 자리 · 🔥 = 뜨는 섹터',nr,'n')+grp('🌱 선취매형','터지기 전 조용한 눌림·저가 지킴·버팀',pre,'p');
   const mv=d.movers||[];
   document.getElementById('jb-movers').innerHTML=mv.length?mv.map(m=>`<span onclick="jbMover('${m.family}')" style="cursor:pointer;padding:7px 11px;border:1px solid ${m.why.length>=2?'#3fb950':'#30363d'};border-radius:8px;font-size:12.5px">
       <b style="color:#e6edf3">${m.family}</b> <span class="ts">${m.rank}위</span><br><span class="ts" style="color:#c9d1d9">${m.why.join(' · ')}</span></span>`).join('')
@@ -2128,13 +2128,16 @@ async function wsOpen(code,name){
   document.getElementById('ws-panel').innerHTML='<div class="ts">불러오는 중…</div>';
   // 패널은 따로 — 차트는 패널을 기다리지 않고 먼저 그림 (2026-10-09 "오래 걸리노")
   fetch(`${API}/stock/${code}/panel`).then(r=>r.ok?r.json():null).catch(()=>null).then(pn=>{ if(_ws.code===code) renderStockPanel(pn,'ws-panel'); });
-  const [cd, sg] = await Promise.all([
-    fetch(`${API}/stock/${code}/candles?count=330`).then(r=>r.ok?r.json():null).catch(()=>null),   // 1년 + EMA 계산용 (DB + 토스 최근)
-    fetch(`${API}/stock/${code}/chart-signals`).then(r=>r.ok?r.json():null).catch(()=>null)]);
+  // 봉이 오면 바로 그리고 신호는 덧그림 (2026-10-09 "로딩이 느리다")
+  const sgP = fetch(`${API}/stock/${code}/chart-signals`).then(r=>r.ok?r.json():null).catch(()=>null);
+  const cd = await fetch(`${API}/stock/${code}/candles?count=330`).then(r=>r.ok?r.json():null).catch(()=>null);   // 1년 + EMA 계산용 (DB + 토스 최근)
   if(_ws.code!==code) return;      // 그사이 다른 종목을 눌렀으면 버림
   if(!cd||!cd.candles||!cd.candles.length){ document.getElementById('ws-note').textContent='차트 데이터를 못 불러왔습니다'; return; }
-  _ws.cache={[code]:{cd,sg}};
+  _ws.cache={[code]:{cd,sg:null}};
   wsDraw();
+  const sg = await sgP;
+  if(_ws.code!==code) return;
+  _ws.cache[code].sg=sg; wsDraw();
 }
 
 // ── 매매 일지: 보유 종목 차트 (로그인 헤더로 평단·손절·내 매수·매도까지, 2026-10-09) ──
@@ -2228,14 +2231,19 @@ async function openChartModal(code, name, spikeDate){
   document.getElementById('chart-modal-bg').classList.add('show');
   fetch(`${API}/stock/${code}/panel`).then(r=>r.ok?r.json():null).then(renderStockPanel).catch(()=>renderStockPanel(null));
   try{
-    const [data, sig] = await Promise.all([fetch(`${API}/stock/${code}/candles?count=330`).then(r=>r.ok?r.json():null),   // 1년 (DB + 토스 최근) — 확대·이동으로 볼 수 있게
-      fetch(`${API}/stock/${code}/chart-signals`).then(r=>r.ok?r.json():null).catch(()=>null)]);
+    // 봉이 오면 바로 그리고, 신호는 따로 받아 덧그림 (2026-10-09 "로딩이 느리다" — 둘 다 기다리던 것)
+    const sigP = fetch(`${API}/stock/${code}/chart-signals`).then(r=>r.ok?r.json():null).catch(()=>null);
+    const data = await fetch(`${API}/stock/${code}/candles?count=330`).then(r=>r.ok?r.json():null);   // 1년 (DB + 토스 최근) — 확대·이동으로 볼 수 있게
     if(!data || !data.candles || !data.candles.length){
       document.getElementById('chart-modal-note').textContent = '토스 API에서 차트 데이터를 가져오지 못했습니다.';
       return;
     }
     if(_cm.code!==code) return;
-    _cm.cache={cd:data,sg:sig};
+    _cm.cache={cd:data,sg:null};
+    renderLwChart('cm-chart', data.candles, [], 90);
+    const sig = await sigP;
+    if(_cm.code!==code || _cm.tf!=='1d') return;
+    _cm.cache.sg=sig;
     const g = renderLwChart('cm-chart', data.candles, sig?sig.items:[], 90);
     document.getElementById('chart-modal-note').textContent = (spikeDate ? `스파이크일: ${spikeDate}` : `최근 90거래일 일봉`)
       + (g!=null ? ` · EMA 5·10·20 간격 ${g.toFixed(1)}% ${g<=4?'(모임 ✓)':g>=7?'(벌어짐 ⚠)':''}` : '') + _avwapNote;
