@@ -40,7 +40,7 @@ def text_now(db: Session, k: int = 8) -> str | None:
         if dp.get("items"):
             out.append(f"⬇ <b>급락 날 줍기</b> 시장 {dp.get('market', 0):+.1f}% · 같이 빠진 센 종목 {len(dp['items'])}개 (손절 20일선 · 수량 절반)")
             for x in dp["items"][:6]:
-                out.append(f"  {'✅' if x.get('tier') == 1 else '·'} <b>{x['name']}</b> {x['chg']:+.1f}% · 손절 {x['stop']:,.0f} (-{x['risk']:.1f}%)")
+                out.append(f"  {'✅' if x.get('tier') == 1 else '·'} <b>{x['name']}</b> {x['chg']:+.1f}% · 거래 {x.get('vx', 0):.1f}배 · 손절 {x['stop']:,.0f} (-{x['risk']:.1f}%)")
     except Exception:  # noqa: BLE001
         pass
     if not rows:

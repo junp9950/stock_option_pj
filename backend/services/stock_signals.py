@@ -664,11 +664,15 @@ def _dip_picks(db: Session, latest, live: dict | None = None, frac: float = 1.0,
         cg = float(chg[code]) * 100
         # 고르는 순서 (12년 v12d.py, 두 기간 모두 같은 방향): 손절폭 8%↓ + 그날 -3%↓ R +0.94/+1.20 · 손절폭 8%↓ +0.56/+0.66 ·
         # 시장보다 더 빠짐 +0.47/+0.53 (덜 빠진 것 +0.28/+0.12) · RS 70~85가 85~95보다 나음(+0.65/+0.56 vs -0.18/-0.06)
-        tier = 1 if (rk <= 8 and cg <= -3) else 2 if rk <= 8 else 3 if (cg < mkt * 100 and rk <= 10) else 4
+        vxx = float(V[code].iloc[-1] / V[code].iloc[-21:-1].mean()) if V[code].iloc[-21:-1].mean() > 0 else 0.0
+        if vxx < 0.7:          # 12년: 거래 없이 조용히 빠진 날 R -0.09/-0.23 (사줄 사람이 없음) → 뺌 (2026-10-09 "거래량 없는 음봉은?")
+            continue
+        # 거래 1배↑ + 손절폭 8%↓ R +1.74/+1.91 (85건) · 거래 1~1.5배 +1.50/+1.08 · 거래 1배 미만 + 손절폭 8%↓ -0.26/-0.03
+        tier = 1 if (vxx >= 1 and rk <= 8) else 2 if vxx >= 1 else 3 if (rk <= 8 and cg <= -3) else 4
         if float(RS[code]) >= 85:
             tier += 1
         out["items"].append({"code": code, "name": names.get(code, code), "chg": round(cg, 2), "close": float(c[code]),
-                             "stop": round(stop), "risk": round(rk, 1), "rs": round(float(RS[code])), "tier": tier})
+                             "stop": round(stop), "risk": round(rk, 1), "rs": round(float(RS[code])), "tier": tier, "vx": round(vxx, 1)})
     out["items"].sort(key=lambda x: (x["tier"], x["risk"]))
     return out
 
@@ -752,7 +756,7 @@ def tracking(db: Session) -> dict:
     날짜마다 그날까지 데이터로 점수를 다시 계산한다 (signal_log가 쌓이기 전 날짜는 '다시 계산'). DB 날짜가 바뀔 때만 · 디스크 캐시."""
     latest = db.execute(text("select max(trading_date) from spot_daily_prices")).scalar()
     from backend.services.result_cache import cached  # noqa: PLC0415
-    return cached("tracking_v3", (), db, lambda: _tracking(db, latest)) or {}
+    return cached("tracking_v4", (), db, lambda: _tracking(db, latest)) or {}
 
 
 def _tracking(db: Session, latest, days: int = 20) -> dict:
