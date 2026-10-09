@@ -142,7 +142,10 @@ select{background:#21262d;border:1px solid #30363d;color:#c9d1d9;padding:6px 10p
 .ws-main{min-width:0;padding:12px}
 .ws #ws-panel{background:var(--card);border:1px solid var(--line);border-radius:10px;padding:12px}
 .ws-search{position:relative;margin-bottom:6px}.ws-search input{width:100%;box-sizing:border-box;background:var(--card2);border:1px solid var(--line);color:var(--text);border-radius:16px;padding:7px 12px;font-size:13px;outline:none}.ws-search input:focus{border-color:var(--blue)}#ws-sr{position:absolute;left:0;right:0;top:100%;z-index:30;background:var(--card);border:1px solid var(--line);border-radius:10px;margin-top:4px;max-height:360px;overflow:auto;display:none;box-shadow:0 6px 18px rgba(0,0,0,.4)}#ws-sr.on{display:block}
-.htop{display:grid;grid-template-columns:minmax(0,1.55fr) minmax(0,1fr);gap:14px;margin-bottom:14px}
+.htop{display:grid;grid-template-columns:minmax(0,1.25fr) minmax(0,1fr);gap:14px;margin-bottom:14px}
+.hc-spark{position:relative;height:130px;margin:2px 0 10px}.hc-spark svg{width:100%;height:100%;display:block}
+.hc-sx{display:flex;justify-content:space-between;font-size:10.5px;color:var(--muted);margin-top:-6px;margin-bottom:10px}
+.hc-tg{display:flex;gap:4px}.hc-tg button{background:none;border:1px solid var(--line);color:var(--muted);border-radius:10px;font-size:11px;padding:1px 8px;cursor:pointer}.hc-tg button.on{color:var(--text);border-color:var(--blue)}
 .hcard{background:var(--card);border:1px solid var(--line);border-radius:14px;padding:18px 20px;min-width:0}
 .hc-h{display:flex;justify-content:space-between;align-items:baseline;gap:8px;margin-bottom:10px}.hc-h b{font-size:15px;color:var(--text)}.hc-h span{font-size:11.5px;color:var(--muted)}
 .hc-head{font-size:20px;font-weight:800;color:var(--text);line-height:1.35;margin:2px 0 4px;word-break:keep-all}
@@ -156,7 +159,7 @@ select{background:#21262d;border:1px solid #30363d;color:#c9d1d9;padding:6px 10p
 .hc-sum{font-size:12.5px;color:var(--muted);margin-bottom:8px}
 .hc-bars{display:flex;gap:4px;margin:6px 0 12px}.hc-bars i{flex:1;height:5px;border-radius:3px;background:var(--line)}
 .hc-bars i.g{background:var(--blue)}.hc-bars i.b{background:var(--orange)}
-.hc-row{display:flex;align-items:center;gap:10px;padding:10px 0;border-top:1px solid var(--line2)}
+.hc-row{display:flex;align-items:center;gap:10px;padding:8px 0;border-top:1px solid var(--line2)}
 .hc-row .t{flex:1;min-width:0}.hc-row .t b{display:block;font-size:13.5px;color:var(--text)}.hc-row .t span{font-size:11.5px;color:var(--muted)}
 .hc-row .v{font-size:16px;font-weight:700;color:var(--text);white-space:nowrap}
 .hc-badge{font-size:11px;font-weight:700;padding:2px 8px;border-radius:10px;white-space:nowrap;border:1px solid}
@@ -947,13 +950,30 @@ function renderHomeTop(d, live){
   const ix=k=>{ const x=it[k]; if(!x) return ''; const c=x.pct>=0?'var(--up)':'var(--down)';
     return `<div class="hc-num" style="cursor:pointer" onclick="openIndexChart('${k==='코스피'?'KOSPI':'KOSDAQ'}','${k}')"><div class="l">${k}${x.status==='OPEN'?' · 장중':''}</div><div class="v">${x.close}</div><div class="s" style="color:${c}">${sg(x.pct)}%</div></div>`; };
   const st=d.sectors_today||{}, pill=(x,c)=>`<span class="hc-pill ${c}" title="20일 순위 ${x.rank||'-'}위 (10일 전 ${x.rank_10ago||'-'}위)">${x.family} <b style="color:${x.chg>=0?'var(--up)':'var(--down)'}">${sg(x.chg)}%</b></span>`;
-  document.getElementById('hc-today').innerHTML=`<div class="hc-h"><b>오늘</b><span>${when}</span></div>
+  document.getElementById('hc-today').innerHTML=`<div class="hc-h"><b>오늘</b><span class="hc-tg"><button data-s="KOSPI" onclick="hcSpark('KOSPI')">코스피</button><button data-s="KOSDAQ" onclick="hcSpark('KOSDAQ')">코스닥</button></span></div>
+    <div class="hc-spark" id="hc-spark"></div><div class="hc-sx" id="hc-sx"></div>
     <div class="hc-head">${md.title||'판단 준비 중'}</div><div class="hc-do">${md.do?'→ '+md.do:''}</div>
     <div class="hc-nums">${ix('코스피')}${ix('코스닥')}${br.adv_pct!=null?`<div class="hc-num"><div class="l">오른 종목 비율</div><div class="v">${br.adv_pct}%</div><div class="s" style="color:var(--muted)">거래 10억↑</div></div>`:''}</div>
     ${(st.strong||[]).length?`<div class="hc-flow"><span class="k">강함</span><div>${st.strong.map(x=>pill(x,'up')).join('')}</div><span class="k">약함</span><div>${(st.weak||[]).map(x=>pill(x,'dn')).join('')}</div></div>`:''}`;
 }
+// '오늘' 카드 지수 하루 선 (SVG) — 전일 종가 점선 · 위면 빨강, 아래면 파랑
+let _hcSym='KOSPI';
+async function hcSpark(sym){
+  _hcSym=sym||_hcSym; document.querySelectorAll('.hc-tg button').forEach(b=>b.classList.toggle('on',b.dataset.s===_hcSym));
+  const box=document.getElementById('hc-spark'); if(!box) return;
+  const d=await fetch(`${API}/index/intraday/${_hcSym}`).then(r=>r.ok?r.json():null).catch(()=>null);
+  if(!d||!d.points||d.points.length<2){ box.innerHTML='<div class="ts" style="padding:40px 0;text-align:center">지수 선을 못 불러왔습니다</div>'; return; }
+  const P=d.points.map(p=>p[1]), lo=Math.min(...P,d.prev), hi=Math.max(...P,d.prev), W=600, H=130, pad=6;
+  const x=i=>{ const t=d.points[i][0], m=(+t.slice(0,2)-9)*60+(+t.slice(2)); return m/390*W; }, y=v=>pad+(hi-v)/((hi-lo)||1)*(H-pad*2);
+  const line=P.map((v,i)=>`${x(i).toFixed(1)},${y(v).toFixed(1)}`).join(' ');
+  const c=d.close>=d.prev?'var(--up)':'var(--down)', fill=d.close>=d.prev?'rgba(248,81,73,.10)':'rgba(88,166,255,.12)';
+  box.innerHTML=`<svg viewBox="0 0 ${W} ${H}" preserveAspectRatio="none"><polygon points="${x(0).toFixed(1)},${H} ${line} ${x(P.length-1).toFixed(1)},${H}" fill="${fill}"/>
+    <line x1="0" x2="${W}" y1="${y(d.prev)}" y2="${y(d.prev)}" stroke="var(--muted)" stroke-dasharray="3 4" stroke-width="1" vector-effect="non-scaling-stroke"/>
+    <polyline points="${line}" fill="none" stroke="${c}" stroke-width="1.6" vector-effect="non-scaling-stroke"/></svg>`;
+  document.getElementById('hc-sx').innerHTML=`<span>09:00</span><span>${d.date.slice(5).replace('-','/')} · 전일 종가 ${d.prev.toLocaleString()}</span><span>15:30</span>`;
+}
 async function renderDashboard(d, stale, live){
-  try{ renderHomeTop(d, live); }catch(e){ console.error(e); }
+  try{ renderHomeTop(d, live); hcSpark(); }catch(e){ console.error(e); }
   const v=document.getElementById('db-verdict');
   const m=d.market||{}, all=m['전체']||{}, al=d.alert||{};
   const col={상승:'#3fb950',횡보:'#d29922',하락:'#f85149'}, ico={상승:'🟢',횡보:'🟡',하락:'🔴'};

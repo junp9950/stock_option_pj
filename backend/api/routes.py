@@ -1790,6 +1790,37 @@ def get_index_candles(symbol: str, count: int = 150):
     return {"symbol": sym, "candles": out}
 
 
+_IDX_DAY: dict = {}
+
+
+@router.get("/index/intraday/{symbol}")
+def get_index_intraday(symbol: str):
+    """첫 화면 '오늘' 카드의 지수 하루 선 (네이버 1분, 가장 최근 거래일) — 장중 1분 · 장 밖 30분 캐시 (2026-10-09)."""
+    import time as _t  # noqa: PLC0415
+    import requests  # noqa: PLC0415
+    from backend.services.telegram import is_market_time  # noqa: PLC0415
+    sym = {"KOSPI": "KOSPI", "KOSDAQ": "KOSDAQ"}.get(symbol.upper())
+    if not sym:
+        raise HTTPException(status_code=400, detail="KOSPI 또는 KOSDAQ")
+    hit = _IDX_DAY.get(sym)
+    if hit and _t.time() - hit[0] < (60 if is_market_time() else 1800):
+        return hit[1]
+    h = {"User-Agent": "Mozilla/5.0"}
+    try:
+        b = requests.get(f"https://m.stock.naver.com/api/index/{sym}/basic", headers=h, timeout=8).json()
+        day = (b.get("localTradedAt") or "")[:10].replace("-", "")
+        close, pct = float(str(b.get("closePrice")).replace(",", "")), float(b.get("fluctuationsRatio"))
+        rows = requests.get(f"https://api.stock.naver.com/chart/domestic/index/{sym}/minute", headers=h, timeout=8,
+                            params={"startDateTime": day + "0900", "endDateTime": day + "1530"}).json()
+        pts = [[x["localDateTime"][8:12], x["currentPrice"]] for x in rows if "0900" <= x["localDateTime"][8:12] <= "1530"]
+        out = {"symbol": sym, "date": f"{day[:4]}-{day[4:6]}-{day[6:]}", "prev": round(close / (1 + pct / 100), 2), "close": close, "pct": pct,
+               "status": b.get("marketStatus"), "points": pts}
+    except Exception:  # noqa: BLE001
+        return hit[1] if hit else {"symbol": sym, "points": []}
+    _IDX_DAY[sym] = (_t.time(), out)
+    return out
+
+
 @router.get("/dashboard/dip-live")
 def get_dip_live(db: Session = Depends(get_db)):
     """장중 과매도 줍기 (토스 실시간, 5분 캐시) — 오늘 탭 카드가 장중에 부른다 (2026-10-07)."""
