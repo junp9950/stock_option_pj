@@ -18,7 +18,7 @@ def text_now(db: Session, k: int = 8) -> str | None:
     if not sc.get("live"):
         return None
     names = dict(db.execute(text("select code, name from stocks")).all())
-    allr = [(c, v) for c, v in sc["scores"].items() if v["score"] >= 6]
+    allr = [(c, v) for c, v in sc["scores"].items() if v["score"] >= 6 and v["flags"][1]]     # 시장보다 센 종목(RS 70~95)만
     wide = [cv for cv in allr if cv[1]["risk"] > 0.08]          # 손절폭 8%↑는 뺀다 (3년 R +0.11) · 5~8%는 후순위 (R +0.35)
     rows = sorted((cv for cv in allr if cv[1]["risk"] <= 0.08), key=lambda cv: cv[1]["risk"])
     out = [f"⏱ <b>종가 진입 후보</b> {sc.get('at', '')} 기준 (봉 확정 전)"]

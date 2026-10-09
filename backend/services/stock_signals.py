@@ -194,7 +194,9 @@ def signals(db: Session, code: str, days: int = 260, owner: str | None = None) -
             sc = sum(f.fillna(False).astype(int) for f in fl)
             rk_ = 1 - L * 0.99 / C
             # 실제로 사는 조건(점수 6↑ + 손절폭 8%↓ + 상승장)을 다 만족한 날만 '매수'로 — 숫자 6·7은 뜻이 안 읽힘 (2026-10-09 "시그널을 확실히")
-            for d in sc[(sc >= 6) & base_ok & (rk_ <= 0.08) & (sc.index >= start)].index:
+            # 매수는 시장보다 센 종목(RS 70~95)만 — 다른 6개가 맞아도 RS가 낮으면 12년 R -0.27/+0.01/+0.25 (맞으면 -0.15/+0.12/+0.45, v12i.py)
+            # 2026-10-09 한중엔시에스 10/2: RS 34인데 나머지 6개가 맞아 '매수'가 떴던 것
+            for d in sc[(sc >= 6) & fl[1].fillna(False) & base_ok & (rk_ <= 0.08) & (sc.index >= start)].index:
                 miss = [CLOSE_FLAGS[j] for j, f in enumerate(fl) if not bool(f[d])]
                 good = rk_[d] <= 0.03
                 items.append({"date": str(d), "label": f"{'✅ ' if good else ''}종가 매수 · 손절 {L[d] * 0.99:,.0f} (-{rk_[d] * 100:.1f}%)"
@@ -299,18 +301,18 @@ def _workspace_list(db: Session) -> dict:
         # 3년(trend_exit.py, 21일선 아래 종가까지 보유): 6↑ 평균 +2.2%·R +0.60 · 그중 손절폭 3%↓ 평균 +3.9%·R +1.68·최악10% -7%
         scores = close_scores_now(db).get("scores", {})      # 장중이면 실시간 가격으로 (15시대에 오늘 봉 기준 후보)
         for c_, v_ in sorted(scores.items(), key=lambda kv: (-kv[1]["score"], kv[1]["risk"])):
-            if v_["score"] >= 6 and v_["risk"] <= 0.03:
+            if v_["score"] >= 6 and v_["flags"][1] and v_["risk"] <= 0.03:
                 add(c_, "✅ 손익비 좋음")
         for c_, v_ in sorted(scores.items(), key=lambda kv: (-kv[1]["score"], kv[1]["risk"])):
-            if v_["score"] >= 6 and 0.03 < v_["risk"] <= 0.05:
+            if v_["score"] >= 6 and v_["flags"][1] and 0.03 < v_["risk"] <= 0.05:
                 add(c_, "종가 점수 6↑")  # 배지에 점수가 있어 짧게
         # 손절폭 5~8%는 후순위·수량 줄이기, 8%↑는 대기 (3년 예약 손절 R: 3%↓ +1.42 · 3~5% +0.55 · 5~8% +0.35(앞뒤 .32/.37) · 8%↑ +0.11, atr_stop_b.py)
         # 2026-10-09 피에스케이 7.1% "너무 높은 거 아니가" → "포함해서 들고 가도 우리 쪽이 높나" → 1R당 같은 금액이면 5~8%도 플러스
         for c_, v_ in sorted(scores.items(), key=lambda kv: kv[1]["risk"]):
-            if v_["score"] >= 6 and 0.05 < v_["risk"] <= 0.08:
+            if v_["score"] >= 6 and v_["flags"][1] and 0.05 < v_["risk"] <= 0.08:
                 add(c_, "후순위 · 수량 절반")
         for c_, v_ in sorted(scores.items(), key=lambda kv: kv[1]["risk"]):
-            if v_["score"] >= 6 and v_["risk"] > 0.08:
+            if v_["score"] >= 6 and v_["flags"][1] and v_["risk"] > 0.08:
                 add(c_, "⏸ 폭 좁은 날 기다리기")
     except Exception:  # noqa: BLE001
         pass
@@ -386,7 +388,7 @@ def _workspace_list(db: Session) -> dict:
         sc = scores.get(x["code"])
         y["score"] = sc["score"] if sc else None
         y["risk"] = round(sc["risk"] * 100, 1) if sc else None
-        y["rr"] = bool(sc and sc["score"] >= 6 and sc["risk"] <= 0.03)
+        y["rr"] = bool(sc and sc["score"] >= 6 and sc["flags"][1] and sc["risk"] <= 0.03)
         if y["lane"] == "entry" and sc and sc["risk"] > 0.08 and not any(t.startswith("▲") for t in x["tags"]):
             y["lane"] = "wait"            # 다른 이유로 올라왔어도 손절폭 5%↑면 대기로
         cands.append(y)
@@ -806,7 +808,7 @@ def tracking(db: Session) -> dict:
     날짜마다 그날까지 데이터로 점수를 다시 계산한다 (signal_log가 쌓이기 전 날짜는 '다시 계산'). DB 날짜가 바뀔 때만 · 디스크 캐시."""
     latest = db.execute(text("select max(trading_date) from spot_daily_prices")).scalar()
     from backend.services.result_cache import cached  # noqa: PLC0415
-    return cached("tracking_v7", (), db, lambda: _tracking(db, latest)) or {}
+    return cached("tracking_v8", (), db, lambda: _tracking(db, latest)) or {}
 
 
 def _tracking(db: Session, latest, days: int = 20) -> dict:
@@ -824,7 +826,7 @@ def _tracking(db: Session, latest, days: int = 20) -> dict:
         fr = {key: v.iloc[:r + 1] for key, v in P.items()}
         sc = _close_scores(db, d, frames=fr).get("scores", {})
         for code, v in sc.items():
-            if v["score"] >= 6 and v["risk"] <= 0.08:
+            if v["score"] >= 6 and v["flags"][1] and v["risk"] <= 0.08:
                 sig.setdefault(code, []).append((r, float(C[code].iloc[r]), v["stop"], v["score"]))
         try:      # 급락 날 줍기 (손절 20일선 -1%) — 2026-10-09 "여기는 안 들어가나"
             for x in _dip_picks(db, d, frames=fr).get("items", []):
