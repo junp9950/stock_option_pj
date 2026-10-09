@@ -2038,7 +2038,7 @@ function renderWsList(){
   const row=x=>{
     let tg='';
     if(_ws.tab==='track') tg=(x.sell_tmr?'⚠ 내일 아침 정리 · ':'')+`${x.date.slice(5).replace('-','/')} ${Math.round(x.entry).toLocaleString()} · 스탑 ${x.stop.toLocaleString()} · 21선 ${x.to21>0?'+':''}${x.to21}%`;
-    else if(_ws.tab!=='watch') tg=(x.risk!=null?`손절 ${x.risk}% · `:'')+x.tags.join(' · ')+(x.family?` · ${x.family}`:'');   // 손절폭 = 종가에서 그날 저가 -1%까지
+    else if(_ws.tab!=='watch') tg=(x.risk!=null?`손절 ${x.risk}% · `:'')+x.tags.filter(t=>t!=='종가 점수 6↑'||x.tags.length===1).join(' · ')+(x.family?` · ${x.family}`:'');   // 손절폭 = 종가에서 그날 저가 -1%까지
     else if(_ws.tab==='held') tg=(x.stop?`손절 ${Math.round(x.stop).toLocaleString()}${x.room!=null?` · ${x.room<0?'⛔ 이탈':x.room<=2?'⚠ '+x.room+'% 남음':x.room+'% 남음'}`:''}`:'손절선 없음')+(x.long?' · 장기':'');
     else tg=`${KIND[x.kind]||''}${x.level?' '+Math.round(x.level).toLocaleString():''}${x.note?' · '+x.note:''}`;
     const sub=_ws.tab==='held'&&x.gain!=null?`<div class="ws-tg" style="text-align:right">수익 ${x.gain>0?'+':''}${x.gain}%</div>`:'';

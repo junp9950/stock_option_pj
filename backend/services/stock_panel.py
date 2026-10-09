@@ -176,7 +176,7 @@ def _panel(db: Session, code: str, owner: str | None = None) -> dict:
     elif tags:
         stage, title = 1, tags[0]
         sub = " · ".join(tags[1:]) or "오늘 우리 후보 목록에 있음"
-        if tags[0].startswith(("종가 매수", "✅ 손익비", "종가 점수")):
+        if tags[0].startswith(("종가 매수", "✅ 손익비", "종가 점수", "후순위")):
             # 사용자 (2026-10-09): "추세매매가 하고 싶은 거다 · 종베는 그냥 진입 시점일 뿐" → 종가에 사서 21일선까지 끌고 간다
             try:
                 from backend.services.stock_signals import close_scores_now as _csn  # noqa: PLC0415

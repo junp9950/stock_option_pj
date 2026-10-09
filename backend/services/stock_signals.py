@@ -274,15 +274,15 @@ def _workspace_list(db: Session) -> dict:
                 add(c_, "✅ 손익비 좋음")
         for c_, v_ in sorted(scores.items(), key=lambda kv: (-kv[1]["score"], kv[1]["risk"])):
             if v_["score"] >= 6 and 0.03 < v_["risk"] <= 0.05:
-                add(c_, "종가 점수 6↑")
+                add(c_, "종가 점수 6↑")  # 배지에 점수가 있어 짧게
         # 손절폭 5~8%는 후순위·수량 줄이기, 8%↑는 대기 (3년 예약 손절 R: 3%↓ +1.42 · 3~5% +0.55 · 5~8% +0.35(앞뒤 .32/.37) · 8%↑ +0.11, atr_stop_b.py)
         # 2026-10-09 피에스케이 7.1% "너무 높은 거 아니가" → "포함해서 들고 가도 우리 쪽이 높나" → 1R당 같은 금액이면 5~8%도 플러스
         for c_, v_ in sorted(scores.items(), key=lambda kv: kv[1]["risk"]):
             if v_["score"] >= 6 and 0.05 < v_["risk"] <= 0.08:
-                add(c_, "종가 점수 6↑ · 손절폭 넓음 → 후순위 · 수량 절반 이하")
+                add(c_, "후순위 · 수량 절반")
         for c_, v_ in sorted(scores.items(), key=lambda kv: kv[1]["risk"]):
             if v_["score"] >= 6 and v_["risk"] > 0.08:
-                add(c_, "⏸ 손절폭 8%↑ · 폭 좁은 날 기다리기")
+                add(c_, "⏸ 폭 좁은 날 기다리기")
     except Exception:  # noqa: BLE001
         pass
     log = _get(db, "top3_log", {}) or {}
@@ -343,7 +343,7 @@ def _workspace_list(db: Session) -> dict:
         return {**x, "close": c, "chg": round(ch, 2)}
     def lane(tags):
         # 2026-10-09 사용자 "오늘 정한 기준으로 바꾸고": 오늘 진입 = ▲ 진입 · 종가 점수 6↑(손절폭 8%↓)만. 그 밖(종가 매수·파란 화살표 등)은 대기에 참고로
-        return "entry" if any(t.startswith(("▲", "✅ 손익비", "종가 점수 6↑")) for t in tags) else "wait"
+        return "entry" if any(t.startswith(("▲", "✅ 손익비", "종가 점수 6↑", "후순위")) for t in tags) else "wait"
     cands = []
     for x in cand.values():
         if lane(x["tags"]) == "wait" and not x["tags"][0].startswith(("돌파 대기", "⏸")):
