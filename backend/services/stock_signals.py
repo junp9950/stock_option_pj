@@ -220,6 +220,11 @@ def workspace_list(db: Session) -> dict:
         if family and not x["family"]:
             x["family"] = family
 
+    try:      # ▲ 진입 신호가 오늘 뜬 종목 — 맨 위
+        for x in entry_today(db):
+            add(x["code"], f"▲ 진입 신호 ({x['kind']})")
+    except Exception:  # noqa: BLE001
+        pass
     log = _get(db, "top3_log", {}) or {}
     if log:
         for c in log.get(max(log), []):
@@ -308,3 +313,46 @@ def holdings(db: Session, owner: str) -> dict:
                  room=round((c / h["stop"] - 1) * 100, 1) if h["stop"] and c else None)
     held.sort(key=lambda h: (h["long"], h["room"] if h["room"] is not None else 99))
     return {"as_of": str(latest), "live": live_at, "held": held}
+
+
+_ENTRY: dict = {"key": None, "v": []}
+
+
+def entry_today(db: Session, asof=None) -> list[dict]:
+    """전 종목에 ▲ 진입 규칙을 돌려 가장 최근 거래일에 신호가 뜬 종목 (DB 날짜가 바뀔 때만 계산, 약 2~4초).
+    규칙은 signals()와 같다: (박스 돌파 또는 EMA 모임 돌파·정배열) + 상승·횡보장 + 추세 조건 6/7↑. 하루 거래대금 20일 평균 30억↑만."""
+    latest = asof or db.execute(text("select max(trading_date) from spot_daily_prices")).scalar()
+    if _ENTRY["key"] == latest:
+        return _ENTRY["v"]
+    if not _bull_days(db).get(latest, False):
+        _ENTRY.update(key=latest, v=[])
+        return []
+    px = pd.read_sql(text("select stock_code s, trading_date d, open_price o, high_price h, low_price l, close_price c, trading_value tv "
+                          "from spot_daily_prices where trading_date >= cast(:d as date) - 420 and trading_date <= :d"), db.connection(), params={"d": latest})
+    P = {k: px.pivot(index="d", columns="s", values=k).sort_index().astype("float32") for k in ("o", "h", "l", "c", "tv")}
+    del px
+    O, H, L, C, TV = P["o"], P["h"], P["l"], P["c"], P["tv"]
+    liq = TV.iloc[-21:-1].mean() >= 3e9
+    cols = liq[liq].index
+    O, H, L, C, TV = O[cols], H[cols], L[cols], C[cols], TV[cols]
+    chg = C / C.shift(1) - 1
+    tvx = TV / TV.rolling(20).mean().shift(1)
+    e5, e10, e20, e60 = (C.ewm(span=n, adjust=False).mean() for n in (5, 10, 20, 60))
+    ehi = np.maximum(np.maximum(e5, e10), e20); elo = np.minimum(np.minimum(e5, e10), e20)
+    gap_prev = ((ehi - elo) / C).shift(1)
+    ma200 = C.rolling(200, min_periods=180).mean(); s50 = C.rolling(50).mean(); s150 = C.rolling(150, min_periods=135).mean()
+    hi20p, lo20p, hi10p = H.shift(1).rolling(20).max(), L.shift(1).rolling(20).min(), H.shift(1).rolling(10).max()
+    hi52, lo52 = H.rolling(250, min_periods=200).max(), L.rolling(250, min_periods=200).min()
+    r = -1
+    tt7 = (((C > s150) & (C > ma200)).iloc[r].astype(int) + (s150 > ma200).iloc[r].astype(int) + (ma200 > ma200.shift(21)).iloc[r].astype(int)
+           + ((s50 > s150) & (s50 > ma200)).iloc[r].astype(int) + (C > s50).iloc[r].astype(int) + (C >= lo52 * 1.3).iloc[r].astype(int) + (C >= hi52 * 0.75).iloc[r].astype(int))
+    box = ((hi20p / lo20p - 1 <= 0.20) & (C > hi20p) & (chg >= 0.05) & (tvx >= 2) & (C > ma200)).iloc[r]
+    ema = ((gap_prev <= 0.04) & (C > ehi) & (C > hi10p) & (chg >= 0.03) & (chg < 0.29) & (tvx >= 1.5)).iloc[r]
+    up60 = ((C > e60) & (e20 > e60)).iloc[r]
+    hit = (box | (ema & up60)) & (tt7 >= 6)
+    names = dict(db.execute(text("select code, name from stocks")).all())
+    out = [{"code": c, "name": names.get(c, c), "kind": "박스 돌파" if bool(box[c]) else "EMA 모임 돌파", "close": float(C[c].iloc[r]),
+            "stop": float(L[c].iloc[r]) * 0.99, "chg": float(chg[c].iloc[r]) * 100} for c in hit[hit].index]
+    out.sort(key=lambda x: -x["chg"])
+    _ENTRY.update(key=latest, v=out)
+    return out

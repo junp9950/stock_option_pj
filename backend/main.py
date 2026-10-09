@@ -778,6 +778,7 @@ select{background:#21262d;border:1px solid #30363d;color:#c9d1d9;padding:6px 10p
     <div class="cm-body">
       <div class="cm-chart">
         <div class="note" id="chart-modal-note" style="margin-bottom:8px"></div>
+        <div class="ws-per" id="cm-tf"><button data-tf="1d" onclick="cmTf('1d')">일봉</button><button data-tf="1w" onclick="cmTf('1w')">주봉</button><button data-tf="60m" onclick="cmTf('60m')">60분</button><button data-tf="30m" onclick="cmTf('30m')">30분</button><button data-tf="15m" onclick="cmTf('15m')">15분</button><button data-tf="5m" onclick="cmTf('5m')">5분</button><button data-tf="1m" onclick="cmTf('1m')">1분</button></div>
         <div class="lwbox"><div class="lwleg" id="cm-chart-leg"></div><div id="cm-chart" class="lwc"></div></div>
       </div>
       <aside class="cm-panel" id="cm-panel"></aside>
@@ -2118,7 +2119,22 @@ function renderStockPanel(p, target){
     <div class="cp-rows">${p.rows.map(r=>`<div class="cp-row"${r.tip?` title="${r.tip}"`:''}><span class="k">${r.k}${r.tip?' ⓘ':''}</span><span class="v">${r.v}</span></div>`).join('')}</div>
     <div class="ts" style="font-size:10.5px">일봉 ${p.date} 기준 · 종가는 정규장 15:30 · 추세 조건 8/8은 상승장 60일 +9%(3년), RS 95↑는 오히려 약했음</div>`;
 }
+let _cm={code:null,tf:'1d',cache:{}};
+async function cmTf(tf){
+  _cm.tf=tf; document.querySelectorAll('#cm-tf button').forEach(b=>b.classList.toggle('on',b.dataset.tf===tf));
+  const code=_cm.code, c=_cm.cache; if(!code||!c.cd) return;
+  if(tf==='1d'){ const g=renderLwChart('cm-chart',c.cd.candles,c.sg?c.sg.items:[],90);
+    document.getElementById('chart-modal-note').textContent=`일봉 · 1년 (끌어서 과거 보기)`+(g!=null?` · EMA 5·10·20 간격 ${g.toFixed(1)}% ${g<=4?'(모임 ✓)':g>=7?'(벌어짐 ⚠)':''}`:'')+_avwapNote; return; }
+  document.getElementById('chart-modal-note').textContent=`${TF_NAME[tf]} 불러오는 중…`;
+  const cd=c[tf]||(c[tf]=await tfCandles(code,tf));
+  if(_cm.code!==code||_cm.tf!==tf) return;
+  if(!cd){ document.getElementById('chart-modal-note').textContent=`${TF_NAME[tf]}을 못 받았습니다`; return; }
+  renderLwChart('cm-chart',cd.candles,[],tf==='1w'?80:120);
+  document.getElementById('chart-modal-note').textContent=`${TF_NAME[tf]}${tf==='1w'?'':' · 최근 약 6거래일'} · 우리 신호는 일봉에만`;
+}
 async function openChartModal(code, name, spikeDate){
+  _cm={code,tf:'1d',cache:{}}; document.getElementById('cm-tf').style.display='flex';
+  document.querySelectorAll('#cm-tf button').forEach(b=>b.classList.toggle('on',b.dataset.tf==='1d'));
   document.getElementById('chart-modal-title').textContent = `${name} (${code})`;
   document.getElementById('chart-modal-note').textContent = '로딩 중…';
   lwClear('cm-chart');
@@ -2132,6 +2148,8 @@ async function openChartModal(code, name, spikeDate){
       document.getElementById('chart-modal-note').textContent = '토스 API에서 차트 데이터를 가져오지 못했습니다.';
       return;
     }
+    if(_cm.code!==code) return;
+    _cm.cache={cd:data,sg:sig};
     const g = renderLwChart('cm-chart', data.candles, sig?sig.items:[], 90);
     document.getElementById('chart-modal-note').textContent = (spikeDate ? `스파이크일: ${spikeDate}` : `최근 90거래일 일봉`)
       + (g!=null ? ` · EMA 5·10·20 간격 ${g.toFixed(1)}% ${g<=4?'(모임 ✓)':g>=7?'(벌어짐 ⚠)':''}` : '') + _avwapNote;
@@ -2142,6 +2160,7 @@ async function openChartModal(code, name, spikeDate){
 }
 // 지수 차트 (2026-10-07: 오늘 탭 지수 카드를 누르면 최근 60일 + EMA)
 async function openIndexChart(sym, name){
+  _cm={code:null,tf:'1d',cache:{}}; document.getElementById('cm-tf').style.display='none';
   document.getElementById('cm-panel').innerHTML='';
   document.getElementById('chart-modal-title').textContent = `${name} 지수 — 일봉`;
   document.getElementById('chart-modal-note').textContent = '로딩 중…';
