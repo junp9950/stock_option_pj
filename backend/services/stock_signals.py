@@ -32,8 +32,23 @@ def _bull_days(db: Session) -> dict:
     rows = db.execute(text("select trading_date, avg(greatest(least(change_pct, 30), -30)) from spot_daily_prices "
                            "where trading_date >= cast(:d as date) - 900 and trading_value >= 1e9 and change_pct <> 'NaN' group by 1 order by 1"), {"d": latest}).all()
     reg = regime_series({d: float(v) for d, v in rows if v is not None})
-    _REG.update(key=latest, v={d: r["state"] in ("상승", "횡보") for d, r in reg.items()})
+    _REG.update(key=latest, v={d: r["state"] in ("상승", "횡보") for d, r in reg.items()}, mkt={d: float(v) for d, v in rows if v is not None})
     return _REG["v"]
+
+
+_MK: dict = {"key": None, "v": {}}
+
+
+def _market_chg(db: Session) -> dict:
+    """날짜별 시장 등락(%) — _dip_picks와 같은 정의(거래대금 20일 평균 10억↑ 종목 평균). 차트에 지난 급락 날 표시용."""
+    latest = db.execute(text("select max(trading_date) from spot_daily_prices")).scalar()
+    if _MK["key"] == latest:
+        return _MK["v"]
+    P = _close_frames(db, latest)
+    C, TV = P["c"], P["tv"]
+    chg = (C / C.shift(1) - 1).where(TV.rolling(20).mean() >= 1e9).clip(-0.3, 0.3).mean(axis=1) * 100
+    _MK.update(key=latest, v={d: float(v) for d, v in chg.items() if v == v})
+    return _MK["v"]
 
 
 def signals(db: Session, code: str, days: int = 260, owner: str | None = None) -> dict:
@@ -155,6 +170,21 @@ def signals(db: Session, code: str, days: int = 260, owner: str | None = None) -
             last_c = float(C.iloc[-1])
             active = {"date": str(d), "entry": p0, "stop": stop, "days": len(idx) - i, "gain": (last_c / p0 - 1) * 100, "half": half}
             break
+    # 급락 날 줍기 자리 (dip_now와 같은 조건 · 손절 20일선 -1%) — 지난 급락 날에 어디서 떴을지 (2026-10-09 "지금은 못 보는 거제")
+    try:
+        mk = _market_chg(db)
+        rh2 = rs_hist(db); ra = rh2.get("rs", {}).get(code)
+        if ra is not None:
+            RS2 = pd.Series(ra.astype(float), index=[pd.Timestamp(x).date() for x in rh2["dates"]]).reindex(df.index)
+            hi60r = C / H.rolling(60).max() - 1
+            liq30 = TV.rolling(20).mean() >= 3e9
+            for d in df.index[df.index >= start]:
+                if mk.get(d, 0) > -2 or not bool(bull[d]):
+                    continue
+                if (C[d] > e20[d] > e60[d]) and liq30[d] and 70 <= (RS2[d] if RS2[d] == RS2[d] else 0) < 95 and hi60r[d] >= -0.10 and chg[d] < 0 and e20[d] * 0.99 < C[d]:
+                    items.append({"date": str(d), "label": f"⬇ 급락 날 줍기 (시장 {mk[d]:+.1f}% · 손절 20일선 {e20[d] * 0.99:,.0f})", "kind": "dip", "pos": "below", "price": float(L[d])})
+    except Exception:  # noqa: BLE001
+        pass
     # 종가 진입 점수 6↑ 자리 (close_scores와 같은 7개 조건, 상승·횡보장만) — 사용자 목표 "종가에 안전하고 확률 높은 추세 종목".
     # ▲ 진입은 '거래 실린 돌파일'만 잡아서 거래 없이 계단식으로 오르는 종목(SK이노베이션 9~10월)은 비어 보였다 (2026-10-09).
     try:
@@ -594,12 +624,12 @@ def close_scores_now(db: Session, max_age: float = 120) -> dict:
         return close_scores(db)
 
 
-def _dip_picks(db: Session, latest, live: dict | None = None, frac: float = 1.0) -> dict:
+def _dip_picks(db: Session, latest, live: dict | None = None, frac: float = 1.0, frames: dict | None = None) -> dict:
     """급락 날 줍기 (2026-10-09 사용자 "하락장 초입이면 빠르게 끊고, 잠깐의 풀백이면 좋은 포지셔닝").
     조건: 시장(거래 10억↑ 종목 평균) 그날 -2%↓ · 센 종목(종가>EMA20>EMA60 · 거래 30억↑ · RS 70~95 · 60일 고점 -10% 안)이 같이 빠짐(그날 음수).
     손절 = 20일선 -1% (그날 저가 손절은 다음 날 흔들림에 잘림) · 크기 절반.
     12년(spot_daily_hist · v12.py, 상승장): 2019~22 R +0.38(168건) · 2023~ +0.35(245건) · 최악10% -15% · 그날 -5%↓ 빠진 것 R 1.16(56건)."""
-    P = _close_frames(db, latest)
+    P = frames or _close_frames(db, latest)
     H, L, C, V, TV = P["h"], P["l"], P["c"], P["v"], P["tv"]
     asof = str(latest)
     if live:
@@ -713,7 +743,7 @@ def tracking(db: Session) -> dict:
     날짜마다 그날까지 데이터로 점수를 다시 계산한다 (signal_log가 쌓이기 전 날짜는 '다시 계산'). DB 날짜가 바뀔 때만 · 디스크 캐시."""
     latest = db.execute(text("select max(trading_date) from spot_daily_prices")).scalar()
     from backend.services.result_cache import cached  # noqa: PLC0415
-    return cached("tracking_v2", (), db, lambda: _tracking(db, latest)) or {}
+    return cached("tracking_v3", (), db, lambda: _tracking(db, latest)) or {}
 
 
 def _tracking(db: Session, latest, days: int = 20) -> dict:
@@ -728,13 +758,20 @@ def _tracking(db: Session, latest, days: int = 20) -> dict:
         d = C.index[r]
         if not bulls.get(d, False):
             continue
-        sc = _close_scores(db, d, frames={key: v.iloc[:r + 1] for key, v in P.items()}).get("scores", {})
+        fr = {key: v.iloc[:r + 1] for key, v in P.items()}
+        sc = _close_scores(db, d, frames=fr).get("scores", {})
         for code, v in sc.items():
             if v["score"] >= 6 and v["risk"] <= 0.08:
                 sig.setdefault(code, []).append((r, float(C[code].iloc[r]), v["stop"], v["score"]))
+        try:      # 급락 날 줍기 (손절 20일선 -1%) — 2026-10-09 "여기는 안 들어가나"
+            for x in _dip_picks(db, d, frames=fr).get("items", []):
+                sig.setdefault(x["code"], []).append((r, float(C[x["code"]].iloc[r]), float(x["stop"]), "dip"))
+        except Exception:  # noqa: BLE001
+            pass
     names = dict(db.execute(text("select code, name from stocks")).all())
     alive, done = [], {"stop": 0, "exit": 0, "win": 0}
     for code, lst in sig.items():
+        lst.sort(key=lambda t: t[0])
         free_from = -1                             # 정리한 뒤에 나온 신호부터 다시 따라간다
         for r0, p0, stop, score in lst:
             if r0 <= free_from:
@@ -753,7 +790,8 @@ def _tracking(db: Session, latest, days: int = 20) -> dict:
                 free_from = end
                 continue
             c_now = float(C[code].iloc[-1])
-            alive.append({"code": code, "name": names.get(code, code), "date": str(C.index[r0]), "entry": p0, "stop": round(stop), "score": score,
+            alive.append({"code": code, "name": names.get(code, code), "date": str(C.index[r0]), "entry": p0, "stop": round(stop),
+                          "score": None if score == "dip" else score, "dip": score == "dip",
                           "gain": round((c_now / p0 - 1) * 100, 1), "to21": round((c_now / float(e21[code].iloc[-1]) - 1) * 100, 1),
                           "sell_tmr": status == "exit_tmr", "days": n - 1 - r0})
             break

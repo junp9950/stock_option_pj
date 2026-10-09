@@ -634,7 +634,7 @@ select{background:#21262d;border:1px solid #30363d;color:#c9d1d9;padding:6px 10p
       <div class="ws-ctl"><div class="ws-per" id="ws-tf"><button data-tf="1d" onclick="wsTf('1d')">일봉</button><button data-tf="1w" onclick="wsTf('1w')">주봉</button><button data-tf="60m" onclick="wsTf('60m')">60분</button><button data-tf="30m" onclick="wsTf('30m')">30분</button><button data-tf="15m" onclick="wsTf('15m')">15분</button><button data-tf="5m" onclick="wsTf('5m')">5분</button><button data-tf="1m" onclick="wsTf('1m')">1분</button></div>
       <div class="ws-per" id="ws-per"><button data-n="66" onclick="wsPeriod(66)">3개월</button><button data-n="130" onclick="wsPeriod(130)">6개월</button><button data-n="250" onclick="wsPeriod(250)">1년</button></div></div>
       <div class="lwbox"><div class="lwleg" id="ws-chart-leg"></div><div id="ws-chart" class="lwc"></div></div>
-      <details class="ws-lg"><summary>ⓘ 차트 표시 설명</summary><div class="ws-legend"><span>▲ <b>진입</b> = 사기 좋은 자리 (2~3주 보유 · 급등봉 당일은 안 냄) → 스탑로스 = 신호 봉 저가 -1% 예약 · ▼ 14일선 아래 종가 절반 · 21일선 아래 종가 나머지</span><span>● 보라 숫자 <b>6·7</b> = 종가 진입 점수 (7개 조건 중 맞은 개수 · 상승·횡보장만) → 사면 바로 스탑로스 = 그날 저가 -1% 예약 · 21일선 아래 종가면 다음 날 아침 정리</span><span>↑ <b>종가 매수</b> = 그날 종가에 살 후보 (진입 시점일 뿐 · 파는 건 위와 같음)</span><span>↑ 파란 화살표 = 박스 위로 돌파 · 이평선 모였다 돌파</span><span>● 초록 = 오르던 종목의 거래 적은 눌림</span><span>· 작은 점 = 참고 (돌파 대기 · 아깝게 놓침 · 상승 추세 시작) — 봉에 올리면 위에 내용</span><span>■ 회색 = 급등봉 · 1년 최대 거래</span><span>▼ 주황 = 조심</span><span>· 두 손가락으로 확대, 끌어서 이동, 누르면 그 날 가격</span></div></details>
+      <details class="ws-lg"><summary>ⓘ 차트 표시 설명</summary><div class="ws-legend"><span>▲ <b>진입</b> = 사기 좋은 자리 (2~3주 보유 · 급등봉 당일은 안 냄) → 스탑로스 = 신호 봉 저가 -1% 예약 · ▼ 14일선 아래 종가 절반 · 21일선 아래 종가 나머지</span><span>↑ 하늘색 <b>줍기</b> = 급락 날 줍기 (시장 -2%↓ 날 같이 빠진 센 종목 · 손절 20일선 · 수량 절반)</span><span>● 보라 숫자 <b>6·7</b> = 종가 진입 점수 (7개 조건 중 맞은 개수 · 상승·횡보장만) → 사면 바로 스탑로스 = 그날 저가 -1% 예약 · 21일선 아래 종가면 다음 날 아침 정리</span><span>↑ <b>종가 매수</b> = 그날 종가에 살 후보 (진입 시점일 뿐 · 파는 건 위와 같음)</span><span>↑ 파란 화살표 = 박스 위로 돌파 · 이평선 모였다 돌파</span><span>● 초록 = 오르던 종목의 거래 적은 눌림</span><span>· 작은 점 = 참고 (돌파 대기 · 아깝게 놓침 · 상승 추세 시작) — 봉에 올리면 위에 내용</span><span>■ 회색 = 급등봉 · 1년 최대 거래</span><span>▼ 주황 = 조심</span><span>· 두 손가락으로 확대, 끌어서 이동, 누르면 그 날 가격</span></div></details>
     </div>
     <aside class="cm-panel" id="ws-panel"></aside>
   </div>
@@ -2063,7 +2063,7 @@ async function loadWorkspace(){
 }
 function wsItems(t){ const d=_ws.data||{}; return t==='track'?(d.track||[]):(d.candidates||[]).filter(x=>(x.lane||'entry')===t); }
 const WS_LANE={entry:'종가에 진입 · ✅ 손절폭 3%↓ 먼저 · 5~8%는 수량 절반 · 사면 스탑로스(그날 저가 -1%) 예약 · 21일선 아래 종가면 다음 날 아침 정리 · ⬇ 급락 날 줍기는 손절 20일선 · 수량 절반',
-  wait:'신호 전 · 돌파 나오면 그때 · ⏸ 손절폭 8%↑는 폭 좁은 날 기다리기 · 참고 = 다른 기준 신호', track:'내 매매 아님 · 최근 20일 사이트 신호를 규칙대로 따라간 것 · ⚠ = 내일 아침 정리'};
+  wait:'신호 전 · 돌파 나오면 그때 · ⏸ 손절폭 8%↑는 폭 좁은 날 기다리기 · 참고 = 다른 기준 신호', track:'내 매매 아님 · 최근 20일 사이트 신호(점수 6↑ · ⬇ 급락 날 줍기)를 규칙대로 따라간 것 · ⚠ = 내일 아침 정리'};
 function wsTab(t){ _ws.tab=t; try{ localStorage.setItem('ws-tab',t); }catch(e){} renderWsList(); }
 function renderWsList(){
   document.querySelectorAll('.ws-tabs button').forEach(b=>{ const n=wsItems(b.dataset.t).length; b.classList.toggle('on',b.dataset.t===_ws.tab); b.innerHTML=`${{entry:'오늘 진입',wait:'대기',track:'신호 추적'}[b.dataset.t]} ${n}`; });
@@ -2074,7 +2074,7 @@ function renderWsList(){
   const KIND={above:'선 위 마감 대기',near:'수렴 자리',hold:'지지선',watch:'봉 보기'};
   const row=x=>{
     let tg='';
-    if(_ws.tab==='track') tg=(x.sell_tmr?'⚠ 내일 아침 정리 · ':'')+`${x.date.slice(5).replace('-','/')} ${Math.round(x.entry).toLocaleString()} · 스탑 ${x.stop.toLocaleString()} · 21선 ${x.to21>0?'+':''}${x.to21}%`;
+    if(_ws.tab==='track') tg=(x.sell_tmr?'⚠ 내일 아침 정리 · ':'')+(x.dip?'⬇ 줍기 · ':'')+`${x.date.slice(5).replace('-','/')} ${Math.round(x.entry).toLocaleString()} · 스탑 ${x.stop.toLocaleString()} · 21선 ${x.to21>0?'+':''}${x.to21}%`;
     else if(_ws.tab!=='watch') tg=(x.risk!=null?`손절 ${x.risk}% · `:'')+x.tags.filter(t=>t!=='종가 점수 6↑'||x.tags.length===1).join(' · ')+(x.family?` · ${x.family}`:'');   // 손절폭 = 종가에서 그날 저가 -1%까지
     else if(_ws.tab==='held') tg=(x.stop?`손절 ${Math.round(x.stop).toLocaleString()}${x.room!=null?` · ${x.room<0?'⛔ 이탈':x.room<=2?'⚠ '+x.room+'% 남음':x.room+'% 남음'}`:''}`:'손절선 없음')+(x.long?' · 장기':'');
     else tg=`${KIND[x.kind]||''}${x.level?' '+Math.round(x.level).toLocaleString():''}${x.note?' · '+x.note:''}`;
@@ -2301,7 +2301,7 @@ function renderLwChart(cid, allCandles, signals, per){
     const lv=av[av.length-1].value, lc=closes[closes.length-1]; _avwapNote=` · ${lab} ${data[ai].time.slice(5)} VWAP ${Math.round(lv).toLocaleString()} ${lc>=lv?'위 ✓':'아래 ⚠'}`; }
   // 신호 → 화살표 표시 (폰에선 진입·청산·손절·종베 추천·매수매도·위험만 글자)
   const MC={entry:['#58a6ff','arrowUp'],exit:['#c9d1d9','arrowDown'],exit_bad:['#f0883e','arrowDown'],buy:['#1f6feb','arrowUp'],rest:['#2d9c87','circle'],info:['#8b949e','square'],
-            warn:['#f0883e','arrowDown'],trade_buy:['#ffffff','arrowUp'],trade_sell:['#bc8cff','arrowDown'],wait:['#58a6ff','circle'],near:['#6e7681','circle'],note:['#8b949e','circle'],score:['#d2a8ff','circle']};
+            warn:['#f0883e','arrowDown'],trade_buy:['#ffffff','arrowUp'],trade_sell:['#bc8cff','arrowDown'],wait:['#58a6ff','circle'],near:['#6e7681','circle'],note:['#8b949e','circle'],score:['#d2a8ff','circle'],dip:['#56d4dd','arrowUp']};
   const KEY=['entry','exit','exit_bad','trade_buy','trade_sell','warn'];
   const ts=new Set(data.map(d=>d.time));
   let mk=(signals||[]).filter(sg=>ts.has(sg.date));
@@ -2309,7 +2309,8 @@ function renderLwChart(cid, allCandles, signals, per){
   const DOT=['near','note','wait'];     // 참고 점: 작게 점만 — 글자는 봉에 올리면 위 정보 줄에 (2026-10-09 "점 뜨는 거 뭐고", 글자 겹침)
   mk=mk.map(sg=>{ const [col,shape]=MC[sg.kind]||MC.info; const dot=DOT.includes(sg.kind);
     const showTxt=!dot&&(!small||KEY.includes(sg.kind)||sg.label.startsWith('종가 매수'));
-    if(sg.kind==='score') return {time:sg.date,position:'belowBar',color:col,shape,text:String(sg.score),size:0.5};   // 종가 점수 6·7 — 숫자만 (글자 겹침 방지)
+    if(sg.kind==='score') return {time:sg.date,position:'belowBar',color:col,shape,text:String(sg.score),size:0.5};
+    if(sg.kind==='dip') return {time:sg.date,position:'belowBar',color:col,shape,text:'줍기',size:0.9};      // 급락 날 줍기   // 종가 점수 6·7 — 숫자만 (글자 겹침 방지)
     return {time:sg.date,position:sg.pos==='below'?'belowBar':'aboveBar',color:col,shape,text:showTxt?sg.label:'',size:sg.kind==='entry'?1.6:dot?0.4:1}; })
     .sort((a,b)=>a.time<b.time?-1:a.time>b.time?1:0);
   cs.setMarkers(mk);
