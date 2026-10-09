@@ -1968,9 +1968,55 @@ def get_sector_calendar(db: Session = Depends(get_db)):
     return cached("sector_calendar_v2", (), db, lambda: scan(db))
 
 
+_TF_CACHE: dict = {}
+
+
+def _naver_tf_candles(code: str, tf: str) -> list[dict]:
+    """네이버 차트 API: 분봉(최근 약 6거래일, 시고저종·거래량) / 주봉(fchart). 시간은 KST를 그대로 UTC 초로 (차트 축이 한국 시간으로 보이게)."""
+    import calendar  # noqa: PLC0415
+    import re as _re  # noqa: PLC0415
+    import time as _t  # noqa: PLC0415
+    from datetime import datetime, timedelta  # noqa: PLC0415
+    from zoneinfo import ZoneInfo  # noqa: PLC0415
+    import requests  # noqa: PLC0415
+    key = (code, tf)
+    hit = _TF_CACHE.get(key)
+    if hit and _t.time() - hit[0] < 60:
+        return hit[1]
+    hdr = {"User-Agent": "Mozilla/5.0"}
+    out = []
+    if tf == "1w":
+        t = requests.get(f"https://fchart.stock.naver.com/sise.nhn?symbol={code}&timeframe=week&count=160&requestType=0", headers=hdr, timeout=8).text
+        for x in _re.findall(r'data="([^"]+)"', t):
+            d, o, h, l, c, v = x.split("|")
+            out.append({"timestamp": f"{d[:4]}-{d[4:6]}-{d[6:]}T00:00:00.000+09:00", "openPrice": o, "highPrice": h, "lowPrice": l, "closePrice": c, "volume": v})
+    else:
+        mins = {"1m": "minute", "3m": "minute3", "5m": "minute5", "10m": "minute10", "15m": "minute15", "30m": "minute30", "60m": "minute60"}[tf]
+        now = datetime.now(ZoneInfo("Asia/Seoul"))
+        st = (now - timedelta(days=21)).strftime("%Y%m%d0900")
+        rows = requests.get(f"https://api.stock.naver.com/chart/domestic/item/{code}/{mins}?startDateTime={st}&endDateTime={now:%Y%m%d%H%M}", headers=hdr, timeout=8).json()
+        for r in rows or []:
+            ts = r["localDateTime"]
+            sec = calendar.timegm(datetime.strptime(ts, "%Y%m%d%H%M%S").timetuple())
+            out.append({"t": sec, "timestamp": f"{ts[:4]}-{ts[4:6]}-{ts[6:8]}T{ts[8:10]}:{ts[10:12]}:00+09:00", "openPrice": r["openPrice"], "highPrice": r["highPrice"],
+                        "lowPrice": r["lowPrice"], "closePrice": r["currentPrice"], "volume": r.get("accumulatedTradingVolume") or 0})
+    _TF_CACHE[key] = (_t.time(), out)
+    if len(_TF_CACHE) > 400:
+        _TF_CACHE.clear()
+    return out
+
+
 @router.get("/stock/{code}/candles")
-def get_stock_candles(code: str, count: int = 330, db: Session = Depends(get_db)):
-    """긴 일봉 (토스는 200봉까지라 앞은 DB, 최근 며칠은 토스 실시간으로 덮음) — 첫 화면 1년 차트용 (2026-10-09)."""
+def get_stock_candles(code: str, count: int = 330, tf: str = "1d", db: Session = Depends(get_db)):
+    """긴 일봉 (토스는 200봉까지라 앞은 DB, 최근 며칠은 토스 실시간으로 덮음) — 첫 화면 1년 차트용 (2026-10-09).
+    tf=1w(주봉)·1m·3m·5m·10m·15m·30m·60m(분봉, 최근 약 6거래일)는 네이버 차트 API."""
+    if tf != "1d":
+        if tf not in ("1w", "1m", "3m", "5m", "10m", "15m", "30m", "60m"):
+            raise HTTPException(status_code=400, detail="tf")
+        try:
+            return {"code": code, "tf": tf, "candles": _naver_tf_candles(code, tf)}
+        except Exception:  # noqa: BLE001
+            raise HTTPException(status_code=502, detail="분봉·주봉을 못 받았습니다")
     rows = db.execute(text("select trading_date, open_price, high_price, low_price, close_price, volume from spot_daily_prices "
                            "where stock_code = :c order by trading_date desc limit :n"), {"c": code, "n": min(count, 600)}).all()
     out = {str(r[0]): {"timestamp": f"{r[0]}T00:00:00.000+09:00", "openPrice": str(r[1]), "highPrice": str(r[2]), "lowPrice": str(r[3]),
