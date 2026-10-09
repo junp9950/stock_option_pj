@@ -271,7 +271,10 @@ def _members_all(db: Session) -> dict:
                 now_p, prev, tv_today = last, s_.iloc[-2], TV[c].iloc[-1]
                 ma20, base20 = s_.iloc[-20:].mean(), s_.iloc[-21]
             rows[c] = {"code": c, "name": names.get(c, c), "chg": round(float(now_p / prev - 1) * 100, 1), "ret20": round(float(now_p / base20 - 1) * 100, 1),
-                       "gap20": round(float(now_p / ma20 - 1) * 100, 1), "tv_x": round(float(tv_today / avg), 1), "tv": round(float(tv_today * (frac if c in live else 1)) / 1e8)}   # 거래대금 칸은 실제 누적
+                       "gap20": round(float(now_p / ma20 - 1) * 100, 1), "tv_x": round(float(tv_today / avg), 1), "tv": round(float(tv_today * (frac if c in live else 1)) / 1e8),   # 거래대금 칸은 실제 누적
+                       # 어제 대비 (2026-10-09 사용자 "전날 대비가 돈 들어온 데이터엔 낫지 않나" → 20일 평균은 그대로 두고 가속만 옆에)
+                       "tv_d1": (round(float(tv_today / TV[c].iloc[-1]), 1) if c in live else round(float(TV[c].iloc[-1] / TV[c].iloc[-2]), 1))
+                       if (TV[c].iloc[-1] if c in live else TV[c].iloc[-2]) else None}
         out = {"as_of": as_of, "live": bool(live),
                "families": {f: sorted((rows[c] for c in m if c in rows), key=lambda x: -x["chg"]) for f, m in fams.items()}}
         _MEM.update(t=time.time(), key=key, v=out)

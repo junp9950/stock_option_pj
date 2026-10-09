@@ -1542,8 +1542,8 @@ async function toggleRotMembers(tr,fam){
   const c=n=>n>0?'#f85149':n<0?'#58a6ff':'#8b949e', sg=n=>(n>0?'+':'')+n;
   const line=x=>`<tr><td style="padding:3px 6px"><span style="cursor:pointer;text-decoration:underline dotted" onclick="openChartModal('${x.code}','${x.name}','')">${x.name}</span></td>
     <td style="color:${c(x.chg)};padding:3px 6px">${sg(x.chg)}%</td><td style="color:${c(x.ret20)};padding:3px 6px">${sg(x.ret20)}%</td>
-    <td style="padding:3px 6px;color:${x.gap20>=20?'#f85149':'#c9d1d9'}">${sg(x.gap20)}%</td><td style="padding:3px 6px;${x.tv_x>=2?'font-weight:700':''}">${x.tv_x}배</td><td class="ts" style="padding:3px 6px">${x.tv.toLocaleString()}억</td></tr>`;
-  const head='<tr class="ts"><th style="text-align:left;padding:3px 6px">종목</th><th>오늘</th><th>20일</th><th>20일선 이격</th><th>거래 (평소 대비)</th><th>거래대금</th></tr>';
+    <td style="padding:3px 6px;color:${x.gap20>=20?'#f85149':'#c9d1d9'}">${sg(x.gap20)}%</td><td style="padding:3px 6px;${x.tv_x>=2?'font-weight:700':''}">${x.tv_x}배${x.tv_d1!=null?` <span class="ts" title="어제 거래대금 대비 — 1보다 크면 오늘 더 들어옴, 작으면 식는 중">· 어제의 ${x.tv_d1}배</span>`:''}</td><td class="ts" style="padding:3px 6px">${x.tv.toLocaleString()}억</td></tr>`;
+  const head='<tr class="ts"><th style="text-align:left;padding:3px 6px">종목</th><th>오늘</th><th>20일</th><th>20일선 이격</th><th title="평소 = 직전 20거래일 평균 · 옆 숫자 = 어제 대비">거래 (평소 대비 · 어제 대비)</th><th>거래대금</th></tr>';
   const first=d.items.slice(0,30), rest=d.items.slice(30);
   td.innerHTML=`<div class="ts" style="margin-bottom:4px">${fam} ${d.items.length}종목 (하루 거래대금 10억↑) · ${d.as_of} 기준 · 오늘 등락 순 · 이름 누르면 차트</div>
     <table style="width:100%;font-size:12px">${head}${first.map(line).join('')}</table>`
