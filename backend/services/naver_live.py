@@ -54,28 +54,45 @@ def snapshot(codes: list[str], max_age: float = 60) -> dict[str, dict]:
     return out
 
 
-_FCHART = "https://fchart.stock.naver.com/sise.nhn?symbol={code}&timeframe=minute&count=420&requestType=0"
+_FCHART = "https://fchart.stock.naver.com/sise.nhn?symbol={code}&timeframe=minute&count=1100&requestType=0"
 _LEGACY = "https://polling.finance.naver.com/api/realtime?query=SERVICE_ITEM:{code}"
 
 
 def krx_day(code: str) -> dict | None:
-    """오늘 정규장(15:30까지) 봉 — 시가·고가·저가·종가·거래량과 기준가(어제 정규장 종가).
+    """가장 최근 거래일의 정규장(15:30까지) 봉 — 시가·고가·저가·종가·거래량과 기준가(그 전 거래일 정규장 종가).
 
     토스 일봉·DB 종가는 마지막 체결가라 넥스트레이드(20시까지)·시간외 단일가가 섞인다
     (2026-10-08 LS머트리얼즈: 어제 정규장 15,600인데 시간외 15,350이 종가로 잡혀 +5.5%가 +7.2%로 나옴).
+    분봉 1,100개(약 2거래일)로 날짜별 15:30 종가를 잡아서, 휴장일·다음 날 아침에도 직전 거래일 기준으로 보여 준다.
     """
     today = datetime.now(_KST).strftime("%Y%m%d")
     try:
-        r = requests.get(_LEGACY.format(code=code), timeout=6, headers={"User-Agent": "Mozilla/5.0"})
-        d = r.json()["result"]["areas"][0]["datas"][0]
         m = requests.get(_FCHART.format(code=code), timeout=6, headers={"User-Agent": "Mozilla/5.0"}).text
     except Exception:  # noqa: BLE001
         return None
-    close = vol = None
+    days: dict[str, list] = {}
     for x in re.findall(r'data="(\d{12})\|[^|]*\|[^|]*\|[^|]*\|(\d+)\|(\d+)"', m):
-        if x[0][:8] == today and x[0][8:] <= "1530":
-            close, vol = float(x[1]), float(x[2])
-    if close is None or not d.get("sv"):
+        if "0900" <= x[0][8:] <= "1530":
+            days.setdefault(x[0][:8], []).append((float(x[1]), float(x[2])))
+    if not days:
         return None
-    return {"open": float(d.get("ov") or close), "high": float(d.get("hv") or close), "low": float(d.get("lv") or close),
-            "close": close, "volume": vol, "base": float(d["sv"])}
+    ds = sorted(days)
+    d = ds[-1]
+    rows = days[d]
+    close, vol = rows[-1]
+    prices = [r[0] for r in rows]
+    base = days[ds[-2]][-1][0] if len(ds) >= 2 else None
+    o = h = l = None
+    if d == today or base is None:      # 오늘 장이면 옛 polling API가 시가·고가·저가·기준가를 정확히 준다
+        try:
+            r = requests.get(_LEGACY.format(code=code), timeout=6, headers={"User-Agent": "Mozilla/5.0"})
+            j = r.json()["result"]["areas"][0]["datas"][0]
+            if d == today:
+                o, h, l = float(j.get("ov") or 0) or None, float(j.get("hv") or 0) or None, float(j.get("lv") or 0) or None
+                base = float(j["sv"]) if j.get("sv") else base
+        except Exception:  # noqa: BLE001
+            pass
+    if not base:
+        return None
+    return {"date": f"{d[:4]}-{d[4:6]}-{d[6:]}", "open": o or prices[0], "high": max(h or 0, max(prices)), "low": min(l or 1e18, min(prices)),
+            "close": close, "volume": vol, "base": base}
