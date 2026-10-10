@@ -416,7 +416,7 @@ def _workspace_list(db: Session) -> dict:
             _ls = {"on": True}
         for c_, v_ in sorted(scores.items(), key=lambda kv: -(kv[1].get("rs") or 0)):
             if v_.get("lead") and not v_.get("buy"):
-                add(c_, "🔥 주도주 RS 95↑ · V1.0 아님 · 위험 절반(0.25%) · 최대 2종목" if _ls.get("on") else f"주도주 (지금 꺼짐 — {_ls.get('why', '')})")
+                add(c_, ("🔥 주도주 RS 95↑ · V1.0 아님 · 거래당 위험 0.10% · 최대 2종목" + (f" · ⚠️ {_ls['warn']}" if _ls.get("warn") else "")) if _ls.get("on") else f"주도주 (지금 꺼짐 — {_ls.get('why', '')})")
     except Exception:  # noqa: BLE001
         pass
     try:      # 급락 날 줍기 (시장 -2%↓ 날 같이 빠진 센 종목 · 손절 20일선 · 크기 절반)
@@ -803,7 +803,7 @@ def _close_scores(db: Session, latest, live: dict | None = None, frac: float = 1
         # 점수 5인데 빠진 게 과열 두 개(20일선 +15%↑ · 이평선 간격 6%↑)뿐 → 12년(v12w.py) R -0.31/0.00/+0.77 — 이번 장(2023~)에서만 통함 → 수량 절반 · 이번 장 한정
         rs_v = RS.get(code)
         # 주도주 (2026-10-10 사용자 "추세추종은 강함을 좇는 건데 가장 강한 걸 과열이라고 해 버린 거 아니냐" · GPT 동의):
-        # 정배열 · RS 95↑ · 손절폭 8%↓ · 양봉 · 종가가 그날 범위 위 절반. V1.0 아님 — 이번 장 한정 별도 전략(L, 거래당 위험 0.25% · 최대 2종목).
+        # 정배열 · RS 95↑ · 손절폭 8%↓ · 양봉 · 종가가 그날 범위 위 절반. V1.0 아님 — 이번 장 한정 별도 전략(L, 거래당 위험 0.10% · 최대 2종목, 10/10 0.25%→0.10%).
         # 12년 거래당 R: 2015~18 -0.27 · 2019~22 +0.02 · 2023~25.05 +0.04 · 2025.06~ +0.62 (V1.0 -0.14/+0.05/+0.17/+0.59) — 지금 장에서만 통함
         o_ = O.iloc[r].get(code)
         lead = bool(code in tr_codes and rs_v is not None and rs_v == rs_v and rs_v >= 95 and 0 < rk <= 0.08

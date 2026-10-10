@@ -31,6 +31,7 @@ HELP = ("주식 레이더 봇 명령\n"
         "/종베 종목 가격 [메모] — 오늘 종베 기록 (여러 줄 가능) · /종베목록 · /종베삭제 종목 · /채점\n"
         "종목토론 알림에 '답장' — 그 글에 댓글(댓글 알림이면 답글)로 달림 · /이름 우라늄 — 댓글 이름 정하기\n"
         "/board — (그룹에서) 이 방을 종목토론·건의사항 알림 전용으로 · /board_off — 해제\n"
+        "/주도주 — 주도주(RS 95↑) 상태 · /주도주 끄기 이유 · /주도주 켜기 이유\n"
         "/stop — 알림 끄기")
 
 
@@ -672,6 +673,15 @@ def poll(db: Session) -> None:
                 send(db, f"예: /이름 우라늄 (가능한 이름: {', '.join(AUTHORS)})", cid); continue
             au = _get(db, "telegram_authors", {}); au[cid] = name; _put(db, "telegram_authors", au)
             send(db, f"✅ 이 대화방에서 답장으로 다는 댓글은 '{name}' 이름으로 올라갑니다.", cid)
+        elif txt.startswith("/주도주"):      # 주도주(L) 상태·수동 끄기/켜기 — 끄고 켠 때를 숫자와 함께 기록 (2026-10-10)
+            from backend.services import forward_log as FL  # noqa: PLC0415
+            arg = txt.split(maxsplit=2)
+            if len(arg) >= 2 and arg[1] in ("끄기", "켜기"):
+                send(db, FL.set_lead_manual(db, arg[1] == "켜기", arg[2] if len(arg) > 2 else ""), cid)
+            else:
+                ls = FL.lead_state(db)
+                send(db, ("주도주: 켜짐" if ls["on"] else f"주도주: 꺼짐 — {ls['why']}") + (f" · ⚠️ {ls['warn']}" if ls.get("warn") else "")
+                     + "\n/주도주 끄기 이유 · /주도주 켜기 이유 (끄고 켠 때를 기록합니다)", cid)
         elif txt.startswith("/종베목록"):
             from backend.services import jongbe_check as JC  # noqa: PLC0415
             from backend.db.models import UserJongbe  # noqa: PLC0415

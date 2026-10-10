@@ -32,9 +32,11 @@ CONFIG = {"signal": "stock_signals._close_scores buy (S0)", "order": "RS desc", 
           "market_filter": "bull (record_close에서 확인)", "frozen": "2026-10-10", "next_open_cancel_if_open_le_stop": True}
 # 주도주 L (V1.0 아님, 이번 장 한정 별도 전략 · GPT 운영 규칙 10/10): 정배열·RS 95↑·손절폭 8%↓·양봉·종가 범위 위 절반
 # 실제 L = 거래당 위험 0.25% · 최대 2종목 · 15:12 신호 → 종가. Lsh = 모든 주도주 신호 전수 기록(칸 제한 없음) → 꺼짐 판단용.
-# 꺼짐: 상승장 아님 → 신규 중단 · 최근 30건(Lsh) 평균 R ≤ −0.10 → 실제 매수 중단(기록 계속), +0.10 ≥ 이면 다시 켬 · 실제 L 누적 R이 고점 대비 −4R → 잠금(사용자 해제 전까지 기록만).
+# 운영(10/10 GPT·사용자 합의 수정): 거래당 위험 0.10% · 최대 2종목. 상승장 아님 → 신규 중단. 실제 L 누적 R 고점 대비 −15R → 실매매 정지(계좌 약 −1.5%, 사용자 '/주도주 켜기' 전까지 기록만).
+#   −8R · 최근 30건(Lsh) 평균 R ≤ −0.10 → 경고만(자동으로 끄지 않음 — 승률 18%라 성적 기반 켜고 끄기는 12년 검증에서 전부 엇갈림).
+#   사용자가 직접 끄고 켜면(텔레그램 /주도주 끄기·켜기) 그때 30건 평균·낙폭과 함께 기록 → 나중에 사람 판단이 도움이 됐는지 평가.
 # Z = Lazy식 모멘텀 BUY 모방(종가가 직전 20일 고가 위 · 거래량 20일 평균 1.9배↑ · 그날 +5%↑ · 거래대금 30억↑), V1.0과 같은 체결·손절·정리로 종목 고르기만 비교.
-LEAD = {"risk": 0.0025, "slots": 2, "roll": 30, "off": -0.10, "on": 0.10, "latch_R": -4.0}
+LEAD = {"risk": 0.0010, "slots": 2, "roll": 30, "warn_mean": -0.10, "warn_R": -8.0, "stop_R": -15.0}
 CONFIG_HASH = hashlib.sha256(json.dumps(CONFIG, sort_keys=True).encode()).hexdigest()[:12]
 STATE_KEY = "fwd_v1_state"
 KST = ZoneInfo("Asia/Seoul")
@@ -234,19 +236,49 @@ def _lazy_cands(db: Session, latest) -> list[dict]:
     return out
 
 
+def _lead_dd(st: dict) -> float:
+    cum = pk = 0.0
+    for t in (st.get("L") or {}).get("trades", []):
+        cum += t["R"]; pk = max(pk, cum)
+    return cum - pk
+
+
 def lead_state(db: Session, st: dict | None = None) -> dict:
-    """주도주 L 켜짐/꺼짐 (화면·알림용). 상승장 아님 → 꺼짐 · 잠금 → 꺼짐 · 최근 30건 평균 R 이력(±0.10 hysteresis)."""
+    """주도주 L 켜짐/꺼짐 + 경고 (화면·알림용). 꺼짐 = 사용자 수동 끔 · −15R 정지 · 하락장. 경고 = −8R · 최근 30건 평균 R ≤ −0.10."""
     from backend.services.stock_signals import _bull_days  # noqa: PLC0415
     from backend.services.telegram import _get  # noqa: PLC0415
     st = st if st is not None else (_get(db, STATE_KEY, {}) or {})
     latest = db.execute(text("select max(trading_date) from spot_daily_prices")).scalar()
-    if st.get("L_latch"):
-        return {"on": False, "why": st["L_latch"]}
+    dd = _lead_dd(st); m30 = st.get("L_mean30")
+    warn = []
+    if dd <= LEAD["warn_R"]:
+        warn.append(f"주도주 누적 {dd:+.1f}R")
+    if m30 is not None and m30 <= LEAD["warn_mean"]:
+        warn.append(f"최근 {LEAD['roll']}건 평균 R {m30:+.2f}")
+    w = " · ".join(warn)
+    man = st.get("L_manual") or {}
+    if man.get("on") is False:
+        return {"on": False, "why": f"사용자가 끔 ({man.get('at', '')}{' · ' + man['reason'] if man.get('reason') else ''})", "warn": w}
+    if st.get("L_hard"):
+        return {"on": False, "why": st["L_hard"], "warn": w}
     if not _bull_days(db).get(latest, False):
-        return {"on": False, "why": "하락장 — 신규 중단"}
-    if st.get("L_on") is False:
-        return {"on": False, "why": f"최근 {LEAD['roll']}건 평균 R {st.get('L_mean30', 0):+.2f} — 기록만"}
-    return {"on": True, "why": ""}
+        return {"on": False, "why": "하락장 — 신규 중단", "warn": w}
+    return {"on": True, "why": "", "warn": w}
+
+
+def set_lead_manual(db: Session, on: bool, reason: str = "") -> str:
+    """텔레그램 /주도주 끄기·켜기 — 사람 판단을 그때 숫자와 함께 남긴다. 켜기는 −15R 정지도 푼다."""
+    from backend.services.telegram import _get, _put  # noqa: PLC0415
+    st = _get(db, STATE_KEY, {}) or {}
+    now = datetime.now(KST).strftime("%Y-%m-%d %H:%M")
+    rec = {"at": now, "on": on, "reason": reason[:100], "mean30": st.get("L_mean30"), "dd": round(_lead_dd(st), 2), "hard": st.get("L_hard")}
+    st.setdefault("L_manual_log", []).append(rec)
+    st["L_manual"] = {"on": on, "at": now, "reason": reason[:100]}
+    if on:
+        st.pop("L_hard", None)
+    _put(db, STATE_KEY, st)
+    return (f"주도주 {'켬' if on else '끔'} ({now}) · 기록: 최근 30건 평균 R {rec['mean30'] if rec['mean30'] is not None else '-'} · 누적 낙폭 {rec['dd']:+.1f}R"
+            + (" · −15R 정지 해제" if on and rec["hard"] else ""))
 
 
 def record_close(db: Session, asof: date | None = None) -> str:
@@ -287,19 +319,13 @@ def record_close(db: Session, asof: date | None = None) -> str:
            _step(st["L"], "L", latest, bars, lead_src if (bull and ls["on"]) else [], "close", slots=LEAD["slots"], rp=LEAD["risk"]),
            _step(st["Lsh"], "Lsh", latest, bars, lead_src if bull else [], "close", slots=999, rp=0.0005),
            _step(st["Z"], "Z", latest, bars, lazy_c, "close")]
-    # 주도주 꺼짐 판단 (GPT 운영 규칙): 최근 30건 Lsh 평균 R · 실제 L 누적 R 고점 대비 −4R 잠금
+    # 주도주: 최근 30건 Lsh 평균 R(경고용) · 실제 L 누적 R 고점 대비 −15R → 실매매 정지
     tr = st["Lsh"]["trades"][-LEAD["roll"]:]
     if len(tr) >= LEAD["roll"]:
-        m30 = sum(t["R"] for t in tr) / len(tr); st["L_mean30"] = round(m30, 3)
-        if st.get("L_on", True) and m30 <= LEAD["off"]:
-            st["L_on"] = False
-        elif st.get("L_on") is False and m30 >= LEAD["on"]:
-            st["L_on"] = True
-    cum = pk = 0.0
-    for t in st["L"]["trades"]:
-        cum += t["R"]; pk = max(pk, cum)
-        if cum - pk <= LEAD["latch_R"] and not st.get("L_latch"):
-            st["L_latch"] = f"주도주 누적 {cum - pk:+.1f}R — 잠금(사용자 확인 필요)"
+        st["L_mean30"] = round(sum(t["R"] for t in tr) / len(tr), 3)
+    dd = _lead_dd(st)
+    if dd <= LEAD["stop_R"] and not st.get("L_hard"):
+        st["L_hard"] = f"주도주 누적 {dd:+.1f}R — −15R 정지(계좌 약 −1.5%) · 사용자 /주도주 켜기 전까지 기록만"
     for k in ACC:
         st[k]["eq"] = st[k]["eq"][-800:]
     st["last"] = str(latest); st["version"] = VERSION; st["config"] = CONFIG_HASH
@@ -340,7 +366,7 @@ def monthly_text(db: Session, ym: str | None = None) -> str | None:
            f"거래일 {len(days)} · 15:12 스냅샷 빠짐 {miss}일 · 15:12↔종가 후보 일치율 평균 {sum(jac) / len(jac):.2f}" if jac else f"거래일 {len(days)} · 15:12 스냅샷 빠짐 {miss}일",
            f"상위 10 교체율(P vs X 산 종목) 평균 {sum(flips) / len(flips):.2f}" if flips else ""]
     for k, nm in (("P", "P 기본(15:12 신호·종가)"), ("S", "S 보조(종가 신호·다음 날 시가)"), ("X", "X 진단(같은 종가)"),
-                  ("L", "L 주도주 실제(0.25%·2종목)"), ("Lsh", "L 주도주 전수 기록"), ("Z", "Z Lazy식 모방(같은 체결)")):
+                  ("L", "L 주도주 실제(0.10%·2종목)"), ("Lsh", "L 주도주 전수 기록"), ("Z", "Z Lazy식 모방(같은 체결)")):
         a = st.get(k) or {}
         tr = [t for t in a.get("trades", []) if t["d1"][:7] == ym]
         alltr = a.get("trades", [])
@@ -359,7 +385,10 @@ def monthly_text(db: Session, ym: str | None = None) -> str | None:
         elif k == "P" and mdd <= -0.15:
             out.append("⚠️ P 낙폭 15% 넘음 — 사전 기준상 위험 절반(0.25%) 검토")
     try:
-        out.append("주도주 상태: " + ("켜짐" if lead_state(db, st)["on"] else "꺼짐 — " + lead_state(db, st)["why"]))
+        ls_ = lead_state(db, st)
+        out.append("주도주 상태: " + ("켜짐" if ls_["on"] else "꺼짐 — " + ls_["why"]) + (f" · ⚠️ {ls_['warn']}" if ls_.get("warn") else ""))
+        for r_ in (st.get("L_manual_log") or [])[-5:]:
+            out.append(f"  사용자 {'켬' if r_['on'] else '끔'} {r_['at']} · {r_.get('reason') or ''} · 30건 평균 {r_.get('mean30')} · 낙폭 {r_.get('dd')}R")
     except Exception:  # noqa: BLE001
         pass
     n_tr = len((st.get("P") or {}).get("trades", [])); n_days = len({t["d0"] for t in (st.get("P") or {}).get("trades", [])})
