@@ -337,6 +337,18 @@ def start_scheduler() -> BackgroundScheduler:
     # 18:35 신호 추적 중인 🔥 주도주가 21일선 아래로 마감했으면 '내일 아침 정리' (2026-10-10)
     scheduler.add_job(lambda: _tg("send_lead_track"), 'cron', day_of_week='mon-fri', hour=18, minute=35, id='lead_track', replace_existing=True, max_instances=1)
 
+    def _market_flows_job() -> None:
+        from backend.collector.market_investor import collect  # noqa: PLC0415
+        db = SessionLocal()
+        try:
+            logger.info("시장 수급: %s", collect(db))
+        except Exception as exc:  # noqa: BLE001
+            logger.error("시장 수급 실패: %s", type(exc).__name__)
+        finally:
+            db.close()
+    # 16:05·18:05 코스피·코스닥 투자자별 순매수 (KIS, 최근 300거래일 덮어쓰기) — 시장 카드 '수급' (2026-10-11)
+    scheduler.add_job(_market_flows_job, 'cron', day_of_week='mon-fri', hour='16,18', minute=5, id='market_flows', replace_existing=True, max_instances=1)
+
     def _forward_close() -> None:
         from backend.services.forward_log import record_close  # noqa: PLC0415
         db = SessionLocal()
