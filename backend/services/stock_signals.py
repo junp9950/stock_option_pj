@@ -358,7 +358,7 @@ def workspace_list(db: Session) -> dict:
     from backend.services.result_cache import cached  # noqa: PLC0415
     now = datetime.now(ZoneInfo("Asia/Seoul"))
     if not (is_trading_day(now.date()) and 9 <= now.hour < 16):
-        return cached("workspace_list_v9", (), db, lambda: _workspace_list(db))
+        return cached("workspace_list_v10", (), db, lambda: _workspace_list(db))
     return _workspace_list(db)
 
 
@@ -508,8 +508,18 @@ def _workspace_list(db: Session) -> dict:
         if y["lane"] == "entry" and sc and sc["risk"] > 0.08 and not sc.get("semi") and not any(t.startswith("▲") for t in x["tags"]):
             y["lane"] = "wait"            # 다른 이유로 올라왔어도 손절폭 5%↑면 대기로
         cands.append(y)
-    # 정렬: 매수 칸 → 섹터 1~8위 먼저 → 손절폭 3%↓ → 5% 안 → 점수 → 손절폭
-    cands.sort(key=lambda y: (y["lane"] != "entry", (y.get("sec_rank") or 99) > 8, not y["rr"], (y["risk"] or 0) > 5,
+    # 정렬 (2026-10-10 바꿈): 매수 칸은 강도(RS) 높은 순. 12년 검증 — 같은 날 후보가 남은 칸보다 많을 때 RS 순으로 고르면
+    # 무작위 순서 10,000번 중 100백분위(연 +24.7% vs 무작위 중앙 +4.0%), 예전 순서(섹터→손절폭 3%↓→점수→손절폭)는 41백분위 (ranking_lab.py).
+    # 대기 칸은 예전 순서 그대로.
+    for y in cands:
+        sc = scores.get(y["code"]) or {}
+        y["rs"] = sc.get("rs")
+    ent = sorted([y for y in cands if y["lane"] == "entry" and y["rs"] is not None], key=lambda y: -y["rs"])
+    for k_, y in enumerate(ent, 1):
+        y["rs_rank"] = k_
+        y["tags"] = [f"강도 RS {y['rs']:.0f} · 후보 중 {k_}위"] + y["tags"]
+    cands.sort(key=lambda y: (y["lane"] != "entry", -(y["rs"] if (y["lane"] == "entry" and y.get("rs") is not None) else -1),
+                              (y.get("sec_rank") or 99) > 8, not y["rr"], (y["risk"] or 0) > 5,
                               -(y["score"] if y["score"] is not None else -1), y["risk"] if y["risk"] is not None else 99))
     return {"as_of": str(latest), "live": live_at, "mode": mp.get("mode"),
             "candidates": cands, "track": _track_rows(db, px), "track_done": (tracking(db) or {}).get("done", {})}
@@ -684,7 +694,7 @@ def close_scores(db: Session) -> dict:
     점수 7 이김 46%·+1.5%. 기간을 반으로 나눠도 둘 다 점수 따라 이김 비율이 올라감(앞 26→47%, 뒤 31→46%). 디스크 캐시."""
     latest = db.execute(text("select max(trading_date) from spot_daily_prices")).scalar()
     from backend.services.result_cache import cached  # noqa: PLC0415
-    v = cached("close_scores_v4", (), db, lambda: _close_scores(db, latest)) or {}
+    v = cached("close_scores_v5", (), db, lambda: _close_scores(db, latest)) or {}
     return v
 
 
@@ -779,7 +789,9 @@ def _close_scores(db: Session, latest, live: dict | None = None, frac: float = 1
         normal = code in tr_codes and bool(f[1] and rk <= 0.08 and (sum(f) >= 6 or e_ or (sum(f) == 5 and not f[5] and not f[6])))
         # 과열 매수 (2026-10-09 하나마이크론 "시장 급락 뒤 급반등인데 과열 끝자락에서만 줍네" → "앞선 장은 다 지나간 거고 일단"):
         # 점수 5인데 빠진 게 과열 두 개(20일선 +15%↑ · 이평선 간격 6%↑)뿐 → 12년(v12w.py) R -0.31/0.00/+0.77 — 이번 장(2023~)에서만 통함 → 수량 절반 · 이번 장 한정
+        rs_v = RS.get(code)
         out[code] = {"score": sum(f), "flags": f, "stop": float(l[code]) * 0.99, "risk": rk, "ema": e_,
+                     "rs": round(float(rs_v), 1) if rs_v is not None and rs_v == rs_v else None,     # 후보 순서용 (2026-10-10: RS 높은 순이 12년 무작위 순서 10,000번 중 100백분위)
                      "hot": bool(code in tr_codes and f[1] and rk <= 0.08 and sum(f) == 5 and not f[5] and not f[6] and not e_),
                      "semi": bool(code in semi_ok and not normal),
                      "buy": bool(normal or code in semi_ok)}
