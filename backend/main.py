@@ -962,13 +962,18 @@ async function loadDashboard(){
   if(!d){ if(!old) document.getElementById('db-verdict').textContent='불러오지 못했습니다'; return; }
   try{ localStorage.setItem('db-last',JSON.stringify(d)); }catch(e){}
   renderDashboard(d, false);
-  loadLive(d);
+  window._dashD=d; loadLive(d);
 }
+// 장중 자동 갱신 (2026-10-11 "장중에 지수 그래프가 계속 업데이트 되나?"): 오늘 탭이 보일 때 지수 선 1분마다, 시장 카드·수급·장세는 5분마다
+setInterval(()=>{ const k=new Date(new Date().toLocaleString('en-US',{timeZone:'Asia/Seoul'})), hm=k.getHours()*100+k.getMinutes(), wd=k.getDay();
+  const home=document.getElementById('panel-home');
+  if(document.visibilityState!=='visible'||!home||!home.classList.contains('active')||wd===0||wd===6||hm<900||hm>1540) return;
+  hcSpark(); if(k.getMinutes()%5===0&&window._dashD) loadLive(window._dashD); },60000);
 // 장중(평일 9:00~15:40)에는 지금 가격으로 장세를 다시 판단해 판단 문구·과매도·순환 카드·카드 순서를 바꾼다 (대시보드 본체는 장 마감 데이터) — 2026-10-07
 async function loadLive(d){
   const k=new Date(new Date().toLocaleString('en-US',{timeZone:'Asia/Seoul'})), hm=k.getHours()*100+k.getMinutes(), wd=k.getDay();
   if(wd===0||wd===6||hm<900||hm>1540) return;
-  const el=document.getElementById('db-dip'); if(el) el.insertAdjacentHTML('afterbegin','<div class="ts" id="db-dip-wait">장중 가격으로 확인 중…</div>');
+  const el=document.getElementById('db-dip'); if(el&&!document.getElementById('db-dip-wait')) el.insertAdjacentHTML('afterbegin','<div class="ts" id="db-dip-wait">장중 가격으로 확인 중…</div>');
   const r=await fetch(`${API}/dashboard/dip-live`).then(x=>x.ok?x.json():null).catch(()=>null);
   if(!r){ const w=document.getElementById('db-dip-wait'); if(w) w.textContent='장중 가격을 못 불러왔습니다'; return; }
   // 시장 국면·20일 비교·섹터 표·조건 B·박스 돌파도 지금 가격으로 바꿔 그림 (2026-10-07 "지금 기준으로 시장 데이터 전부")
@@ -979,6 +984,19 @@ async function loadLive(d){
 }
 // 첫 화면 위 카드 두 장 (2026-10-09) — 색약: 상태는 ▲■▼ 모양 + 파랑/회색/주황
 let _homeTopArgs=[null,null];
+function hbWon(v){ const a=Math.abs(v); return (v>0?'+':v<0?'−':'')+(a>=1e6?(a/1e6).toFixed(1)+'조':Math.round(a/100).toLocaleString()+'억'); }   // 백만원 → 조·억
+// 수급 표: 5일 합 / 오늘 전환 · 장중이면 '장중 잠정치' (장 마감 뒤 확정치로 덮어씀, 2026-10-11) — 전환은 이 표만 다시 그림
+function hbFlowsHTML(FL){
+  if(!(FL&&FL.KOSPI&&FL.KOSDAQ)) return '';
+  const won=hbWon, C=[['frgn','외국인'],['orgn','기관'],['fund','연기금'],['ivtr','투신'],['insu','보험'],['scrt','금융투자'],['prsn','개인']];
+  const md=window._flowMode||'sum', cell=v=>`<td class="mono" style="color:${v>0?'var(--up)':v<0?'var(--down)':'var(--muted)'}">${v==null?'-':won(v)}</td>`;
+  const tag=FL.provisional?` · <b class="hb-prov">장중 잠정치${FL.updated?' '+FL.updated:''}</b>`:'';
+  const head=md==='sum'?`최근 ${FL.days}거래일 합 <span>${FL.from.slice(5).replace('-','/')}~${FL.to.slice(5).replace('-','/')}${FL.provisional?' (오늘은 잠정)':''}</span>`:`${FL.to.slice(5).replace('-','/')} 하루 <span></span>`;
+  const btn=(k,t)=>`<button class="${md===k?'on':''}" onclick="window._flowMode='${k}';hbFlowsRedraw()">${t}</button>`;
+  return `<div class="hb-flows"><div class="hb-fh">투자자별 순매수 · ${head}${tag}<span class="hb-ftg">${btn('sum',FL.days+'일')}${btn('today',FL.provisional?'오늘(잠정)':'하루')}</span></div><div style="overflow-x:auto"><table><thead><tr><th></th>${C.map(c=>`<th>${c[1]}</th>`).join('')}</tr></thead><tbody>
+    ${['KOSPI','KOSDAQ'].map(k=>{ const src=md==='sum'?FL[k].sum:(FL[k].today||{}); return `<tr><th>${k==='KOSPI'?'코스피':'코스닥'}</th>${C.map(c=>cell(src[c[0]])).join('')}</tr>`; }).join('')}</tbody></table></div></div>`;
+}
+function hbFlowsRedraw(){ const el=document.querySelector('#hc-market .hb-flows'), d=_homeTopArgs[0]; if(el&&d) el.outerHTML=hbFlowsHTML(d.flows); }
 function renderHomeTop(d, live){
   _homeTopArgs=[d,live];
   const sg=x=>(x>0?'+':'')+x, m=d.market||{}, all=m['전체']||{}, br=d.breadth||{}, it=d.index_today||{}, md=(live&&live.mode)||d.mode||{};
@@ -991,7 +1009,7 @@ function renderHomeTop(d, live){
   if(br.temp) add('과매수 · 과매도','20일선 위 '+br.br20+'% · 20일선 +20% 넘은 종목 '+br.hot20+'% · 3일 '+sg(br.c3)+'%'+(br.temp_say?' · '+br.temp_say:''),br.temp,'n',null,br.temp_k==='up'?'⚠ 과매수':br.temp_k?'⬇ 과매도':'■ 보통');
   if(br.hi60!=null) add('신고가 · 신저가','최근 60일 최고 · 최저 종가 종목 수',br.hi60+' · '+br.lo60,br.hi60>=br.lo60*2&&br.hi60>=10?'g':br.lo60>br.hi60?'b':'n');
   if(m.rel!=null) add('삼전·하닉 vs 코스닥','최근 20일 · 삼하 '+sg(m.sh20)+'% · 코스닥 '+sg(m.kq20)+'%',sg(m.rel)+'%p',m.rel>=10?'b':m.rel<=-3?'g':'n');
-  const FL=d.flows, won=v=>{ const a=Math.abs(v); return (v>0?'+':v<0?'−':'')+(a>=1e6?(a/1e6).toFixed(1)+'조':Math.round(a/100).toLocaleString()+'억'); };   // 백만원 → 조·억
+  const FL=d.flows, won=hbWon;
   if(FL&&FL.KOSPI&&FL.KOSDAQ){ const fk=FL.KOSPI.sum.frgn, fq=FL.KOSDAQ.sum.frgn;
     add('외국인 '+FL.days+'일','코스피 '+won(fk)+' · 코스닥 '+won(fq)+(FL.provisional?' · 오늘 장중 잠정':''),won(fk+fq),fk+fq>0?'g':'b'); }
   else if(m.sh_foreign5!=null) add('외국인','삼전·하닉 5일 순매수',(Math.abs(m.sh_foreign5)>=10000?(m.sh_foreign5>=0?'+':'-')+(Math.abs(m.sh_foreign5)/10000).toFixed(1)+'조':(m.sh_foreign5>=0?'+':'')+Math.round(m.sh_foreign5).toLocaleString()+'억'),m.sh_foreign5>0?'g':'b');
@@ -1003,14 +1021,7 @@ function renderHomeTop(d, live){
   vt=mvText(_mv); vk=all.state==='하락'?'b':all.state==='상승'?'g':'n';
   const when=live?`장중 ${live.as_of}`:`${(d.as_of||'').slice(5).replace('-','/')} 마감 기준`;
   // 시안 B (2026-10-11): 근거 6개 = 큰 타일, 판정·주의·요약은 왼쪽 카드 맨 위
-  // 수급 표: 5일 합 / 오늘 전환 · 장중이면 '장중 잠정치' (장 마감 뒤 확정치로 덮어씀, 2026-10-11)
-  const FT=FL&&FL.KOSPI&&FL.KOSDAQ?(()=>{ const C=[['frgn','외국인'],['orgn','기관'],['fund','연기금'],['ivtr','투신'],['insu','보험'],['scrt','금융투자'],['prsn','개인']];
-      const md=window._flowMode||'sum', cell=v=>`<td class="mono" style="color:${v>0?'var(--up)':v<0?'var(--down)':'var(--muted)'}">${v==null?'-':won(v)}</td>`;
-      const tag=FL.provisional?` · <b class="hb-prov">장중 잠정치${FL.updated?' '+FL.updated:''}</b>`:'';
-      const head=md==='sum'?`최근 ${FL.days}거래일 합 <span>${FL.from.slice(5).replace('-','/')}~${FL.to.slice(5).replace('-','/')}${FL.provisional?' (오늘은 잠정)':''}</span>`:`${FL.to.slice(5).replace('-','/')} 하루 <span></span>`;
-      const btn=(k,t)=>`<button class="${md===k?'on':''}" onclick="window._flowMode='${k}';renderHomeTop(_homeTopArgs[0],_homeTopArgs[1]);hcSpark();">${t}</button>`;
-      return `<div class="hb-flows"><div class="hb-fh">투자자별 순매수 · ${head}${tag}<span class="hb-ftg">${btn('sum',FL.days+'일')}${btn('today',FL.provisional?'오늘(잠정)':'하루')}</span></div><div style="overflow-x:auto"><table><thead><tr><th></th>${C.map(c=>`<th>${c[1]}</th>`).join('')}</tr></thead><tbody>
-        ${['KOSPI','KOSDAQ'].map(k=>{ const src=md==='sum'?FL[k].sum:(FL[k].today||{}); return `<tr><th>${k==='KOSPI'?'코스피':'코스닥'}</th>${C.map(c=>cell(src[c[0]])).join('')}</tr>`; }).join('')}</tbody></table></div></div>`; })():'';
+  const FT=hbFlowsHTML(FL);
   document.getElementById('hc-market').innerHTML=FT+rows.map(r=>`<div class="hb-tile k-${r.k}" title="${r.t} — ${r.sub}"><div class="hb-th"><b>${r.t}</b><span class="hc-badge ${B[r.k][0]}">${r.bt||B[r.k][1]}</span></div><div class="hb-tv">${r.v}</div><div class="hb-ts">${r.sub}</div></div>`).join('');
   const ix=k=>{ const x=it[k]; if(!x) return ''; const c=x.pct>=0?'var(--up)':'var(--down)';
     return `<div class="hb-num" style="cursor:pointer" onclick="openIndexChart('${k==='코스피'?'KOSPI':'KOSDAQ'}','${k}')"><div class="l">${k}${x.status==='OPEN'?' · 장중':''}</div><div class="v">${x.close}</div><div class="s mono" style="color:${c}">${sg(x.pct)}%</div></div>`; };
