@@ -358,7 +358,7 @@ def workspace_list(db: Session) -> dict:
     from backend.services.result_cache import cached  # noqa: PLC0415
     now = datetime.now(ZoneInfo("Asia/Seoul"))
     if not (is_trading_day(now.date()) and 9 <= now.hour < 16):
-        return cached("workspace_list_v14", (), db, lambda: _workspace_list(db))
+        return cached("workspace_list_v15", (), db, lambda: _workspace_list(db))
     return _workspace_list(db)
 
 
@@ -414,10 +414,10 @@ def _workspace_list(db: Session) -> dict:
             _ls = lead_state(db)
         except Exception:  # noqa: BLE001
             _ls = {"on": True}
-        for c_, v_ in sorted(scores.items(), key=lambda kv: lead_order(kv[1])):
+        for c_, v_ in sorted(scores.items(), key=lambda kv: -(kv[1].get("rs") or 0)):
             if v_.get("lead") and not v_.get("buy"):
                 add(c_, (f"🔥 주도주 · 강도 최상위 RS {v_.get('rs') or 0:.0f}" + (" · " + " · ".join(v_.get("lead_state") or []) if v_.get("lead_state") else " · 자리 표시 없음(오르는 날)")
-                         + " · 기본 신호와 별도로 소량 (거래당 위험 0.10%, 2종목까지 · 📍 눌림 먼저)" + (f" · ⚠️ {_ls['warn']}" if _ls.get("warn") else "")) if _ls.get("on") else f"주도주 (지금 쉬는 중 — {_ls.get('why', '')})")
+                         + " · 기본 신호와 별도로 소량 (거래당 위험 0.10%, 2종목까지)" + (f" · ⚠️ {_ls['warn']}" if _ls.get("warn") else "")) if _ls.get("on") else f"주도주 (지금 쉬는 중 — {_ls.get('why', '')})")
     except Exception:  # noqa: BLE001
         pass
     try:      # 급락 날 줍기 (시장 -2%↓ 날 같이 빠진 센 종목 · 손절 20일선 · 크기 절반)
@@ -524,12 +524,11 @@ def _workspace_list(db: Session) -> dict:
         sc = scores.get(y["code"]) or {}
         y["rs"] = sc.get("rs")
         y["lead"] = bool(sc.get("lead") and not sc.get("buy"))
-        y["lead_ord"] = lead_order(sc) if y["lead"] else (9, 0)
     ent = sorted([y for y in cands if y["lane"] == "entry" and y["rs"] is not None and not y["lead"]], key=lambda y: -y["rs"])
     for k_, y in enumerate(ent, 1):
         y["rs_rank"] = k_
         y["tags"] = [f"강도 RS {y['rs']:.0f} · 후보 중 {k_}위"] + y["tags"]
-    cands.sort(key=lambda y: (y["lane"] != "entry", y.get("lead", False), y.get("lead_ord", (9, 0)), -(y["rs"] if (y["lane"] == "entry" and y.get("rs") is not None) else -1),
+    cands.sort(key=lambda y: (y["lane"] != "entry", y.get("lead", False), -(y["rs"] if (y["lane"] == "entry" and y.get("rs") is not None) else -1),
                               (y.get("sec_rank") or 99) > 8, not y["rr"], (y["risk"] or 0) > 5,
                               -(y["score"] if y["score"] is not None else -1), y["risk"] if y["risk"] is not None else 99))
     return {"as_of": str(latest), "live": live_at, "mode": mp.get("mode"),
@@ -722,15 +721,6 @@ def _close_frames(db: Session, latest) -> dict:
         if _CF["key"] == latest:
             return _CF["v"]
         return _close_frames_load(db, latest)
-
-
-def lead_order(v: dict) -> tuple:
-    """주도주 칸 채우는 순서 (2026-10-10 사용자 "과열매수 말고 눌림매수가 좋지"): 📍 눌림·지지 먼저 → 표시 없음 → ⚠️ 과열(📍 없음) 맨 뒤, 같은 칸에선 RS 높은 순.
-    7/30~10/8 지금 규칙 다시 돌림(replay_0730.py): 주도주 신호 62건 중 📍 15건 평균 +1.82R(이김 60%) · 표시 없음 19건 +0.27R · ⚠️ 28건 −0.19R(이김 21%).
-    2칸 계좌: RS 순 −0.9R → 이 순서 +5.2R (대부분 아직 보유 중인 평가이익, 표시는 이 기간을 본 뒤 만든 것)."""
-    st = v.get("lead_state") or v.get("state") or []
-    pin = any("📍" in x for x in st); warn = any("⚠️" in x for x in st)
-    return (0 if pin else 2 if warn else 1, -(v.get("rs") or 0))
 
 
 def _close_frames_load(db: Session, latest) -> dict:
@@ -1065,17 +1055,18 @@ def tracking(db: Session) -> dict:
     날짜마다 그날까지 데이터로 점수를 다시 계산한다 (signal_log가 쌓이기 전 날짜는 '다시 계산'). DB 날짜가 바뀔 때만 · 디스크 캐시."""
     latest = db.execute(text("select max(trading_date) from spot_daily_prices")).scalar()
     from backend.services.result_cache import cached  # noqa: PLC0415
-    return cached("tracking_v12", (), db, lambda: _tracking(db, latest)) or {}
+    return cached("tracking_v13", (), db, lambda: _tracking(db, latest)) or {}
 
 
-def _tracking(db: Session, latest, days: int = 20) -> dict:
+def _tracking(db: Session, latest, days: int = 20, lead_days: int = 60) -> dict:
+    """lead_days: 🔥 주도주는 몇 달씩 가므로 60거래일까지 따라간다 (2026-10-10 "맞으면 21일선 깨질 때까지 들고 가기 — 이 신호가 뜨게 되어 있나")."""
     P = _close_frames(db, latest)
     C, H, L = P["c"], P["h"], P["l"]
     e21 = C.ewm(span=21, adjust=False).mean()
     bulls = _bull_days(db)
     n = len(C.index)
     sig: dict[str, list] = {}
-    for k in range(days - 1, -1, -1):             # 오래된 날부터
+    for k in range(max(days, lead_days) - 1, -1, -1):             # 오래된 날부터
         r = n - 1 - k
         d = C.index[r]
         if not bulls.get(d, False):
@@ -1083,8 +1074,12 @@ def _tracking(db: Session, latest, days: int = 20) -> dict:
         fr = {key: v.iloc[:r + 1] for key, v in P.items()}
         sc = _close_scores(db, d, frames=fr).get("scores", {})
         for code, v in sc.items():
-            if v.get("buy"):
+            if v.get("buy") and k < days:
                 sig.setdefault(code, []).append((r, float(C[code].iloc[r]), v["stop"], v["score"]))
+            elif v.get("lead") and not v.get("buy"):
+                sig.setdefault(code, []).append((r, float(C[code].iloc[r]), v["stop"], "lead"))
+        if k >= days:
+            continue
         try:      # 급락 날 줍기 (손절 20일선 -1%) — 2026-10-09 "여기는 안 들어가나"
             for x in _dip_picks(db, d, frames=fr).get("items", []):
                 sig.setdefault(x["code"], []).append((r, float(C[x["code"]].iloc[r]), float(x["stop"]), "dip"))
@@ -1113,7 +1108,7 @@ def _tracking(db: Session, latest, days: int = 20) -> dict:
                 continue
             c_now = float(C[code].iloc[-1])
             alive.append({"code": code, "name": names.get(code, code), "date": str(C.index[r0]), "entry": p0, "stop": round(stop),
-                          "score": None if score == "dip" else score, "dip": score == "dip",
+                          "score": None if score in ("dip", "lead") else score, "dip": score == "dip", "lead": score == "lead",
                           "gain": round((c_now / p0 - 1) * 100, 1), "to21": round((c_now / float(e21[code].iloc[-1]) - 1) * 100, 1),
                           "sell_tmr": status == "exit_tmr", "days": n - 1 - r0})
             break

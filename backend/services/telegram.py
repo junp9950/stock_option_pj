@@ -441,6 +441,30 @@ def send_dip_live(db: Session) -> None:
         send(db, msg, html=True)
 
 
+def send_lead_track(db: Session) -> None:
+    """평일 18:35 — 신호 추적 중인 🔥 주도주가 오늘 21일선 아래로 마감했으면 '내일 아침 정리' (2026-10-10 "맞으면 21일선 깨질 때까지 들고 가기").
+    정리할 게 없으면 보내지 않는다. 내 매매가 아니라 사이트 주도주 신호를 규칙대로 따라간 것."""
+    from backend.utils.dates import is_trading_day  # noqa: PLC0415
+    from backend.services.stock_signals import tracking  # noqa: PLC0415
+    today = datetime.now(ZoneInfo("Asia/Seoul")).date()
+    if not is_trading_day(today):
+        return
+    t = tracking(db) or {}
+    if t.get("date") != str(today):
+        return
+    leads = [a for a in t.get("items", []) if a.get("lead")]
+    out = [a for a in leads if a.get("sell_tmr")]
+    if not out:
+        return
+    lines = ["🔥 <b>주도주 · 21일선 아래 마감 → 내일 아침 정리</b> (사이트 신호를 규칙대로 따라간 것)"]
+    lines += [f"  · <b>{a['name']}</b> {a['date'][5:].replace('-', '/')} {a['entry']:,.0f} → {a['gain']:+.1f}%" for a in out]
+    keep = [a for a in leads if not a.get("sell_tmr")]
+    if keep:
+        lines.append("계속 들고 가는 주도주")
+        lines += [f"  · {a['name']} {a['gain']:+.1f}% · 21일선까지 {a['to21']:+.1f}%" for a in keep]
+    send(db, "\n".join(lines), html=True)
+
+
 def send_us_premarket(db: Session) -> None:
     """평일 19:00 — 오늘 산 종베가 소부장·기판/광통신/전력이면 같이 움직이는 미국 종목 프리마켓을 알려 준다.
     크게 빠지면 20:00 넥스트레이드 애프터마켓 전에 정리 판단 (2026-10-06)."""

@@ -36,7 +36,7 @@ CONFIG = {"signal": "stock_signals._close_scores buy (S0)", "order": "RS desc", 
 #   −8R · 최근 30건(Lsh) 평균 R ≤ −0.10 → 경고만(자동으로 끄지 않음 — 승률 18%라 성적 기반 켜고 끄기는 12년 검증에서 전부 엇갈림).
 #   사용자가 직접 끄고 켜면(텔레그램 /주도주 끄기·켜기) 그때 30건 평균·낙폭과 함께 기록 → 나중에 사람 판단이 도움이 됐는지 평가.
 # Z = 모멘텀 돌파 비교 규칙(종가가 직전 20일 고가 위 · 거래량 20일 평균 1.9배↑ · 그날 +5%↑ · 거래대금 30억↑), V1.0과 같은 체결·손절·정리로 종목 고르기만 비교.
-LEAD = {"risk": 0.0010, "slots": 2, "order": "pin>none>warn, then RS", "roll": 30, "warn_mean": -0.10, "warn_R": -8.0, "stop_R": -15.0}
+LEAD = {"risk": 0.0010, "slots": 2, "roll": 30, "warn_mean": -0.10, "warn_R": -8.0, "stop_R": -15.0}
 CONFIG_HASH = hashlib.sha256(json.dumps(CONFIG, sort_keys=True).encode()).hexdigest()[:12]
 STATE_KEY = "fwd_v1_state"
 KST = ZoneInfo("Asia/Seoul")
@@ -73,11 +73,7 @@ def _cands(scores: dict, prices: dict | None = None, lead: bool = False) -> list
         out.append({"code": c, "score": v["score"], "flags": [bool(x) for x in v["flags"]], "ema": bool(v.get("ema")),
                     "hot": bool(v.get("hot")), "semi": bool(v.get("semi")), "rs": v.get("rs"), "stop": round(float(v["stop"]), 2),
                     "risk": round(float(v["risk"]), 5), "price": px, "state": v.get("lead_state") or []})
-    if lead:                                             # 주도주: 📍 눌림 먼저 → 표시 없음 → ⚠️ 과열만 (2026-10-10)
-        from backend.services.stock_signals import lead_order  # noqa: PLC0415
-        out.sort(key=lead_order)
-    else:
-        out.sort(key=lambda x: -(x["rs"] or 0))
+    out.sort(key=lambda x: -(x["rs"] or 0))
     for k, x in enumerate(out, 1):
         x["rs_rank"] = k
     return out
