@@ -47,9 +47,20 @@ def text_now(db: Session, k: int = 8) -> str | None:
                 out.append(f"  · <b>{x['name']}</b> {x['chg']:+.1f}% · 손절 {x['stop']:,.0f} (-{x['risk']:.1f}%)")
     except Exception:  # noqa: BLE001
         pass
+    lead_lines = []
+    try:      # 주도주 (V1.0 아님 · 이번 장 한정 별도 전략 L, 2026-10-10) — V1.0 목록 뒤에 붙인다
+        from backend.services.forward_log import lead_state  # noqa: PLC0415
+        ls = lead_state(db)
+        leads = sorted([(c, v) for c, v in sc["scores"].items() if v.get("lead") and not v.get("buy")], key=lambda cv: -(cv[1].get("rs") or 0))
+        if leads:
+            lead_lines.append(f"🔥 <b>주도주 RS 95↑</b> (V1.0 아님 · 이번 장 한정 · 거래당 위험 0.25% · 최대 2종목) — " + ("켜짐" if ls["on"] else f"꺼짐: {ls['why']}"))
+            for c, v in leads[:5]:
+                lead_lines.append(f"  · <b>{names.get(c, c)}</b> RS {v.get('rs') or 0:.0f} · 스탑로스 {v['stop']:,.0f} (-{v['risk'] * 100:.1f}%)")
+    except Exception:  # noqa: BLE001
+        pass
     if not rows:
         out.append("매수 신호 (손절폭 8%↓) 종목 없음 → 쉬기" + (f" (손절폭 넓어서 뺀 것 {len(wide)}개)" if wide else ""))
-        return "\n".join(out)
+        return "\n".join(out + lead_lines)
     good = [r for r in rows if r[1]["risk"] <= 0.03 and not r[1].get("hot") and not r[1].get("semi")]
     out.append(f"매수 신호 {len(rows)}개 · ✅ 손절폭 3%↓ {len(good)}개" + (f" · 8%↑라 뺀 것 {len(wide)}개" if wide else ""))
     try:
@@ -65,6 +76,7 @@ def text_now(db: Session, k: int = 8) -> str | None:
         out.append(f"{'✅' if v['risk'] <= 0.03 and not v.get('hot') and not v.get('semi') else '·'} <b>{names.get(c, c)}</b> RS {v.get('rs') or 0:.0f} · {'이평선 돌파 · ' if v.get('ema') else ''}{'과열 매수(이번 장) · 수량 절반 · ' if v.get('hot') else ''}{'반도체·AI 특별 · 수량 절반 · ' if v.get('semi') else ''}{v['score']}/7 · 스탑로스 {v['stop']:,.0f} (-{v['risk'] * 100:.1f}%)"
                    + (" · 후순위, 수량 절반 이하" if v["risk"] > 0.05 and not v.get("semi") else "")
                    + (f" · {srk[c][1]} {srk[c][0]}위" if srk.get(c, (99,))[0] <= 8 else " · 섹터 밖"))
+    out += lead_lines
     out.append("파는 법: 사면 바로 스탑로스 예약 (정규장만) · 21일선 아래 종가면 다음 날 아침 정리")
     out.append("<i>3년(같은 위험 금액당): 손절폭 3%↓ 1.4배 · 3~5% 0.55배 · 5~8% 0.35배 · 8%↑ 0.1배 벎 → 수량은 손절폭에 맞춰</i>")
     return "\n".join(out)

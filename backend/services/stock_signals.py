@@ -358,7 +358,7 @@ def workspace_list(db: Session) -> dict:
     from backend.services.result_cache import cached  # noqa: PLC0415
     now = datetime.now(ZoneInfo("Asia/Seoul"))
     if not (is_trading_day(now.date()) and 9 <= now.hour < 16):
-        return cached("workspace_list_v10", (), db, lambda: _workspace_list(db))
+        return cached("workspace_list_v11", (), db, lambda: _workspace_list(db))
     return _workspace_list(db)
 
 
@@ -409,6 +409,14 @@ def _workspace_list(db: Session) -> dict:
         for c_, v_ in sorted(scores.items(), key=lambda kv: kv[1]["risk"]):
             if (v_["score"] >= 6 or v_.get("ema")) and v_["flags"][1] and v_["risk"] > 0.08 and not v_.get("buy"):
                 add(c_, "⏸ 폭 좁은 날 기다리기")
+        try:      # 주도주 (V1.0 아님 · 이번 장 한정 · L 켜짐이면 '진입' 칸, 꺼지면 대기에 참고로)
+            from backend.services.forward_log import lead_state  # noqa: PLC0415
+            _ls = lead_state(db)
+        except Exception:  # noqa: BLE001
+            _ls = {"on": True}
+        for c_, v_ in sorted(scores.items(), key=lambda kv: -(kv[1].get("rs") or 0)):
+            if v_.get("lead") and not v_.get("buy"):
+                add(c_, "🔥 주도주 RS 95↑ · V1.0 아님 · 위험 절반(0.25%) · 최대 2종목" if _ls.get("on") else f"주도주 (지금 꺼짐 — {_ls.get('why', '')})")
     except Exception:  # noqa: BLE001
         pass
     try:      # 급락 날 줍기 (시장 -2%↓ 날 같이 빠진 센 종목 · 손절 20일선 · 크기 절반)
@@ -482,7 +490,7 @@ def _workspace_list(db: Session) -> dict:
         return {**x, "close": c, "chg": round(ch, 2)}
     def lane(tags):
         # 2026-10-09 사용자 "오늘 정한 기준으로 바꾸고": 오늘 진입 = ▲ 진입 · 종가 점수 6↑(손절폭 8%↓)만. 그 밖(종가 매수·파란 화살표 등)은 대기에 참고로
-        return "entry" if any(t.startswith(("▲", "✅ 손익비", "종가 점수 6↑", "후순위", "⬇ 급락", "이평선 모였다 돌파 · 매수", "과열 매수", "반도체·AI 특별")) for t in tags) else "wait"
+        return "entry" if any(t.startswith(("▲", "✅ 손익비", "종가 점수 6↑", "후순위", "⬇ 급락", "이평선 모였다 돌파 · 매수", "과열 매수", "반도체·AI 특별", "🔥 주도주")) for t in tags) else "wait"
     try:
         srank = sector_rank_of(db)
     except Exception:  # noqa: BLE001
@@ -514,11 +522,12 @@ def _workspace_list(db: Session) -> dict:
     for y in cands:
         sc = scores.get(y["code"]) or {}
         y["rs"] = sc.get("rs")
-    ent = sorted([y for y in cands if y["lane"] == "entry" and y["rs"] is not None], key=lambda y: -y["rs"])
+        y["lead"] = bool(sc.get("lead") and not sc.get("buy"))
+    ent = sorted([y for y in cands if y["lane"] == "entry" and y["rs"] is not None and not y["lead"]], key=lambda y: -y["rs"])
     for k_, y in enumerate(ent, 1):
         y["rs_rank"] = k_
         y["tags"] = [f"강도 RS {y['rs']:.0f} · 후보 중 {k_}위"] + y["tags"]
-    cands.sort(key=lambda y: (y["lane"] != "entry", -(y["rs"] if (y["lane"] == "entry" and y.get("rs") is not None) else -1),
+    cands.sort(key=lambda y: (y["lane"] != "entry", y.get("lead", False), -(y["rs"] if (y["lane"] == "entry" and y.get("rs") is not None) else -1),
                               (y.get("sec_rank") or 99) > 8, not y["rr"], (y["risk"] or 0) > 5,
                               -(y["score"] if y["score"] is not None else -1), y["risk"] if y["risk"] is not None else 99))
     return {"as_of": str(latest), "live": live_at, "mode": mp.get("mode"),
@@ -694,7 +703,7 @@ def close_scores(db: Session) -> dict:
     점수 7 이김 46%·+1.5%. 기간을 반으로 나눠도 둘 다 점수 따라 이김 비율이 올라감(앞 26→47%, 뒤 31→46%). 디스크 캐시."""
     latest = db.execute(text("select max(trading_date) from spot_daily_prices")).scalar()
     from backend.services.result_cache import cached  # noqa: PLC0415
-    v = cached("close_scores_v5", (), db, lambda: _close_scores(db, latest)) or {}
+    v = cached("close_scores_v6", (), db, lambda: _close_scores(db, latest)) or {}
     return v
 
 
@@ -718,14 +727,14 @@ def _close_frames_load(db: Session, latest) -> dict:
                                            "and trading_date <= :d order by 1"), {"d": latest}).all()]
     codes = [r[0] for r in db.execute(text("select distinct stock_code from spot_daily_prices where trading_date = :d"), {"d": latest}).all()]
     di, ci = {d: i for i, d in enumerate(dates)}, {c: i for i, c in enumerate(codes)}
-    A = {k: np.full((len(dates), len(codes)), np.nan, dtype="float32") for k in ("h", "l", "c", "v", "tv")}
-    for s_, d_, h_, l_, c_, v_, t_ in db.execute(text("select stock_code, trading_date, high_price, low_price, close_price, volume, trading_value "
-                                                      "from spot_daily_prices where trading_date >= cast(:d as date) - 400 and trading_date <= :d"), {"d": latest}):
+    A = {k: np.full((len(dates), len(codes)), np.nan, dtype="float32") for k in ("o", "h", "l", "c", "v", "tv")}
+    for s_, d_, o_, h_, l_, c_, v_, t_ in db.execute(text("select stock_code, trading_date, open_price, high_price, low_price, close_price, volume, trading_value "
+                                                          "from spot_daily_prices where trading_date >= cast(:d as date) - 400 and trading_date <= :d"), {"d": latest}):
         j = ci.get(s_)
         if j is None:
             continue
         i = di[d_]
-        A["h"][i, j], A["l"][i, j], A["c"][i, j] = h_ or np.nan, l_ or np.nan, c_ or np.nan
+        A["o"][i, j], A["h"][i, j], A["l"][i, j], A["c"][i, j] = o_ or np.nan, h_ or np.nan, l_ or np.nan, c_ or np.nan
         A["v"][i, j], A["tv"][i, j] = v_ if v_ is not None else np.nan, t_ if t_ is not None else np.nan
     v = {k: pd.DataFrame(a, index=dates, columns=codes) for k, a in A.items()}
     _CF.update(key=latest, v=v)
@@ -737,14 +746,17 @@ def _close_scores(db: Session, latest, live: dict | None = None, frac: float = 1
     frames = 앞에서 잘라 낸 프레임이면 그 마지막 날 기준 점수 (지난 날짜 다시 계산용)."""
     P = frames or _close_frames(db, latest)
     H, L, C, V, TV = P["h"], P["l"], P["c"], P["v"], P["tv"]
+    O = P.get("o")
+    if O is None:
+        O = C.shift(1)                      # 예전 캐시(시가 없음)면 전날 종가로 대신
     asof = str(latest)
     if live:
         from datetime import date as _date  # noqa: PLC0415
         today = _date.today()
-        row = {k: pd.Series({c: x[k] for c, x in live.items() if x.get(k)}, dtype="float32").reindex(C.columns) for k in ("h", "l", "c")}
+        row = {k: pd.Series({c: x[k] for c, x in live.items() if x.get(k)}, dtype="float32").reindex(C.columns) for k in ("o", "h", "l", "c")}
         vol = pd.Series({c: x["v"] / max(frac, 0.05) for c, x in live.items()}, dtype="float32").reindex(C.columns)
         add = lambda F, ser: pd.concat([F, ser.to_frame(today).T])  # noqa: E731
-        H, L, C, V, TV = add(H, row["h"]), add(L, row["l"]), add(C, row["c"]), add(V, vol), add(TV, row["c"] * vol)
+        O, H, L, C, V, TV = add(O, row["o"]), add(H, row["h"]), add(L, row["l"]), add(C, row["c"]), add(V, vol), add(TV, row["c"] * vol)
         asof = str(today)
     liq = TV.rolling(20).mean() >= 3e9
     e5, e10, e20, e60 = (C.ewm(span=n, adjust=False).mean() for n in (5, 10, 20, 60))
@@ -790,7 +802,13 @@ def _close_scores(db: Session, latest, live: dict | None = None, frac: float = 1
         # 과열 매수 (2026-10-09 하나마이크론 "시장 급락 뒤 급반등인데 과열 끝자락에서만 줍네" → "앞선 장은 다 지나간 거고 일단"):
         # 점수 5인데 빠진 게 과열 두 개(20일선 +15%↑ · 이평선 간격 6%↑)뿐 → 12년(v12w.py) R -0.31/0.00/+0.77 — 이번 장(2023~)에서만 통함 → 수량 절반 · 이번 장 한정
         rs_v = RS.get(code)
-        out[code] = {"score": sum(f), "flags": f, "stop": float(l[code]) * 0.99, "risk": rk, "ema": e_,
+        # 주도주 (2026-10-10 사용자 "추세추종은 강함을 좇는 건데 가장 강한 걸 과열이라고 해 버린 거 아니냐" · GPT 동의):
+        # 정배열 · RS 95↑ · 손절폭 8%↓ · 양봉 · 종가가 그날 범위 위 절반. V1.0 아님 — 이번 장 한정 별도 전략(L, 거래당 위험 0.25% · 최대 2종목).
+        # 12년 거래당 R: 2015~18 -0.27 · 2019~22 +0.02 · 2023~25.05 +0.04 · 2025.06~ +0.62 (V1.0 -0.14/+0.05/+0.17/+0.59) — 지금 장에서만 통함
+        o_ = O.iloc[r].get(code)
+        lead = bool(code in tr_codes and rs_v is not None and rs_v == rs_v and rs_v >= 95 and 0 < rk <= 0.08
+                    and o_ is not None and o_ == o_ and c[code] > o_ and bool(pos.get(code, 0) >= 0.5))
+        out[code] = {"score": sum(f), "flags": f, "stop": float(l[code]) * 0.99, "risk": rk, "ema": e_, "lead": lead,
                      "rs": round(float(rs_v), 1) if rs_v is not None and rs_v == rs_v else None,     # 후보 순서용 (2026-10-10: RS 높은 순이 12년 무작위 순서 10,000번 중 100백분위)
                      "hot": bool(code in tr_codes and f[1] and rk <= 0.08 and sum(f) == 5 and not f[5] and not f[6] and not e_),
                      "semi": bool(code in semi_ok and not normal),

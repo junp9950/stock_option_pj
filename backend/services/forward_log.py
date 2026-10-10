@@ -29,7 +29,12 @@ logger = logging.getLogger(__name__)
 VERSION = "V1.0"
 CONFIG = {"signal": "stock_signals._close_scores buy (S0)", "order": "RS desc", "slots": 10, "risk": 0.005,
           "stop": "entry-day low x0.99", "exit": "close<EMA21 -> next open", "cost_buy": 0.0005, "cost_sell": 0.0025,
-          "market_filter": "bull (in S0)", "frozen": "2026-10-10", "next_open_cancel_if_open_le_stop": True}
+          "market_filter": "bull (record_close에서 확인)", "frozen": "2026-10-10", "next_open_cancel_if_open_le_stop": True}
+# 주도주 L (V1.0 아님, 이번 장 한정 별도 전략 · GPT 운영 규칙 10/10): 정배열·RS 95↑·손절폭 8%↓·양봉·종가 범위 위 절반
+# 실제 L = 거래당 위험 0.25% · 최대 2종목 · 15:12 신호 → 종가. Lsh = 모든 주도주 신호 전수 기록(칸 제한 없음) → 꺼짐 판단용.
+# 꺼짐: 상승장 아님 → 신규 중단 · 최근 30건(Lsh) 평균 R ≤ −0.10 → 실제 매수 중단(기록 계속), +0.10 ≥ 이면 다시 켬 · 실제 L 누적 R이 고점 대비 −4R → 잠금(사용자 해제 전까지 기록만).
+# Z = Lazy식 모멘텀 BUY 모방(종가가 직전 20일 고가 위 · 거래량 20일 평균 1.9배↑ · 그날 +5%↑ · 거래대금 30억↑), V1.0과 같은 체결·손절·정리로 종목 고르기만 비교.
+LEAD = {"risk": 0.0025, "slots": 2, "roll": 30, "off": -0.10, "on": 0.10, "latch_R": -4.0}
 CONFIG_HASH = hashlib.sha256(json.dumps(CONFIG, sort_keys=True).encode()).hexdigest()[:12]
 STATE_KEY = "fwd_v1_state"
 KST = ZoneInfo("Asia/Seoul")
@@ -57,10 +62,10 @@ def _load(db: Session, d, kind: str) -> dict | None:
     return r if r is None or isinstance(r, dict) else json.loads(r)
 
 
-def _cands(scores: dict, prices: dict | None = None) -> list[dict]:
+def _cands(scores: dict, prices: dict | None = None, lead: bool = False) -> list[dict]:
     out = []
     for c, v in scores.items():
-        if not v.get("buy"):
+        if (not v.get("lead") or v.get("buy")) if lead else not v.get("buy"):
             continue
         px = (prices or {}).get(c)
         out.append({"code": c, "score": v["score"], "flags": [bool(x) for x in v["flags"]], "ema": bool(v.get("ema")),
@@ -86,9 +91,16 @@ def snapshot_1512(db: Session) -> str:
         prices = {c: v["c"] for c, v in snapshot(codes, max_age=90).items()}
     except Exception as exc:  # noqa: BLE001
         logger.warning("15:12 가격 실패: %s", exc)
+    codes += [c for c, v in sc["scores"].items() if v.get("lead") and c not in prices]
+    try:
+        from backend.services.naver_live import snapshot  # noqa: PLC0415
+        prices.update({c: v["c"] for c, v in snapshot(codes, max_age=90).items()})
+    except Exception:  # noqa: BLE001
+        pass
     cands = _cands(sc["scores"], prices)
-    _save(db, today, "1512", {"at": sc.get("at"), "config": CONFIG_HASH, "universe": len(sc["scores"]), "cands": cands})
-    return f"15:12 후보 {len(cands)}"
+    leads = _cands(sc["scores"], prices, lead=True)
+    _save(db, today, "1512", {"at": sc.get("at"), "config": CONFIG_HASH, "universe": len(sc["scores"]), "cands": cands, "leads": leads})
+    return f"15:12 후보 {len(cands)} · 주도주 {len(leads)}"
 
 
 def _bars(db: Session, codes: list[str], upto) -> dict:
@@ -123,16 +135,17 @@ def _equity(a: dict, bars: dict, d) -> float:
     return a["cash"] + mv
 
 
-def _step(a: dict, name: str, d, bars: dict, cands: list[dict], entry: str) -> dict:
+def _step(a: dict, name: str, d, bars: dict, cands: list[dict], entry: str, slots: int | None = None, rp: float | None = None) -> dict:
     """하루 진행. entry: 'close'(P·X) 또는 'next_open'(S: 오늘 시가에 어제 주문 체결, 오늘 후보는 내일 주문)."""
     cb, cs = CONFIG["cost_buy"], CONFIG["cost_sell"]
+    slots = slots or CONFIG["slots"]; rp = rp or CONFIG["risk"]
     notes = []
     today = {c: [x for x in bars.get(c, []) if x[0] == d] for c in set(a["pos"]) | {p["code"] for p in a["pending"]} | {x["code"] for x in cands}}
     # 1) S: 어제 주문을 오늘 시가에
     if entry == "next_open" and a["pending"]:
         E_ = _equity(a, bars, d)
         for o in a["pending"]:
-            if len(a["pos"]) >= CONFIG["slots"]:
+            if len(a["pos"]) >= slots:
                 notes.append(f"칸 없음 {o['code']}"); continue
             if o["code"] in a["pos"] or not today.get(o["code"]):
                 continue
@@ -142,7 +155,7 @@ def _step(a: dict, name: str, d, bars: dict, cands: list[dict], entry: str) -> d
             if op <= o["stop"]:                           # 시가가 이미 전날 정한 손절가 아래 = 손절 구조가 무효 → 진입 취소 (GPT 검토 10/10, 실행 정의)
                 notes.append(f"시가가 손절 아래라 취소 {o['code']}"); continue
             rk = 1 - o["stop"] / op
-            val = CONFIG["risk"] * E_ / rk
+            val = rp * E_ / rk
             a["cash"] -= val * (1 + cb)
             a["pos"][o["code"]] = {"sh": val / op, "px0": op, "d0": str(d), "stop": o["stop"], "risk0": rk, "rs": o.get("rs"), "hi": op, "lo": op, "exit_next": False}
         a["pending"] = []
@@ -174,7 +187,7 @@ def _step(a: dict, name: str, d, bars: dict, cands: list[dict], entry: str) -> d
         for x in cands:                                  # RS 순
             if x["code"] in a["pos"]:
                 continue
-            if len(a["pos"]) >= CONFIG["slots"]:
+            if len(a["pos"]) >= slots:
                 skipped.append(x["code"]); continue
             tb = today.get(x["code"])
             if not tb:
@@ -182,7 +195,7 @@ def _step(a: dict, name: str, d, bars: dict, cands: list[dict], entry: str) -> d
             _, o, h, l, cl, ch = tb[0]
             stop_final = l * 0.99                         # 실제 손절 = 확정 저가 -1%
             rk_plan = x["risk"] if x.get("risk") else 1 - stop_final / cl     # 크기는 신호 시점 손절폭으로
-            val = CONFIG["risk"] * E_ / max(rk_plan, 0.003)
+            val = rp * E_ / max(rk_plan, 0.003)
             a["cash"] -= val * (1 + cb)
             rk_real = 1 - stop_final / cl
             a["pos"][x["code"]] = {"sh": val / cl, "px0": cl, "d0": str(d), "stop": stop_final, "risk0": rk_real, "rs": x.get("rs"), "hi": cl, "lo": cl,
@@ -202,6 +215,40 @@ def _step(a: dict, name: str, d, bars: dict, cands: list[dict], entry: str) -> d
             "selected": selected, "skipped": skipped[:30], "notes": notes}
 
 
+def _lazy_cands(db: Session, latest) -> list[dict]:
+    """Lazy식 모멘텀 BUY 모방: 종가 > 직전 20일 고가 · 거래량 ≥ 직전 20일 평균 × 1.9 · 그날 +5%↑ · 거래대금 20일 평균 30억↑. RS 순."""
+    from backend.services.stock_signals import _close_frames  # noqa: PLC0415
+    P = _close_frames(db, latest)
+    C, H, L, V, TV = P["c"], P["h"], P["l"], P["v"], P["tv"]
+    if str(C.index[-1]) != str(latest):
+        return []
+    c, l = C.iloc[-1], L.iloc[-1]
+    ok = (c > H.iloc[-21:-1].max()) & (V.iloc[-1] >= 1.9 * V.iloc[-21:-1].mean()) & (c / C.iloc[-2] - 1 >= 0.05) & (TV.iloc[-20:].mean() >= 3e9)
+    rs_raw = 0.4 * (C / C.shift(63) - 1) + 0.2 * (C / C.shift(126) - 1) + 0.2 * (C / C.shift(189) - 1) + 0.2 * (C / C.shift(252) - 1)
+    RS = rs_raw.where(TV.rolling(20).mean() >= 3e9).rank(axis=1, pct=True).iloc[-1] * 98 + 1
+    out = []
+    for code in ok[ok.fillna(False).astype(bool)].index:
+        st = float(l[code]) * 0.99
+        out.append({"code": code, "rs": round(float(RS.get(code)), 1) if RS.get(code) == RS.get(code) else None, "stop": round(st, 2), "risk": round(1 - st / float(c[code]), 5)})
+    out.sort(key=lambda x: -(x["rs"] or 0))
+    return out
+
+
+def lead_state(db: Session, st: dict | None = None) -> dict:
+    """주도주 L 켜짐/꺼짐 (화면·알림용). 상승장 아님 → 꺼짐 · 잠금 → 꺼짐 · 최근 30건 평균 R 이력(±0.10 hysteresis)."""
+    from backend.services.stock_signals import _bull_days  # noqa: PLC0415
+    from backend.services.telegram import _get  # noqa: PLC0415
+    st = st if st is not None else (_get(db, STATE_KEY, {}) or {})
+    latest = db.execute(text("select max(trading_date) from spot_daily_prices")).scalar()
+    if st.get("L_latch"):
+        return {"on": False, "why": st["L_latch"]}
+    if not _bull_days(db).get(latest, False):
+        return {"on": False, "why": "하락장 — 신규 중단"}
+    if st.get("L_on") is False:
+        return {"on": False, "why": f"최근 {LEAD['roll']}건 평균 R {st.get('L_mean30', 0):+.2f} — 기록만"}
+    return {"on": True, "why": ""}
+
+
 def record_close(db: Session, asof: date | None = None) -> str:
     """장 마감 뒤: 확정 종가 후보 저장 + 가상 계좌 P·S·X 하루 진행. asof = 시험용 지난 날짜 다시 돌리기."""
     from backend.services.stock_signals import _close_scores  # noqa: PLC0415
@@ -211,31 +258,57 @@ def record_close(db: Session, asof: date | None = None) -> str:
     latest = asof or db.execute(text("select max(trading_date) from spot_daily_prices")).scalar()
     if latest != today or not is_trading_day(today):
         return "오늘 시세 없음"
+    from backend.services.stock_signals import _bull_days  # noqa: PLC0415
+    bull = bool(_bull_days(db).get(latest, False))
     sc = _close_scores(db, latest).get("scores", {})
     px = {r[0]: float(r[1]) for r in db.execute(text("select stock_code, close_price from spot_daily_prices where trading_date = :d"), {"d": latest}).all()}
-    close_c = _cands(sc, px)
+    close_c = _cands(sc, px); close_l = _cands(sc, px, lead=True)
     snap = _load(db, latest, "1512")
     snap_c = (snap or {}).get("cands") or []
-    _save(db, latest, "close", {"config": CONFIG_HASH, "universe": len(sc), "cands": close_c, "snapshot_missing": snap is None})
+    snap_l = (snap or {}).get("leads") or []
+    lazy_c = _lazy_cands(db, latest)
+    _save(db, latest, "close", {"config": CONFIG_HASH, "universe": len(sc), "bull": bull, "cands": close_c, "leads": close_l, "lazy": lazy_c, "snapshot_missing": snap is None})
     st = _get(db, STATE_KEY, {}) or {}
     if st.get("last") == str(latest):
         return "이미 진행함"
-    for k in ("P", "S", "X"):
+    ACC = ("P", "S", "X", "L", "Lsh", "Z")
+    for k in ACC:
         st.setdefault(k, _new_acct())
     codes = set()
-    for k in ("P", "S", "X"):
+    for k in ACC:
         codes |= set(st[k]["pos"]) | {p["code"] for p in st[k]["pending"]}
-    codes |= {x["code"] for x in close_c} | {x["code"] for x in snap_c}
+    codes |= {x["code"] for x in close_c + snap_c + snap_l + close_l + lazy_c}
     bars = _bars(db, sorted(codes), latest)
-    rep = [_step(st["P"], "P", latest, bars, snap_c, "close"), _step(st["S"], "S", latest, bars, close_c, "next_open"), _step(st["X"], "X", latest, bars, close_c, "close")]
-    for k in ("P", "S", "X"):
+    lead_src = snap_l if snap is not None else close_l          # 주도주도 15:12 신호 기준(없으면 종가 신호)
+    ls = lead_state(db, st)
+    rep = [_step(st["P"], "P", latest, bars, snap_c if bull else [], "close"),
+           _step(st["S"], "S", latest, bars, close_c if bull else [], "next_open"),
+           _step(st["X"], "X", latest, bars, close_c if bull else [], "close"),
+           _step(st["L"], "L", latest, bars, lead_src if (bull and ls["on"]) else [], "close", slots=LEAD["slots"], rp=LEAD["risk"]),
+           _step(st["Lsh"], "Lsh", latest, bars, lead_src if bull else [], "close", slots=999, rp=0.0005),
+           _step(st["Z"], "Z", latest, bars, lazy_c, "close")]
+    # 주도주 꺼짐 판단 (GPT 운영 규칙): 최근 30건 Lsh 평균 R · 실제 L 누적 R 고점 대비 −4R 잠금
+    tr = st["Lsh"]["trades"][-LEAD["roll"]:]
+    if len(tr) >= LEAD["roll"]:
+        m30 = sum(t["R"] for t in tr) / len(tr); st["L_mean30"] = round(m30, 3)
+        if st.get("L_on", True) and m30 <= LEAD["off"]:
+            st["L_on"] = False
+        elif st.get("L_on") is False and m30 >= LEAD["on"]:
+            st["L_on"] = True
+    cum = pk = 0.0
+    for t in st["L"]["trades"]:
+        cum += t["R"]; pk = max(pk, cum)
+        if cum - pk <= LEAD["latch_R"] and not st.get("L_latch"):
+            st["L_latch"] = f"주도주 누적 {cum - pk:+.1f}R — 잠금(사용자 확인 필요)"
+    for k in ACC:
         st[k]["eq"] = st[k]["eq"][-800:]
     st["last"] = str(latest); st["version"] = VERSION; st["config"] = CONFIG_HASH
     _put(db, STATE_KEY, st)
     s1, s2 = {x["code"] for x in snap_c}, {x["code"] for x in close_c}
     jac = len(s1 & s2) / len(s1 | s2) if (s1 | s2) else None
     _save(db, latest, "acct", {"config": CONFIG_HASH, "jaccard": jac, "snapshot_missing": snap is None, "accounts": rep})
-    return f"종가 후보 {len(close_c)} · 15:12 후보 {len(snap_c)}" + (f" · 일치 {jac:.2f}" if jac is not None else "") + " · " + " ".join(f"{r['acct']} {r['equity']:.4f}" for r in rep)
+    return (f"{'상승장' if bull else '하락장(신규 없음)'} · 종가 후보 {len(close_c)} · 15:12 후보 {len(snap_c)} · 주도주 {len(lead_src)} · Lazy식 {len(lazy_c)}"
+            + (f" · 일치 {jac:.2f}" if jac is not None else "") + " · " + " ".join(f"{r['acct']} {r['equity']:.4f}" for r in rep))
 
 
 def monthly_text(db: Session, ym: str | None = None) -> str | None:
@@ -266,7 +339,8 @@ def monthly_text(db: Session, ym: str | None = None) -> str | None:
     out = [f"📒 <b>실전 기록 {VERSION} — {ym}</b> (규칙 동결 · 보고만)",
            f"거래일 {len(days)} · 15:12 스냅샷 빠짐 {miss}일 · 15:12↔종가 후보 일치율 평균 {sum(jac) / len(jac):.2f}" if jac else f"거래일 {len(days)} · 15:12 스냅샷 빠짐 {miss}일",
            f"상위 10 교체율(P vs X 산 종목) 평균 {sum(flips) / len(flips):.2f}" if flips else ""]
-    for k, nm in (("P", "P 기본(15:12 신호·종가)"), ("S", "S 보조(종가 신호·다음 날 시가)"), ("X", "X 진단(같은 종가)")):
+    for k, nm in (("P", "P 기본(15:12 신호·종가)"), ("S", "S 보조(종가 신호·다음 날 시가)"), ("X", "X 진단(같은 종가)"),
+                  ("L", "L 주도주 실제(0.25%·2종목)"), ("Lsh", "L 주도주 전수 기록"), ("Z", "Z Lazy식 모방(같은 체결)")):
         a = st.get(k) or {}
         tr = [t for t in a.get("trades", []) if t["d1"][:7] == ym]
         alltr = a.get("trades", [])
@@ -284,6 +358,10 @@ def monthly_text(db: Session, ym: str | None = None) -> str | None:
             out.append("⛔ P 낙폭 25% 넘음 — 사전 기준상 신규 진입 중단 검토")
         elif k == "P" and mdd <= -0.15:
             out.append("⚠️ P 낙폭 15% 넘음 — 사전 기준상 위험 절반(0.25%) 검토")
+    try:
+        out.append("주도주 상태: " + ("켜짐" if lead_state(db, st)["on"] else "꺼짐 — " + lead_state(db, st)["why"]))
+    except Exception:  # noqa: BLE001
+        pass
     n_tr = len((st.get("P") or {}).get("trades", [])); n_days = len({t["d0"] for t in (st.get("P") or {}).get("trades", [])})
     out.append(f"판정 진행: P 정리 {n_tr}/100건 · 진입일 {n_days}/40 (1차 판정 = 12개월+100건+40일, 그 전엔 판정 안 함)")
     return "\n".join(x for x in out if x)
