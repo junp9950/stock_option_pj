@@ -146,7 +146,7 @@ def _panel(db: Session, code: str, owner: str | None = None) -> dict:
         from backend.services.telegram import _get  # noqa: PLC0415
         log = _get(db, "top3_log", {}) or {}
         if log and code in log.get(max(log), []):
-            tags.append("참고 · 버틴 종목 (텔레그램 종베)")
+            tags.append("참고 · 버틴 종목 (시장 빠진 날 버팀)")
     except Exception:  # noqa: BLE001
         pass
     try:      # 사이트 매수 신호(목록과 같은 기준) — 패널 맨 위 단계에 바로 보이게 (2026-10-09 "시그널을 확실히")

@@ -346,7 +346,7 @@ def signals(db: Session, code: str, days: int = 260, owner: str | None = None) -
         for d, cs_ in (_get(db, "top3_log", {}) or {}).items():
             dd = pd.Timestamp(d).date()
             if code in cs_ and dd in df.index and dd >= start:
-                items.append({"date": d, "label": "버틴 종목 · 텔레그램 종베 (참고)", "kind": "note", "pos": "below", "price": float(L[dd])})
+                items.append({"date": d, "label": "버틴 종목 · 시장 빠진 날 버팀 (참고)", "kind": "note", "pos": "below", "price": float(L[dd])})
     except Exception:  # noqa: BLE001
         pass
     # 매매 일지 실제 매수·매도 (같은 날 같은 방향은 평균가로 묶음)
