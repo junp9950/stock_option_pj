@@ -1926,6 +1926,24 @@ def _sectors_today(db: Session) -> dict:
         return {}
 
 
+@router.get("/jongbe/scoreboard")
+def get_jongbe_scoreboard(days: int = 20, db: Session = Depends(get_db)):
+    """종베 탭 성적표 (2026-10-10): 최근 N거래일 사이트 종베 A·B등급 vs 내 종베(user_jongbe) — 산 값 대비 다음 날 시가·종가, 종가로 이긴 비율.
+    금액 없이 %만 (공개 화면)."""
+    rows = db.execute(text("""
+        with p as (select 'A' g, trading_date d, code, close_price px from jongbe_picks where grade = 'A'
+                   union all select 'B', trading_date, code, close_price from jongbe_picks where grade = 'B'
+                   union all select 'me', trading_date, code, entry_price from user_jongbe),
+        ds as (select distinct trading_date from spot_daily_prices order by 1 desc limit :n),
+        n as (select p.*, (select min(trading_date) from spot_daily_prices s where s.stock_code = p.code and s.trading_date > p.d) d1
+              from p where p.d >= (select min(trading_date) from ds))
+        select n.g, count(*), avg(s.open_price / n.px - 1), avg(s.close_price / n.px - 1), avg((s.close_price > n.px)::int), min(n.d), max(n.d)
+        from n join spot_daily_prices s on s.stock_code = n.code and s.trading_date = n.d1 group by n.g"""), {"n": days + 1}).all()
+    out = {g: {"n": int(c), "open": round(float(o) * 100, 2), "close": round(float(cl) * 100, 2), "win": round(float(w) * 100), "from": str(a), "to": str(b)}
+           for g, c, o, cl, w, a, b in rows}
+    return {"days": days, "groups": out}
+
+
 @router.get("/screener/my-pattern")
 def get_my_pattern(db: Session = Depends(get_db)):
     """종베: 최적 조건 B · 내 패턴 A(사용자 매수 501건에서 번 자리) · 내일 후보 (2026-10-06)."""
