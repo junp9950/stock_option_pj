@@ -310,8 +310,8 @@ select{background:#21262d;border:1px solid #30363d;color:#c9d1d9;padding:6px 10p
 .hb-verdict.k-g{background:#2ea043;color:#fff}.hb-verdict.k-n{background:#e8edf3;color:#0f141b}.hb-verdict.k-b{background:#da3633;color:#fff}
 .hb-cau{font-size:12.5px;color:#e8edf3;border:1px solid #e8edf3;padding:3px 10px;border-radius:999px}
 .hb-sum{font-size:12px;color:var(--muted);margin-left:auto}
-.hb-idx{display:grid;grid-template-columns:minmax(0,1.4fr) repeat(3,minmax(0,1fr));gap:14px;align-items:end;margin-bottom:12px}
-.hb-spark .hc-tg{margin-bottom:2px}.hb-spark .hc-spark{height:56px;margin:0}.hb-spark .hc-sx{margin:0;font-size:10px}
+.hb-idx{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:10px 14px;align-items:end;margin-bottom:12px}
+.hb-spark{grid-column:1/-1}.hb-spark .hc-tg{margin-bottom:4px}.hb-spark .hc-spark{height:110px;margin:0}.hb-spark .hc-sx{margin:2px 0 0;font-size:11px}      /* 지수 흐름 크게 (2026-10-11 "너무 작다") */
 .hb-num{cursor:default}.hb-num .l{font-size:12px;color:var(--muted)}.hb-num .v{font-size:21px;font-weight:600;color:#fff;margin:2px 0}.hb-num .s{font-size:13px}
 .hb-flow{display:flex;flex-wrap:wrap;gap:6px;align-items:center;font-size:12.5px}.hb-flow .k{color:var(--muted);margin:0 2px 0 6px}.hb-flow .k:first-child{margin-left:0}
 .hb-flow .hc-pill{margin:0;background:var(--card2);border:0;padding:4px 10px;border-radius:999px}
@@ -2168,8 +2168,8 @@ async function loadWorkspace(){
   if(!_ws.code){ const L=wsItems(_ws.tab); const f=L[0]||(d.candidates||[])[0]||(d.track||[])[0]; if(f) wsOpen(f.code,f.name); }
 }
 function wsItems(t){ const d=_ws.data||{}; return t==='track'?(d.track||[]):(d.candidates||[]).filter(x=>(x.lane||'entry')===t); }
-const WS_LANE={entry:'종가에 진입 · 강도(RS) 높은 순 — 칸이 모자라면 위에서부터 · 과열 매수·반도체 특별은 수량 절반 · 사면 스탑로스(그날 저가 -1%) 예약 · 21일선 아래 종가면 다음 날 아침 정리 · ⬇ 급락 날 줍기(시험 중)는 손절 20일선 · 수량 절반',
-  wait:'신호 전 · 돌파 나오면 그때 · ⏸ 손절폭 8%↑는 폭 좁은 날 기다리기 · 참고 = 다른 기준 신호', track:'내 매매 아님 · 최근 20일 사이트 신호(점수 6↑ · ⬇ 급락 날 줍기) + 🔥 주도주(60일)를 규칙대로 따라간 것 · ⚠ = 내일 아침 정리'};
+const WS_LANE={entry:'장 마감(종가)에 사는 후보 · 숫자 = 강도(RS, 99가 최고) · ‘적게 매수’ = 평소 수량의 절반 · 사면 바로 손절 주문(그날 저가 −1%) · 21일선 아래로 마감하면 다음 날 아침 정리',
+  wait:'아직 신호 전 · 돌파가 나오면 그때 · ⏸ = 손절폭이 8%보다 넓어서 좁아지는 날 기다리기 · 참고 = 다른 기준의 신호', track:'사이트 신호를 규칙대로 따라가 본 것 (내 매매 아님) · 기본 신호 20일 · 주도주 60일 · ▼ 내일 아침 정리 = 21일선 아래로 마감'};
 function hbChip(k,t){ return `<span class="hb-chip k-${k}">${{g:'▲',n:'■',b:'▼'}[k]} ${t}</span>`; }
 function wsTab(t){ _ws.tab=t; try{ localStorage.setItem('ws-tab',t); }catch(e){} renderWsList(); }
 function renderWsList(){
@@ -2183,10 +2183,10 @@ function renderWsList(){
   const hbSect=x=>{ const t=(x.tags||[]).find(t=>/^(뜨는 섹터|올라오는 섹터) /.test(t)); if(t) return t.replace(/^(뜨는 섹터|올라오는 섹터) /,'')+(x.sec_rank&&x.sec_rank<=8?` ${x.sec_rank}위`:''); return (x.tags||[]).some(t=>t.startsWith('섹터 밖'))?'섹터 밖':(x.family||''); };
   const hbState=x=>{ const t=(x.tags||[]).join(' '), o=[]; if(t.includes('📍')) o.push('눌림'); if(t.includes('🚀')) o.push('돌파'); const m=t.match(/과열 · 20일선 \+(\d+)%/); if(m) o.push('과열 +'+m[1]+'%'); return o.join(' · ')||'자리 표시 없음'; };
   const hbBadge=x=>{ const t=(x.tags||[]).join(' ');
-    if(_ws.tab==='track') return x.sell_tmr?['▼ 내일 아침 정리','r']:x.lead?['주도','w']:x.dip?['줍기','o']:null;
+    if(_ws.tab==='track') return x.sell_tmr?['▼ 내일 아침 정리','r','21일선 아래로 마감 · 규칙상 다음 날 아침 정리']:x.lead?['주도','w','주도주 신호']:x.dip?['줍기','o','급락 날 줍기']:null;
     if(_ws.tab!=='entry') return null;
-    if(x.lead) return ['주도','w']; if(t.includes('과열 매수')) return ['과열 · 절반','o']; if(t.includes('반도체·AI 특별')) return ['반도체 · 절반','o']; if(t.includes('급락 날 줍기')) return ['줍기 · 절반','o'];
-    return [(x.rr?'✅ ':'')+'매수','w']; };
+    if(x.lead) return ['주도','w','강도 최상위 종목 · 기본 신호와 따로 아주 적게']; if(t.includes('과열 매수')) return ['적게 매수','o','이미 많이 오른(과열) 자리라 평소 수량의 절반만']; if(t.includes('반도체·AI 특별')) return ['적게 매수','o','반도체·AI 특별 조건(손절폭이 넓음)이라 평소 수량의 절반만']; if(t.includes('급락 날 줍기')) return ['적게 매수','o','시장 급락 날 줍기(시험 중) · 평소 수량의 절반만'];
+    return [(x.rr?'✅ ':'')+'매수','w',x.rr?'손절폭 3% 이하 · 손익비 좋은 자리':'평소 수량']; };
   const hbRow=x=>{ const bd=hbBadge(x), all=(x.tags||[]).join(' · ').replace(/"/g,'');
     let sub;
     if(_ws.tab==='track') sub=`${x.date.slice(5).replace('-','/')} ${Math.round(x.entry).toLocaleString()} · 스탑 ${x.stop.toLocaleString()} · 21선 ${x.to21>0?'+':''}${x.to21}%`;
@@ -2196,7 +2196,7 @@ function renderWsList(){
     const box=(_ws.tab!=='track'&&x.rs!=null)?`<div class="hb-rs${x.lead?' lead':''}">${Math.round(x.rs)}</div>`:wsAv(x.code,x.name);
     const right=_ws.tab==='track'?`<div style="color:${x.gain>0?'var(--up)':x.gain<0?'var(--down)':'var(--muted)'}">${x.gain>0?'+':''}${x.gain}%</div>`:`<div style="color:${x.chg>0?'var(--up)':x.chg<0?'var(--down)':'var(--muted)'}">${x.chg>0?'+':''}${(x.chg||0).toFixed(2)}%</div>`;
     return `<div class="ws-item hb-row${x.code===_ws.code?' on':''}" data-c="${x.code}" onclick="wsOpen('${x.code}','${x.name.replace(/'/g,'')}')" title="${all}">${box}
-      <div class="hb-main"><div class="hb-nm"><span class="n">${x.name}</span>${bd?`<span class="hb-b ${bd[1]}">${bd[0]}</span>`:''}</div><div class="hb-sub">${sub}</div></div>
+      <div class="hb-main"><div class="hb-nm"><span class="n">${x.name}</span>${bd?`<span class="hb-b ${bd[1]}" title="${bd[2]||''}">${bd[0]}</span>`:''}</div><div class="hb-sub">${sub}</div></div>
       <div class="ws-px">${x.close?Math.round(x.close).toLocaleString():'-'}${right}</div></div>`; };
   const row=x=>{
     if(['entry','wait','track'].includes(_ws.tab)) return hbRow(x);
@@ -2216,8 +2216,8 @@ function renderWsList(){
     let h;
     if(_ws.tab==='entry'){      // 기본 신호 칸과 주도주 칸을 따로 채운다 (2026-10-10 "이 종목 중에 좋은 순위가 뭐란 거고")
       const B=L.filter(x=>!x.lead), Ld=L.filter(x=>x.lead);
-      h=(B.length&&Ld.length?`<div class="ws-sub">기본 신호 · 빈 칸 수만큼 위에서부터 (강도 RS 높은 순)</div>`:'')+B.map(row).join('')
-        +(Ld.length?`<div class="ws-sub">🔥 주도주 · 기본과 따로 위에서 2종목까지 소량 (거래당 위험 0.10%)</div>`+Ld.map(row).join(''):'');
+      h=(B.length&&Ld.length?`<div class="ws-sub" title="한 번에 최대 10종목까지 들고 갑니다. 이미 7종목을 들고 있으면 위에서 3개만 삽니다.">기본 신호 · 위일수록 강한 종목 · 최대 10종목, 빈 자리만큼 위에서부터</div>`:'')+B.map(row).join('')
+        +(Ld.length?`<div class="ws-sub" title="손절에 걸려도 계좌의 0.1%만 잃는 크기">주도주 · 기본 신호와 따로 · 최대 2종목 · 아주 적게</div>`+Ld.map(row).join(''):'');
     } else h=L.map(row).join('');
     if(_ws.tab==='entry'&&L.length<6){      // 오늘 진입이 적은 날: 아래를 비워 두지 않고 다음 후보(대기)를 흐리게 이어서 (2026-10-09 "여기가 붕 뜬다")
       const W=wsItems('wait').slice(0,10);
@@ -2262,7 +2262,7 @@ async function wsOpen(code,name){
   { const D=_ws.data||{}, x=(D.candidates||[]).find(y=>y.code===code&&y.lane==='entry'), t=(D.track||[]).find(y=>y.code===code);
     _ws.stop=x&&x.stop?x.stop:x&&x.close&&x.risk!=null?x.close*(1-x.risk/100):t?t.stop:null;
     const sig=document.getElementById('ws-sig'), hot=x&&(x.tags||[]).some(v=>v.includes('과열 매수')), semi=x&&(x.tags||[]).some(v=>v.includes('반도체·AI 특별'));
-    sig.innerHTML=x?`<span class="hb-b ${x.lead?'w':hot||semi?'o':'w'}" style="font-size:12px;padding:3px 10px">${x.lead?'주도 매수 · 소량':hot?'과열 매수 · 절반':semi?'반도체 특별 · 절반':'매수'}</span><span>종가 매수 · 손절 <b class="mono">${Math.round(_ws.stop).toLocaleString()}</b> (−${x.risk}%)${x.score!=null?' · 점수 '+x.score+'/7':''}${x.rs!=null?' · RS '+Math.round(x.rs):''}</span>`
+    sig.innerHTML=x?`<span class="hb-b ${x.lead?'w':hot||semi?'o':'w'}" style="font-size:12px;padding:3px 10px">${x.lead?'주도 · 아주 적게':hot?'과열 · 적게 매수':semi?'반도체 특별 · 적게 매수':'매수'}</span><span>종가 매수 · 손절 <b class="mono">${Math.round(_ws.stop).toLocaleString()}</b> (−${x.risk}%)${x.score!=null?' · 점수 '+x.score+'/7':''}${x.rs!=null?' · RS '+Math.round(x.rs):''}</span>`
       :t?`<span class="hb-b ${t.sell_tmr?'r':'o'}" style="font-size:12px;padding:3px 10px">${t.sell_tmr?'▼ 내일 아침 정리':'신호 추적 중'}</span><span>${t.date.slice(5).replace('-','/')} ${Math.round(t.entry).toLocaleString()}에 신호 · 스탑 <b class="mono">${t.stop.toLocaleString()}</b> · 21선 ${t.to21>0?'+':''}${t.to21}% · ${t.gain>0?'+':''}${t.gain}%</span>`:'';
     document.getElementById('ws-chips-a').innerHTML=''; document.getElementById('ws-chips-b').innerHTML=''; document.getElementById('ws-px').innerHTML=''; }
   // 패널은 따로 — 차트는 패널을 기다리지 않고 먼저 그림 (2026-10-09 "오래 걸리노")
