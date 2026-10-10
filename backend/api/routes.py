@@ -2528,6 +2528,7 @@ def delete_journal(ex_id: int, request: Request, db: Session = Depends(get_db)):
 class JournalCfgIn(BaseModel):
     exclude: list[str] | None = Field(default=None, max_length=100)
     cash: float | None = Field(default=None, ge=0, le=1e13)   # 예수금 — 보유 비중 계산용
+    capital: float | None = Field(default=None, ge=0, le=1e13)   # 수량 계산용 계좌 금액 (2026-10-10, 로그인 화면에서만 보임)
 
 
 @router.post("/journal/config")
@@ -2540,4 +2541,6 @@ def post_journal_config(body: JournalCfgIn, request: Request, db: Session = Depe
         cfg["exclude"] = [x.strip()[:20] for x in body.exclude if x.strip()]
     if body.cash is not None:
         cfg["cash"] = round(body.cash)
+    if body.capital is not None:
+        cfg["capital"] = round(body.capital)
     return set_cfg(db, owner, cfg)

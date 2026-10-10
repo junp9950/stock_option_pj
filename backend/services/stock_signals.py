@@ -278,6 +278,36 @@ def signals(db: Session, code: str, days: int = 260, owner: str | None = None) -
                     items.append({"date": str(d), "label": f"매수 자리 유지 · {desc}", "kind": "score_keep", "pos": "below",
                                   "price": float(L[d]), "score": int(sc[d]), "why": why})
                 prev_on = True
+        # 🔥 주도주 매수 (2026-10-10 "주도주도 매수 표시를 넣는 게 맞나") — _close_scores 'lead'와 같은 규칙: 정배열 · RS 95↑ · 손절폭 8%↓ · 양봉 · 종가 범위 위 절반.
+        # 기본 매수와 별도 · 거래당 위험 0.10%. 들고 있는 동안(스탑 = 산 날 저가 -1% · 21일선 아래 종가 정리) 또 뜨면 작은 점만.
+        e8_, e55_ = C.ewm(span=8, adjust=False).mean(), C.ewm(span=55, adjust=False).mean()
+        al_ = (e8_ > e14) & (e14 > e21) & (e21 > e55_)
+        lead_ok = (base_ok & (RS >= 95) & (rk_ <= 0.08) & (rk_ > 0) & (C > O) & ((C - L) / rng >= 0.5)).fillna(False) & ~buy_ok
+        hold_l = None
+        for k, d in enumerate(df.index):
+            if hold_l and k > hold_l["k"] and (float(L.iloc[k]) < hold_l["stop"] or (k - hold_l["k"] > 1 and float(C.iloc[k]) < float(e21.iloc[k]))):
+                hold_l = None
+            if not bool(lead_ok.iloc[k]):
+                continue
+            if hold_l is None:
+                hold_l = {"k": k, "stop": float(L.iloc[k]) * 0.99}
+                if d < start:
+                    continue
+                st_ = []
+                if bool(al_[d]) and (L[d] <= e14[d] * 1.005 or L[d] <= e21[d] * 1.005) and C[d] > e14[d]:
+                    st_.append("📍 눌림·지지 자리")
+                if hi20p[d] == hi20p[d] and C[d] > hi20p[d]:
+                    st_.append("🚀 20일 고점 돌파")
+                if C[d] / ma20[d] - 1 >= 0.15:
+                    st_.append(f"⚠️ 과열 · 20일선 +{(C[d] / ma20[d] - 1) * 100:.0f}%")
+                why = ["시장 상승·횡보장 · 종가 > 20일선 > 60일선 (정배열)", f"강도 RS {float(RS[d]):.0f} (최상위 95↑)",
+                       f"양봉 · 종가가 그날 범위 위쪽 ({float((C[d] - L[d]) / rng[d]) * 100:.0f}%)",
+                       f"손절폭 {rk_[d] * 100:.1f}% · 스탑로스 {L[d] * 0.99:,.0f} (오늘 저가 -1%)",
+                       "기본 신호와 별도로 소량 (거래당 위험 0.10%) · 21일선 아래 종가면 다음 날 아침 정리"] + st_
+                items.append({"date": str(d), "label": f"🔥 주도주 매수 (소량) · 손절 {L[d] * 0.99:,.0f} (-{rk_[d] * 100:.1f}%) · RS {float(RS[d]):.0f}"
+                              + (" · " + " · ".join(st_) if st_ else ""), "kind": "lead", "pos": "below", "price": float(L[d]), "why": why})
+            elif d >= start:
+                items.append({"date": str(d), "label": "🔥 주도주 보유 중 (또 뜸) · 더 사지 않기", "kind": "lead_keep", "pos": "below", "price": float(L[d])})
         # 돌파 모양인데 매수가 아닌 날 → 작은 회색 점 + 이유 (2026-10-09 "파란 화살표는 좀 애매한데") · 매수와 겹치면 지움
         # 12년: 이평선 돌파 전부 R -0.11/0.00/+0.16 · 정배열 아닌 바닥 돌파 -0.18/-0.03/+0.06 → 화살표로 띄울 만한 자리가 아님
         keep = []

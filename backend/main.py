@@ -479,6 +479,7 @@ select{background:#21262d;border:1px solid #30363d;color:#c9d1d9;padding:6px 10p
       <div id="jr-preview" style="margin-top:8px;font-size:12px"></div>
     </div>
 
+    <div id="jr-size" style="border:1px solid #30363d;border-radius:10px;padding:10px 14px;margin-bottom:14px;font-size:13px"></div>
     <div id="jr-cards" style="display:flex;flex-wrap:wrap;gap:8px;margin-bottom:14px"></div>
     <div id="jr-insights" style="border:1px solid #30363d;border-radius:10px;padding:10px 14px;margin-bottom:16px;font-size:13px;line-height:1.7"></div>
 
@@ -638,7 +639,7 @@ select{background:#21262d;border:1px solid #30363d;color:#c9d1d9;padding:6px 10p
       <div class="ws-ctl"><div class="ws-per" id="ws-tf"><button data-tf="1d" onclick="wsTf('1d')">일봉</button><button data-tf="1w" onclick="wsTf('1w')">주봉</button><button data-tf="60m" onclick="wsTf('60m')">60분</button><button data-tf="30m" onclick="wsTf('30m')">30분</button><button data-tf="15m" onclick="wsTf('15m')">15분</button><button data-tf="5m" onclick="wsTf('5m')">5분</button><button data-tf="1m" onclick="wsTf('1m')">1분</button></div>
       <div class="ws-per" id="ws-per"><button data-n="66" onclick="wsPeriod(66)">3개월</button><button data-n="130" onclick="wsPeriod(130)">6개월</button><button data-n="250" onclick="wsPeriod(250)">1년</button></div></div>
       <div class="lwbox"><div class="lwleg" id="ws-chart-leg"></div><div id="ws-chart" class="lwc"></div></div>
-      <details class="ws-lg"><summary>ⓘ 차트 표시 설명</summary><div class="ws-legend"><span>▲ <b>진입</b> = 사기 좋은 자리 (2~3주 보유 · 급등봉 당일은 안 냄) → 스탑로스 = 신호 봉 저가 -1% 예약 · ▼ 14일선 아래 종가 절반 · 21일선 아래 종가 나머지</span><span>↑ 하늘색 <b>줍기</b> = 급락 날 줍기 · 시험 중 (상승장에서 시장 -2%↓ 날 · 뜨는 섹터 3곳의 주도주가 같이 빠졌을 때 · 손절 20일선 · 수량 절반)</span><span>↑ 보라 <b>매수</b> = 종가 매수 신호 (점수 6↑ · 강도 70~95 · 손절폭 8%↓ · 상승장, ✅ = 손절폭 3%↓) · 다음 날도 이어지면 작은 보라 점 = 자리 유지, ↑ <b>더 좋음</b> = 손절폭이 확 짧아진 날 · 산 뒤 아직 들고 있는데 또 뜨면: ↑ <b>더 사기</b> = 첫 매수가 +1R↑ (같은 크기까지 · 전체 손절을 새 저가 -1%로 올림), ● <b>보유 중</b> = 첫 매수가 +1R 안 됨 → 더 사지 않기 · 봉에 올리면 위에 매수 근거 (점수 6↑ 또는 이평선 모였다 돌파 + 정배열 · 강도 · 손절폭) → 사면 바로 스탑로스 = 그날 저가 -1% 예약 · 21일선 아래 종가면 다음 날 아침 정리</span><span>· 회색 점 = 버틴 종목(텔레그램 종베, 참고)</span><span>· 회색 작은 점 = 돌파 모양만 나온 날 (매수 아님 · 봉에 올리면 이유 — 정배열·강도·손절폭까지 맞으면 보라 매수로 뜸)</span><span>● 초록 = 오르던 종목의 거래 적은 눌림</span><span>· 작은 점 = 참고 (돌파 대기 · 아깝게 놓침 · 상승 추세 시작) — 봉에 올리면 위에 내용</span><span>■ 회색 = 급등봉 · 1년 최대 거래</span><span>▼ 주황 = 조심</span><span>· 두 손가락으로 확대, 끌어서 이동, 누르면 그 날 가격</span></div></details>
+      <details class="ws-lg"><summary>ⓘ 차트 표시 설명</summary><div class="ws-legend"><span>▲ <b>진입</b> = 사기 좋은 자리 (2~3주 보유 · 급등봉 당일은 안 냄) → 스탑로스 = 신호 봉 저가 -1% 예약 · ▼ 14일선 아래 종가 절반 · 21일선 아래 종가 나머지</span><span>↑ 주황 <b>🔥주도</b> = 주도주 매수 (강도 최상위 RS 95↑ · 정배열 · 양봉 위쪽 마감 · 손절폭 8%↓ · 기본 매수와 별도로 소량, 거래당 위험 0.10%) → 스탑로스 = 그날 저가 -1% · 21일선 아래 종가면 다음 날 아침 정리 · 들고 있는 동안 또 뜨면 작은 주황 점 · 봉에 올리면 📍 눌림 / 🚀 돌파 / ⚠️ 과열 표시</span><span>↑ 하늘색 <b>줍기</b> = 급락 날 줍기 · 시험 중 (상승장에서 시장 -2%↓ 날 · 뜨는 섹터 3곳의 주도주가 같이 빠졌을 때 · 손절 20일선 · 수량 절반)</span><span>↑ 보라 <b>매수</b> = 종가 매수 신호 (점수 6↑ · 강도 70~95 · 손절폭 8%↓ · 상승장, ✅ = 손절폭 3%↓) · 다음 날도 이어지면 작은 보라 점 = 자리 유지, ↑ <b>더 좋음</b> = 손절폭이 확 짧아진 날 · 산 뒤 아직 들고 있는데 또 뜨면: ↑ <b>더 사기</b> = 첫 매수가 +1R↑ (같은 크기까지 · 전체 손절을 새 저가 -1%로 올림), ● <b>보유 중</b> = 첫 매수가 +1R 안 됨 → 더 사지 않기 · 봉에 올리면 위에 매수 근거 (점수 6↑ 또는 이평선 모였다 돌파 + 정배열 · 강도 · 손절폭) → 사면 바로 스탑로스 = 그날 저가 -1% 예약 · 21일선 아래 종가면 다음 날 아침 정리</span><span>· 회색 점 = 버틴 종목(텔레그램 종베, 참고)</span><span>· 회색 작은 점 = 돌파 모양만 나온 날 (매수 아님 · 봉에 올리면 이유 — 정배열·강도·손절폭까지 맞으면 보라 매수로 뜸)</span><span>● 초록 = 오르던 종목의 거래 적은 눌림</span><span>· 작은 점 = 참고 (돌파 대기 · 아깝게 놓침 · 상승 추세 시작) — 봉에 올리면 위에 내용</span><span>■ 회색 = 급등봉 · 1년 최대 거래</span><span>▼ 주황 = 조심</span><span>· 두 손가락으로 확대, 끌어서 이동, 누르면 그 날 가격</span></div></details>
     </div>
     <aside class="cm-panel" id="ws-panel"></aside>
   </div>
@@ -1341,7 +1342,7 @@ async function loadJournal(){
   document.getElementById('jr-who').textContent=`${a.o}의 매매 일지`;
   document.getElementById('jr-asof').textContent=_jr.as_of?`· 시세 ${_jr.as_of} 기준`:'';
   if(!document.getElementById('jr-date').value) document.getElementById('jr-date').value=_jr.as_of||'';
-  jrRender();
+  jrRender(); jrSizeRender();
 }
 function jrBusy(t){   // 로그인·불러오기 중인지 보이게 (2026-10-06 "로딩일 때 됐는지 안 됐는지 알 수가 없다")
   const b=document.getElementById('jr-open'), m=document.getElementById('jr-login-msg');
@@ -1366,6 +1367,29 @@ async function jrLogin(create){
   loadJournal();
 }
 function jrLogout(){ try{ localStorage.removeItem('jr-pin'); }catch(e){} _jr=null; loadJournal(); }
+// 오늘 신호 몇 주 살지 (2026-10-10 "수량은 매매 일지에서만") — 수량 = 계좌 × 거래당 위험 ÷ (매수가 − 스탑로스)
+// 거래당 위험: 기본 0.5% · 수량 절반 표시 0.25% · 🔥 주도주 0.10%. 가격은 지금 목록 가격(장중이면 실시간).
+async function jrSizeRender(){
+  const el=document.getElementById('jr-size'); if(!el||!_jr) return;
+  const cap=+(_jr.cfg.capital||0);
+  const head=`<div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;margin-bottom:6px"><b style="color:#e6edf3">🧮 오늘 신호 수량</b>
+    <span class="ts">계좌 금액</span><input id="jr-cap" type="number" inputmode="numeric" value="${cap||''}" placeholder="예: 100000000" style="width:140px;background:#0d1117;border:1px solid #30363d;color:#c9d1d9;padding:4px 8px;border-radius:6px">
+    <button class="btn btn-sm" onclick="jrCapSave()">저장</button><span class="ts">거래당 위험: 기본 0.5% · 수량 절반 0.25% · 🔥 주도주 0.10%</span></div>`;
+  if(!cap){ el.innerHTML=head+'<div class="ts">계좌 금액을 넣으면 오늘 매수 신호마다 몇 주인지 계산합니다.</div>'; return; }
+  const d=await fetch(`${API}/workspace/list`).then(r=>r.ok?r.json():null).catch(()=>null);
+  const L=((d&&d.candidates)||[]).filter(x=>(x.lane||'entry')==='entry'&&x.close&&x.risk);
+  if(!L.length){ el.innerHTML=head+'<div class="ts">오늘은 매수 신호가 없습니다.</div>'; return; }
+  const row=x=>{ const half=(x.tags||[]).some(t=>t.includes('수량 절반')); const rp=x.lead?0.001:half?0.0025:0.005;
+    const stop=x.close*(1-x.risk/100), per=x.close-stop, q=per>0?Math.floor(cap*rp/per):0;
+    return `<tr><td>${x.lead?'🔥 ':''}<b>${x.name}</b></td><td style="text-align:right">${Math.round(x.close).toLocaleString()}</td><td style="text-align:right">${Math.round(stop).toLocaleString()} <span class="ts">(-${x.risk}%)</span></td><td style="text-align:right">${(rp*100).toFixed(2).replace(/0$/,'')}%</td><td style="text-align:right"><b>${q.toLocaleString()}주</b></td><td style="text-align:right">${Math.round(q*x.close).toLocaleString()}원</td></tr>`; };
+  el.innerHTML=head+`<table class="pb-table"><thead><tr><th>종목</th><th style="text-align:right">가격</th><th style="text-align:right">스탑로스</th><th style="text-align:right">위험</th><th style="text-align:right">수량</th><th style="text-align:right">금액</th></tr></thead><tbody>${L.map(row).join('')}</tbody></table>
+    <div class="ts" style="margin-top:4px">${d.live?d.live+' 실시간 가격':'종가'} 기준 · 손절에 걸리면 계좌의 위험 % 만큼만 잃는 수량 · 금액이 계좌보다 크면 칸 수를 줄이기</div>`;
+}
+async function jrCapSave(){
+  const v=Math.max(0,Math.round(+document.getElementById('jr-cap').value||0));
+  const r=await fetch(`${API}/journal/config`,{method:'POST',headers:jrH(),body:JSON.stringify({capital:v})}).then(r=>r.ok?r.json():null).catch(()=>null);
+  if(r) _jr.cfg=r; jrSizeRender();
+}
 function jrRender(){
   const s=_jr.summary, all=s.all||{count:0};
   const card=(t,v,sub)=>`<div style="border:1px solid #30363d;border-radius:10px;padding:10px 14px;min-width:110px"><div class="ts">${t}</div><div style="font-size:17px;font-weight:600;color:#e6edf3">${v}</div>${sub?`<div class="ts">${sub}</div>`:''}</div>`;
@@ -2086,7 +2110,7 @@ function renderWsList(){
     else tg=`${KIND[x.kind]||''}${x.level?' '+Math.round(x.level).toLocaleString():''}${x.note?' · '+x.note:''}`;
     const sub=_ws.tab==='held'&&x.gain!=null?`<div class="ws-tg" style="text-align:right">수익 ${x.gain>0?'+':''}${x.gain}%</div>`:'';
     return `<div class="ws-item${x.code===_ws.code?' on':''}" data-c="${x.code}" onclick="wsOpen('${x.code}','${x.name.replace(/'/g,'')}')">${wsAv(x.code,x.name)}
-      <div class="ws-txt"><div class="ws-nm"><span class="n">${x.name}</span>${(x.lane==='entry'&&_ws.tab==='entry'&&!x.lead)?(()=>{const half=(x.tags||[]).some(t=>t.includes('수량 절반'));return `<span class="b" style="border-color:var(--blue);color:var(--blue)" title="${half?'수량 절반 (손절폭 5~8% · 과열 매수 · 반도체 특별 중 하나)':'정상 수량'}${x.score!=null?' · 종가 진입 점수 '+x.score+'/7':''}">${x.rr?'✅ ':''}매수${half?' · 절반':''}</span>`;})():''}${(x.lead&&x.lane==='entry'&&_ws.tab==='entry')?`<span class="b" style="border-color:#e8590c;color:#e8590c" title="강도 최상위 주도주 — 기본 신호와 별도로 소량 (거래당 위험 0.10%, 2종목까지)">🔥 주도주</span>`:''}</div><div class="ws-tg" title="${tg.replace(/"/g,'')}">${tg}</div></div>
+      <div class="ws-txt"><div class="ws-nm"><span class="n">${x.name}</span>${(x.lane==='entry'&&_ws.tab==='entry'&&!x.lead)?(()=>{const half=(x.tags||[]).some(t=>t.includes('수량 절반'));return `<span class="b" style="border-color:var(--blue);color:var(--blue)" title="${half?'수량 절반 (손절폭 5~8% · 과열 매수 · 반도체 특별 중 하나)':'정상 수량'}${x.score!=null?' · 종가 진입 점수 '+x.score+'/7':''}">${x.rr?'✅ ':''}매수${half?' · 절반':''}</span>`;})():''}${(x.lead&&x.lane==='entry'&&_ws.tab==='entry')?`<span class="b" style="border-color:#e8590c;color:#e8590c" title="강도 최상위 주도주 — 기본 신호와 별도로 소량 (거래당 위험 0.10%, 2종목까지)">🔥 주도주 매수 · 소량</span>`:''}</div><div class="ws-tg" title="${tg.replace(/"/g,'')}">${tg}</div></div>
       <div class="ws-px">${x.close?Math.round(x.close).toLocaleString():'-'}${_ws.tab==='track'?`<div style="color:${x.gain>0?'var(--up)':x.gain<0?'var(--down)':'var(--muted)'}" title="진입 뒤">${x.gain>0?'+':''}${x.gain}%</div>`:`<div style="color:${x.chg>0?'var(--up)':x.chg<0?'var(--down)':'var(--muted)'}">${x.chg>0?'+':''}${(x.chg||0).toFixed(2)}%</div>`}${sub}</div></div>`;
   };
   if(_ws.tab==='held'){ const a=L.filter(x=>!x.long), b=L.filter(x=>x.long);
@@ -2320,7 +2344,7 @@ function renderLwChart(cid, allCandles, signals, per){
     const lv=av[av.length-1].value, lc=closes[closes.length-1]; _avwapNote=` · ${lab} ${data[ai].time.slice(5)} VWAP ${Math.round(lv).toLocaleString()} ${lc>=lv?'위 ✓':'아래 ⚠'}`; }
   // 신호 → 화살표 표시 (폰에선 진입·청산·손절·종베 추천·매수매도·위험만 글자)
   const MC={entry:['#58a6ff','arrowUp'],exit:['#c9d1d9','arrowDown'],exit_bad:['#f0883e','arrowDown'],buy:['#1f6feb','arrowUp'],rest:['#2d9c87','circle'],info:['#8b949e','square'],
-            warn:['#f0883e','arrowDown'],trade_buy:['#ffffff','arrowUp'],trade_sell:['#bc8cff','arrowDown'],wait:['#58a6ff','circle'],near:['#6e7681','circle'],note:['#8b949e','circle'],score:['#d2a8ff','circle'],score_better:['#d2a8ff','arrowUp'],score_keep:['#d2a8ff','circle'],score_add:['#d2a8ff','arrowUp'],score_hold:['#d2a8ff','circle'],dip:['#56d4dd','arrowUp'],shape:['#6e7681','circle']};
+            warn:['#f0883e','arrowDown'],trade_buy:['#ffffff','arrowUp'],trade_sell:['#bc8cff','arrowDown'],wait:['#58a6ff','circle'],near:['#6e7681','circle'],note:['#8b949e','circle'],score:['#d2a8ff','circle'],score_better:['#d2a8ff','arrowUp'],score_keep:['#d2a8ff','circle'],score_add:['#d2a8ff','arrowUp'],score_hold:['#d2a8ff','circle'],dip:['#56d4dd','arrowUp'],lead:['#e8590c','arrowUp'],lead_keep:['#e8590c','circle'],shape:['#6e7681','circle']};
   const KEY=['entry','exit','exit_bad','trade_buy','trade_sell','warn'];
   const ts=new Set(data.map(d=>d.time));
   let mk=(signals||[]).filter(sg=>ts.has(sg.date));
@@ -2333,6 +2357,8 @@ function renderLwChart(cid, allCandles, signals, per){
     if(sg.kind==='score_add') return {time:sg.date,position:'belowBar',color:col,shape:'arrowUp',text:'더 사기',size:0.8};   // 들고 있는 첫 매수 +1R↑ · 손절 올리기
     if(sg.kind==='score_hold') return {time:sg.date,position:'belowBar',color:col,shape:'circle',text:'보유 중',size:0.6};   // 들고 있으면 더 사지 않기
     if(sg.kind==='score_keep') return {time:sg.date,position:'belowBar',color:col,shape:'circle',text:'',size:0.4};   // 매수 자리 유지 (점만)
+    if(sg.kind==='lead') return {time:sg.date,position:'belowBar',color:'#e8590c',shape:'arrowUp',text:'🔥주도',size:1};   // 주도주 매수 (소량 · 위험 0.10%)
+    if(sg.kind==='lead_keep') return {time:sg.date,position:'belowBar',color:'#e8590c',shape:'circle',text:'',size:0.4};   // 주도주 보유 중 또 뜸
     if(sg.kind==='dip') return {time:sg.date,position:'belowBar',color:col,shape,text:'줍기',size:0.9};      // 급락 날 줍기   // 종가 점수 6·7 — 숫자만 (글자 겹침 방지)
     return {time:sg.date,position:sg.pos==='below'?'belowBar':'aboveBar',color:col,shape,text:showTxt?sg.label:'',size:sg.kind==='entry'?1.6:dot?0.4:1}; })
     .sort((a,b)=>a.time<b.time?-1:a.time>b.time?1:0);
