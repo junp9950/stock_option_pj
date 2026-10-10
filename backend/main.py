@@ -163,19 +163,19 @@ select{background:#21262d;border:1px solid #30363d;color:#c9d1d9;padding:6px 10p
 .hc-verdict{display:flex;align-items:center;gap:8px;margin:2px 0 4px}.hc-verdict b{font-size:17px;color:var(--text)}
 .hc-sum{font-size:12.5px;color:var(--muted);margin-bottom:8px}
 .hc-bars{display:flex;gap:4px;margin:4px 0 8px}.hc-bars i{flex:1;height:5px;border-radius:3px;background:var(--line)}
-.hc-bars i{background:#d29922}.hc-bars i.g{background:#2ea043}.hc-bars i.b{background:#da3633}
+.hc-bars i{background:#e8740c}.hc-bars i.g{background:#2ea043}.hc-bars i.b{background:#da3633}
 .hc-row{display:flex;align-items:center;gap:10px;padding:6px 0;border-top:1px solid var(--line2)}
 .hc-row .t{flex:1;min-width:0}.hc-row .t b{display:block;font-size:13.5px;color:var(--text)}.hc-row .t span{font-size:11.5px;color:var(--muted)}
 .hc-row .v{font-size:16px;font-weight:700;color:var(--text);white-space:nowrap}
 .hc-badge{font-size:11px;font-weight:700;padding:2px 8px;border-radius:10px;white-space:nowrap;border:1px solid}
 .hc-badge.g{color:var(--blue);border-color:rgba(88,166,255,.45);background:rgba(56,139,253,.10)}
-.hc-badge.n{color:#0d1117;background:#d29922;border-color:#d29922}   /* 중립 = 호박색(사용자 10/10) — 초록과 밝기 차이 크게, 점선 테두리·■ 글자로도 구분 */
+.hc-badge.n{color:#0d1117;background:#e8740c;border-color:#e8740c}   /* 중립 = 주황(사용자 10/10: 노랑은 초록과 안 구분됨) — 점선 테두리·■ 글자로도 구분 */
 .hc-badge.b{color:var(--orange);border-color:rgba(240,136,62,.5);background:rgba(240,136,62,.10)}
 /* 양호·약화가 한눈에 (2026-10-10, 사용자 고름: 양호 초록 · 약화 빨강 — 노랑과 안 헷갈리게 진한 초록) · 중립 = 회색 테두리만. 색약이라 ▲■▼ 모양·글자도 같이 */
 .hc-badge.g{background:#2ea043;color:#fff;border-color:#2ea043}.hc-badge.b{background:#da3633;color:#fff;border-color:#da3633}
 .hc-row.k-g{background:rgba(35,134,54,.16);box-shadow:inset 3px 0 0 #2ea043;padding-left:8px;padding-right:4px}.hc-row.k-g .v{color:#7ee787}
 .hc-row.k-b{background:rgba(218,54,51,.16);box-shadow:inset 3px 0 0 #f85149;padding-left:8px;padding-right:4px}.hc-row.k-b .v{color:#ffa198}
-.hc-row.k-n{background:rgba(210,153,34,.12);box-shadow:inset 3px 0 0 #d29922;padding-left:8px;padding-right:4px}.hc-row.k-n .v{color:#f2cc60}
+.hc-row.k-n{background:rgba(232,116,12,.12);box-shadow:inset 3px 0 0 #e8740c;padding-left:8px;padding-right:4px}.hc-row.k-n .v{color:#ffb070}
 /* PC: 위 카드 두 개를 낮게 줄여서 목록·차트가 한 화면에 들어오게 (2026-10-10 "차트·종목 검색 아래까지 한 페이지에") */
 @media(min-width:901px){
 .htop{margin-bottom:10px;gap:10px}.hcard{padding:10px 14px;border-radius:12px}
@@ -194,7 +194,7 @@ select{background:#21262d;border:1px solid #30363d;color:#c9d1d9;padding:6px 10p
 #hc-market .hc-row .v{font-size:14px;text-align:right}#hc-market .hc-row .hc-badge{justify-self:end;font-size:10.5px;padding:1px 6px}
 #hc-market .hc-row.k-g{background:linear-gradient(90deg,rgba(35,134,54,.45),rgba(35,134,54,.10));border-color:#2ea043;box-shadow:inset 5px 0 0 #2ea043;padding-left:12px}#hc-market .hc-row.k-g .v{color:#7ee787;font-weight:800}#hc-market .hc-row.k-g .t b{color:#fff}
 #hc-market .hc-row.k-b{background:linear-gradient(90deg,rgba(218,54,51,.45),rgba(218,54,51,.10));border-color:#f85149;box-shadow:inset 5px 0 0 #f85149;padding-left:12px}#hc-market .hc-row.k-b .v{color:#ffa198;font-weight:800}#hc-market .hc-row.k-b .t b{color:#fff}
-#hc-market .hc-row.k-n{background:linear-gradient(90deg,rgba(210,153,34,.30),rgba(210,153,34,.07));border-color:#d29922;border-style:dashed;box-shadow:inset 5px 0 0 #d29922;padding-left:12px}#hc-market .hc-row.k-n .v{color:#f2cc60;font-weight:800}#hc-market .hc-row.k-n .t b{color:#fff}#hc-market .hc-row .hc-badge{font-size:11px;padding:2px 8px}
+#hc-market .hc-row.k-n{background:linear-gradient(90deg,rgba(232,116,12,.32),rgba(232,116,12,.07));border-color:#e8740c;border-style:dashed;box-shadow:inset 5px 0 0 #e8740c;padding-left:12px}#hc-market .hc-row.k-n .v{color:#ffb070;font-weight:800}#hc-market .hc-row.k-n .t b{color:#fff}#hc-market .hc-row .hc-badge{font-size:11px;padding:2px 8px}
 .lwbox>.lwc{height:clamp(300px,calc(100vh - 512px),720px)}
 }
 @media(max-width:900px){.htop{grid-template-columns:1fr}.hc-head{font-size:18px}.hc-num .v{font-size:19px}.hcard{padding:16px}}
