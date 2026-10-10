@@ -366,7 +366,7 @@ def monthly_text(db: Session, ym: str | None = None) -> str | None:
            f"거래일 {len(days)} · 15:12 스냅샷 빠짐 {miss}일 · 15:12↔종가 후보 일치율 평균 {sum(jac) / len(jac):.2f}" if jac else f"거래일 {len(days)} · 15:12 스냅샷 빠짐 {miss}일",
            f"상위 10 교체율(P vs X 산 종목) 평균 {sum(flips) / len(flips):.2f}" if flips else ""]
     for k, nm in (("P", "P 기본(15:12 신호·종가)"), ("S", "S 보조(종가 신호·다음 날 시가)"), ("X", "X 진단(같은 종가)"),
-                  ("L", "L 주도주 실제(0.10%·2종목)"), ("Lsh", "L 주도주 전수 기록"), ("Z", "Z Lazy식 모방(같은 체결)")):
+                  ("L", "L 주도주 실제(0.10%·2종목)"), ("Lsh", "L 주도주 전수 기록"), ("Z", "Z Lazy 모방 LAZY_CLONE(우리 추정 규칙·같은 체결 — Lazy 실제 신호 아님)")):
         a = st.get(k) or {}
         tr = [t for t in a.get("trades", []) if t["d1"][:7] == ym]
         alltr = a.get("trades", [])
@@ -380,6 +380,11 @@ def monthly_text(db: Session, ym: str | None = None) -> str | None:
         er = sum(t["R"] for t in alltr) / len(alltr) if alltr else None
         out.append(f"{nm}: 이번 달 {mret * 100:+.1f}% · 누적 {(a['eq'][-1][1] - 1) * 100:+.1f}% · 최대낙폭 {mdd * 100:.1f}% · 정리 {len(tr)}건(누적 {len(alltr)}건"
                    + (f", 평균 R {er:+.2f}" if er is not None else "") + f") · 보유 {len(a.get('pos', {}))}")
+        if len(alltr) >= 10:      # 추세추종은 소수 큰 수익이 전체를 만든다 — 승률보다 이 숫자들 (GPT 권고 10/10)
+            rs_ = sorted(t["R"] for t in alltr); wins = [r for r in rs_ if r > 0]; loss = [r for r in rs_ if r <= 0]
+            top = rs_[-max(1, len(rs_) // 10):]; tot = sum(rs_)
+            out.append(f"   중앙 R {rs_[len(rs_) // 2]:+.2f} · 이긴 비율 {100 * len(wins) / len(rs_):.0f}% · 손익비 {(sum(wins) / len(wins)) / abs(sum(loss) / len(loss)) if wins and loss else 0:.1f}"
+                       + (f" · 상위 10% 거래가 전체 R의 {100 * sum(top) / tot:.0f}%" if tot > 0 else " · 누적 R 마이너스"))
         if k == "P" and mdd <= -0.25:
             out.append("⛔ P 낙폭 25% 넘음 — 사전 기준상 신규 진입 중단 검토")
         elif k == "P" and mdd <= -0.15:
