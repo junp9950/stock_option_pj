@@ -172,7 +172,7 @@ select{background:#21262d;border:1px solid #30363d;color:#c9d1d9;padding:6px 10p
 .hc-badge.n{color:var(--muted);border-color:var(--line)}
 .hc-badge.b{color:var(--orange);border-color:rgba(240,136,62,.5);background:rgba(240,136,62,.10)}
 /* 양호·약화가 한눈에 (2026-10-10): 양호 = 파랑 꽉 찬 배지 + 줄 왼쪽 파랑 막대·옅은 바탕 · 약화 = 주황 같은 방식 · 중립 = 회색 테두리만. 색약이라 ▲■▼ 모양·글자도 같이 */
-.hc-badge.g{background:var(--blue);color:#0d1117;border-color:var(--blue)}.hc-badge.b{background:var(--orange);color:#0d1117;border-color:var(--orange)}
+.hc-badge.g{background:#58a6ff;color:#0d1117;border-color:#58a6ff}.hc-badge.b{background:#ff8c4a;color:#0d1117;border-color:#ff8c4a}
 .hc-row.k-g{background:rgba(56,139,253,.09);box-shadow:inset 3px 0 0 var(--blue);padding-left:8px;padding-right:4px}.hc-row.k-g .v{color:var(--blue)}
 .hc-row.k-b{background:rgba(240,136,62,.11);box-shadow:inset 3px 0 0 var(--orange);padding-left:8px;padding-right:4px}.hc-row.k-b .v{color:var(--orange)}
 .hc-row.k-n{padding-left:8px;padding-right:4px}.hc-row.k-n .v{color:var(--muted)}
@@ -192,8 +192,9 @@ select{background:#21262d;border:1px solid #30363d;color:#c9d1d9;padding:6px 10p
 #hc-market>.hc-row{display:grid;grid-template-columns:minmax(0,1fr) auto auto;column-gap:6px;align-items:center;padding:4px 8px;border:1px solid var(--line2);border-radius:8px;background:var(--card2)}
 #hc-market .hc-row .t{min-width:0}#hc-market .hc-row .t b{font-size:12.5px}#hc-market .hc-row .t span{display:block;font-size:10.5px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 #hc-market .hc-row .v{font-size:14px;text-align:right}#hc-market .hc-row .hc-badge{justify-self:end;font-size:10.5px;padding:1px 6px}
-#hc-market .hc-row.k-g{background:rgba(56,139,253,.10);border-color:rgba(56,139,253,.45);box-shadow:inset 4px 0 0 var(--blue);padding-left:11px}
-#hc-market .hc-row.k-b{background:rgba(240,136,62,.12);border-color:rgba(240,136,62,.5);box-shadow:inset 4px 0 0 var(--orange);padding-left:11px}
+#hc-market .hc-row.k-g{background:linear-gradient(90deg,rgba(56,139,253,.38),rgba(56,139,253,.10));border-color:#58a6ff;box-shadow:inset 5px 0 0 #58a6ff;padding-left:12px}#hc-market .hc-row.k-g .v{color:#a5d6ff;font-weight:800}#hc-market .hc-row.k-g .t b{color:#fff}
+#hc-market .hc-row.k-b{background:linear-gradient(90deg,rgba(255,123,58,.40),rgba(255,123,58,.10));border-color:#ff8c4a;box-shadow:inset 5px 0 0 #ff8c4a;padding-left:12px}#hc-market .hc-row.k-b .v{color:#ffc29a;font-weight:800}#hc-market .hc-row.k-b .t b{color:#fff}
+#hc-market .hc-row.k-n{background:transparent;border-style:dashed}#hc-market .hc-row .hc-badge{font-size:11px;padding:2px 8px}
 .lwbox>.lwc{height:clamp(300px,calc(100vh - 512px),720px)}
 }
 @media(max-width:900px){.htop{grid-template-columns:1fr}.hc-head{font-size:18px}.hc-num .v{font-size:19px}.hcard{padding:16px}}
