@@ -300,7 +300,7 @@ select{background:#21262d;border:1px solid #30363d;color:#c9d1d9;padding:6px 10p
 
 .cp-c1,.cp-c2{display:flex;flex-direction:column;gap:10px}
 /* ── 첫 화면 시안 B (2026-10-11 사용자 고름) — 정돈된 카드 · 색 = 양호 초록 / 중립 흰 / 약화 빨강, ▲■▼ 글자 함께 ── */
-#panel-home{--card:#161d27;--card2:#1d2633;--line:#253041;--line2:#202a38;--text:#e8edf3;--body:#d3dae3;--muted:#8a96a6;--up:#f2555a;--down:#5b8def;
+#panel-home,.hbt{--card:#161d27;--card2:#1d2633;--line:#253041;--line2:#202a38;--text:#e8edf3;--body:#d3dae3;--muted:#8a96a6;--up:#f2555a;--down:#5b8def;
   font-family:'Noto Sans KR','Apple SD Gothic Neo','Malgun Gothic','Segoe UI',sans-serif}
 #panel-home .mono,#panel-home .ws-px,#panel-home .hb-num .v,#panel-home .hb-tv,#panel-home .hb-rs,#panel-home .hb-px{font-family:'IBM Plex Mono',ui-monospace,Menlo,monospace;font-variant-numeric:tabular-nums}
 #panel-home .htop{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1.15fr);gap:16px;margin-bottom:16px}
@@ -369,6 +369,29 @@ select{background:#21262d;border:1px solid #30363d;color:#c9d1d9;padding:6px 10p
 @media(min-width:901px){#panel-home .lwbox{position:relative}#panel-home .lwbox>.lwleg{position:absolute;top:6px;left:8px;z-index:3;background:rgba(15,20,27,.88);pointer-events:none;max-width:calc(100% - 120px);min-height:0}}   /* 봉 정보는 차트 위에 겹쳐서 — 차트 잘림 줄이기 */
 @media(max-width:1100px){#panel-home .htop{grid-template-columns:1fr}}
 @media(max-width:760px){.hb-idx{grid-template-columns:1fr 1fr}.hb-spark{grid-column:1/-1}#hc-market{grid-template-columns:1fr 1fr}#panel-home .ws>.cm-panel{grid-template-columns:1fr}#panel-home .ws>.cm-panel .cp-rows{grid-template-columns:1fr}.hb-sum{margin-left:0}}
+
+/* ── 다른 탭 시안 B (2026-10-11, 차트 후보부터) — .hbt = 테마 적용 탭 ── */
+.hbt .mono{font-family:'IBM Plex Mono',ui-monospace,Menlo,monospace;font-variant-numeric:tabular-nums}
+.hbt .sec{background:var(--card);border:0;border-radius:16px;padding:14px 20px;margin-top:14px}
+.hbt .sec>summary{font-size:16px;font-weight:800;color:#fff}.hbt .sec>summary .ts{font-weight:400}
+.hbt .sec .lead{color:var(--muted);font-size:13px;line-height:1.6}
+.hbt #pb-market{border-radius:16px}
+.hbt input:not([type=checkbox]),.hbt select{background:#0f141b!important;border:1px solid var(--line)!important;color:var(--text)!important;border-radius:10px!important;padding:6px 10px!important}
+.hbt .pb-table{background:transparent;border:0}.hbt .pb-table th{background:transparent;color:var(--muted);font-weight:500;border-bottom:1px solid var(--line)}
+.hbt .pb-table td{border-bottom:1px solid var(--line2)}.hbt .pb-table tbody tr:hover{background:var(--card2)}
+.cc-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(300px,1fr));gap:10px}
+.cc{background:#0f141b;border:1px solid var(--line);border-radius:12px;padding:10px 14px;display:flex;flex-direction:column;gap:5px;cursor:pointer;min-width:0}
+.cc:hover{border-color:#5b6a7e}.cc.k-b{border-color:#2ea043;background:rgba(35,134,54,.12)}
+.cc-h{display:flex;flex-wrap:wrap;align-items:center;gap:6px}.cc-h>b{font-size:15px;color:#fff}
+.cc-t{font-size:11px;font-weight:600;padding:1px 8px;border-radius:999px;border:1px solid var(--line);color:var(--body);white-space:nowrap}
+.cc-t.k-g{border-color:#2ea043;background:rgba(35,134,54,.18);color:#fff}.cc-t.k-b{border-color:#da3633;background:rgba(218,54,51,.18);color:#fff}
+.cc-rs{font-size:11px;font-weight:700;padding:1px 8px;border-radius:999px;background:#1d2633;color:var(--muted);font-family:'IBM Plex Mono',monospace}
+.cc-rs.mid{color:#fff}.cc-rs.top{background:#e8edf3;color:#0f141b}
+.cc-p{display:flex;flex-wrap:wrap;gap:4px 16px;font-size:13px;color:var(--body)}
+.cc-s{font-size:12px;color:var(--muted);line-height:1.5}
+.cc-f{font-size:12px;padding:3px 8px;border-radius:8px;border:1px solid var(--line)}.cc-f.k-g{border-color:#2ea043;background:rgba(35,134,54,.15);color:#fff}
+.cc-f.k-b{border-color:#da3633;background:rgba(218,54,51,.15);color:#fff}.cc-f.k-n{border-color:#e8edf3;color:#fff}
+.cc-lb:empty{display:none}
 </style>
 <script src="https://cdn.jsdelivr.net/npm/chart.js@4/dist/chart.umd.min.js"></script>
 <link rel="preconnect" href="https://fonts.googleapis.com"><link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Noto+Sans+KR:wght@400;500;700;800&family=IBM+Plex+Mono:wght@500;600&display=swap">
@@ -735,14 +758,14 @@ select{background:#21262d;border:1px solid #30363d;color:#c9d1d9;padding:6px 10p
   </details>
 </div>
 
-<div id="panel-candidates" class="panel content">
+<div id="panel-candidates" class="panel content hbt">
   <div id="pb-market" hidden style="border-radius:10px;padding:12px 16px;margin-bottom:14px;border:1px solid #30363d"></div>
   <p class="ts" style="margin:0 0 6px">제목을 누르면 펼쳐지고 접힙니다 (브라우저가 기억).</p>
   <details class="sec" data-k="ss">
     <summary>🎯 손절 짧은 자리 <span class="ts" id="ss-info"></span></summary>
 
     <p class="lead" style="margin-top:6px"><b>추세선 지지</b>(저점 높이는 추세선 + 위 수평 저항, 전진건설로봇형) · <b>수평 지지 수렴</b>(거래 마르며 좁아지는 박스, SK이터닉스형). 둘 다 앞서 거래가 터진 뒤 거래가 마른 종목. 실적 좋은 순 → 손절선이 가까운 순. 3년 검증: 전체는 우위 거의 없음(+0.1R) · <b>📈 실적 개선이면 +0.5R</b> · 영업 적자(−0.2R)는 뺐음. 강도 숫자 = 시장 대비 세기(70↑ 센 편, 95↑ 🔥 최상위).</p>
-    <div id="ss-body" style="display:flex;flex-wrap:wrap;gap:6px" class="ts">로딩 중…</div>
+    <div id="ss-body" class="cc-grid ts">로딩 중…</div>
   </details>
   <details class="sec" data-k="cd">
     <summary>📐 차트 모양 후보 <span class="ts" id="cd-sum"></span></summary>
@@ -835,21 +858,21 @@ select{background:#21262d;border:1px solid #30363d;color:#c9d1d9;padding:6px 10p
     <summary>📏 EMA 모임 돌파 · 후보 <span class="ts" id="ema-info"></span></summary>
     <p class="lead" style="margin-top:6px">단기 <b>EMA 5·10·20</b>이 모여 있다가(전날 간격 4%↓) 세 선 위·10일 고점 돌파(+3%↑·거래 1.5배↑). <b>EMA60은 추세 필터</b> — 📈정배열(종가>EMA60 & EMA20>EMA60)이면 5일 성적 2~3배. 손절 = 돌파 봉 저가 아래 마감 · 5~10일.</p>
     <div class="ts" style="margin:6px 0 4px">오늘 돌파</div>
-    <div id="ema-brk" style="display:flex;flex-wrap:wrap;gap:6px" class="ts">로딩 중…</div>
+    <div id="ema-brk" class="cc-grid ts">로딩 중…</div>
     <div class="ts" style="margin:10px 0 4px">내일 후보 — EMA 3% 안으로 모여서 10일 고점 4% 안 · 60일선 위 · 오늘 조용</div>
-    <div id="ema-wait" style="display:flex;flex-wrap:wrap;gap:6px" class="ts"></div>
+    <div id="ema-wait" class="cc-grid ts"></div>
   </details>
   <details class="sec" data-k="lp">
     <summary>🏦 대형주 눌림 박스 <span class="ts">· 참고 (검증 약함)</span> <span class="ts" id="lp-info"></span></summary>
     <p class="lead" style="margin-top:6px">하루 거래대금 <b>500억↑ 대형주</b>가 60일 고점에서 <b>-5~-20%</b> 눌려 120일선 근처 위에서 쉬고, 거래가 평소(60일) 이하. 대형주는 바닥(-40%)까지 잘 안 빠져서 바닥 박스 감시에는 안 잡히는 자리(에이피알형). <b>손절 = 최근 15일 박스 하단 아래 마감</b> · 20일 보유. <span style="color:#d29922">⚠️ 근거가 '3년 20일 뒤 평균 +7%' 하나뿐(시장 대비·손절 반영 안 됨) — 매수 신호가 아니라 차트 볼 목록.</span></p>
-    <div id="lp-body" style="display:flex;flex-wrap:wrap;gap:6px" class="ts">로딩 중…</div>
+    <div id="lp-body" class="cc-grid ts">로딩 중…</div>
   </details>
   <details class="sec" data-k="bb">
     <summary>👀 바닥 박스 감시 <span class="ts" id="bb-info"></span></summary>
 
     <p class="lead" style="margin-top:6px">급등했다 크게 빠진 뒤(120일 고점 -40%↓, 1년 저점보다는 15%↑ 위) 15일째 좁은 박스(폭 13%↓)에서 거래 없이 버티는 종목. 아직 신저가를 깨는 종목은 뺍니다. <b>추천이 아니라 감시용</b> — 박스에서 터지는 날(🔔) 섹터·시장이 받쳐 주면 봅니다.</p>
     <div id="bb-burst" style="margin-bottom:8px"></div>
-    <div id="bb-body" style="display:flex;flex-wrap:wrap;gap:6px" class="ts">로딩 중…</div>
+    <div id="bb-body" class="cc-grid ts">로딩 중…</div>
   </details>
 </div>
 
@@ -2003,18 +2026,18 @@ function cdMatch(it, terms){
   });
 }
 // 20일선 이격도 표시: +30%↑ 과열, +20%↑ 주의 (3년 확인 기준)
-function rsTag(x){   // 강도(RS) 숫자 (2026-10-10 차트 후보 카드)
-  return x.rs!=null?` <span style="font-size:11px;color:${x.rs>=95?'#e8590c':x.rs>=70?'#c9d1d9':'#8b949e'}" title="강도: 거래대금 30억↑ 종목 중 3·6·9·12개월 수익률 순위 (99가 최고) · 기본 매수 70~95 · 주도주 95↑">강도 ${x.rs}${x.rs>=95?' 🔥':''}</span>`:'';
+function rsTag(x){   // 강도(RS) 숫자 (2026-10-10 차트 후보 카드 · 10/11 시안 B 칩)
+  return x.rs!=null?`<span class="cc-rs${x.rs>=95?' top':x.rs>=70?' mid':''}" title="강도: 거래대금 30억↑ 종목 중 3·6·9·12개월 수익률 순위 (99가 최고) · 기본 매수 70~95 · 주도주 95↑">강도 ${x.rs}</span>`:'';
 }
 function flagTag(x){   // 투자주의·경고·위험, 단기과열, 관리종목, 신용불가
   const f=(x&&x.flags)||[]; if(!f.length) return '';
-  const col=t=>t==='투자위험'||t==='투자경고'||t==='관리종목'?'#f85149':t==='신용불가'?'#d29922':'#e3b341';
-  return ' '+f.map(t=>`<span style="font-size:10.5px;color:${col(t)};border:1px solid ${col(t)};border-radius:6px;padding:0 4px;white-space:nowrap" title="${t==='신용불가'?'신용 매수 불가 (증거금 100%) — 한국투자증권 기준이라 메리츠 등 다른 증권사와 다를 수 있음':'거래소 지정 — 모든 증권사 공통'}">${t==='신용불가'?'신용불가(한투)':t}</span>`).join(' ');
+  const col=t=>t==='투자위험'||t==='투자경고'||t==='관리종목'?'#f85149':'n';      // 위험·경고·관리 = 빨간 칩, 나머지(신용불가·주의·과열) = 회색 칩 (노랑 안 씀, 색약)
+  return ' '+f.map(t=>`<span class="cc-t${col(t)==='#f85149'?' k-b':''}" style="font-size:10.5px" title="${t==='신용불가'?'신용 매수 불가 (증거금 100%) — 한국투자증권 기준이라 메리츠 등 다른 증권사와 다를 수 있음':'거래소 지정 — 모든 증권사 공통'}">${t==='신용불가'?'신용불가(한투)':t}</span>`).join(' ');
 }
 function noFlag(x, warnOff, credOff){ const f=x.flags||[]; return !(warnOff&&f.some(t=>t!=='신용불가')) && !(credOff&&f.includes('신용불가')); }
 function gapTag(g){
   if(g==null) return '';
-  const col = g>=30?'#f85149':g>=20?'#d29922':'#8b949e';
+  const col = g>=30?'#ff7b72':g>=20?'#ffa198':'#8b949e';      // 노랑 대신 옅은 빨강 (색약, 2026-10-11)
   return ` <span style="font-size:11px;color:${col}" title="20일선 대비">${g>=30?'⚠과열 ':g>=20?'주의 ':''}이격 ${g>=0?'+':''}${g}%</span>`;
 }
 function cdWon(v){ return v>=1e12?(v/1e12).toFixed(1)+'조':Math.round(v/1e8).toLocaleString()+'억'; }
@@ -2063,11 +2086,14 @@ async function loadSupportSetups(){
   if(!d){ el.textContent='불러오지 못했습니다'; return; }
   _ssDate=d.trading_date; await lbLoad(d.trading_date);
   document.getElementById('ss-info').textContent=`${d.trading_date} · ${d.items.length}개${d.dropped_loss?` · 영업 적자 ${d.dropped_loss}개 뺌`:''}`;
-  el.innerHTML=d.items.length?d.items.map(x=>`<span onclick="openChartModal('${x.code}','${x.name}','')" style="cursor:pointer;border:1px solid ${x.type.startsWith('추세선')?'#bc8cff':'#58a6ff'};border-radius:8px;padding:6px 10px;font-size:12.5px;line-height:1.55">
-    <b style="color:#e6edf3">${x.name}</b>${flagTag(x)}${rsTag(x)} <span style="font-size:11px;color:${x.type.startsWith('추세선')?'#bc8cff':'#58a6ff'}">${x.type}</span><br>
-    <span style="color:#58a6ff">손절 ${x.stop.toLocaleString()}원 (${x.stop_pct}%)</span> · <span style="color:#f85149">위 ${x.target.toLocaleString()}원 (+${x.target_pct}%)</span><br>
-    ${lbBtns(x,'손절 짧은 자리',_ssDate)}<br><span class="ts">현재 ${x.close.toLocaleString()}원 · 거래 터질 때의 ${x.dry}배 · 터진 뒤 ${x.since_burst}일${x.families.length?' · '+x.families[0]:''}</span>
-    ${x.fund?`<br><span style="font-size:11.5px;color:${x.fund.good?'#3fb950':x.fund.grow?'#c9d1d9':x.fund.loss?'#f85149':'#8b949e'}">${x.fund.good?'📈 실적 개선':x.fund.grow?'이익 증가':x.fund.loss?'⚠ 영업 적자':'이익 감소'} · ${x.fund.period} 영업익 ${x.fund.op_yoy!=null?(x.fund.op_yoy>0?'+':'')+x.fund.op_yoy+'%':'-'} · 매출 ${x.fund.rev_yoy!=null?(x.fund.rev_yoy>0?'+':'')+x.fund.rev_yoy+'%':'-'}${x.fund.margin!=null?' · 이익률 '+x.fund.margin+'%':''}</span>`:''}</span>`).join('')
+  // 시안 B 카드 (2026-10-11): 이름·강도·모양 / 손절·목표 / 현재가·거래 / 실적(▲■▼)
+  const fund=x=>{ const f=x.fund; if(!f) return ''; const k=f.good?'g':f.loss?'b':f.grow?'n':'b', t=f.good?'실적 개선':f.loss?'영업 적자':f.grow?'이익 증가':'이익 감소';
+    return `<div class="cc-f k-${k}">${{g:'▲',n:'■',b:'▼'}[k]} ${t} · ${f.period} 영업익 ${f.op_yoy!=null?(f.op_yoy>0?'+':'')+f.op_yoy+'%':'-'} · 매출 ${f.rev_yoy!=null?(f.rev_yoy>0?'+':'')+f.rev_yoy+'%':'-'}${f.margin!=null?' · 이익률 '+f.margin+'%':''}</div>`; };
+  el.innerHTML=d.items.length?d.items.map(x=>`<div class="cc" onclick="openChartModal('${x.code}','${x.name}','')">
+    <div class="cc-h"><b>${x.name}</b>${flagTag(x)}${rsTag(x)}<span class="cc-t">${x.type}</span></div>
+    <div class="cc-p"><span>손절 <b class="mono" style="color:var(--down)">${x.stop.toLocaleString()}</b> <span class="mono">(${x.stop_pct}%)</span></span><span>위 <b class="mono" style="color:var(--up)">${x.target.toLocaleString()}</b> <span class="mono">(+${x.target_pct}%)</span></span></div>
+    <div class="cc-s">현재 ${x.close.toLocaleString()}원 · 거래 터질 때의 ${x.dry}배 · 터진 뒤 ${x.since_burst}일${x.families.length?' · '+x.families[0]:''}</div>
+    ${fund(x)}<div class="cc-lb" onclick="event.stopPropagation()">${lbBtns(x,'손절 짧은 자리',_ssDate)}</div></div>`).join('')
     :'지금은 없습니다';
 }
 
@@ -2079,9 +2105,9 @@ async function loadEmaSection(){
   if(!d){ b.textContent='불러오지 못했습니다'; return; }
   const eb=d.ema_break||[], ew=d.ema_wait||[];
   document.getElementById('ema-info').textContent=`${d.trading_date} · 돌파 ${eb.length} · 후보 ${ew.length}`;
-  const tag=x=>(x.money?' <b style="color:#e3b341;font-size:11px">⭐섹터 돈</b>':'')+(x.up60?' <b style="color:#3fb950;font-size:11px">📈정배열</b>':'')+(x.avwap_below?' <b style="color:#f0883e;font-size:11px">⚠기준봉VWAP 아래</b>':'');
-  const card=(x,body)=>`<span onclick="openChartModal('${x.code}','${x.name}','')" style="cursor:pointer;border:1px solid ${x.up60?'#3fb950':'#30363d'};border-radius:8px;padding:6px 10px;font-size:12.5px;line-height:1.55"><b style="color:#e6edf3">${x.name}</b>${tag(x)}<br><span class="ts">${body}</span></span>`;
-  b.innerHTML=eb.length?eb.map(x=>card(x,`<span style="color:#f85149">${x.change_pct>0?'+':''}${x.change_pct}%</span> · 거래 ${x.tv_x}배 · 전날 간격 ${x.ema_gap}%${x.family?' · '+x.family:''}`)).join(''):'오늘 돌파 없음';
+  const tag=x=>(x.money?'<span class="cc-t">섹터 돈</span>':'')+(x.up60?'<span class="cc-t k-g">▲ 정배열</span>':'')+(x.avwap_below?'<span class="cc-t k-b">▼ 기준봉 VWAP 아래</span>':'');
+  const card=(x,body)=>`<div class="cc" onclick="openChartModal('${x.code}','${x.name}','')"><div class="cc-h"><b>${x.name}</b>${rsTag(x)}${tag(x)}</div><div class="cc-s">${body}</div></div>`;
+  b.innerHTML=eb.length?eb.map(x=>card(x,`<span class="mono" style="color:${x.change_pct>=0?'var(--up)':'var(--down)'}">${x.change_pct>0?'+':''}${x.change_pct}%</span> · 거래 ${x.tv_x}배 · 전날 간격 ${x.ema_gap}%${x.family?' · '+x.family:''}`)).join(''):'오늘 돌파 없음';
   w.innerHTML=ew.length?ew.map(x=>card(x,`10일 고점 ${x.line.toLocaleString()}까지 ${x.to_high_pct}% · 간격 ${x.ema_now}%${x.family?' · '+x.family:''}`)).join(''):'없음';
 }
 // 대형주 눌림 박스 (2026-10-07)
@@ -2090,19 +2116,19 @@ async function loadLargePullback(){
   const el=document.getElementById('lp-body'); if(!el) return;
   if(!d){ el.textContent='불러오지 못했습니다'; return; }
   document.getElementById('lp-info').textContent=`${d.trading_date} · ${d.items.length}개${d.market==='하락'?' · 🔴 하락장 — 보기만':''}`;
-  el.innerHTML=d.items.length?d.items.map(x=>`<span onclick="openChartModal('${x.code}','${x.name}','')" style="cursor:pointer;border:1px solid #1f6feb;border-radius:8px;padding:6px 10px;font-size:12.5px;line-height:1.55">
-    <b style="color:#e6edf3">${x.name}</b>${rsTag(x)} <span style="color:${x.change_pct>=0?'#f85149':'#58a6ff'}">${x.change_pct>0?'+':''}${x.change_pct}%</span><br>
-    <span class="ts">고점 ${x.off_hi60_pct}% · 15일 박스 폭 ${x.box_pct}% · 거래 ${x.vol_ratio}배 · 하루 ${x.liq_eok.toLocaleString()}억${x.families.length?' · '+x.families[0]:''}</span><br>
-    <span style="color:#58a6ff">손절 ${x.stop.toLocaleString()}원 (${x.stop_pct}%)</span></span>`).join(''):'지금은 없습니다';
+  el.innerHTML=d.items.length?d.items.map(x=>`<div class="cc" onclick="openChartModal('${x.code}','${x.name}','')">
+    <div class="cc-h"><b>${x.name}</b>${rsTag(x)}<span class="mono" style="margin-left:auto;color:${x.change_pct>=0?'var(--up)':'var(--down)'}">${x.change_pct>0?'+':''}${x.change_pct}%</span></div>
+    <div class="cc-p"><span>손절 <b class="mono" style="color:var(--down)">${x.stop.toLocaleString()}</b> <span class="mono">(${x.stop_pct}%)</span></span></div>
+    <div class="cc-s">고점 ${x.off_hi60_pct}% · 15일 박스 폭 ${x.box_pct}% · 거래 ${x.vol_ratio}배 · 하루 ${x.liq_eok.toLocaleString()}억${x.families.length?' · '+x.families[0]:''}</div></div>`).join(''):'지금은 없습니다';
 }
 async function loadBottomBox(){
   const d=await fetch(`${API}/screener/bottom-box`).then(r=>r.ok?r.json():null).catch(()=>null);
   const el=document.getElementById('bb-body'); if(!el) return;
   if(!d){ el.textContent='불러오지 못했습니다'; return; }
   document.getElementById('bb-info').textContent=`${d.trading_date} · ${d.items.length}개${d.burst.length?` · 오늘 터짐 ${d.burst.length}`:''}`;
-  const chip=(x,b)=>`<span onclick="openChartModal('${x.code}','${x.name}','')" style="cursor:pointer;border:1px solid ${b?'#f85149':'#30363d'};border-radius:8px;padding:5px 9px;font-size:12px;line-height:1.5">
-    <b style="color:#e6edf3">${x.name}</b>${b?` <b style="color:#f85149">🔔 +${x.change_pct}%</b>`:''}<br><span class="ts">박스 ${x.days}일째 · 폭 ${x.band_pct}% · 고점 ${x.dd_pct}% · 거래 ${x.dry_x}배${x.families.length?' · '+x.families[0]:''}</span></span>`;
-  document.getElementById('bb-burst').innerHTML=d.burst.length?'<div class="ts" style="color:#f85149;margin-bottom:4px">🔔 오늘 박스에서 터짐</div><div style="display:flex;flex-wrap:wrap;gap:6px">'+d.burst.map(x=>chip(x,true)).join('')+'</div>':'';
+  const chip=(x,b)=>`<div class="cc${b?' k-b':''}" onclick="openChartModal('${x.code}','${x.name}','')"><div class="cc-h"><b>${x.name}</b>${b?`<span class="cc-t k-g">▲ 오늘 +${x.change_pct}% 터짐</span>`:''}</div>
+    <div class="cc-s">박스 ${x.days}일째 · 폭 ${x.band_pct}% · 고점 ${x.dd_pct}% · 거래 ${x.dry_x}배${x.families.length?' · '+x.families[0]:''}</div></div>`;
+  document.getElementById('bb-burst').innerHTML=d.burst.length?'<div class="ts" style="margin-bottom:4px">오늘 박스에서 터짐</div><div class="cc-grid">'+d.burst.map(x=>chip(x,true)).join('')+'</div>':'';
   el.innerHTML=d.items.length?d.items.map(x=>chip(x,false)).join(''):'지금은 없습니다';
 }
 
