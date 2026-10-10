@@ -53,7 +53,7 @@ def text_now(db: Session, k: int = 8) -> str | None:
         ls = lead_state(db)
         leads = sorted([(c, v) for c, v in sc["scores"].items() if v.get("lead") and not v.get("buy")], key=lambda cv: -(cv[1].get("rs") or 0))
         if leads:
-            lead_lines.append(f"🔥 <b>주도주 RS 95↑</b> (V1.0 아님 · 이번 장 한정 · 거래당 위험 0.10% · 최대 2종목) — " + ("켜짐" if ls["on"] else f"꺼짐: {ls['why']}")
+            lead_lines.append(f"🔥 <b>주도주 · 강도 최상위(RS 95↑)</b> — 기본 신호와 별도로 소량 · 이번 장 한정 · 거래당 위험 0.10% · 2종목까지 — " + ("켜짐" if ls["on"] else f"쉬는 중: {ls['why']}")
                               + (f" · ⚠️ 경고: {ls['warn']}" if ls.get("warn") else ""))
             for c, v in leads[:5]:
                 lead_lines.append(f"  · <b>{names.get(c, c)}</b> RS {v.get('rs') or 0:.0f} · 스탑로스 {v['stop']:,.0f} (-{v['risk'] * 100:.1f}%)")

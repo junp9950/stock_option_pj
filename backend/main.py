@@ -2086,7 +2086,7 @@ function renderWsList(){
     else tg=`${KIND[x.kind]||''}${x.level?' '+Math.round(x.level).toLocaleString():''}${x.note?' · '+x.note:''}`;
     const sub=_ws.tab==='held'&&x.gain!=null?`<div class="ws-tg" style="text-align:right">수익 ${x.gain>0?'+':''}${x.gain}%</div>`:'';
     return `<div class="ws-item${x.code===_ws.code?' on':''}" data-c="${x.code}" onclick="wsOpen('${x.code}','${x.name.replace(/'/g,'')}')">${wsAv(x.code,x.name)}
-      <div class="ws-txt"><div class="ws-nm"><span class="n">${x.name}</span>${(x.lane==='entry'&&_ws.tab==='entry'&&x.score!=null&&x.score>=6)?`<span class="b" style="border-color:var(--blue);color:var(--blue)" title="종가 진입 점수 ${x.score}/7">${x.rr?'✅ ':''}매수</span>`:''}</div><div class="ws-tg" title="${tg.replace(/"/g,'')}">${tg}</div></div>
+      <div class="ws-txt"><div class="ws-nm"><span class="n">${x.name}</span>${(x.lane==='entry'&&_ws.tab==='entry'&&x.score!=null&&x.score>=6)?`<span class="b" style="border-color:var(--blue);color:var(--blue)" title="종가 진입 점수 ${x.score}/7">${x.rr?'✅ ':''}매수</span>`:''}${(x.lead&&x.lane==='entry'&&_ws.tab==='entry')?`<span class="b" style="border-color:#e8590c;color:#e8590c" title="강도 최상위 주도주 — 기본 신호와 별도로 소량 (거래당 위험 0.10%, 2종목까지)">🔥 주도주</span>`:''}</div><div class="ws-tg" title="${tg.replace(/"/g,'')}">${tg}</div></div>
       <div class="ws-px">${x.close?Math.round(x.close).toLocaleString():'-'}${_ws.tab==='track'?`<div style="color:${x.gain>0?'var(--up)':x.gain<0?'var(--down)':'var(--muted)'}" title="진입 뒤">${x.gain>0?'+':''}${x.gain}%</div>`:`<div style="color:${x.chg>0?'var(--up)':x.chg<0?'var(--down)':'var(--muted)'}">${x.chg>0?'+':''}${(x.chg||0).toFixed(2)}%</div>`}${sub}</div></div>`;
   };
   if(_ws.tab==='held'){ const a=L.filter(x=>!x.long), b=L.filter(x=>x.long);

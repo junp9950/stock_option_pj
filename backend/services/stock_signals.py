@@ -358,7 +358,7 @@ def workspace_list(db: Session) -> dict:
     from backend.services.result_cache import cached  # noqa: PLC0415
     now = datetime.now(ZoneInfo("Asia/Seoul"))
     if not (is_trading_day(now.date()) and 9 <= now.hour < 16):
-        return cached("workspace_list_v11", (), db, lambda: _workspace_list(db))
+        return cached("workspace_list_v12", (), db, lambda: _workspace_list(db))
     return _workspace_list(db)
 
 
@@ -416,7 +416,7 @@ def _workspace_list(db: Session) -> dict:
             _ls = {"on": True}
         for c_, v_ in sorted(scores.items(), key=lambda kv: -(kv[1].get("rs") or 0)):
             if v_.get("lead") and not v_.get("buy"):
-                add(c_, ("🔥 주도주 RS 95↑ · V1.0 아님 · 거래당 위험 0.10% · 최대 2종목" + (f" · ⚠️ {_ls['warn']}" if _ls.get("warn") else "")) if _ls.get("on") else f"주도주 (지금 꺼짐 — {_ls.get('why', '')})")
+                add(c_, (f"🔥 주도주 · 강도 최상위 RS {v_.get('rs') or 0:.0f} · 기본 신호와 별도로 소량 (거래당 위험 0.10%, 2종목까지)" + (f" · ⚠️ {_ls['warn']}" if _ls.get("warn") else "")) if _ls.get("on") else f"주도주 (지금 쉬는 중 — {_ls.get('why', '')})")
     except Exception:  # noqa: BLE001
         pass
     try:      # 급락 날 줍기 (시장 -2%↓ 날 같이 빠진 센 종목 · 손절 20일선 · 크기 절반)
