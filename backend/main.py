@@ -169,7 +169,7 @@ select{background:#21262d;border:1px solid #30363d;color:#c9d1d9;padding:6px 10p
 .hc-row .v{font-size:16px;font-weight:700;color:var(--text);white-space:nowrap}
 .hc-badge{font-size:11px;font-weight:700;padding:2px 8px;border-radius:10px;white-space:nowrap;border:1px solid}
 .hc-badge.g{color:var(--blue);border-color:rgba(88,166,255,.45);background:rgba(56,139,253,.10)}
-.hc-badge.n{color:#0d1117;background:#e8740c;border-color:#e8740c}   /* 중립 = 주황(사용자 10/10: 노랑은 초록과 안 구분됨) — 점선 테두리·■ 글자로도 구분 */
+.hc-badge.n{color:#0d1117;background:#e8740c;border-color:#e8740c}   /* 중립 = 주황(사용자 10/10: 노랑은 초록과 안 구분됨) — ■ 글자로도 구분 */
 .hc-badge.b{color:var(--orange);border-color:rgba(240,136,62,.5);background:rgba(240,136,62,.10)}
 /* 양호·약화가 한눈에 (2026-10-10, 사용자 고름: 양호 초록 · 약화 빨강 — 노랑과 안 헷갈리게 진한 초록) · 중립 = 회색 테두리만. 색약이라 ▲■▼ 모양·글자도 같이 */
 .hc-badge.g{background:#2ea043;color:#fff;border-color:#2ea043}.hc-badge.b{background:#da3633;color:#fff;border-color:#da3633}
@@ -194,7 +194,7 @@ select{background:#21262d;border:1px solid #30363d;color:#c9d1d9;padding:6px 10p
 #hc-market .hc-row .v{font-size:14px;text-align:right}#hc-market .hc-row .hc-badge{justify-self:end;font-size:10.5px;padding:1px 6px}
 #hc-market .hc-row.k-g{background:linear-gradient(90deg,rgba(35,134,54,.45),rgba(35,134,54,.10));border-color:#2ea043;box-shadow:inset 5px 0 0 #2ea043;padding-left:12px}#hc-market .hc-row.k-g .v{color:#7ee787;font-weight:800}#hc-market .hc-row.k-g .t b{color:#fff}
 #hc-market .hc-row.k-b{background:linear-gradient(90deg,rgba(218,54,51,.45),rgba(218,54,51,.10));border-color:#f85149;box-shadow:inset 5px 0 0 #f85149;padding-left:12px}#hc-market .hc-row.k-b .v{color:#ffa198;font-weight:800}#hc-market .hc-row.k-b .t b{color:#fff}
-#hc-market .hc-row.k-n{background:linear-gradient(90deg,rgba(232,116,12,.32),rgba(232,116,12,.07));border-color:#e8740c;border-style:dashed;box-shadow:inset 5px 0 0 #e8740c;padding-left:12px}#hc-market .hc-row.k-n .v{color:#ffb070;font-weight:800}#hc-market .hc-row.k-n .t b{color:#fff}#hc-market .hc-row .hc-badge{font-size:11px;padding:2px 8px}
+#hc-market .hc-row.k-n{background:linear-gradient(90deg,rgba(232,116,12,.32),rgba(232,116,12,.07));border-color:#e8740c;box-shadow:inset 5px 0 0 #e8740c;padding-left:12px}#hc-market .hc-row.k-n .v{color:#ffb070;font-weight:800}#hc-market .hc-row.k-n .t b{color:#fff}#hc-market .hc-row .hc-badge{font-size:11px;padding:2px 8px}
 .lwbox>.lwc{height:clamp(300px,calc(100vh - 512px),720px)}
 }
 @media(max-width:900px){.htop{grid-template-columns:1fr}.hc-head{font-size:18px}.hc-num .v{font-size:19px}.hcard{padding:16px}}
