@@ -1831,6 +1831,7 @@ def get_dip_live(db: Session = Depends(get_db)):
         r["index_today"] = index_today()
     except Exception:  # noqa: BLE001
         pass
+    r["flows"] = _market_flows(db)      # 장중 잠정치 반영 (2026-10-11)
     return r
 
 

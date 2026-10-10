@@ -346,6 +346,17 @@ def start_scheduler() -> BackgroundScheduler:
             logger.error("시장 수급 실패: %s", type(exc).__name__)
         finally:
             db.close()
+    def _market_flows_live_job() -> None:
+        from backend.collector.market_investor import collect_live  # noqa: PLC0415
+        db = SessionLocal()
+        try:
+            collect_live(db)
+        except Exception as exc:  # noqa: BLE001
+            logger.error("장중 수급 실패: %s", type(exc).__name__)
+        finally:
+            db.close()
+    # 장중 5분마다 오늘 잠정치 (09:00~15:40, 확정치는 16:05에 덮어씀)
+    scheduler.add_job(_market_flows_live_job, 'cron', day_of_week='mon-fri', hour='9-15', minute='*/5', id='market_flows_live', replace_existing=True, max_instances=1)
     # 16:05·18:05 코스피·코스닥 투자자별 순매수 (KIS, 최근 300거래일 덮어쓰기) — 시장 카드 '수급' (2026-10-11)
     scheduler.add_job(_market_flows_job, 'cron', day_of_week='mon-fri', hour='16,18', minute=5, id='market_flows', replace_existing=True, max_instances=1)
 
