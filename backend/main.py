@@ -940,11 +940,13 @@ function renderHomeTop(d, live){
   const good=rows.filter(r=>r.k==='g').length;
   let vt, vk;
   // 속 약해짐 = '꺾임'이 아니라 '곧 흔들림' (12년: 20일 안 20일선 이탈 88% vs 76%, 낙폭은 같고 20일 뒤 시장은 더 오름) — 2026-10-09
-  if(all.state==='하락'){ vt='쉬는 날'; vk='b'; } else if(br.weak||br.narrow){ vt='곧 흔들릴 수 있음 · 쫓지 말고 빠지는 날 줍기'; vk='n'; } else if(all.state==='상승'){ vt='진입 가능'; vk='g'; } else { vt='골라서 작게'; vk='n'; }
+  // 세 탭 같은 문구 (2026-10-10): 매수 켜고 끄기 = 시장 국면 하나 · 폭 좁아짐은 아래 흰 줄
+  const _mv={state:all.state,weak:br.weak,narrow:br.narrow};
+  vt=mvText(_mv); vk=all.state==='하락'?'b':all.state==='상승'?'g':'n';
   const when=live?`장중 ${live.as_of}`:`${(d.as_of||'').slice(5).replace('-','/')} 마감 기준`;
   document.getElementById('hc-market').innerHTML=`<div class="hc-h"><b>시장 상태</b><span>${when}</span></div>
     <div class="hc-verdict"><span class="hc-badge ${B[vk][0]}">${B[vk][1].split(' ')[0]}</span><b>${vt}</b></div>
-    <div class="hc-sum">근거 ${rows.length}개 중 ${good}개 양호 · 하락장은 쉬고, 시장이 -2% 넘게 빠지는 날은 센 종목 줍기</div>
+    <div class="hc-sum">${mvCaution(_mv)?`<span style="color:#e6edf3">${mvCaution(_mv)}</span> · `:''}근거 ${rows.length}개 중 ${good}개 양호 · 매수 켜고 끄기는 시장 국면만 봄</div>
     <div class="hc-bars">${rows.map(r=>`<i class="${r.k==='g'?'g':r.k==='b'?'b':''}"></i>`).join('')}</div>
     ${rows.map(r=>`<div class="hc-row k-${r.k}" title="${r.t} — ${r.sub}"><div class="t"><b>${r.t}</b><span>${r.sub}</span></div><div class="v">${r.v}</div><span class="hc-badge ${B[r.k][0]}">${r.bt||B[r.k][1]}</span></div>`).join('')}`;
   const ix=k=>{ const x=it[k]; if(!x) return ''; const c=x.pct>=0?'var(--up)':'var(--down)';
@@ -952,7 +954,7 @@ function renderHomeTop(d, live){
   const st=d.sectors_today||{}, pill=(x,c)=>`<span class="hc-pill ${c}" title="20일 순위 ${x.rank||'-'}위 (10일 전 ${x.rank_10ago||'-'}위)">${x.family} <b style="color:${x.chg>=0?'var(--up)':'var(--down)'}">${sg(x.chg)}%</b></span>`;
   document.getElementById('hc-today').innerHTML=`<div class="hc-h"><b>오늘</b><span class="hc-tg"><button data-s="KOSPI" onclick="hcSpark('KOSPI')">코스피</button><button data-s="KOSDAQ" onclick="hcSpark('KOSDAQ')">코스닥</button></span></div>
     <div class="hc-spark" id="hc-spark"></div><div class="hc-sx" id="hc-sx"></div>
-    <div class="hc-head">${md.title||'판단 준비 중'}</div><div class="hc-do">${md.do?'→ '+md.do:''}</div>
+    <div class="hc-head">${md.title?'종베·스윙 자리: '+md.title:'판단 준비 중'}</div><div class="hc-do">${md.do?'→ '+md.do:''}</div>
     <div class="hc-nums">${ix('코스피')}${ix('코스닥')}${br.adv_pct!=null?`<div class="hc-num"><div class="l">오른 종목 비율</div><div class="v">${br.adv_pct}%</div><div class="s" style="color:var(--muted)">조용한 종목 빼고</div></div>`:''}</div>
     ${(st.strong||[]).length?`<div class="hc-flow"><span class="k">강함</span><div>${st.strong.map(x=>pill(x,'up')).join('')}</div><span class="k">약함</span><div>${(st.weak||[]).map(x=>pill(x,'dn')).join('')}</div></div>`:''}`;
 }
@@ -1152,10 +1154,7 @@ async function loadJongbe(){
   const mk=document.getElementById('jb-market');
   if(!d){ mk.textContent='불러오지 못했습니다'; return; }
   const st=(d.market&&d.market.state)||'-';
-  mk.style.background=d.market_ok?'rgba(63,185,80,.10)':'rgba(248,81,73,.12)';
-  mk.style.borderColor=d.market_ok?'#3fb950':'#f85149';
-  mk.innerHTML=d.market_ok?`<b style="color:#3fb950">시장 ${st}</b> <span style="color:#e6edf3;margin-left:6px">종베 가능</span>`
-    :`<b style="color:#f85149">시장 ${st} · 종베 쉬기</b>`;
+  mvBanner(mk);      // 세 탭 같은 문구 (2026-10-10)
   document.getElementById('jb-date').textContent=`· ${d.trading_date} 장 마감 기준`;
   const stc={'과열':'#f85149','주의':'#d29922'};
   document.getElementById('jb-fams').innerHTML=d.families.map(f=>{
@@ -2064,22 +2063,21 @@ function renderVolumeRecords(){
   </tr>`).join('');
 }
 
-function renderMarket(m){
-  const el = document.getElementById('pb-market');
-  if(!m){ el.hidden = true; return; }
-  const style = {
-    '상승': {bg:'rgba(63,185,80,.10)', bd:'#3fb950', msg:'매매 가능'},
-    '횡보': {bg:'rgba(210,153,34,.10)', bd:'#d29922', msg:'매매 가능 · 점수 높은 종목 위주'},
-    '하락': {bg:'rgba(248,81,73,.12)', bd:'#f85149', msg:'매매 쉬기'},
-  }[m.state];
-  el.style.background = style.bg;
-  el.style.borderColor = style.bd;
-  const sign = n => (n>=0?'+':'')+n.toFixed(1)+'%';
-  el.innerHTML = `<b style="color:${style.bd};font-size:15px">시장 ${m.state}</b>
-    <span style="color:#e6edf3;margin-left:8px">${style.msg}</span>
-    <div class="ts" style="margin-top:4px">전종목 평균 지수 · 20일선 대비 ${sign(m.vs_ma20_pct)} · 최근 20일 ${sign(m.cum20_pct)} · ${m.as_of} 마감 기준</div>`;
-  el.hidden = false;
+// 세 탭 공통 시장 문구 (2026-10-10): 매수 켜고 끄기 = 시장 국면 하나 · 시장 폭 좁아짐은 흰 줄 참고 — 색은 초록(가능)·흰(횡보)·빨강(쉬기)
+const MV_STYLE={'상승':{bg:'rgba(35,134,54,.14)',bd:'#2ea043',msg:'매매 가능'},'횡보':{bg:'rgba(230,237,243,.05)',bd:'#e6edf3',msg:'매매 가능 · 점수 높은 종목 위주'},'하락':{bg:'rgba(218,54,51,.14)',bd:'#da3633',msg:'쉬기'}};
+function mvText(m){ return m&&MV_STYLE[m.state]?`시장 ${m.state} · ${MV_STYLE[m.state].msg}`:'시장 판단 준비 중'; }
+function mvCaution(m){ return m&&m.state!=='하락'&&(m.weak||m.narrow)?'■ 시장 폭 좁아짐 → 쫓지 말고 빠지는 날 줍기':''; }
+async function mvBanner(el){
+  const m=await fetch(`${API}/market/verdict`).then(r=>r.ok?r.json():null).catch(()=>null);
+  if(!el) return m;
+  if(!m||!MV_STYLE[m.state]){ el.hidden=true; return m; }
+  const st=MV_STYLE[m.state], sign=n=>n==null?'-':(n>=0?'+':'')+n.toFixed(1)+'%', cau=mvCaution(m);
+  el.style.background=st.bg; el.style.borderColor=st.bd;
+  el.innerHTML=`<b style="color:${st.bd};font-size:15px">${mvText(m)}</b>${cau?`<div style="color:#e6edf3;font-size:13px;margin-top:4px">${cau}</div>`:''}
+    <div class="ts" style="margin-top:4px">전종목 평균 지수 · 20일선 대비 ${sign(m.vs_ma20_pct)} · 최근 20일 ${sign(m.cum20_pct)} · ${m.as_of||''} 마감 기준</div>`;
+  el.hidden=false; return m;
 }
+function renderMarket(m){ mvBanner(document.getElementById('pb-market')); }
 
 let _avwapNote='';
 function clearChartCanvas(){   // 열 때 이전 종목 차트가 남아 보이던 것 지움 (2026-10-07)

@@ -1926,6 +1926,20 @@ def _sectors_today(db: Session) -> dict:
         return {}
 
 
+@router.get("/market/verdict")
+def get_market_verdict(db: Session = Depends(get_db)):
+    """세 탭(오늘·차트 후보·종베) 공통 시장 문구 (2026-10-10 "시장 상승·매매 가능이 맞나?"):
+    매수 켜고 끄기 = 시장 국면 하나(12년 검증된 필터). 시장 폭 좁아짐은 참고 한 줄(흔들릴 확률 88% vs 76%, 낙폭 같음, 20일 뒤 더 오름)."""
+    from backend.screener.market_regime import current_regime  # noqa: PLC0415
+    from backend.services.stock_signals import market_breadth  # noqa: PLC0415
+    m = current_regime(db) or {}
+    try:
+        b = market_breadth(db) or {}
+    except Exception:  # noqa: BLE001
+        b = {}
+    return {**m, "weak": bool(b.get("weak")), "narrow": bool(b.get("narrow")), "breadth_pct": b.get("pct")}
+
+
 @router.get("/jongbe/scoreboard")
 def get_jongbe_scoreboard(days: int = 20, db: Session = Depends(get_db)):
     """종베 탭 성적표 (2026-10-10): 최근 N거래일 사이트 종베 A·B등급 vs 내 종베(user_jongbe) — 산 값 대비 다음 날 시가·종가, 종가로 이긴 비율.
