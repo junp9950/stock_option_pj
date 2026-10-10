@@ -263,7 +263,10 @@ select{background:#21262d;border:1px solid #30363d;color:#c9d1d9;padding:6px 10p
 .cal-c .top{font-size:10px;padding:3px 4px;flex-direction:column;gap:0}.cal-c .top .v{font-size:10px}.cal-c .sub{font-size:9.5px;flex-direction:column;gap:0}.cal-c .sub.s2{display:none}.cal-c.off{font-size:10px}.cal-c .hn{font-size:9px}.cal-c .top .v,.cal-c .sub .v{display:none}.cal-c{min-height:70px}}
 
 /* 캘린더 (2026-10-11): 왼쪽 이번 주 일정 · 가운데 달력(지난 날 = 강한 테마, 앞으로 = 중요 일정) · 오른쪽 누른 날 자세히 */
-.cal-layout{display:grid;grid-template-columns:minmax(250px,290px) minmax(0,1180px) minmax(280px,340px);gap:18px;justify-content:center;align-items:start}
+.cal-layout{display:grid;grid-template-columns:minmax(0,1fr) 360px;gap:18px;max-width:1900px;margin:0 auto;align-items:start}
+.cs-tabs{display:flex;gap:4px;margin-bottom:12px;background:#0d1117;border:1px solid #262c36;border-radius:10px;padding:3px}
+.cs-tabs button{flex:1;background:none;border:0;color:#8b949e;border-radius:8px;padding:7px 0;font-size:13px;cursor:pointer}
+.cs-tabs button.on{background:#1c2330;color:#e6edf3;font-weight:600}
 .cal-main{min-width:0}.cal-main .cal-wrap,.cal-main .cal-det{max-width:none}
 .ev-side{position:sticky;top:12px;max-height:calc(100vh - 24px);overflow:auto;background:#11161d;border:1px solid #262c36;border-radius:12px;padding:14px 14px 10px;scrollbar-width:thin}
 .ev-side .eh{display:flex;align-items:baseline;gap:8px;margin-bottom:8px}.ev-side .eh b{font-size:15px;color:#e6edf3}.ev-side .eh .ts{margin-left:auto}
@@ -285,15 +288,14 @@ select{background:#21262d;border:1px solid #30363d;color:#c9d1d9;padding:6px 10p
 .ev-r .v b{color:#c9d1d9;font-weight:600}
 .ev-empty{color:#8b949e;font-size:12px;padding:10px 0}
 .cal-c .evs{display:flex;flex-direction:column;gap:2px;margin-top:2px;min-width:0}
-.cal-c .evl{display:flex;gap:4px;align-items:baseline;font-size:11.5px;color:#c9d1d9;min-width:0;white-space:nowrap}
+.cal-c .evl{display:flex;gap:4px;align-items:baseline;font-size:12px;color:#c9d1d9;min-width:0;white-space:nowrap}
 .cal-c .evl .t{overflow:hidden;text-overflow:ellipsis}.cal-c .evl .cn{font-size:9.5px;font-weight:700;border:1px solid #3d4a5c;border-radius:3px;padding:0 2px;color:#adbac7;line-height:13px;flex:none}
 .cal-c .evl .cn.kr{border-color:#6e4048;color:#f0a5ad}.cal-c .evl .tm{margin-left:auto;color:#8b949e;font-size:10.5px;flex:none;padding-left:3px}
 .cal-c .evm{font-size:11px;color:#8b949e}
 .cal-c.evd{cursor:pointer;justify-content:flex-start}.cal-c.evd:hover{border-color:#3d4a5c}
 .ev-side .cal-det{margin:0;background:none;border:0;padding:0;max-width:none}.ev-side .cal-det .rows{grid-template-columns:1fr}
 .ev-side .sh{font-size:12px;color:#8b949e;margin:12px 0 6px;font-weight:600}
-@media(max-width:1500px){.cal-layout{grid-template-columns:minmax(0,1fr) minmax(0,1fr)}.cal-main{grid-column:1/-1;order:-1}.ev-side{position:static;max-height:none}}
-@media(max-width:760px){.cal-layout{grid-template-columns:1fr}}
+@media(max-width:1100px){.cal-layout{grid-template-columns:1fr}.ev-side{position:static;max-height:none}}
 
 .why{margin:0 0 12px;color:#8b949e;font-size:12px;line-height:1.65}
 .why summary{cursor:pointer;color:#8b949e;font-size:12px;width:max-content}
@@ -662,7 +664,6 @@ select{background:#21262d;border:1px solid #30363d;color:#c9d1d9;padding:6px 10p
 <!-- 섹터 캘린더 탭 -->
 <div id="panel-calendar" class="panel content">
  <div class="cal-layout">
-  <aside class="ev-side" id="ev-week"><span class="ts">일정 불러오는 중…</span></aside>
   <div class="cal-main">
   <div class="cal-wrap">
     <div class="cal-top">
@@ -674,7 +675,11 @@ select{background:#21262d;border:1px solid #30363d;color:#c9d1d9;padding:6px 10p
     <div id="cal-grid" class="cal-grid"></div>
   </div>
   </div>
-  <aside class="ev-side" id="cal-detail"><span class="ts">날짜를 누르면 그날 섹터·일정</span></aside>
+  <aside class="ev-side" id="cal-side">
+    <div class="cs-tabs"><button id="cs-t-week" class="on" onclick="calSide('week')">이번 주 일정</button><button id="cs-t-day" onclick="calSide('day')">누른 날</button></div>
+    <div id="ev-week"><span class="ts">일정 불러오는 중…</span></div>
+    <div id="cal-detail" style="display:none"><span class="ts">날짜를 누르면 그날 섹터·일정</span></div>
+  </aside>
  </div>
 </div>
 
@@ -1732,15 +1737,21 @@ async function evRender(){
   const ws=evYmd(mon), we=evYmd(sun);
   const wg=group(wItems.filter(e=>e.ev_date>=ws&&e.ev_date<=we&&evPass(e)));
   const md=(d)=>`${d.getMonth()+1}/${d.getDate()}`;
-  document.getElementById('ev-week').innerHTML=`<div class="eh"><b>${next?'다음 주':'이번 주'} 일정</b><span class="ts">${md(mon)} ~ ${md(sun)} · 한국 시간</span></div>${evFilterBar()}
+  document.getElementById('cs-t-week').textContent=next?'다음 주 일정':'이번 주 일정';
+  document.getElementById('ev-week').innerHTML=`<div class="eh"><b>${md(mon)} ~ ${md(sun)}</b><span class="ts">한국 시간</span></div>${evFilterBar()}
     ${Object.keys(wg).sort().map(k=>evDay(k,wg[k],true)).join('')||'<div class="ev-empty">일정 없음</div>'}
     <div class="ts" style="margin-top:8px;line-height:1.5">밤 = 미국 장 시작 전 발표 · 새벽 = 미국 장 마감 후 발표<br>한국 실적은 회사가 공시한 실적 설명회 날짜</div>`;
+}
+function calSide(k){ // 오른쪽 칸: 이번 주 일정 ↔ 누른 날
+  document.getElementById('ev-week').style.display=k==='week'?'':'none';
+  document.getElementById('cal-detail').style.display=k==='day'?'':'none';
+  document.getElementById('cs-t-week').classList.toggle('on',k==='week'); document.getElementById('cs-t-day').classList.toggle('on',k==='day');
 }
 function calMove(k){
   const ms=[...new Set(_cal.days.map(d=>d.date.slice(0,7)))];
   const [ly,lm]=ms[ms.length-1].split('-').map(Number); ms.push(evYmd(new Date(ly,lm,1)).slice(0,7)); // 다음 달은 일정만
   const i=ms.indexOf(_calMonth)+k; if(i<0||i>=ms.length) return;
-  _calMonth=ms[i]; document.getElementById('cal-detail').innerHTML='<span class="ts">날짜를 누르면 그날 섹터·일정</span>'; renderCal();
+  _calMonth=ms[i]; document.getElementById('cal-detail').innerHTML='<span class="ts">날짜를 누르면 그날 섹터·일정</span>'; calSide('week'); renderCal();
 }
 function calHeat(v){ // 등락이 클수록 진한 빨강
   const k=Math.max(0,Math.min(1,(v-2)/10));
@@ -1806,7 +1817,7 @@ async function calPick(date, quiet){
       <div class="ts" style="margin-top:2px">종목 중 ${t.up_pct}% 상승</div>
       <div class="l">${t.leaders.map(l=>`<span>${l.name} ${l.chg>=0?'+':''}${l.chg}%</span>`).join('')}</div></div>`).join('')}</div>`:''}
     ${!d&&!evs.length?'<div class="ev-empty">이날은 기록·일정이 없습니다</div>':''}</div>`;
-  if(!quiet&&window.innerWidth<=1500) box.scrollIntoView({behavior:'smooth',block:'nearest'});
+  if(!quiet){ calSide('day'); if(window.innerWidth<=1100) box.scrollIntoView({behavior:'smooth',block:'nearest'}); }
 }
 
 async function loadRotation(){
