@@ -35,7 +35,7 @@ CONFIG = {"signal": "stock_signals._close_scores buy (S0)", "order": "RS desc", 
 # 운영(10/10 GPT·사용자 합의 수정): 거래당 위험 0.10% · 최대 2종목. 상승장 아님 → 신규 중단. 실제 L 누적 R 고점 대비 −15R → 실매매 정지(계좌 약 −1.5%, 사용자 '/주도주 켜기' 전까지 기록만).
 #   −8R · 최근 30건(Lsh) 평균 R ≤ −0.10 → 경고만(자동으로 끄지 않음 — 승률 18%라 성적 기반 켜고 끄기는 12년 검증에서 전부 엇갈림).
 #   사용자가 직접 끄고 켜면(텔레그램 /주도주 끄기·켜기) 그때 30건 평균·낙폭과 함께 기록 → 나중에 사람 판단이 도움이 됐는지 평가.
-# Z = Lazy식 모멘텀 BUY 모방(종가가 직전 20일 고가 위 · 거래량 20일 평균 1.9배↑ · 그날 +5%↑ · 거래대금 30억↑), V1.0과 같은 체결·손절·정리로 종목 고르기만 비교.
+# Z = 모멘텀 돌파 비교 규칙(종가가 직전 20일 고가 위 · 거래량 20일 평균 1.9배↑ · 그날 +5%↑ · 거래대금 30억↑), V1.0과 같은 체결·손절·정리로 종목 고르기만 비교.
 LEAD = {"risk": 0.0010, "slots": 2, "roll": 30, "warn_mean": -0.10, "warn_R": -8.0, "stop_R": -15.0}
 CONFIG_HASH = hashlib.sha256(json.dumps(CONFIG, sort_keys=True).encode()).hexdigest()[:12]
 STATE_KEY = "fwd_v1_state"
@@ -217,8 +217,8 @@ def _step(a: dict, name: str, d, bars: dict, cands: list[dict], entry: str, slot
             "selected": selected, "skipped": skipped[:30], "notes": notes}
 
 
-def _lazy_cands(db: Session, latest) -> list[dict]:
-    """Lazy식 모멘텀 BUY 모방: 종가 > 직전 20일 고가 · 거래량 ≥ 직전 20일 평균 × 1.9 · 그날 +5%↑ · 거래대금 20일 평균 30억↑. RS 순."""
+def _momo_cands(db: Session, latest) -> list[dict]:
+    """모멘텀 돌파 비교 규칙: 종가 > 직전 20일 고가 · 거래량 ≥ 직전 20일 평균 × 1.9 · 그날 +5%↑ · 거래대금 20일 평균 30억↑. RS 순."""
     from backend.services.stock_signals import _close_frames  # noqa: PLC0415
     P = _close_frames(db, latest)
     C, H, L, V, TV = P["c"], P["h"], P["l"], P["v"], P["tv"]
@@ -298,8 +298,8 @@ def record_close(db: Session, asof: date | None = None) -> str:
     snap = _load(db, latest, "1512")
     snap_c = (snap or {}).get("cands") or []
     snap_l = (snap or {}).get("leads") or []
-    lazy_c = _lazy_cands(db, latest)
-    _save(db, latest, "close", {"config": CONFIG_HASH, "universe": len(sc), "bull": bull, "cands": close_c, "leads": close_l, "lazy": lazy_c, "snapshot_missing": snap is None})
+    momo_c = _momo_cands(db, latest)
+    _save(db, latest, "close", {"config": CONFIG_HASH, "universe": len(sc), "bull": bull, "cands": close_c, "leads": close_l, "momo": momo_c, "snapshot_missing": snap is None})
     st = _get(db, STATE_KEY, {}) or {}
     if st.get("last") == str(latest):
         return "이미 진행함"
@@ -309,7 +309,7 @@ def record_close(db: Session, asof: date | None = None) -> str:
     codes = set()
     for k in ACC:
         codes |= set(st[k]["pos"]) | {p["code"] for p in st[k]["pending"]}
-    codes |= {x["code"] for x in close_c + snap_c + snap_l + close_l + lazy_c}
+    codes |= {x["code"] for x in close_c + snap_c + snap_l + close_l + momo_c}
     bars = _bars(db, sorted(codes), latest)
     lead_src = snap_l if snap is not None else close_l          # 주도주도 15:12 신호 기준(없으면 종가 신호)
     ls = lead_state(db, st)
@@ -318,7 +318,7 @@ def record_close(db: Session, asof: date | None = None) -> str:
            _step(st["X"], "X", latest, bars, close_c if bull else [], "close"),
            _step(st["L"], "L", latest, bars, lead_src if (bull and ls["on"]) else [], "close", slots=LEAD["slots"], rp=LEAD["risk"]),
            _step(st["Lsh"], "Lsh", latest, bars, lead_src if bull else [], "close", slots=999, rp=0.0005),
-           _step(st["Z"], "Z", latest, bars, lazy_c, "close")]
+           _step(st["Z"], "Z", latest, bars, momo_c, "close")]
     # 주도주: 최근 30건 Lsh 평균 R(경고용) · 실제 L 누적 R 고점 대비 −15R → 실매매 정지
     tr = st["Lsh"]["trades"][-LEAD["roll"]:]
     if len(tr) >= LEAD["roll"]:
@@ -333,7 +333,7 @@ def record_close(db: Session, asof: date | None = None) -> str:
     s1, s2 = {x["code"] for x in snap_c}, {x["code"] for x in close_c}
     jac = len(s1 & s2) / len(s1 | s2) if (s1 | s2) else None
     _save(db, latest, "acct", {"config": CONFIG_HASH, "jaccard": jac, "snapshot_missing": snap is None, "accounts": rep})
-    return (f"{'상승장' if bull else '하락장(신규 없음)'} · 종가 후보 {len(close_c)} · 15:12 후보 {len(snap_c)} · 주도주 {len(lead_src)} · Lazy식 {len(lazy_c)}"
+    return (f"{'상승장' if bull else '하락장(신규 없음)'} · 종가 후보 {len(close_c)} · 15:12 후보 {len(snap_c)} · 주도주 {len(lead_src)} · 모멘텀 돌파 {len(momo_c)}"
             + (f" · 일치 {jac:.2f}" if jac is not None else "") + " · " + " ".join(f"{r['acct']} {r['equity']:.4f}" for r in rep))
 
 
@@ -366,7 +366,7 @@ def monthly_text(db: Session, ym: str | None = None) -> str | None:
            f"거래일 {len(days)} · 15:12 스냅샷 빠짐 {miss}일 · 15:12↔종가 후보 일치율 평균 {sum(jac) / len(jac):.2f}" if jac else f"거래일 {len(days)} · 15:12 스냅샷 빠짐 {miss}일",
            f"상위 10 교체율(P vs X 산 종목) 평균 {sum(flips) / len(flips):.2f}" if flips else ""]
     for k, nm in (("P", "P 기본(15:12 신호·종가)"), ("S", "S 보조(종가 신호·다음 날 시가)"), ("X", "X 진단(같은 종가)"),
-                  ("L", "L 주도주 실제(0.10%·2종목)"), ("Lsh", "L 주도주 전수 기록"), ("Z", "Z Lazy 모방 LAZY_CLONE(우리 추정 규칙·같은 체결 — Lazy 실제 신호 아님)")):
+                  ("L", "L 주도주 실제(0.10%·2종목)"), ("Lsh", "L 주도주 전수 기록"), ("Z", "Z 모멘텀 돌파 비교(20일 고점 돌파·거래 1.9배·+5% · 같은 체결)")):
         a = st.get(k) or {}
         tr = [t for t in a.get("trades", []) if t["d1"][:7] == ym]
         alltr = a.get("trades", [])

@@ -135,7 +135,7 @@ select{background:#21262d;border:1px solid #30363d;color:#c9d1d9;padding:6px 10p
 .cp-row{display:flex;justify-content:space-between;gap:8px;padding:6px 2px;border-bottom:1px solid var(--line2);font-size:12px}
 .cp-row .k{color:var(--muted)}.cp-row .v{color:var(--text);text-align:right}
 @media(max-width:900px){.cm-body{flex-direction:column}.cm-panel{width:100%}}
-/* 첫 화면 작업대: 종목 목록 | 신호 찍힌 차트 | 패널 (2026-10-09, Lazy Alpha식) */
+/* 첫 화면 작업대: 종목 목록 | 신호 찍힌 차트 | 패널 (2026-10-09, 카드형 작업대) */
 .ws{display:grid;grid-template-columns:270px minmax(0,1fr) 320px;gap:14px;align-items:start;margin-bottom:14px}
 .ws-list,.ws-main{background:var(--card);border:1px solid var(--line);border-radius:10px;padding:10px}
 .ws-list{max-height:none;display:flex;flex-direction:column;min-height:0}
@@ -620,7 +620,7 @@ select{background:#21262d;border:1px solid #30363d;color:#c9d1d9;padding:6px 10p
 <!-- 눌림목 레이더 탭 -->
 <!-- 오늘 (대시보드, 2026-10-06) -->
 <div id="panel-home" class="panel active content">
-  <!-- 첫 화면 위: '오늘' 카드 + '시장 상태' 카드 (2026-10-09 "Lazy Alpha 라운지처럼 깔끔하게") — 예전 띠·판단 상자는 숨김(아래 코드가 아직 씀) -->
+  <!-- 첫 화면 위: '오늘' 카드 + '시장 상태' 카드 (2026-10-09 "깔끔한 대시보드처럼") — 예전 띠·판단 상자는 숨김(아래 코드가 아직 씀) -->
   <div class="htop"><section class="hcard" id="hc-today"><div class="ts">불러오는 중…</div></section><section class="hcard" id="hc-market"></section></div>
   <div id="db-strip" class="mstrip" style="display:none"></div>
   <div id="db-verdict" style="display:none"></div>
@@ -2194,7 +2194,7 @@ async function jrWsOpen(code,name){
   if(!cd||!cd.candles||!cd.candles.length){ document.getElementById('jr-ws-note').textContent='차트 데이터를 못 불러왔습니다'; return; }
   _jrWs.cache={code,cd,sg}; jrWsDraw();
 }
-// 오른쪽 패널: 결론(상태 제목) 크게 · 단계 막대 · ✓/⚠ 칩 · 카드 · 세부 지표 (2026-10-09, Lazy Alpha식 배치)
+// 오른쪽 패널: 결론(상태 제목) 크게 · 단계 막대 · ✓/⚠ 칩 · 카드 · 세부 지표 (2026-10-09, 카드형pha식 배치)
 function renderStockPanel(p, target){
   const el=document.getElementById(target||'cm-panel');
   if(!p||!p.ok){el.innerHTML='';return;}

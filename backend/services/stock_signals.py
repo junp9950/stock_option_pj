@@ -643,7 +643,7 @@ def market_breadth(db: Session) -> dict:
     lvl = (1 + CH.where(TV.rolling(20).mean() >= 1e9).mean(axis=1).fillna(0) / 100).cumprod()
     idx_up = bool(lvl.iloc[-1] > lvl.iloc[-20:].mean())
     now, d10 = float(br.iloc[-1]), float(br.iloc[-1] - br.iloc[-11])
-    # 첫 화면 시장 상태 카드용 (2026-10-09 "Lazy Alpha 라운지처럼 깔끔하게"): 60일 신고가·신저가 수 · 오늘 오른 종목 비율
+    # 첫 화면 시장 상태 카드용 (2026-10-09 "깔끔한 대시보드처럼"): 60일 신고가·신저가 수 · 오늘 오른 종목 비율
     l1 = TV.rolling(20).mean().iloc[-1] >= 1e9
     hi60 = int(((C.iloc[-1] >= C.iloc[-60:].max()) & liq.iloc[-1]).sum()); lo60 = int(((C.iloc[-1] <= C.iloc[-60:].min()) & liq.iloc[-1]).sum())
     adv = float((CH.iloc[-1][l1] > 0).mean())

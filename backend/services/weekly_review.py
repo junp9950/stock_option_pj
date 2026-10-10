@@ -43,17 +43,17 @@ def log_signals(db: Session) -> str:
     except Exception as exc:  # noqa: BLE001
         logger.warning("급락 줍기 기록 실패: %s", exc)
     try:      # 비교용 뒷기록 (화면·텔레그램엔 안 보임, 2026-10-09 사용자 "뒤로 백데이터로 · 어디에 뜨게는 하지 말고")
-        log[str(latest)]["lazy"] = _lazy_today(db, latest)
+        log[str(latest)]["alt"] = _alt_today(db, latest)
     except Exception as exc:  # noqa: BLE001
-        logger.warning("Lazy식 신호 기록 실패: %s", exc)
+        logger.warning("비교용 신호 기록 실패: %s", exc)
     for k in sorted(log)[:-400]:                 # 400일만 들고 있는다
         log.pop(k)
     _put(db, LOG_KEY, log)
     return f"진입 {len(log[str(latest)]['entry'])} · 점수6↑ {len(log[str(latest)]['score'])}"
 
 
-def _lazy_today(db: Session, latest) -> dict:
-    """Lazy Alpha 툴팁 규칙을 역산한 진입·눌림 진입 (lazy_reentry.py와 같은 규칙) — 우리 신호와 앞으로의 데이터로 비교하려고 매일 남긴다.
+def _alt_today(db: Session, latest) -> dict:
+    """외부 신호 서비스 규칙을 역산한 진입·눌림 진입 (비교용) — 우리 신호와 앞으로의 데이터로 비교하려고 매일 남긴다.
     진입 = EMA8>14>21>55 정배열이 어제·오늘 유지 + (종가 21선 재돌파 또는 저가가 14·21선 0.5% 안 닿고 종가 14선 위 양봉).
     눌림 = 최근 10일 안 진입 뒤 저가가 8·14선 1% 안 + 양봉 + 거래량 전날보다 늘고 + 종가 14선 위. 거래대금 20일 평균 30억↑ · 상승·횡보장.
     3년 뒤돌아보기(같은 매도): 진입 R +0.10 · 눌림 +0.15 vs 우리 점수 6↑ +0.57."""
@@ -76,7 +76,7 @@ def _lazy_today(db: Session, latest) -> dict:
     C = pd.DataFrame(A["c"])
     e8, e14, e21, e55 = (C.ewm(span=n, adjust=False).mean().values for n in (8, 14, 21, 55))
     O, L, Cn, V = A["o"], A["l"], A["c"], A["v"]
-    liq = pd.DataFrame(A["t"]).rolling(20).mean().values >= 1e9      # Lazy Alpha는 작은 종목도 잡아서 10억까지 넓게 (2026-10-09 미래반도체 17억·대성에너지 29억)
+    liq = pd.DataFrame(A["t"]).rolling(20).mean().values >= 1e9      # 비교 대상 서비스는 작은 종목도 잡아서 10억까지 넓게 (2026-10-09 미래반도체 17억·대성에너지 29억)
     al = (e8 > e14) & (e14 > e21) & (e21 > e55)
     def ent(r):
         reclaim = al[r] & al[r - 1] & (Cn[r] > e21[r]) & (Cn[r - 1] <= e21[r - 1])
@@ -88,7 +88,7 @@ def _lazy_today(db: Session, latest) -> dict:
     for k in range(1, 11):
         recent |= ent(r - k)
     pull = recent & al[r] & ((L[r] <= e8[r] * 1.01) | (L[r] <= e14[r] * 1.01)) & (Cn[r] > O[r]) & (V[r] > V[r - 1]) & (Cn[r] > e14[r]) & liq[r]
-    # 돌파 진입 = 오늘 처음 EMA8>14>21>55 정배열 + 거래량 50일 평균(오늘 포함) 1.5배↑ + 양봉 (역산 7/7 일치, project_lazy_alpha)
+    # 돌파 진입 = 오늘 처음 EMA8>14>21>55 정배열 + 거래량 50일 평균(오늘 포함) 1.5배↑ + 양봉 (역산 7/7 일치)
     v50 = pd.DataFrame(V).rolling(50).mean().values
     brk = al[r] & ~al[r - 1] & (V[r] >= v50[r] * 1.5) & (Cn[r] > O[r]) & liq[r]
     pick = lambda m: [{"code": codes[j], "close": float(Cn[r, j]), "stop": round(float(L[r, j]) * 0.99)} for j in np.where(m)[0]]  # noqa: E731
