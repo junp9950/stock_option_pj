@@ -15,6 +15,7 @@
 from __future__ import annotations
 
 import threading
+from backend.services.trading_rules import entry_masks, market_returns, relative_strength
 
 import numpy as np
 import pandas as pd
@@ -26,15 +27,14 @@ _REG: dict = {"key": None, "v": {}}
 
 
 def _bull_days(db: Session) -> dict:
-    """날짜별 시장 국면이 상승·횡보인가 (전 종목 평균 등락으로 regime_series) — DB 날짜가 바뀔 때만 계산."""
     latest = db.execute(text("select max(trading_date) from spot_daily_prices")).scalar()
     if _REG["key"] == latest:
         return _REG["v"]
-    from backend.screener.market_regime import regime_series  # noqa: PLC0415
-    rows = db.execute(text("select trading_date, avg(greatest(least(change_pct, 30), -30)) from spot_daily_prices "
-                           "where trading_date >= cast(:d as date) - 900 and trading_value >= 1e9 and change_pct <> 'NaN' group by 1 order by 1"), {"d": latest}).all()
-    reg = regime_series({d: float(v) for d, v in rows if v is not None})
-    _REG.update(key=latest, v={d: r["state"] in ("상승", "횡보") for d, r in reg.items()}, mkt={d: float(v) for d, v in rows if v is not None})
+    from backend.screener.market_regime import regime_series
+    frames = _close_frames(db, latest)
+    changes = market_returns(frames["c"], frames["tv"]) * 100
+    reg = regime_series(changes.to_dict())
+    _REG.update(key=latest, v={d:r["state"] in ("상승", "횡보") for d,r in reg.items()}, mkt=changes.to_dict())
     return _REG["v"]
 
 
@@ -734,7 +734,7 @@ def close_scores(db: Session) -> dict:
     점수 7 이김 46%·+1.5%. 기간을 반으로 나눠도 둘 다 점수 따라 이김 비율이 올라감(앞 26→47%, 뒤 31→46%). 디스크 캐시."""
     latest = db.execute(text("select max(trading_date) from spot_daily_prices")).scalar()
     from backend.services.result_cache import cached  # noqa: PLC0415
-    v = cached("close_scores_v7", (), db, lambda: _close_scores(db, latest)) or {}
+    v = cached("close_scores_v8", (), db, lambda: _close_scores(db, latest)) or {}
     return v
 
 
@@ -754,13 +754,13 @@ def _close_frames(db: Session, latest) -> dict:
 
 
 def _close_frames_load(db: Session, latest) -> dict:
-    dates = [r[0] for r in db.execute(text("select distinct trading_date from spot_daily_prices where trading_date >= cast(:d as date) - 400 "
+    dates = [r[0] for r in db.execute(text("select distinct trading_date from spot_daily_prices where trading_date >= cast(:d as date) - 800 "
                                            "and trading_date <= :d order by 1"), {"d": latest}).all()]
-    codes = [r[0] for r in db.execute(text("select distinct stock_code from spot_daily_prices where trading_date = :d"), {"d": latest}).all()]
+    codes = [r[0] for r in db.execute(text("select distinct stock_code from spot_daily_prices where trading_date >= cast(:d as date) - 800 and trading_date <= :d order by 1"), {"d": latest}).all()]
     di, ci = {d: i for i, d in enumerate(dates)}, {c: i for i, c in enumerate(codes)}
     A = {k: np.full((len(dates), len(codes)), np.nan, dtype="float32") for k in ("o", "h", "l", "c", "v", "tv")}
     for s_, d_, o_, h_, l_, c_, v_, t_ in db.execute(text("select stock_code, trading_date, open_price, high_price, low_price, close_price, volume, trading_value "
-                                                          "from spot_daily_prices where trading_date >= cast(:d as date) - 400 and trading_date <= :d"), {"d": latest}):
+                                                          "from spot_daily_prices where trading_date >= cast(:d as date) - 800 and trading_date <= :d"), {"d": latest}):
         j = ci.get(s_)
         if j is None:
             continue
@@ -782,8 +782,9 @@ def _close_scores(db: Session, latest, live: dict | None = None, frac: float = 1
         O = C.shift(1)                      # 예전 캐시(시가 없음)면 전날 종가로 대신
     asof = str(latest)
     if live:
-        from datetime import date as _date  # noqa: PLC0415
-        today = _date.today()
+        from datetime import datetime  # noqa: PLC0415
+        from zoneinfo import ZoneInfo
+        today = datetime.now(ZoneInfo("Asia/Seoul")).date()
         row = {k: pd.Series({c: x[k] for c, x in live.items() if x.get(k)}, dtype="float32").reindex(C.columns) for k in ("o", "h", "l", "c")}
         vol = pd.Series({c: x["v"] / max(frac, 0.05) for c, x in live.items()}, dtype="float32").reindex(C.columns)
         add = lambda F, ser: pd.concat([F, ser.to_frame(today).T])  # noqa: E731
@@ -791,16 +792,7 @@ def _close_scores(db: Session, latest, live: dict | None = None, frac: float = 1
         asof = str(today)
     liq = TV.rolling(20).mean() >= 3e9
     e5, e10, e20, e60 = (C.ewm(span=n, adjust=False).mean() for n in (5, 10, 20, 60))
-    rs_raw = 0.4 * (C / C.shift(63) - 1) + 0.2 * (C / C.shift(126) - 1) + 0.2 * (C / C.shift(189) - 1) + 0.2 * (C / C.shift(252) - 1)
-    RS = rs_raw.where(liq).rank(axis=1, pct=True).iloc[-1] * 98 + 1
-    if frames is not None and not live:     # 지난 날짜(잘라 낸 프레임)는 1년 전 값이 모자라 RS가 비어 '강도 부족'으로 빠졌음 → 날짜별 RS 기록으로 (2026-10-09 HPSP 9월)
-        try:
-            rh = rs_hist(db); dkey = str(C.index[-1])
-            if dkey in rh.get("dates", []):
-                k_ = rh["dates"].index(dkey)
-                RS = pd.Series({cd: float(a[k_]) for cd, a in rh["rs"].items()}).reindex(C.columns)
-        except Exception:  # noqa: BLE001
-            pass
+    RS = relative_strength(C, TV).iloc[-1]
     r = -1
     c, h, l = C.iloc[r], H.iloc[r], L.iloc[r]
     chg = c / C.iloc[r - 1] - 1
@@ -829,12 +821,13 @@ def _close_scores(db: Session, latest, live: dict | None = None, frac: float = 1
     brk_all = (gap_prev <= 0.04) & (c > ehi) & (c > H.iloc[-11:-1].max()) & (chg >= 0.03) & (chg < 0.29) & (tvx >= 1.5) & liq.iloc[r]
     semi_ok = {cd for cd in brk_all[brk_all.fillna(False).astype(bool)].index
                if cd in semi and bool(flags[1].get(cd, False)) and float(1 - l[cd] * 0.99 / c[cd]) <= 0.12}
+    normal_mask, hot_mask = entry_masks(trend, RS, 1 - l * .99 / c, flags, ema)
     tr_codes = set(trend[trend.fillna(False).astype(bool)].index)
     for code in tr_codes | semi_ok:
         f = [bool(x.get(code, False)) for x in flags]
         rk = float(1 - l[code] * 0.99 / c[code])
         e_ = bool(ema.get(code, False)) and code in tr_codes
-        normal = code in tr_codes and bool(f[1] and rk <= 0.08 and (sum(f) >= 6 or e_ or (sum(f) == 5 and not f[5] and not f[6])))
+        normal = bool(normal_mask.get(code, False))
         # 과열 매수 (2026-10-09 하나마이크론 "시장 급락 뒤 급반등인데 과열 끝자락에서만 줍네" → "앞선 장은 다 지나간 거고 일단"):
         # 점수 5인데 빠진 게 과열 두 개(20일선 +15%↑ · 이평선 간격 6%↑)뿐 → 12년(v12w.py) R -0.31/0.00/+0.77 — 이번 장(2023~)에서만 통함 → 수량 절반 · 이번 장 한정
         rs_v = RS.get(code)
@@ -854,10 +847,11 @@ def _close_scores(db: Session, latest, live: dict | None = None, frac: float = 1
             if g_ == g_ and g_ is not None and g_ >= 0.15:
                 lst.append(f"⚠️ 과열 · 20일선 +{g_ * 100:.0f}%")
         out[code] = {"score": sum(f), "flags": f, "stop": float(l[code]) * 0.99, "risk": rk, "ema": e_, "lead": lead, "lead_state": lst,
-                     "rs": round(float(rs_v), 1) if rs_v is not None and rs_v == rs_v else None,     # 후보 순서용 (2026-10-10: RS 높은 순이 12년 무작위 순서 10,000번 중 100백분위)
-                     "hot": bool(code in tr_codes and f[1] and rk <= 0.08 and sum(f) == 5 and not f[5] and not f[6] and not e_),
+                     "rs": float(rs_v) if rs_v is not None and rs_v == rs_v else None,     # 후보 순서용 (2026-10-10: RS 높은 순이 12년 무작위 순서 10,000번 중 100백분위)
+                     "hot": bool(hot_mask.get(code, False)),
                      "semi": bool(code in semi_ok and not normal),
-                     "buy": bool(normal or code in semi_ok)}
+                     # 반도체·AI 특별(손절폭 12%까지)은 사용자 규칙이라 매수에 그대로 둠 — 계좌에선 수량 절반(size_multiplier) (2026-10-11 GPT 수정본은 실험으로 뺐으나 되돌림)
+                     "buy": bool(normal or code in semi_ok), "price": float(c[code])}
     return {"date": asof, "scores": out, "live": bool(live)}
 
 
@@ -888,6 +882,8 @@ def close_scores_now(db: Session, max_age: float = 120) -> dict:
         frac = 1.0 if (now.hour, now.minute) >= (15, 30) else _day_frac(now)
         v = _close_scores(db, latest, live=live, frac=frac)
         v["at"] = now.strftime("%H:%M")
+        # The forward logger freezes orders from these same quotes, without refetching.
+        _CSL["quotes"] = live
         _CSL.update(t=time.time(), v=v)
         return v
     except Exception:  # noqa: BLE001
@@ -905,8 +901,9 @@ def _dip_picks(db: Session, latest, live: dict | None = None, frac: float = 1.0,
     H, L, C, V, TV = P["h"], P["l"], P["c"], P["v"], P["tv"]
     asof = str(latest)
     if live:
-        from datetime import date as _date  # noqa: PLC0415
-        today = _date.today()
+        from datetime import datetime  # noqa: PLC0415
+        from zoneinfo import ZoneInfo
+        today = datetime.now(ZoneInfo("Asia/Seoul")).date()
         row = {k: pd.Series({c: x[k] for c, x in live.items() if x.get(k)}, dtype="float32").reindex(C.columns) for k in ("h", "l", "c")}
         vol = pd.Series({c: x["v"] / max(frac, 0.05) for c, x in live.items()}, dtype="float32").reindex(C.columns)
         add = lambda F, ser: pd.concat([F, ser.to_frame(today).T])  # noqa: E731
@@ -1051,7 +1048,7 @@ def rs_hist(db: Session) -> dict:
     if _RSH["key"] == latest:
         return _RSH["v"]
     from backend.services.result_cache import cached  # noqa: PLC0415
-    v = cached("rs_hist_v1", (), db, lambda: _rs_hist(db, latest)) or {}
+    v = cached("rs_hist_v2", (), db, lambda: _rs_hist(db, latest)) or {}
     if v.get("date") == str(latest):
         _RSH.update(key=latest, v=v)
     return v
@@ -1070,7 +1067,7 @@ def rs_latest(db: Session) -> dict:
 
 def _rs_hist(db: Session, latest, keep: int = 270) -> dict:
     # 메모리 아끼기 (pandas read_sql·pivot이 500MB 넘게 씀): 최근 400일 안에 하루라도 30억↑ 거래된 종목만, numpy 배열에 바로 채운다
-    codes = [r[0] for r in db.execute(text("select stock_code from spot_daily_prices where trading_date >= cast(:d as date) - 400 "
+    codes = [r[0] for r in db.execute(text("select stock_code from spot_daily_prices where trading_date >= cast(:d as date) - 800 "
                                            "group by 1 having max(trading_value) >= 3e9"), {"d": latest}).all()]
     dates = [r[0] for r in db.execute(text("select distinct trading_date from spot_daily_prices where trading_date >= cast(:d as date) - 800 "
                                            "and trading_date <= :d order by 1"), {"d": latest}).all()]
@@ -1087,7 +1084,7 @@ def _rs_hist(db: Session, latest, keep: int = 270) -> dict:
     raw = 0.4 * (C / C.shift(63) - 1) + 0.2 * (C / C.shift(126) - 1) + 0.2 * (C / C.shift(189) - 1) + 0.2 * (C / C.shift(252) - 1)
     RS = (raw.where(liq).iloc[-keep:].rank(axis=1, pct=True) * 98 + 1)
     return {"date": str(latest), "dates": [str(d) for d in RS.index],
-            "rs": {c: RS[c].to_numpy(dtype="float16") for c in RS.columns if RS[c].notna().any()}}
+            "rs": {c: RS[c].to_numpy(dtype="float32") for c in RS.columns if RS[c].notna().any()}}
 
 
 def tracking(db: Session) -> dict:
@@ -1096,65 +1093,57 @@ def tracking(db: Session) -> dict:
     날짜마다 그날까지 데이터로 점수를 다시 계산한다 (signal_log가 쌓이기 전 날짜는 '다시 계산'). DB 날짜가 바뀔 때만 · 디스크 캐시."""
     latest = db.execute(text("select max(trading_date) from spot_daily_prices")).scalar()
     from backend.services.result_cache import cached  # noqa: PLC0415
-    return cached("tracking_v13", (), db, lambda: _tracking(db, latest)) or {}
+    return cached("tracking_v14", (), db, lambda: _tracking(db, latest)) or {}
 
 
 def _tracking(db: Session, latest, days: int = 20, lead_days: int = 60) -> dict:
-    """lead_days: 🔥 주도주는 몇 달씩 가므로 60거래일까지 따라간다 (2026-10-10 "맞으면 21일선 깨질 때까지 들고 가기 — 이 신호가 뜨게 되어 있나")."""
+    from backend.services import account_engine as engine
     P = _close_frames(db, latest)
-    C, H, L = P["c"], P["h"], P["l"]
-    e21 = C.ewm(span=21, adjust=False).mean()
+    C, O, H, L = P["c"], P["o"], P["h"], P["l"]
     bulls = _bull_days(db)
     n = len(C.index)
-    sig: dict[str, list] = {}
-    for k in range(max(days, lead_days) - 1, -1, -1):             # 오래된 날부터
-        r = n - 1 - k
-        d = C.index[r]
-        if not bulls.get(d, False):
-            continue
-        fr = {key: v.iloc[:r + 1] for key, v in P.items()}
-        sc = _close_scores(db, d, frames=fr).get("scores", {})
-        for code, v in sc.items():
-            if v.get("buy") and k < days:
-                sig.setdefault(code, []).append((r, float(C[code].iloc[r]), v["stop"], v["score"]))
-            elif v.get("lead") and not v.get("buy"):
-                sig.setdefault(code, []).append((r, float(C[code].iloc[r]), v["stop"], "lead"))
-        if k >= days:
-            continue
-        try:      # 급락 날 줍기 (손절 20일선 -1%) — 2026-10-09 "여기는 안 들어가나"
-            for x in _dip_picks(db, d, frames=fr).get("items", []):
-                sig.setdefault(x["code"], []).append((r, float(C[x["code"]].iloc[r]), float(x["stop"]), "dip"))
-        except Exception:  # noqa: BLE001
-            pass
+    if not n:
+        return {"date": str(latest), "items": [], "done": {"stop":0,"exit":0,"win":0}}
     names = dict(db.execute(text("select code, name from stocks")).all())
-    alive, done = [], {"stop": 0, "exit": 0, "win": 0}
-    for code, lst in sig.items():
-        lst.sort(key=lambda t: t[0])
-        free_from = -1                             # 정리한 뒤에 나온 신호부터 다시 따라간다
-        for r0, p0, stop, score in lst:
-            if r0 <= free_from:
-                continue
-            status, end = "hold", n - 1
-            for m in range(r0 + 1, n):
-                lo, c = float(L[code].iloc[m]), float(C[code].iloc[m])
-                if lo == lo and lo < stop:
-                    status, end = "stop", m; break
-                if m - r0 > 1 and c == c and c < float(e21[code].iloc[m]):
-                    status, end = ("exit" if m < n - 1 else "exit_tmr"), m; break
-            if status in ("stop", "exit"):
-                done[status] += 1
-                px_out = stop if status == "stop" else float(C[code].iloc[end])
-                done["win"] += px_out > p0
-                free_from = end
-                continue
-            c_now = float(C[code].iloc[-1])
-            alive.append({"code": code, "name": names.get(code, code), "date": str(C.index[r0]), "entry": p0, "stop": round(stop),
-                          "score": None if score in ("dip", "lead") else score, "dip": score == "dip", "lead": score == "lead",
-                          "gain": round((c_now / p0 - 1) * 100, 1), "to21": round((c_now / float(e21[code].iloc[-1]) - 1) * 100, 1),
-                          "sell_tmr": status == "exit_tmr", "days": n - 1 - r0})
-            break
-    alive.sort(key=lambda a: (not a["sell_tmr"], -a["gain"]))
-    return {"date": str(latest), "items": alive, "done": done}
+    account = engine.new_account()
+    changes = (C / C.shift(1) - 1) * 100
+    start = max(0, n - max(days, lead_days))
+    # Materialize history only for a selected/held stock, once per tracking run.
+    bars = {}
+    for r in range(start, n):
+        day = C.index[r]
+        candidates = []
+        if bulls.get(day, False):
+            fr = {k:v.iloc[:r+1] for k,v in P.items()}
+            scores = _close_scores(db, day, frames=fr).get("scores", {})
+            for code,v in scores.items():
+                tag = v["score"] if v.get("buy") and n-1-r < days else "lead" if v.get("lead") and not v.get("buy") else None
+                if tag is not None:
+                    candidates.append({"code":code,"stop":v["stop"],"risk":v["risk"],"rs":v.get("rs"),"tag":tag,"hot":v.get("hot")})
+            if n-1-r < days:
+                for x in _dip_picks(db, day, frames=fr).get("items", []):
+                    candidates.append({"code":x["code"],"stop":float(x["stop"]),"tag":"dip"})
+        needed = set(account["pos"]) | {x["code"] for x in candidates}
+        for code in needed - bars.keys():
+            bars[code] = list(zip(C.index, O[code], H[code], L[code], C[code], changes[code]))
+        context = engine.day_context({c:bars[c] for c in needed}, day)
+        engine.advance(account, "tracking", day, context, candidates, "close", slots=len(C.columns), risk=.000001)
+    done = {"stop":0,"exit":0,"win":0}
+    for t in account["trades"]:
+        done["stop" if t["why"] == "손절" else "exit"] += 1
+        done["win"] += t["net"] > 0
+    ctx = engine.day_context(bars, latest)
+    alive = []
+    for code,p in account["pos"].items():
+        current = ctx["close"].get(code,p["px0"])
+        line = ctx["ema"].get(code)
+        tag = p.get("tag")
+        alive.append({"code":code,"name":names.get(code,code),"date":p["d0"],"entry":p["px0"],"stop":round(p["stop"]),
+          "score":tag if isinstance(tag,(int,float)) else None,"lead":tag=="lead","dip":tag=="dip",
+          "gain":round((current/p["px0"]-1)*100,1),"to21":round((current/line-1)*100,1) if line else None,
+          "sell_tmr":p["exit_next"],"days":sum(str(d)>p["d0"] for d in C.index)})
+    alive.sort(key=lambda x:(not x["sell_tmr"],-x["gain"]))
+    return {"date":str(latest),"items":alive,"done":done}
 
 
 def _track_rows(db: Session, px: dict) -> list[dict]:

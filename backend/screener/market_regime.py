@@ -5,12 +5,8 @@
 from __future__ import annotations
 
 import math
-from datetime import date, timedelta
-
-from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
-from backend.db.models import SpotDailyPrice, Stock
 
 
 def regime_series(market_chg: dict) -> dict:
@@ -42,14 +38,14 @@ def regime_series(market_chg: dict) -> dict:
 
 
 def current_regime(db: Session) -> dict | None:
-    rows = db.execute(
-        select(SpotDailyPrice.trading_date, func.avg(func.coalesce(SpotDailyPrice.change_pct, 0)))
-        .join(Stock, Stock.code == SpotDailyPrice.stock_code)
-        .where(SpotDailyPrice.trading_date >= date.today() - timedelta(days=90))
-        .where(SpotDailyPrice.change_pct != float("nan"))  # Postgres: NaN = NaN 이 참이라 NaN 행만 빠진다
-        .group_by(SpotDailyPrice.trading_date)
-    ).all()
-    series = regime_series({d: float(avg) for d, avg in rows})
+    from sqlalchemy import text
+    from backend.services.stock_signals import _close_frames
+    from backend.services.trading_rules import market_returns
+    latest = db.execute(text("select max(trading_date) from spot_daily_prices")).scalar()
+    if latest is None:
+        return None
+    frames = _close_frames(db, latest)
+    series = regime_series((market_returns(frames["c"],frames["tv"]) * 100).to_dict())
     if not series:
         return None
     last = max(series)
