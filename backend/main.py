@@ -310,7 +310,7 @@ select{background:#21262d;border:1px solid #30363d;color:#c9d1d9;padding:6px 10p
 .hb-verdict.k-g{background:#2ea043;color:#fff}.hb-verdict.k-n{background:#e8edf3;color:#0f141b}.hb-verdict.k-b{background:#da3633;color:#fff}
 .hb-cau{font-size:12.5px;color:#e8edf3;border:1px solid #e8edf3;padding:3px 10px;border-radius:999px}
 .hb-sum{font-size:12px;color:var(--muted);margin-left:auto}
-.hb-idx{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:6px 14px;align-items:end;margin-bottom:8px}
+.hb-idx{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:6px 14px;align-items:end;margin-bottom:8px}
 .hb-spark{grid-column:1/-1}.hb-spark .hc-tg{margin-bottom:4px}.hb-spark .hc-spark{height:84px;margin:0}.hb-spark .hc-sx{margin:2px 0 0;font-size:11px}      /* 지수 흐름 크게 (2026-10-11 "너무 작다") */
 .hb-num{cursor:default}.hb-num .l{font-size:12px;color:var(--muted)}.hb-num .v{font-size:21px;font-weight:600;color:#fff;margin:2px 0}.hb-num .s{font-size:13px}
 .hb-flow{display:flex;flex-wrap:wrap;gap:6px;align-items:center;font-size:12.5px}.hb-flow .k{color:var(--muted);margin:0 2px 0 6px}.hb-flow .k:first-child{margin-left:0}
@@ -1028,26 +1028,35 @@ function renderHomeTop(d, live){
   const st=d.sectors_today||{}, pill=(x,c)=>`<span class="hc-pill ${c}" title="20일 순위 ${x.rank||'-'}위 (10일 전 ${x.rank_10ago||'-'}위)">${x.family} <b style="color:${x.chg>=0?'var(--up)':'var(--down)'}">${sg(x.chg)}%</b></span>`;
   const cau=mvCaution(_mv);
   document.getElementById('hc-today').innerHTML=`<div class="hb-top"><span class="hb-verdict k-${vk}">${{g:'▲',n:'■',b:'▼'}[vk]} ${vt}</span>${cau?`<span class="hb-cau">${cau.replace(' → ',' · ')}</span>`:''}<span class="hb-sum">근거 ${rows.length}개 중 ${good}개 양호 · ${when}</span></div>
-    <div class="hb-idx"><div class="hb-spark"><span class="hc-tg"><button data-s="KOSPI" onclick="hcSpark('KOSPI')">코스피</button><button data-s="KOSDAQ" onclick="hcSpark('KOSDAQ')">코스닥</button></span><div class="hc-spark" id="hc-spark"></div><div class="hc-sx" id="hc-sx"></div></div>
-    ${ix('코스피')}${ix('코스닥')}${br.adv_pct!=null?`<div class="hb-num"><div class="l">오른 종목</div><div class="v">${br.adv_pct}%</div><div class="s" style="color:var(--muted);font-size:12px">조용한 종목 뺌</div></div>`:''}</div>
+    <div class="hb-idx"><div class="hb-spark"><span class="hc-tg"><button data-s="KOSPI" onclick="hcSpark('KOSPI')">코스피</button><button data-s="FUT" onclick="hcSpark('FUT')">코200선물</button><button data-s="KOSDAQ" onclick="hcSpark('KOSDAQ')">코스닥</button></span><div class="hc-spark" id="hc-spark"></div><div class="hc-sx" id="hc-sx"></div></div>
+    ${ix('코스피')}<div class="hb-num" id="hb-fut" style="cursor:pointer" onclick="hcSpark('FUT')"><div class="l">코200선물</div><div class="v">-</div><div class="s mono">&nbsp;</div></div>${ix('코스닥')}${br.adv_pct!=null?`<div class="hb-num"><div class="l">오른 종목</div><div class="v">${br.adv_pct}%</div><div class="s" style="color:var(--muted);font-size:12px">조용한 종목 뺌</div></div>`:''}</div>
     ${(st.strong||[]).length?`<div class="hb-flow"><span class="k">강함</span>${st.strong.map(x=>pill(x,'up')).join('')}<span class="k">약함</span>${(st.weak||[]).map(x=>pill(x,'dn')).join('')}</div>`:''}`;      // 종베·스윙 장세 문구는 뺌 (2026-10-11: 추세 매수 '매매 가능'과 헷갈림) — '오늘 판단 자세히'에 그대로 있음
   hbFitChart();
 }
 // '오늘' 카드 지수 하루 선 (SVG) — 전일 종가 점선 · 위면 빨강, 아래면 파랑
 let _hcSym='KOSPI';
+// 코스피200 선물 숫자 칸 (2026-10-11 "코스피/코200선물/코스닥") — 같은 1분 데이터(서버 1분 캐시)
+async function hbFut(){ const el=document.getElementById('hb-fut'); if(!el) return;
+  const d=await fetch(`${API}/index/intraday/FUT`).then(r=>r.ok?r.json():null).catch(()=>null); if(!d||d.close==null) return;
+  el.querySelector('.v').textContent=d.close.toLocaleString(undefined,{minimumFractionDigits:2});
+  const s=el.querySelector('.s'); s.textContent=(d.pct>0?'+':'')+d.pct.toFixed(2)+'%'; s.style.color=d.pct>=0?'var(--up)':'var(--down)';
+  if(d.status==='OPEN') el.querySelector('.l').textContent='코200선물 · 장중'; }
 async function hcSpark(sym){
   _hcSym=sym||_hcSym; document.querySelectorAll('.hc-tg button').forEach(b=>b.classList.toggle('on',b.dataset.s===_hcSym));
   const box=document.getElementById('hc-spark'); if(!box) return;
   const d=await fetch(`${API}/index/intraday/${_hcSym}`).then(r=>r.ok?r.json():null).catch(()=>null);
   if(!d||!d.points||d.points.length<2){ box.innerHTML='<div class="ts" style="padding:40px 0;text-align:center">지수 선을 못 불러왔습니다</div>'; return; }
   const P=d.points.map(p=>p[1]), lo=Math.min(...P,d.prev), hi=Math.max(...P,d.prev), W=600, H=92, pad=6;
-  const x=i=>{ const t=d.points[i][0], m=(+t.slice(0,2)-9)*60+(+t.slice(2)); return m/390*W; }, y=v=>pad+(hi-v)/((hi-lo)||1)*(H-pad*2);
+  const mm=t=>(+t.slice(0,2))*60+(+t.slice(2)), T0=mm(d.t0||'0900'), TL=mm(d.t1||'1530')-T0;      // 선물은 08:45~15:45
+  const x=i=>(mm(d.points[i][0])-T0)/TL*W, y=v=>pad+(hi-v)/((hi-lo)||1)*(H-pad*2);
   const line=P.map((v,i)=>`${x(i).toFixed(1)},${y(v).toFixed(1)}`).join(' ');
   const c=d.close>=d.prev?'var(--up)':'var(--down)', fill=d.close>=d.prev?'rgba(248,81,73,.10)':'rgba(88,166,255,.12)';
   box.innerHTML=`<svg viewBox="0 0 ${W} ${H}" preserveAspectRatio="none"><polygon points="${x(0).toFixed(1)},${H} ${line} ${x(P.length-1).toFixed(1)},${H}" fill="${fill}"/>
     <line x1="0" x2="${W}" y1="${y(d.prev)}" y2="${y(d.prev)}" stroke="var(--muted)" stroke-dasharray="3 4" stroke-width="1" vector-effect="non-scaling-stroke"/>
     <polyline points="${line}" fill="none" stroke="${c}" stroke-width="1.6" vector-effect="non-scaling-stroke"/></svg>`;
-  document.getElementById('hc-sx').innerHTML=`<span>09:00</span><span>${d.date.slice(5).replace('-','/')} · 전일 종가 ${d.prev.toLocaleString()}</span><span>15:30</span>`;
+  const hm=t=>t.slice(0,2)+':'+t.slice(2);
+  document.getElementById('hc-sx').innerHTML=`<span>${hm(d.t0||'0900')}</span><span>${d.date.slice(5).replace('-','/')} · 전일 종가 ${d.prev.toLocaleString()}</span><span>${hm(d.t1||'1530')}</span>`;
+  hbFut();
 }
 async function renderDashboard(d, stale, live){
   try{ renderHomeTop(d, live); hcSpark(); }catch(e){ console.error(e); }
