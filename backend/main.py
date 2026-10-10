@@ -163,7 +163,7 @@ select{background:#21262d;border:1px solid #30363d;color:#c9d1d9;padding:6px 10p
 .hc-verdict{display:flex;align-items:center;gap:8px;margin:2px 0 4px}.hc-verdict b{font-size:17px;color:var(--text)}
 .hc-sum{font-size:12.5px;color:var(--muted);margin-bottom:8px}
 .hc-bars{display:flex;gap:4px;margin:4px 0 8px}.hc-bars i{flex:1;height:5px;border-radius:3px;background:var(--line)}
-.hc-bars i.g{background:var(--blue)}.hc-bars i.b{background:var(--orange)}
+.hc-bars i.g{background:#2ea043}.hc-bars i.b{background:#da3633}
 .hc-row{display:flex;align-items:center;gap:10px;padding:6px 0;border-top:1px solid var(--line2)}
 .hc-row .t{flex:1;min-width:0}.hc-row .t b{display:block;font-size:13.5px;color:var(--text)}.hc-row .t span{font-size:11.5px;color:var(--muted)}
 .hc-row .v{font-size:16px;font-weight:700;color:var(--text);white-space:nowrap}
@@ -171,10 +171,10 @@ select{background:#21262d;border:1px solid #30363d;color:#c9d1d9;padding:6px 10p
 .hc-badge.g{color:var(--blue);border-color:rgba(88,166,255,.45);background:rgba(56,139,253,.10)}
 .hc-badge.n{color:var(--muted);border-color:var(--line)}
 .hc-badge.b{color:var(--orange);border-color:rgba(240,136,62,.5);background:rgba(240,136,62,.10)}
-/* 양호·약화가 한눈에 (2026-10-10): 양호 = 파랑 꽉 찬 배지 + 줄 왼쪽 파랑 막대·옅은 바탕 · 약화 = 주황 같은 방식 · 중립 = 회색 테두리만. 색약이라 ▲■▼ 모양·글자도 같이 */
-.hc-badge.g{background:#58a6ff;color:#0d1117;border-color:#58a6ff}.hc-badge.b{background:#ff8c4a;color:#0d1117;border-color:#ff8c4a}
-.hc-row.k-g{background:rgba(56,139,253,.09);box-shadow:inset 3px 0 0 var(--blue);padding-left:8px;padding-right:4px}.hc-row.k-g .v{color:var(--blue)}
-.hc-row.k-b{background:rgba(240,136,62,.11);box-shadow:inset 3px 0 0 var(--orange);padding-left:8px;padding-right:4px}.hc-row.k-b .v{color:var(--orange)}
+/* 양호·약화가 한눈에 (2026-10-10, 사용자 고름: 양호 초록 · 약화 빨강 — 노랑과 안 헷갈리게 진한 초록) · 중립 = 회색 테두리만. 색약이라 ▲■▼ 모양·글자도 같이 */
+.hc-badge.g{background:#2ea043;color:#fff;border-color:#2ea043}.hc-badge.b{background:#da3633;color:#fff;border-color:#da3633}
+.hc-row.k-g{background:rgba(35,134,54,.16);box-shadow:inset 3px 0 0 #2ea043;padding-left:8px;padding-right:4px}.hc-row.k-g .v{color:#7ee787}
+.hc-row.k-b{background:rgba(218,54,51,.16);box-shadow:inset 3px 0 0 #f85149;padding-left:8px;padding-right:4px}.hc-row.k-b .v{color:#ffa198}
 .hc-row.k-n{padding-left:8px;padding-right:4px}.hc-row.k-n .v{color:var(--muted)}
 /* PC: 위 카드 두 개를 낮게 줄여서 목록·차트가 한 화면에 들어오게 (2026-10-10 "차트·종목 검색 아래까지 한 페이지에") */
 @media(min-width:901px){
@@ -192,8 +192,8 @@ select{background:#21262d;border:1px solid #30363d;color:#c9d1d9;padding:6px 10p
 #hc-market>.hc-row{display:grid;grid-template-columns:minmax(0,1fr) auto auto;column-gap:6px;align-items:center;padding:4px 8px;border:1px solid var(--line2);border-radius:8px;background:var(--card2)}
 #hc-market .hc-row .t{min-width:0}#hc-market .hc-row .t b{font-size:12.5px}#hc-market .hc-row .t span{display:block;font-size:10.5px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 #hc-market .hc-row .v{font-size:14px;text-align:right}#hc-market .hc-row .hc-badge{justify-self:end;font-size:10.5px;padding:1px 6px}
-#hc-market .hc-row.k-g{background:linear-gradient(90deg,rgba(56,139,253,.38),rgba(56,139,253,.10));border-color:#58a6ff;box-shadow:inset 5px 0 0 #58a6ff;padding-left:12px}#hc-market .hc-row.k-g .v{color:#a5d6ff;font-weight:800}#hc-market .hc-row.k-g .t b{color:#fff}
-#hc-market .hc-row.k-b{background:linear-gradient(90deg,rgba(255,123,58,.40),rgba(255,123,58,.10));border-color:#ff8c4a;box-shadow:inset 5px 0 0 #ff8c4a;padding-left:12px}#hc-market .hc-row.k-b .v{color:#ffc29a;font-weight:800}#hc-market .hc-row.k-b .t b{color:#fff}
+#hc-market .hc-row.k-g{background:linear-gradient(90deg,rgba(35,134,54,.45),rgba(35,134,54,.10));border-color:#2ea043;box-shadow:inset 5px 0 0 #2ea043;padding-left:12px}#hc-market .hc-row.k-g .v{color:#7ee787;font-weight:800}#hc-market .hc-row.k-g .t b{color:#fff}
+#hc-market .hc-row.k-b{background:linear-gradient(90deg,rgba(218,54,51,.45),rgba(218,54,51,.10));border-color:#f85149;box-shadow:inset 5px 0 0 #f85149;padding-left:12px}#hc-market .hc-row.k-b .v{color:#ffa198;font-weight:800}#hc-market .hc-row.k-b .t b{color:#fff}
 #hc-market .hc-row.k-n{background:transparent;border-style:dashed}#hc-market .hc-row .hc-badge{font-size:11px;padding:2px 8px}
 .lwbox>.lwc{height:clamp(300px,calc(100vh - 512px),720px)}
 }
@@ -2922,6 +2922,9 @@ def startup_event() -> None:
             logging.getLogger(__name__).warning("매매 일지 미리 계산 실패: %s", exc)
         finally:
             _db.close()
+    import os  # noqa: PLC0415
+    if os.environ.get("NO_SCHEDULER"):        # 화면 시험용 서버(:8011 등) — 수집·예약 작업(텔레그램 확인·알림)을 돌리지 않는다 (2026-10-10)
+        return
     threading.Thread(target=_warm_journal, daemon=True).start()
     threading.Thread(target=_bg, daemon=True).start()
     start_scheduler()
