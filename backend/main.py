@@ -1008,7 +1008,7 @@ function renderHomeTop(d, live){
       const md=window._flowMode||'sum', cell=v=>`<td class="mono" style="color:${v>0?'var(--up)':v<0?'var(--down)':'var(--muted)'}">${v==null?'-':won(v)}</td>`;
       const tag=FL.provisional?` · <b class="hb-prov">장중 잠정치${FL.updated?' '+FL.updated:''}</b>`:'';
       const head=md==='sum'?`최근 ${FL.days}거래일 합 <span>${FL.from.slice(5).replace('-','/')}~${FL.to.slice(5).replace('-','/')}${FL.provisional?' (오늘은 잠정)':''}</span>`:`${FL.to.slice(5).replace('-','/')} 하루 <span></span>`;
-      const btn=(k,t)=>`<button class="${md===k?'on':''}" onclick="window._flowMode='${k}';renderHomeTop(_homeTopArgs[0],_homeTopArgs[1])">${t}</button>`;
+      const btn=(k,t)=>`<button class="${md===k?'on':''}" onclick="window._flowMode='${k}';renderHomeTop(_homeTopArgs[0],_homeTopArgs[1]);hcSpark();">${t}</button>`;
       return `<div class="hb-flows"><div class="hb-fh">투자자별 순매수 · ${head}${tag}<span class="hb-ftg">${btn('sum',FL.days+'일')}${btn('today',FL.provisional?'오늘(잠정)':'하루')}</span></div><div style="overflow-x:auto"><table><thead><tr><th></th>${C.map(c=>`<th>${c[1]}</th>`).join('')}</tr></thead><tbody>
         ${['KOSPI','KOSDAQ'].map(k=>{ const src=md==='sum'?FL[k].sum:(FL[k].today||{}); return `<tr><th>${k==='KOSPI'?'코스피':'코스닥'}</th>${C.map(c=>cell(src[c[0]])).join('')}</tr>`; }).join('')}</tbody></table></div></div>`; })():'';
   document.getElementById('hc-market').innerHTML=FT+rows.map(r=>`<div class="hb-tile k-${r.k}" title="${r.t} — ${r.sub}"><div class="hb-th"><b>${r.t}</b><span class="hc-badge ${B[r.k][0]}">${r.bt||B[r.k][1]}</span></div><div class="hb-tv">${r.v}</div><div class="hb-ts">${r.sub}</div></div>`).join('');
