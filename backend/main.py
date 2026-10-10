@@ -163,19 +163,19 @@ select{background:#21262d;border:1px solid #30363d;color:#c9d1d9;padding:6px 10p
 .hc-verdict{display:flex;align-items:center;gap:8px;margin:2px 0 4px}.hc-verdict b{font-size:17px;color:var(--text)}
 .hc-sum{font-size:12.5px;color:var(--muted);margin-bottom:8px}
 .hc-bars{display:flex;gap:4px;margin:4px 0 8px}.hc-bars i{flex:1;height:5px;border-radius:3px;background:var(--line)}
-.hc-bars i{background:#e3b341}.hc-bars i.g{background:#2ea043}.hc-bars i.b{background:#da3633}
+.hc-bars i{background:#e6edf3}.hc-bars i.g{background:#2ea043}.hc-bars i.b{background:#da3633}
 .hc-row{display:flex;align-items:center;gap:10px;padding:6px 0;border-top:1px solid var(--line2)}
 .hc-row .t{flex:1;min-width:0}.hc-row .t b{display:block;font-size:13.5px;color:var(--text)}.hc-row .t span{font-size:11.5px;color:var(--muted)}
 .hc-row .v{font-size:16px;font-weight:700;color:var(--text);white-space:nowrap}
 .hc-badge{font-size:11px;font-weight:700;padding:2px 8px;border-radius:10px;white-space:nowrap;border:1px solid}
 .hc-badge.g{color:var(--blue);border-color:rgba(88,166,255,.45);background:rgba(56,139,253,.10)}
-.hc-badge.n{color:#0d1117;background:#e3b341;border-color:#e3b341}   /* 중립 = 밝은 노랑(사용자 10/10: 적색약이라 주황이 더 안 보임) — ■ 글자로도 구분 */
+.hc-badge.n{color:#0d1117;background:#e6edf3;border-color:#e6edf3}   /* 중립 = 흰 테두리·흰 배지(사용자 10/10 후보 7개 중 E 고름 — 적색약·노랑초록 색약, 노랑·주황 다 안 보임) — ■ 글자로도 구분 */
 .hc-badge.b{color:var(--orange);border-color:rgba(240,136,62,.5);background:rgba(240,136,62,.10)}
 /* 양호·약화가 한눈에 (2026-10-10, 사용자 고름: 양호 초록 · 약화 빨강 — 노랑과 안 헷갈리게 진한 초록) · 중립 = 회색 테두리만. 색약이라 ▲■▼ 모양·글자도 같이 */
 .hc-badge.g{background:#2ea043;color:#fff;border-color:#2ea043}.hc-badge.b{background:#da3633;color:#fff;border-color:#da3633}
 .hc-row.k-g{background:rgba(35,134,54,.16);box-shadow:inset 3px 0 0 #2ea043;padding-left:8px;padding-right:4px}.hc-row.k-g .v{color:#7ee787}
 .hc-row.k-b{background:rgba(218,54,51,.16);box-shadow:inset 3px 0 0 #f85149;padding-left:8px;padding-right:4px}.hc-row.k-b .v{color:#ffa198}
-.hc-row.k-n{background:rgba(227,179,65,.12);box-shadow:inset 3px 0 0 #e3b341;padding-left:8px;padding-right:4px}.hc-row.k-n .v{color:#f2cc60}
+.hc-row.k-n{background:rgba(230,237,243,.05);box-shadow:inset 3px 0 0 #e6edf3;padding-left:8px;padding-right:4px}.hc-row.k-n .v{color:#ffffff}
 /* PC: 위 카드 두 개를 낮게 줄여서 목록·차트가 한 화면에 들어오게 (2026-10-10 "차트·종목 검색 아래까지 한 페이지에") */
 @media(min-width:901px){
 .htop{margin-bottom:10px;gap:10px}.hcard{padding:10px 14px;border-radius:12px}
@@ -194,7 +194,7 @@ select{background:#21262d;border:1px solid #30363d;color:#c9d1d9;padding:6px 10p
 #hc-market .hc-row .v{font-size:14px;text-align:right}#hc-market .hc-row .hc-badge{justify-self:end;font-size:10.5px;padding:1px 6px}
 #hc-market .hc-row.k-g{background:rgba(35,134,54,.20);border-color:#2ea043;box-shadow:inset 5px 0 0 #2ea043;padding-left:12px}#hc-market .hc-row.k-g .v{color:#7ee787;font-weight:800}#hc-market .hc-row.k-g .t b{color:#fff}
 #hc-market .hc-row.k-b{background:rgba(218,54,51,.20);border-color:#f85149;box-shadow:inset 5px 0 0 #f85149;padding-left:12px}#hc-market .hc-row.k-b .v{color:#ffa198;font-weight:800}#hc-market .hc-row.k-b .t b{color:#fff}
-#hc-market .hc-row.k-n{background:rgba(227,179,65,.18);border-color:#e3b341;box-shadow:inset 5px 0 0 #e3b341;padding-left:12px}#hc-market .hc-row.k-n .v{color:#f2cc60;font-weight:800}#hc-market .hc-row.k-n .t b{color:#fff}#hc-market .hc-row .hc-badge{font-size:11px;padding:2px 8px}
+#hc-market .hc-row.k-n{background:rgba(230,237,243,.06);border-color:#e6edf3;box-shadow:inset 5px 0 0 #e6edf3;padding-left:12px}#hc-market .hc-row.k-n .v{color:#ffffff;font-weight:800}#hc-market .hc-row.k-n .t b{color:#fff}#hc-market .hc-row .hc-badge{font-size:11px;padding:2px 8px}
 .lwbox>.lwc{height:clamp(300px,calc(100vh - 512px),720px)}
 }
 @media(max-width:900px){.htop{grid-template-columns:1fr}.hc-head{font-size:18px}.hc-num .v{font-size:19px}.hcard{padding:16px}}
