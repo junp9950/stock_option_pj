@@ -1,157 +1,71 @@
-# 한국 주식 수급 기반 익일 종목 선별 시스템
+# 주식 레이더 — 한국 주식 추세추종 스크리너
 
-외국인·기관 수급, 공매도, 기술적 지표를 종합해 **내일 매수 후보**를 자동 선별하는 시스템입니다.
+시장이 오를 때 강한 종목을 **종가에 사고**, 손절은 산 날 저가 아래에 걸어 두고, **21일선이 깨질 때까지 들고 가는** 매매를 돕는 사이트와 텔레그램 봇입니다.
+종목은 사용자가 차트를 보고 고르고, 사이트는 신호·순서·손절·시장 온도를 보여 줍니다.
 
-> 투자 참고용 보조 도구입니다. 실제 투자 손익의 책임은 사용자에게 있습니다.
-
----
+> 투자 참고용 도구입니다. 실제 투자 손익의 책임은 사용자에게 있습니다.
 
 ## 구성
+- **백엔드**: FastAPI + APScheduler (`backend/`), 화면은 `backend/main.py` 한 파일(HTML·JS 포함)
+- **DB**: PostgreSQL 17 (서버 로컬). 일봉 `spot_daily_prices`, 테마 `sectors`/`sector_stocks`, 실전 기록 `forward_log`, 설정·상태 `settings`
+- **데이터**: KIS Open API · 토스 · 네이버(장중 시세) · DART(실적)
+- **운영**: Azure VM 한 대, systemd `stock-analyzer`(uvicorn :8000) 앞에 Caddy(HTTPS)
 
-- **백엔드** — FastAPI + APScheduler
-- **DB** — Supabase PostgreSQL (클라우드, 집·회사 어디서든 같은 데이터)
-- **데이터** — FinanceDataReader(주가) + KIS Open API(수급·공매도)
+## 매수 규칙 (`backend/services/stock_signals.py` `_close_scores`)
+공통: 시장 국면 상승·횡보 · 거래대금 20일 평균 30억↑ · 종가 > EMA20 > EMA60 · 손절 = 산 날 저가 −1% 예약 · 종가 < EMA21 → 다음 날 아침 정리 · 1R = 손절폭
 
----
+| 신호 | 조건 | 크기 |
+|---|---|---|
+| 기본 매수 (V1.0) | RS 70~95 · 손절폭 ≤ 8% · 종가 점수 6/7 또는 이평선 모였다 돌파 (과열 매수·반도체 특별은 수량 절반) | 거래당 위험 0.5% · 10종목 · 후보가 많으면 RS 높은 순 |
+| 🔥 주도주 (이번 장 한정) | 정배열 · RS 95↑ · 손절폭 ≤ 8% · 양봉 · 종가가 그날 범위 위 절반 | 거래당 위험 0.10% · 2종목 |
 
-## 스케줄
+RS = 0.4×3개월 + 0.2×(6·9·12개월) 수익률을 거래대금 30억↑ 종목 안에서 백분위(1~99).
+규칙을 정한 12년 검증(상장폐지 포함)과 기각한 아이디어는 [`research/`](research/README.md), 숫자 요약은 [`research/RESULTS.md`](research/RESULTS.md).
 
-| 시각 (KST) | 작업 |
-|-----------|------|
-| 매일 03:00 | 최근 30일 데이터 갭 채우기 + 시그널·추천 재계산 |
-| 매일 16:30 | 오늘 데이터 수집 + 시그널 + 추천 생성 (실패 시 5분마다 재시도) |
-| 매주 월 08:00 | 유니버스 갱신 (KOSPI+KOSDAQ 시총 상위 200종목) |
-
----
-
-## 설치 방법
-
-### Windows (로컬 개발)
-
-```powershell
-git clone https://github.com/junp9950/stock_option_pj.git
-cd stock_option_pj
-python -m venv .venv
-.\.venv\Scripts\Activate.ps1
-pip install -r requirements.txt
-```
-
-`.env` 파일 생성:
-```
-DATABASE_URL=your_supabase_url
-KIS_APP_KEY=your_kis_key
-KIS_APP_SECRET=your_kis_secret
-```
-
-서버 실행:
-```powershell
-.venv\Scripts\python -m uvicorn backend.main:app --host 127.0.0.1 --port 8000
-```
-
-### Rocky Linux / RHEL (서버 배포)
-
-```bash
-curl -O https://raw.githubusercontent.com/junp9950/stock_option_pj/main/setup.sh
-chmod +x setup.sh
-./setup.sh
-```
-
-스크립트가 Python 3.11 설치 → 레포 클론 → 패키지 설치 → .env 생성 → systemd 서비스 등록까지 자동으로 처리합니다. VM 재시작 시 서버 자동 실행됩니다.
-
-코드 업데이트 시:
-```bash
-cd stock_option_pj && git pull && sudo systemctl restart stock-analyzer
-```
-
----
-
-## 대시보드
-
+## 화면
 | 탭 | 내용 |
-|----|------|
-| 대시보드 | 내일 매수 후보 TOP 7, 시장 시그널, 추천 성과, 시그널 히스토리 |
-| 전종목 스크리너 | KOSPI+KOSDAQ 200종목, 필터·정렬, 종목별 30일 수급 차트 |
-| 시장 시그널 상세 | 외인·기관 수급 기반 5단계 시그널 |
+|---|---|
+| 오늘 | 시장 카드(지수 선·근거 6개) · 종목 목록(오늘 진입·대기·신호 추적) · 신호 찍힌 차트 · 종목 정보 |
+| 차트 후보 | 손절 짧은 자리 · 차트 모양 · 대량거래 · EMA 모임 돌파 · 대형주 눌림 · 바닥 박스 |
+| 섹터 캘린더 · 섹터 수급 · 거래대금 순위 · 시장 히트맵 | 섹터 흐름 |
+| 매매 일지 | 로그인 후 내 매매 분석 · 보유 · 오늘 신호 수량 계산 |
+| 종베 | 종가 매수 후보 · 내 종베 vs 사이트 성적표 |
+| 종목토론 · 건의사항 | 게시판 |
 
----
+시장 문구는 세 탭 공통(`/api/market/verdict`): 시장 상승 · 매매 가능 / 횡보 / 하락 · 쉬기.
 
-## 종목 시그널 지표
+## 텔레그램 (평일, KST)
+| 시각 | 내용 |
+|---|---|
+| 15:12 | 종가 매수 알림 (기본 신호 RS 순 + 주도주) |
+| 15:40 | 관심·보유 종목 점검 |
+| 15:45쯤 | 장 마감 요약 · 종베 채점 |
+| 18:35 | 추적 중 주도주 21일선 이탈 → 내일 아침 정리 (있을 때만) |
+| 18:40 | 실전 기록 (가상 계좌) |
+| 매달 1일 08:40 | 실전 기록 월간 보고 |
 
-| 지표 | 비중 |
-|------|------|
-| 외국인 강도 | 12% |
-| 기관 강도 | 12% |
-| 동시매수 | 9% |
-| MA 포지션 | 9% |
-| MACD | 9% |
-| RSI(14) | 8% |
-| 거래량 급등 | 7% |
-| 모멘텀 5일 | 7% |
-| 연속매수 | 7% |
-| 볼린저밴드 | 6% |
-| 공매도 비율 | 5% |
-| 공매도 추세 | 4% |
+명령: `/종베 종목 가격` · `/알림` · `/주도주` · `/주도주 끄기 이유` · `/주도주 켜기 이유`
 
-> 공매도 데이터가 없으면 해당 비중이 다른 지표로 자동 재분배됩니다.
+## 실전 기록 (`backend/services/forward_log.py`)
+규칙을 V1.0으로 고정하고 매일 신호를 그대로 따라간 가상 계좌를 쌓습니다(2026-10-12 시작).
+P = 15:12 신호 → 종가 체결 · S = 종가 신호 → 다음 날 시가 · X = 진단 · L·Lsh = 주도주 · Z = 모멘텀 돌파 비교.
+6개월 전에는 판정하지 않고, 규칙을 바꾸면 버전을 올려 새로 시작합니다.
 
----
+## 배포
+`main`에 push하면 GitHub Actions(self-hosted runner)가 서버에서 pull → `scripts/deploy_check.py`(전 파일 컴파일 + 주요 API 200 확인) → 통과하면 재시작, 실패하면 이전 커밋으로 되돌리고 텔레그램으로 알립니다.
 
-## 데이터 수집 우선순위
-
-| 항목 | 1순위 | 2순위 | 실패 시 |
-|------|-------|-------|---------|
-| 주가 OHLCV | FinanceDataReader | — | 건너뜀 |
-| 외국인·기관 수급 | KIS Open API | — | 0 (중립) |
-| 공매도 | KRX 직접 API | KIS Open API | 0 (중립) |
-| 선물·파생 | KS200 지수 (선물 종가 대신) | — | 0 (중립) |
-
-> KRX 차단 환경(회사망, 클라우드 VM)에서는 KIS Open API로 자동 전환됩니다.
-
----
-
-## 초기 데이터 세팅 (최초 설치 시)
-
-**Supabase DB를 공유 중이면 생략해도 됩니다.**
-
-```powershell
-# 1. 가격·수급 백필
-Invoke-RestMethod -Method POST "http://127.0.0.1:8000/api/data/backfill?start_date=2026-01-01&end_date=2026-04-14"
-
-# 2. 시그널 재계산
-Invoke-RestMethod -Method POST "http://127.0.0.1:8000/api/data/signal-backfill"
-Invoke-RestMethod -Method POST "http://127.0.0.1:8000/api/data/market-signal-backfill"
-
-# 3. 추천 생성
-Invoke-RestMethod -Method POST "http://127.0.0.1:8000/api/jobs/backfill?start_date=2026-01-02&end_date=2026-04-14"
-```
-
----
-
-## 주요 API
-
-| 엔드포인트 | 설명 |
-|-----------|------|
-| `GET /api/market-signal` | 시장 시그널 |
-| `GET /api/screener/tomorrow-picks` | 내일 매수 후보 TOP 7 |
-| `GET /api/screener` | 전종목 스크리너 |
-| `GET /api/recommendations/performance` | 추천 성과 (T+1 수익률) |
-| `POST /api/jobs/run-daily` | 파이프라인 수동 실행 (API 직접 호출용) |
-
----
-
-## 트러블슈팅
-
-**KRX 수집 실패**
-회사망·클라우드 VM에서 자주 발생. KIS API로 자동 전환되므로 무시해도 됩니다.
-
-**포트 충돌 (Windows)**
-```powershell
-netstat -ano | findstr :8000
-taskkill /F /PID <PID>
-```
-
-**서비스 재시작 (Linux)**
+로컬에서 화면만 시험할 때는 예약 작업이 운영과 겹치지 않게:
 ```bash
-sudo systemctl restart stock-analyzer
-sudo journalctl -u stock-analyzer -f
+NO_SCHEDULER=1 .venv/bin/python -m uvicorn backend.main:app --port 8011
 ```
+
+## 폴더
+```
+backend/        FastAPI 앱 · 화면(main.py) · 신호(services/stock_signals.py) · 스크리너(screener/) · 텔레그램(services/telegram.py)
+scripts/        배포 점검 등
+research/       12년 검증 스크립트 · 출력 · 사전등록 (기록용)
+docs/           운영 메모
+tests/          테스트
+```
+
+`.env`(DB 주소, KIS·토스·DART 키, 텔레그램 봇 토큰)는 저장소에 올리지 않습니다.
