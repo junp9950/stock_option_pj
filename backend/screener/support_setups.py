@@ -166,9 +166,19 @@ def scan(db: Session) -> dict:
         f = fund.get(x["code"])
         x["fund"] = f
         x["fund_tier"] = 0 if not f else (3 if f["good"] else 2 if f["grow"] else 0 if f["loss"] else 1)
+    # 영업 적자는 뺌 (2026-10-10): 3년 1,012건 중 적자 −0.20R · 손절 63% — 이 목록에서 가장 나쁜 묶음
+    n_loss = sum(1 for x in items if x["fund"] and x["fund"]["loss"])
+    items = [x for x in items if not (x["fund"] and x["fund"]["loss"])]
     items.sort(key=lambda x: (-x["fund_tier"], -x["stop_pct"]))    # 실적 좋은 순 → 손절이 가까운 순
+    try:
+        from backend.services.stock_signals import rs_latest  # noqa: PLC0415
+        rs = rs_latest(db)
+    except Exception:  # noqa: BLE001
+        rs = {}
+    for x in items:
+        x["rs"] = rs.get(x["code"])
     from backend.services.stock_flags import get as flags_get  # noqa: PLC0415
     fl = flags_get([x["code"] for x in items])
     for x in items:
         x["flags"] = fl.get(x["code"], {}).get("flags", [])
-    return {"trading_date": C.index[-1].isoformat(), "items": items}
+    return {"trading_date": C.index[-1].isoformat(), "items": items, "dropped_loss": n_loss}

@@ -659,7 +659,7 @@ select{background:#21262d;border:1px solid #30363d;color:#c9d1d9;padding:6px 10p
   <details class="sec" data-k="ss">
     <summary>🎯 손절 짧은 자리 <span class="ts" id="ss-info"></span></summary>
 
-    <p class="lead" style="margin-top:6px"><b>추세선 지지</b>(저점 높이는 추세선 + 위 수평 저항, 전진건설로봇형) · <b>수평 지지 수렴</b>(거래 마르며 좁아지는 박스, SK이터닉스형). 둘 다 앞서 거래가 터진 뒤 거래가 마른 종목. 손절선이 가까운 순.</p>
+    <p class="lead" style="margin-top:6px"><b>추세선 지지</b>(저점 높이는 추세선 + 위 수평 저항, 전진건설로봇형) · <b>수평 지지 수렴</b>(거래 마르며 좁아지는 박스, SK이터닉스형). 둘 다 앞서 거래가 터진 뒤 거래가 마른 종목. 실적 좋은 순 → 손절선이 가까운 순. 3년 검증: 전체는 우위 거의 없음(+0.1R) · <b>📈 실적 개선이면 +0.5R</b> · 영업 적자(−0.2R)는 뺐음. 강도 숫자 = 시장 대비 세기(70↑ 센 편, 95↑ 🔥 최상위).</p>
     <div id="ss-body" style="display:flex;flex-wrap:wrap;gap:6px" class="ts">로딩 중…</div>
   </details>
   <details class="sec" data-k="cd">
@@ -758,8 +758,8 @@ select{background:#21262d;border:1px solid #30363d;color:#c9d1d9;padding:6px 10p
     <div id="ema-wait" style="display:flex;flex-wrap:wrap;gap:6px" class="ts"></div>
   </details>
   <details class="sec" data-k="lp">
-    <summary>🏦 대형주 눌림 박스 <span class="ts" id="lp-info"></span></summary>
-    <p class="lead" style="margin-top:6px">하루 거래대금 <b>500억↑ 대형주</b>가 60일 고점에서 <b>-5~-20%</b> 눌려 120일선 근처 위에서 쉬고, 거래가 평소(60일) 이하. 대형주는 바닥(-40%)까지 잘 안 빠져서 바닥 박스 감시에는 안 잡히는 자리(에이피알형). <b>손절 = 최근 15일 박스 하단 아래 마감</b> · 20일 보유.</p>
+    <summary>🏦 대형주 눌림 박스 <span class="ts">· 참고 (검증 약함)</span> <span class="ts" id="lp-info"></span></summary>
+    <p class="lead" style="margin-top:6px">하루 거래대금 <b>500억↑ 대형주</b>가 60일 고점에서 <b>-5~-20%</b> 눌려 120일선 근처 위에서 쉬고, 거래가 평소(60일) 이하. 대형주는 바닥(-40%)까지 잘 안 빠져서 바닥 박스 감시에는 안 잡히는 자리(에이피알형). <b>손절 = 최근 15일 박스 하단 아래 마감</b> · 20일 보유. <span style="color:#d29922">⚠️ 근거가 '3년 20일 뒤 평균 +7%' 하나뿐(시장 대비·손절 반영 안 됨) — 매수 신호가 아니라 차트 볼 목록.</span></p>
     <div id="lp-body" style="display:flex;flex-wrap:wrap;gap:6px" class="ts">로딩 중…</div>
   </details>
   <details class="sec" data-k="bb">
@@ -1887,6 +1887,9 @@ function cdMatch(it, terms){
   });
 }
 // 20일선 이격도 표시: +30%↑ 과열, +20%↑ 주의 (3년 확인 기준)
+function rsTag(x){   // 강도(RS) 숫자 (2026-10-10 차트 후보 카드)
+  return x.rs!=null?` <span style="font-size:11px;color:${x.rs>=95?'#e8590c':x.rs>=70?'#c9d1d9':'#8b949e'}" title="강도: 거래대금 30억↑ 종목 중 3·6·9·12개월 수익률 순위 (99가 최고) · 기본 매수 70~95 · 주도주 95↑">강도 ${x.rs}${x.rs>=95?' 🔥':''}</span>`:'';
+}
 function flagTag(x){   // 투자주의·경고·위험, 단기과열, 관리종목, 신용불가
   const f=(x&&x.flags)||[]; if(!f.length) return '';
   const col=t=>t==='투자위험'||t==='투자경고'||t==='관리종목'?'#f85149':t==='신용불가'?'#d29922':'#e3b341';
@@ -1943,9 +1946,9 @@ async function loadSupportSetups(){
   const el=document.getElementById('ss-body'); if(!el) return;
   if(!d){ el.textContent='불러오지 못했습니다'; return; }
   _ssDate=d.trading_date; await lbLoad(d.trading_date);
-  document.getElementById('ss-info').textContent=`${d.trading_date} · ${d.items.length}개`;
+  document.getElementById('ss-info').textContent=`${d.trading_date} · ${d.items.length}개${d.dropped_loss?` · 영업 적자 ${d.dropped_loss}개 뺌`:''}`;
   el.innerHTML=d.items.length?d.items.map(x=>`<span onclick="openChartModal('${x.code}','${x.name}','')" style="cursor:pointer;border:1px solid ${x.type.startsWith('추세선')?'#bc8cff':'#58a6ff'};border-radius:8px;padding:6px 10px;font-size:12.5px;line-height:1.55">
-    <b style="color:#e6edf3">${x.name}</b>${flagTag(x)} <span style="font-size:11px;color:${x.type.startsWith('추세선')?'#bc8cff':'#58a6ff'}">${x.type}</span><br>
+    <b style="color:#e6edf3">${x.name}</b>${flagTag(x)}${rsTag(x)} <span style="font-size:11px;color:${x.type.startsWith('추세선')?'#bc8cff':'#58a6ff'}">${x.type}</span><br>
     <span style="color:#58a6ff">손절 ${x.stop.toLocaleString()}원 (${x.stop_pct}%)</span> · <span style="color:#f85149">위 ${x.target.toLocaleString()}원 (+${x.target_pct}%)</span><br>
     ${lbBtns(x,'손절 짧은 자리',_ssDate)}<br><span class="ts">현재 ${x.close.toLocaleString()}원 · 거래 터질 때의 ${x.dry}배 · 터진 뒤 ${x.since_burst}일${x.families.length?' · '+x.families[0]:''}</span>
     ${x.fund?`<br><span style="font-size:11.5px;color:${x.fund.good?'#3fb950':x.fund.grow?'#c9d1d9':x.fund.loss?'#f85149':'#8b949e'}">${x.fund.good?'📈 실적 개선':x.fund.grow?'이익 증가':x.fund.loss?'⚠ 영업 적자':'이익 감소'} · ${x.fund.period} 영업익 ${x.fund.op_yoy!=null?(x.fund.op_yoy>0?'+':'')+x.fund.op_yoy+'%':'-'} · 매출 ${x.fund.rev_yoy!=null?(x.fund.rev_yoy>0?'+':'')+x.fund.rev_yoy+'%':'-'}${x.fund.margin!=null?' · 이익률 '+x.fund.margin+'%':''}</span>`:''}</span>`).join('')
@@ -1972,7 +1975,7 @@ async function loadLargePullback(){
   if(!d){ el.textContent='불러오지 못했습니다'; return; }
   document.getElementById('lp-info').textContent=`${d.trading_date} · ${d.items.length}개${d.market==='하락'?' · 🔴 하락장 — 보기만':''}`;
   el.innerHTML=d.items.length?d.items.map(x=>`<span onclick="openChartModal('${x.code}','${x.name}','')" style="cursor:pointer;border:1px solid #1f6feb;border-radius:8px;padding:6px 10px;font-size:12.5px;line-height:1.55">
-    <b style="color:#e6edf3">${x.name}</b> <span style="color:${x.change_pct>=0?'#f85149':'#58a6ff'}">${x.change_pct>0?'+':''}${x.change_pct}%</span><br>
+    <b style="color:#e6edf3">${x.name}</b>${rsTag(x)} <span style="color:${x.change_pct>=0?'#f85149':'#58a6ff'}">${x.change_pct>0?'+':''}${x.change_pct}%</span><br>
     <span class="ts">고점 ${x.off_hi60_pct}% · 15일 박스 폭 ${x.box_pct}% · 거래 ${x.vol_ratio}배 · 하루 ${x.liq_eok.toLocaleString()}억${x.families.length?' · '+x.families[0]:''}</span><br>
     <span style="color:#58a6ff">손절 ${x.stop.toLocaleString()}원 (${x.stop_pct}%)</span></span>`).join(''):'지금은 없습니다';
 }

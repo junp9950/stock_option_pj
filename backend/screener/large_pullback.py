@@ -51,4 +51,11 @@ def scan(db: Session) -> dict:
                       "box_pct": round((hi15 / lo15 - 1) * 100, 1), "stop": stop, "stop_pct": round((stop / cl - 1) * 100, 1),
                       "liq_eok": round(liq / 1e8), "families": fam_of.get(c, [])[:2]})
     items.sort(key=lambda x: -x["liq_eok"])
+    try:
+        from backend.services.stock_signals import rs_latest  # noqa: PLC0415
+        rs = rs_latest(db)
+    except Exception:  # noqa: BLE001
+        rs = {}
+    for x in items:
+        x["rs"] = rs.get(x["code"])
     return {"trading_date": C.index[-1].isoformat(), "market": (current_regime(db) or {}).get("state"), "items": items}

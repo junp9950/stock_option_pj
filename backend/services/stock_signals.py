@@ -1057,6 +1057,17 @@ def rs_hist(db: Session) -> dict:
     return v
 
 
+def rs_latest(db: Session) -> dict:
+    """오늘 RS {code: 1~99} — 차트 후보 카드에 강도 숫자 붙이기용 (2026-10-10). 거래대금 30억 미만 종목은 없음."""
+    rh = rs_hist(db)
+    out = {}
+    for c, a in (rh.get("rs") or {}).items():
+        v = float(a[-1])
+        if v == v:
+            out[c] = round(v)
+    return out
+
+
 def _rs_hist(db: Session, latest, keep: int = 270) -> dict:
     # 메모리 아끼기 (pandas read_sql·pivot이 500MB 넘게 씀): 최근 400일 안에 하루라도 30억↑ 거래된 종목만, numpy 배열에 바로 채운다
     codes = [r[0] for r in db.execute(text("select stock_code from spot_daily_prices where trading_date >= cast(:d as date) - 400 "
