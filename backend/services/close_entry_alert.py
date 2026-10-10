@@ -18,10 +18,10 @@ def text_now(db: Session, k: int = 8) -> str | None:
     if not sc.get("live"):
         return None
     names = dict(db.execute(text("select code, name from stocks")).all())
-    allr = [(c, v) for c, v in sc["scores"].items() if (v["score"] >= 6 or v.get("ema") or v.get("hot") or v.get("semi")) and v["flags"][1]]     # 시장보다 센 종목(RS 70~95)만 · 이평선 모였다 돌파 포함
+    allr = [(c, v) for c, v in sc["scores"].items() if v.get("buy")]     # 시장보다 센 종목(RS 70~95)만 · 이평선 모였다 돌파 포함
     lim = lambda v: 0.12 if v.get("semi") else 0.08          # 반도체·AI 특별은 손절폭 12%까지
     wide = [cv for cv in allr if cv[1]["risk"] > lim(cv[1])]          # 손절폭 8%↑는 뺀다 (3년 R +0.11) · 5~8%는 후순위 (R +0.35)
-    rows = sorted((cv for cv in allr if cv[1]["risk"] <= lim(cv[1])), key=lambda cv: cv[1]["risk"])
+    rows = [cv for cv in allr if cv[1]["risk"] <= lim(cv[1])]
     out = [f"⏱ <b>종가 진입 후보</b> {sc.get('at', '')} 기준 (봉 확정 전)"]
     try:
         st = market_status(db) or {}
@@ -76,7 +76,6 @@ def text_now(db: Session, k: int = 8) -> str | None:
     out.append("순서: 강도(RS) 높은 순 — 칸이 모자라면 위에서부터 (12년 검증)")
     for c, v in rows[:k]:
         out.append(f"{'✅' if v['risk'] <= 0.03 and not v.get('hot') and not v.get('semi') else '·'} <b>{names.get(c, c)}</b> RS {v.get('rs') or 0:.0f} · {'이평선 돌파 · ' if v.get('ema') else ''}{'과열 매수(이번 장) · 수량 절반 · ' if v.get('hot') else ''}{'반도체·AI 특별 · 수량 절반 · ' if v.get('semi') else ''}{v['score']}/7 · 스탑로스 {v['stop']:,.0f} (-{v['risk'] * 100:.1f}%)"
-                   + (" · 후순위, 수량 절반 이하" if v["risk"] > 0.05 and not v.get("semi") else "")
                    + (f" · {srk[c][1]} {srk[c][0]}위" if srk.get(c, (99,))[0] <= 8 else " · 섹터 밖"))
     out += lead_lines
     out.append("파는 법: 사면 바로 스탑로스 예약 (정규장만) · 21일선 아래 종가면 다음 날 아침 정리")

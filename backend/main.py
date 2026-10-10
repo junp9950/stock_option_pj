@@ -2126,7 +2126,7 @@ async function loadWorkspace(){
   if(!_ws.code){ const L=wsItems(_ws.tab); const f=L[0]||(d.candidates||[])[0]||(d.track||[])[0]; if(f) wsOpen(f.code,f.name); }
 }
 function wsItems(t){ const d=_ws.data||{}; return t==='track'?(d.track||[]):(d.candidates||[]).filter(x=>(x.lane||'entry')===t); }
-const WS_LANE={entry:'종가에 진입 · 강도(RS) 높은 순 — 칸이 모자라면 위에서부터 · 5~8%는 수량 절반 · 사면 스탑로스(그날 저가 -1%) 예약 · 21일선 아래 종가면 다음 날 아침 정리 · ⬇ 급락 날 줍기(시험 중)는 손절 20일선 · 수량 절반',
+const WS_LANE={entry:'종가에 진입 · 강도(RS) 높은 순 — 칸이 모자라면 위에서부터 · 과열 매수·반도체 특별은 수량 절반 · 사면 스탑로스(그날 저가 -1%) 예약 · 21일선 아래 종가면 다음 날 아침 정리 · ⬇ 급락 날 줍기(시험 중)는 손절 20일선 · 수량 절반',
   wait:'신호 전 · 돌파 나오면 그때 · ⏸ 손절폭 8%↑는 폭 좁은 날 기다리기 · 참고 = 다른 기준 신호', track:'내 매매 아님 · 최근 20일 사이트 신호(점수 6↑ · ⬇ 급락 날 줍기) + 🔥 주도주(60일)를 규칙대로 따라간 것 · ⚠ = 내일 아침 정리'};
 function wsTab(t){ _ws.tab=t; try{ localStorage.setItem('ws-tab',t); }catch(e){} renderWsList(); }
 function renderWsList(){

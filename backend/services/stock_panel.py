@@ -157,8 +157,8 @@ def _panel(db: Session, code: str, owner: str | None = None) -> dict:
             if sc_ and sc_.get("buy"):
                 rk_ = sc_["risk"]
                 tags.insert(0, "반도체·AI 특별 · 수량 절반 (슈퍼사이클)" if sc_.get("semi") else "과열 매수 · 수량 절반 (이번 장)" if sc_.get("hot") else ("✅ 손익비 좋음" if rk_ <= 0.03 else "종가 점수 6↑" if rk_ <= 0.05 and sc_["score"] >= 6
-                                else "이평선 모였다 돌파 · 매수" if rk_ <= 0.05 else "후순위 · 수량 절반")
-                            + (" · 이평선 모였다 돌파" if sc_.get("ema") and (rk_ <= 0.03 or rk_ > 0.05) else ""))
+                                else "이평선 모였다 돌파 · 매수" if sc_.get("ema") else "종가 점수 6↑")
+                            + (" · 이평선 모였다 돌파" if sc_.get("ema") and rk_ <= 0.03 else ""))
                 sr_ = sector_rank_of(db).get(code, (99, ""))
                 tags.insert(1, f"뜨는 섹터 {sr_[1]}" if sr_[0] <= 3 else f"올라오는 섹터 {sr_[1]}" if sr_[0] <= 8 else "섹터 밖 · 후순위")
             if any(x["code"] == code for x in dip_now(db).get("items", [])):

@@ -17,19 +17,22 @@
 from __future__ import annotations
 
 import hashlib
+import copy
 import json
 import logging
-from datetime import date, datetime
+from backend.services import account_engine as engine
+from backend.services.trading_rules import RULE_VERSION, size_multiplier
+from datetime import date, datetime, timedelta
 from zoneinfo import ZoneInfo
 
 from sqlalchemy import text
 from sqlalchemy.orm import Session
 
 logger = logging.getLogger(__name__)
-VERSION = "V1.0"
+VERSION = "V1.1"
 CONFIG = {"signal": "stock_signals._close_scores buy (S0)", "order": "RS desc", "slots": 10, "risk": 0.005,
-          "stop": "entry-day low x0.99", "exit": "close<EMA21 -> next open", "cost_buy": 0.0005, "cost_sell": 0.0025,
-          "market_filter": "bull (record_close에서 확인)", "frozen": "2026-10-10", "next_open_cancel_if_open_le_stop": True}
+          "stop": "signal snapshot low x0.99", "exit": "close<EMA21 -> next open", "cost_buy": 0.0005, "cost_sell": 0.0025,
+          "market_filter": "P/L: previous completed session, frozen at snapshot; S/X: signal close", "frozen": "2026-10-11", "next_open_cancel_if_open_le_stop": True}
 # 주도주 L (V1.0 아님, 이번 장 한정 별도 전략 · GPT 운영 규칙 10/10): 정배열·RS 95↑·손절폭 8%↓·양봉·종가 범위 위 절반
 # 실제 L = 거래당 위험 0.25% · 최대 2종목 · 15:12 신호 → 종가. Lsh = 모든 주도주 신호 전수 기록(칸 제한 없음) → 꺼짐 판단용.
 # 운영(10/10 GPT·사용자 합의 수정): 거래당 위험 0.10% · 최대 2종목. 상승장 아님 → 신규 중단. 실제 L 누적 R 고점 대비 −15R → 실매매 정지(계좌 약 −1.5%, 사용자 '/주도주 켜기' 전까지 기록만).
@@ -37,8 +40,8 @@ CONFIG = {"signal": "stock_signals._close_scores buy (S0)", "order": "RS desc", 
 #   사용자가 직접 끄고 켜면(텔레그램 /주도주 끄기·켜기) 그때 30건 평균·낙폭과 함께 기록 → 나중에 사람 판단이 도움이 됐는지 평가.
 # Z = 모멘텀 돌파 비교 규칙(종가가 직전 20일 고가 위 · 거래량 20일 평균 1.9배↑ · 그날 +5%↑ · 거래대금 30억↑), V1.0과 같은 체결·손절·정리로 종목 고르기만 비교.
 LEAD = {"risk": 0.0010, "slots": 2, "roll": 30, "warn_mean": -0.10, "warn_R": -8.0, "stop_R": -15.0}
-CONFIG_HASH = hashlib.sha256(json.dumps(CONFIG, sort_keys=True).encode()).hexdigest()[:12]
-STATE_KEY = "fwd_v1_state"
+CONFIG_HASH = hashlib.sha256(json.dumps({"account": CONFIG, "lead": LEAD, "rules": RULE_VERSION}, sort_keys=True).encode()).hexdigest()[:12]
+STATE_KEY = "fwd_v1_1_state"
 KST = ZoneInfo("Asia/Seoul")
 
 
@@ -52,7 +55,7 @@ def _ensure(db: Session) -> None:
 def _save(db: Session, d, kind: str, payload: dict) -> None:
     _ensure(db)
     db.execute(text("""insert into forward_log (trading_date, kind, version, payload) values (:d, :k, :v, cast(:p as jsonb))
-        on conflict (trading_date, kind, version) do update set payload = excluded.payload, created_at = now()"""),
+        on conflict (trading_date, kind, version) do nothing"""),
                {"d": d, "k": kind, "v": VERSION, "p": json.dumps(payload, ensure_ascii=False, default=float)})
     db.commit()
 
@@ -71,38 +74,66 @@ def _cands(scores: dict, prices: dict | None = None, lead: bool = False) -> list
             continue
         px = (prices or {}).get(c)
         out.append({"code": c, "score": v["score"], "flags": [bool(x) for x in v["flags"]], "ema": bool(v.get("ema")),
-                    "hot": bool(v.get("hot")), "semi": bool(v.get("semi")), "rs": v.get("rs"), "stop": round(float(v["stop"]), 2),
-                    "risk": round(float(v["risk"]), 5), "price": px, "state": v.get("lead_state") or []})
-    out.sort(key=lambda x: -(x["rs"] or 0))
+                    "hot": bool(v.get("hot")), "semi": bool(v.get("semi")), "rs": v.get("rs"), "stop": float(v["stop"]),
+                    "risk": float(v["risk"]), "price": px if px is not None else v.get("price"), "size_mult": size_multiplier(v), "state": v.get("lead_state") or []})
+    out.sort(key=lambda x: (-(x["rs"] or 0), x["code"]))
     for k, x in enumerate(out, 1):
         x["rs_rank"] = k
     return out
 
 
 def snapshot_1512(db: Session) -> str:
-    """15:12 장중 점수로 매수 후보 전체 저장 (close_entry_alert와 같은 2분 캐시를 씀)."""
-    from backend.services.stock_signals import close_scores_now  # noqa: PLC0415
-    sc = close_scores_now(db)
-    if not sc.get("live"):
-        return "장중 점수 없음"
+    """Freeze signal values and the last completed market filter; first write wins."""
+    from backend.services.stock_signals import close_scores_now, _bull_days, _CSL
     today = datetime.now(KST).date()
-    codes = [c for c, v in sc["scores"].items() if v.get("buy")]
-    prices = {}
-    try:
-        from backend.services.naver_live import snapshot  # noqa: PLC0415
-        prices = {c: v["c"] for c, v in snapshot(codes, max_age=90).items()}
-    except Exception as exc:  # noqa: BLE001
-        logger.warning("15:12 가격 실패: %s", exc)
-    codes += [c for c, v in sc["scores"].items() if v.get("lead") and c not in prices]
-    try:
-        from backend.services.naver_live import snapshot  # noqa: PLC0415
-        prices.update({c: v["c"] for c, v in snapshot(codes, max_age=90).items()})
-    except Exception:  # noqa: BLE001
-        pass
-    cands = _cands(sc["scores"], prices)
-    leads = _cands(sc["scores"], prices, lead=True)
-    _save(db, today, "1512", {"at": sc.get("at"), "config": CONFIG_HASH, "universe": len(sc["scores"]), "cands": cands, "leads": leads})
+    existing = _load(db, today, "1512")
+    if existing is not None:
+        return "이미 저장한 15:12 기록 유지"
+    sc = close_scores_now(db)
+    if not sc.get("live") or sc.get("date") != str(today):
+        return "오늘 장중 점수 없음"
+    latest = db.execute(text("select max(trading_date) from spot_daily_prices where trading_date < :d"), {"d": today}).scalar()
+    bull = bool(_bull_days(db).get(latest, False))
+    cands = _cands(sc["scores"])
+    leads = _cands(sc["scores"], lead=True)
+    lead_on = lead_state(db)["on"]
+    plans = _plan_snapshot(db, today, _CSL.get("quotes", {}), cands, leads, bull, lead_on, latest)
+    _save(db, today, "1512", {"at": sc.get("at"), "config": CONFIG_HASH,
+          "market_asof": str(latest), "bull": bull, "lead_on": lead_on, "plans": plans,
+          "universe": len(sc["scores"]), "cands": cands, "leads": leads})
     return f"15:12 후보 {len(cands)} · 주도주 {len(leads)}"
+
+
+def _plan_snapshot(db, today, quotes, cands, leads, bull, lead_on, last_completed=None):
+    """Freeze selected orders and quantities using the same 15:12 partial bars."""
+    from backend.services.telegram import _get
+    st = _get(db, STATE_KEY, {}) or {}
+    if st.get("config", CONFIG_HASH) != CONFIG_HASH or st.get("version", VERSION) != VERSION:
+        raise ValueError("계좌 규칙/버전 불일치")
+    if st.get("last") and last_completed is not None and st["last"] != str(last_completed):
+        raise ValueError("이전 거래일 계좌부터 복구한 후 스냅샷을 저장해야 합니다")
+    specs = [("P", cands if bull else [], CONFIG["slots"], CONFIG["risk"]),
+             ("L", leads if bull and lead_on else [], LEAD["slots"], LEAD["risk"]),
+             ("Lsh", leads if bull else [], 999, .0005)]
+    codes = {x["code"] for _, pool, _, _ in specs for x in pool}
+    codes.update(c for name, _, _, _ in specs for c in st.get(name, {}).get("pos", {}))
+    bars = _bars(db, sorted(codes), today)
+    for code in codes:
+        history = [b for b in bars.get(code, []) if b[0] < today]
+        q = quotes.get(code)
+        if q and all(q.get(k) for k in ("o", "h", "l", "c")):
+            previous = history[-1][4] if history and history[-1][4] > 0 else q["o"]
+            history.append((today,q["o"],q["h"],q["l"],q["c"],(q["c"]/previous-1)*100))
+        bars[code] = history
+    context = engine.day_context(bars, today)
+    plans = {}
+    for name, pool, slots, risk in specs:
+        account = copy.deepcopy(st.get(name) or _new_acct())
+        report = _step(account, name, today, bars, pool, "close", slots, risk, context)
+        by_code = {x["code"]:x for x in pool}
+        plans[name] = [{**by_code[code], "planned_shares": account["pos"][code]["sh"]}
+                       for code in report["selected"]]
+    return plans
 
 
 def _bars(db: Session, codes: list[str], upto) -> dict:
@@ -118,103 +149,23 @@ def _bars(db: Session, codes: list[str], upto) -> dict:
     return out
 
 
-def _ema21(closes: list[float]) -> float:
-    k = 2 / 22; e = closes[0]
-    for x in closes[1:]:
-        e = x * k + e * (1 - k)
-    return e
+def _ema21(closes):
+    return engine.ema21(closes)
 
 
-def _new_acct() -> dict:
-    return {"cash": 1.0, "pos": {}, "pending": [], "eq": [], "trades": [], "peak": 1.0}
+def _new_acct():
+    return engine.new_account()
 
 
-def _equity(a: dict, bars: dict, d) -> float:
-    mv = 0.0
-    for c, p in a["pos"].items():
-        b = [x for x in bars.get(c, []) if x[0] <= d]
-        mv += p["sh"] * (b[-1][4] if b else p["px0"])
-    return a["cash"] + mv
+def _equity(a, bars, d):
+    return engine.equity(a, engine.day_context(bars, d)["close"])
 
 
-def _step(a: dict, name: str, d, bars: dict, cands: list[dict], entry: str, slots: int | None = None, rp: float | None = None) -> dict:
-    """하루 진행. entry: 'close'(P·X) 또는 'next_open'(S: 오늘 시가에 어제 주문 체결, 오늘 후보는 내일 주문)."""
-    cb, cs = CONFIG["cost_buy"], CONFIG["cost_sell"]
-    slots = slots or CONFIG["slots"]; rp = rp or CONFIG["risk"]
-    notes = []
-    today = {c: [x for x in bars.get(c, []) if x[0] == d] for c in set(a["pos"]) | {p["code"] for p in a["pending"]} | {x["code"] for x in cands}}
-    # 1) S: 어제 주문을 오늘 시가에
-    if entry == "next_open" and a["pending"]:
-        E_ = _equity(a, bars, d)
-        for o in a["pending"]:
-            if len(a["pos"]) >= slots:
-                notes.append(f"칸 없음 {o['code']}"); continue
-            if o["code"] in a["pos"] or not today.get(o["code"]):
-                continue
-            op = today[o["code"]][0][1]
-            if op <= 0:
-                continue
-            if op <= o["stop"]:                           # 시가가 이미 전날 정한 손절가 아래 = 손절 구조가 무효 → 진입 취소 (GPT 검토 10/10, 실행 정의)
-                notes.append(f"시가가 손절 아래라 취소 {o['code']}"); continue
-            rk = 1 - o["stop"] / op
-            val = rp * E_ / rk
-            a["cash"] -= val * (1 + cb)
-            a["pos"][o["code"]] = {"sh": val / op, "px0": op, "d0": str(d), "stop": o["stop"], "risk0": rk, "rs": o.get("rs"), "hi": op, "lo": op, "exit_next": False}
-        a["pending"] = []
-    # 2) 청산: 어제 종가에 EMA21 아래였으면 오늘 시가 / 아니면 손절 예약
-    for c in list(a["pos"]):
-        p = a["pos"][c]; tb = today.get(c)
-        if not tb or p["d0"] == str(d) and entry != "next_open":
-            continue
-        _, o, h, l, cl, ch = tb[0]
-        locked = h == l and ch <= -29
-        px = None; why = ""
-        if p["exit_next"]:
-            px, why = o, "21선"
-        elif l > 0 and l <= p["stop"]:
-            px, why = min(o, p["stop"]) if o > 0 else p["stop"], "손절"
-        if px is not None and locked:
-            notes.append(f"하한가 잠김 이월 {c}"); px = None
-        p["hi"] = max(p["hi"], h); p["lo"] = min(p["lo"], l) if l > 0 else p["lo"]
-        if px is not None:
-            a["cash"] += p["sh"] * px * (1 - cs)
-            net = px / p["px0"] - 1 - cb - cs
-            a["trades"].append({"code": c, "d0": p["d0"], "px0": p["px0"], "d1": str(d), "px1": px, "why": why, "R": round(net / p["risk0"], 3),
-                                "net": round(net, 4), "mfe": round(p["hi"] / p["px0"] - 1, 4), "mae": round(p["lo"] / p["px0"] - 1, 4), "rs": p.get("rs")})
-            del a["pos"][c]
-    # 3) 진입 (P·X: 오늘 종가)
-    E_ = _equity(a, bars, d)
-    selected, skipped = [], []
-    if entry == "close":
-        for x in cands:                                  # RS 순
-            if x["code"] in a["pos"]:
-                continue
-            if len(a["pos"]) >= slots:
-                skipped.append(x["code"]); continue
-            tb = today.get(x["code"])
-            if not tb:
-                skipped.append(x["code"]); continue
-            _, o, h, l, cl, ch = tb[0]
-            stop_final = l * 0.99                         # 실제 손절 = 확정 저가 -1%
-            rk_plan = x["risk"] if x.get("risk") else 1 - stop_final / cl     # 크기는 신호 시점 손절폭으로
-            val = rp * E_ / max(rk_plan, 0.003)
-            a["cash"] -= val * (1 + cb)
-            rk_real = 1 - stop_final / cl
-            a["pos"][x["code"]] = {"sh": val / cl, "px0": cl, "d0": str(d), "stop": stop_final, "risk0": rk_real, "rs": x.get("rs"), "hi": cl, "lo": cl,
-                                   "exit_next": False, "risk_plan": rk_plan, "heat": round(val * rk_real / E_, 5)}
-            selected.append(x["code"])
-    else:
-        a["pending"] = [{"code": x["code"], "stop": x["stop"], "rs": x.get("rs")} for x in cands if x["code"] not in a["pos"]]
-    # 4) 오늘 종가로 EMA21 판단(다음 날 시가 정리) · 자본
-    for c, p in a["pos"].items():
-        b = [x[4] for x in bars.get(c, []) if x[0] <= d]
-        if len(b) >= 30 and b[-1] < _ema21(b[-130:]):
-            p["exit_next"] = True
-    eq = _equity(a, bars, d); a["peak"] = max(a.get("peak", 1.0), eq)
-    a["eq"].append([str(d), round(eq, 6)])
-    heat = sum(p["sh"] * p["px0"] * p["risk0"] for p in a["pos"].values()) / eq if eq > 0 else 0
-    return {"acct": name, "equity": round(eq, 6), "dd": round(eq / a["peak"] - 1, 4), "npos": len(a["pos"]), "heat": round(heat, 4),
-            "selected": selected, "skipped": skipped[:30], "notes": notes}
+def _step(a, name, d, bars, cands, entry, slots=None, rp=None, context=None):
+    return engine.advance(a, name, d, context if context is not None else engine.day_context(bars, d),
+                          cands, entry, slots=CONFIG["slots"] if slots is None else slots,
+                          risk=CONFIG["risk"] if rp is None else rp,
+                          cost_buy=CONFIG["cost_buy"], cost_sell=CONFIG["cost_sell"])
 
 
 def _momo_cands(db: Session, latest) -> list[dict]:
@@ -232,7 +183,7 @@ def _momo_cands(db: Session, latest) -> list[dict]:
     for code in ok[ok.fillna(False).astype(bool)].index:
         st = float(l[code]) * 0.99
         out.append({"code": code, "rs": round(float(RS.get(code)), 1) if RS.get(code) == RS.get(code) else None, "stop": round(st, 2), "risk": round(1 - st / float(c[code]), 5)})
-    out.sort(key=lambda x: -(x["rs"] or 0))
+    out.sort(key=lambda x: (-(x["rs"] or 0), x["code"]))
     return out
 
 
@@ -282,59 +233,83 @@ def set_lead_manual(db: Session, on: bool, reason: str = "") -> str:
 
 
 def record_close(db: Session, asof: date | None = None) -> str:
-    """장 마감 뒤: 확정 종가 후보 저장 + 가상 계좌 P·S·X 하루 진행. asof = 시험용 지난 날짜 다시 돌리기."""
-    from backend.services.stock_signals import _close_scores  # noqa: PLC0415
-    from backend.services.telegram import _get, _put  # noqa: PLC0415
-    from backend.utils.dates import is_trading_day  # noqa: PLC0415
-    today = asof or datetime.now(KST).date()
-    latest = asof or db.execute(text("select max(trading_date) from spot_daily_prices")).scalar()
-    if latest != today or not is_trading_day(today):
+    """Advance every unprocessed trading date; historical replay uses this version only."""
+    from backend.services.telegram import _get, _put
+    from backend.utils.dates import is_trading_day
+    target = asof or datetime.now(KST).date()
+    latest = db.execute(text("select max(trading_date) from spot_daily_prices where trading_date <= :d"), {"d": target}).scalar()
+    if latest != target or not is_trading_day(target):
         return "오늘 시세 없음"
-    from backend.services.stock_signals import _bull_days  # noqa: PLC0415
-    bull = bool(_bull_days(db).get(latest, False))
-    sc = _close_scores(db, latest).get("scores", {})
-    px = {r[0]: float(r[1]) for r in db.execute(text("select stock_code, close_price from spot_daily_prices where trading_date = :d"), {"d": latest}).all()}
-    close_c = _cands(sc, px); close_l = _cands(sc, px, lead=True)
-    snap = _load(db, latest, "1512")
-    snap_c = (snap or {}).get("cands") or []
-    snap_l = (snap or {}).get("leads") or []
-    momo_c = _momo_cands(db, latest)
-    _save(db, latest, "close", {"config": CONFIG_HASH, "universe": len(sc), "bull": bull, "cands": close_c, "leads": close_l, "momo": momo_c, "snapshot_missing": snap is None})
     st = _get(db, STATE_KEY, {}) or {}
-    if st.get("last") == str(latest):
+    if st.get("version", VERSION) != VERSION or st.get("config", CONFIG_HASH) != CONFIG_HASH:
+        raise ValueError("계좌 규칙/버전 불일치: 기존 기록에 새 규칙을 섞을 수 없습니다")
+    last = date.fromisoformat(st["last"]) if st.get("last") else None
+    if last is not None and last > target:
+        raise ValueError("과거 날짜로 운영 계좌를 되감을 수 없습니다")
+    if last == target:
+        if st.get("last_report"):
+            _save(db, target, "acct", st["last_report"])
         return "이미 진행함"
-    ACC = ("P", "S", "X", "L", "Lsh", "Z")
-    for k in ACC:
-        st.setdefault(k, _new_acct())
+    days = [r[0] for r in db.execute(text("select distinct trading_date from spot_daily_prices "
+            "where trading_date > :a and trading_date <= :b order by 1"),
+            {"a": last or target - timedelta(days=1), "b": target}).all()]
+    if not days or days[-1] != target:
+        raise ValueError("거래일 목록 불완전: 계좌 진행 중단")
+    if last is not None:
+        expected = {last + timedelta(days=i) for i in range(1, (target-last).days+1)
+                    if is_trading_day(last + timedelta(days=i))}
+        if not expected.issubset(days):
+            raise ValueError("누락된 거래일 시세: 복구 전까지 계좌 진행 중단")
+    for day in days:
+        report, close_payload = _record_day(db, st, day)
+        _save(db, day, "close", close_payload)
+        st.update(last=str(day), version=VERSION, config=CONFIG_HASH, last_report=report)
+        _put(db, STATE_KEY, st)
+        _save(db, day, "acct", report)
+    return f"{len(days)}거래일 처리 · " + " ".join(f"{r['acct']} {r['equity']:.4f}" for r in report["accounts"])
+
+
+def _record_day(db, st, day):
+    from backend.services.stock_signals import _close_scores, _bull_days
+    sc = _close_scores(db, day).get("scores", {})
+    close_c, close_l = _cands(sc), _cands(sc, lead=True)
+    bull = bool(_bull_days(db).get(day, False))
+    snap = _load(db, day, "1512")
+    if snap is not None and snap.get("config") != CONFIG_HASH:
+        raise ValueError("스냅샷 규칙 불일치")
+    snap_c, snap_l = (snap or {}).get("cands", []), (snap or {}).get("leads", [])
+    snapshot_bull = bool((snap or {}).get("bull", False))
+    lead_on = bool((snap or {}).get("lead_on", False)) and not st.get("L_hard")
+    plans = (snap or {}).get("plans", {})
+    momo = _momo_cands(db, day)
+    account_specs = [
+        ("P", plans.get("P", []) if snapshot_bull else [], "close", CONFIG["slots"], CONFIG["risk"]),
+        ("S", close_c if bull else [], "next_open", CONFIG["slots"], CONFIG["risk"]),
+        ("X", close_c if bull else [], "close", CONFIG["slots"], CONFIG["risk"]),
+        ("L", plans.get("L", []) if snapshot_bull and lead_on else [], "close", LEAD["slots"], LEAD["risk"]),
+        ("Lsh", plans.get("Lsh", []) if snapshot_bull else [], "close", 999, .0005),
+        ("Z", momo, "close", CONFIG["slots"], CONFIG["risk"])]
     codes = set()
-    for k in ACC:
-        codes |= set(st[k]["pos"]) | {p["code"] for p in st[k]["pending"]}
-    codes |= {x["code"] for x in close_c + snap_c + snap_l + close_l + momo_c}
-    bars = _bars(db, sorted(codes), latest)
-    lead_src = snap_l if snap is not None else close_l          # 주도주도 15:12 신호 기준(없으면 종가 신호)
-    ls = lead_state(db, st)
-    rep = [_step(st["P"], "P", latest, bars, snap_c if bull else [], "close"),
-           _step(st["S"], "S", latest, bars, close_c if bull else [], "next_open"),
-           _step(st["X"], "X", latest, bars, close_c if bull else [], "close"),
-           _step(st["L"], "L", latest, bars, lead_src if (bull and ls["on"]) else [], "close", slots=LEAD["slots"], rp=LEAD["risk"]),
-           _step(st["Lsh"], "Lsh", latest, bars, lead_src if bull else [], "close", slots=999, rp=0.0005),
-           _step(st["Z"], "Z", latest, bars, momo_c, "close")]
-    # 주도주: 최근 30건 Lsh 평균 R(경고용) · 실제 L 누적 R 고점 대비 −15R → 실매매 정지
+    for name, cands, _, _, _ in account_specs:
+        a = st.setdefault(name, _new_acct())
+        codes.update(a["pos"])
+        codes.update(x["code"] for x in a["pending"] + cands)
+    bars = _bars(db, sorted(codes), day)
+    context = engine.day_context(bars, day)
+    reports = [_step(st[name], name, day, bars, cands, entry, slots, risk, context)
+               for name, cands, entry, slots, risk in account_specs]
     tr = st["Lsh"]["trades"][-LEAD["roll"]:]
     if len(tr) >= LEAD["roll"]:
         st["L_mean30"] = round(sum(t["R"] for t in tr) / len(tr), 3)
     dd = _lead_dd(st)
     if dd <= LEAD["stop_R"] and not st.get("L_hard"):
-        st["L_hard"] = f"주도주 누적 {dd:+.1f}R — −15R 정지(계좌 약 −1.5%) · 사용자 /주도주 켜기 전까지 기록만"
-    for k in ACC:
-        st[k]["eq"] = st[k]["eq"][-800:]
-    st["last"] = str(latest); st["version"] = VERSION; st["config"] = CONFIG_HASH
-    _put(db, STATE_KEY, st)
+        st["L_hard"] = f"주도주 누적 {dd:+.1f}R — 신규 중단"
     s1, s2 = {x["code"] for x in snap_c}, {x["code"] for x in close_c}
-    jac = len(s1 & s2) / len(s1 | s2) if (s1 | s2) else None
-    _save(db, latest, "acct", {"config": CONFIG_HASH, "jaccard": jac, "snapshot_missing": snap is None, "accounts": rep})
-    return (f"{'상승장' if bull else '하락장(신규 없음)'} · 종가 후보 {len(close_c)} · 15:12 후보 {len(snap_c)} · 주도주 {len(lead_src)} · 모멘텀 돌파 {len(momo_c)}"
-            + (f" · 일치 {jac:.2f}" if jac is not None else "") + " · " + " ".join(f"{r['acct']} {r['equity']:.4f}" for r in rep))
+    report = {"config": CONFIG_HASH, "jaccard": len(s1 & s2) / len(s1 | s2) if s1 | s2 else None,
+              "snapshot_missing": snap is None, "accounts": reports}
+    payload = {"config": CONFIG_HASH, "universe": len(sc), "bull": bull, "cands": close_c,
+               "leads": close_l, "momo": momo, "snapshot_missing": snap is None}
+    return report, payload
 
 
 def monthly_text(db: Session, ym: str | None = None) -> str | None:
@@ -369,33 +344,40 @@ def monthly_text(db: Session, ym: str | None = None) -> str | None:
                   ("L", "L 주도주 실제(0.10%·2종목)"), ("Lsh", "L 주도주 전수 기록"), ("Z", "Z 모멘텀 돌파 비교(20일 고점 돌파·거래 1.9배·+5% · 같은 체결)")):
         a = st.get(k) or {}
         tr = [t for t in a.get("trades", []) if t["d1"][:7] == ym]
-        alltr = a.get("trades", [])
+        alltr = [t for t in a.get("trades", []) if t["d1"][:7] <= ym]
         eq = [e for e in a.get("eq", []) if e[0][:7] == ym]
         if not eq:
             continue
-        mret = eq[-1][1] / (eq[0][1] or 1) - 1
-        pk, mdd = 0, 0
-        for _, v in a.get("eq", []):
+        prior = [e for e in a.get("eq", []) if e[0][:7] < ym]
+        base = prior[-1][1] if prior else 1.0
+        mret = eq[-1][1] / base - 1 if base > 0 else 0.0
+        pk, mdd = 1.0, 0
+        for eq_date, v in a.get("eq", []):
+            if eq_date[:7] > ym:
+                continue
             pk = max(pk, v); mdd = min(mdd, v / pk - 1)
         er = sum(t["R"] for t in alltr) / len(alltr) if alltr else None
-        out.append(f"{nm}: 이번 달 {mret * 100:+.1f}% · 누적 {(a['eq'][-1][1] - 1) * 100:+.1f}% · 최대낙폭 {mdd * 100:.1f}% · 정리 {len(tr)}건(누적 {len(alltr)}건"
-                   + (f", 평균 R {er:+.2f}" if er is not None else "") + f") · 보유 {len(a.get('pos', {}))}")
+        month_reports = [r for d in days for r in by[d].get("acct", {}).get("accounts", []) if r["acct"] == k]
+        held = month_reports[-1]["npos"] if month_reports else "기록 없음"
+        out.append(f"{nm}: 이번 달 {mret * 100:+.1f}% · 누적 {(eq[-1][1] - 1) * 100:+.1f}% · 최대낙폭 {mdd * 100:.1f}% · 정리 {len(tr)}건(누적 {len(alltr)}건"
+                   + (f", 평균 R {er:+.2f}" if er is not None else "") + f") · 월말 보유 {held}")
         if len(alltr) >= 10:      # 추세추종은 소수 큰 수익이 전체를 만든다 — 승률보다 이 숫자들 (GPT 권고 10/10)
             rs_ = sorted(t["R"] for t in alltr); wins = [r for r in rs_ if r > 0]; loss = [r for r in rs_ if r <= 0]
             top = rs_[-max(1, len(rs_) // 10):]; tot = sum(rs_)
             out.append(f"   중앙 R {rs_[len(rs_) // 2]:+.2f} · 이긴 비율 {100 * len(wins) / len(rs_):.0f}% · 손익비 {(sum(wins) / len(wins)) / abs(sum(loss) / len(loss)) if wins and loss else 0:.1f}"
-                       + (f" · 상위 10% 거래가 전체 R의 {100 * sum(top) / tot:.0f}%" if tot > 0 else " · 누적 R 마이너스"))
+                       + (f" · 상위 10% 거래가 전체 R의 {100 * sum(top) / tot:.0f}%" if tot > 0 else " · 누적 R 0 이하"))
         if k == "P" and mdd <= -0.25:
             out.append("⛔ P 낙폭 25% 넘음 — 사전 기준상 신규 진입 중단 검토")
         elif k == "P" and mdd <= -0.15:
             out.append("⚠️ P 낙폭 15% 넘음 — 사전 기준상 위험 절반(0.25%) 검토")
     try:
         ls_ = lead_state(db, st)
-        out.append("주도주 상태: " + ("켜짐" if ls_["on"] else "꺼짐 — " + ls_["why"]) + (f" · ⚠️ {ls_['warn']}" if ls_.get("warn") else ""))
+        out.append("현재 주도주 상태: " + ("켜짐" if ls_["on"] else "꺼짐 — " + ls_["why"]) + (f" · ⚠️ {ls_['warn']}" if ls_.get("warn") else ""))
         for r_ in (st.get("L_manual_log") or [])[-5:]:
             out.append(f"  사용자 {'켬' if r_['on'] else '끔'} {r_['at']} · {r_.get('reason') or ''} · 30건 평균 {r_.get('mean30')} · 낙폭 {r_.get('dd')}R")
     except Exception:  # noqa: BLE001
         pass
-    n_tr = len((st.get("P") or {}).get("trades", [])); n_days = len({t["d0"] for t in (st.get("P") or {}).get("trades", [])})
+    primary_trades = [t for t in (st.get("P") or {}).get("trades", []) if t["d1"][:7] <= ym]
+    n_tr = len(primary_trades); n_days = len({t["d0"] for t in primary_trades})
     out.append(f"판정 진행: P 정리 {n_tr}/100건 · 진입일 {n_days}/40 (1차 판정 = 12개월+100건+40일, 그 전엔 판정 안 함)")
     return "\n".join(x for x in out if x)
