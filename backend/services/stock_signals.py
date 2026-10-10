@@ -531,6 +531,7 @@ def _workspace_list(db: Session) -> dict:
         sc = scores.get(x["code"])
         y["score"] = sc["score"] if sc else None
         y["risk"] = round(sc["risk"] * 100, 1) if sc else None
+        y["stop"] = round(float(sc["stop"])) if sc else None      # 차트 손절선 (2026-10-11 시안 B)
         y["rr"] = bool(sc and sc.get("buy") and sc["risk"] <= 0.03)
         sr = srank.get(x["code"], (99, ""))
         y["sec_rank"] = sr[0]
