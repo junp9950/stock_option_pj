@@ -11,7 +11,15 @@ jobs:
       - name: Deploy on VM
         run: |
           cd ~/stock_option_pj
+          PREV=$(git rev-parse HEAD)
           git pull origin main
+          NEW=$(git rev-parse --short HEAD)
           .venv/bin/pip install -r requirements.txt -q
+          # 안전장치: 새 코드 문법·주요 화면 시험 — 실패하면 이전 커밋으로 되돌리고 재시작하지 않는다 (텔레그램 알림은 스크립트가 보낸다)
+          if ! (set -a && . ./.env && set +a && .venv/bin/python scripts/deploy_check.py "$NEW"); then
+            git reset --hard "$PREV"
+            echo "배포 중단: 점검 실패, $PREV 로 되돌림 (재시작 안 함)"
+            exit 1
+          fi
           sudo systemctl restart stock-analyzer
           echo "Deploy complete"
