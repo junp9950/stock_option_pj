@@ -185,12 +185,16 @@ select{background:#21262d;border:1px solid #30363d;color:#c9d1d9;padding:6px 10p
 #hc-today>.hc-head{grid-area:head;font-size:15px;margin:0}#hc-today>.hc-do{grid-area:head;margin:22px 0 0;font-size:12px}
 #hc-today>.hc-nums{grid-area:nums;margin:0}#hc-today .hc-num{padding:0 12px}#hc-today .hc-num .v{font-size:16px;margin:0}#hc-today .hc-num .l,#hc-today .hc-num .s{font-size:11px}
 #hc-today>.hc-flow{grid-area:flow;display:flex;flex-wrap:wrap;gap:2px 6px;align-items:center}#hc-today .hc-pill{margin:0 3px 2px 0;padding:1px 8px;font-size:11.5px}
-#hc-market{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));column-gap:12px;align-content:start}
+#hc-market{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));grid-template-rows:auto auto auto auto 1fr 1fr;column-gap:8px;row-gap:6px}
 #hc-market>.hc-h,#hc-market>.hc-verdict,#hc-market>.hc-sum,#hc-market>.hc-bars{grid-column:1/-1}
 #hc-market>.hc-verdict{margin:0}#hc-market>.hc-verdict b{font-size:14px}#hc-market>.hc-sum{font-size:11px;margin:0 0 2px}#hc-market>.hc-bars{margin:2px 0 4px}
-#hc-market>.hc-row{padding:4px 0;gap:6px;border-top:1px solid var(--line2)}#hc-market .hc-row .t b{font-size:12px}#hc-market .hc-row .t span{display:none}
-#hc-market .hc-row .v{font-size:13px}#hc-market .hc-badge{font-size:10.5px;padding:1px 6px}
-.lwbox>.lwc{height:clamp(300px,calc(100vh - 508px),720px)}
+/* 근거 6개 = 타일 (제목·설명 왼쪽 / 값·배지 오른쪽) — 카드 남는 높이를 채움 */
+#hc-market>.hc-row{display:grid;grid-template-columns:minmax(0,1fr) auto auto;column-gap:6px;align-items:center;padding:4px 8px;border:1px solid var(--line2);border-radius:8px;background:var(--card2)}
+#hc-market .hc-row .t{min-width:0}#hc-market .hc-row .t b{font-size:12.5px}#hc-market .hc-row .t span{display:block;font-size:10.5px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+#hc-market .hc-row .v{font-size:14px;text-align:right}#hc-market .hc-row .hc-badge{justify-self:end;font-size:10.5px;padding:1px 6px}
+#hc-market .hc-row.k-g{background:rgba(56,139,253,.10);border-color:rgba(56,139,253,.45);box-shadow:inset 4px 0 0 var(--blue);padding-left:11px}
+#hc-market .hc-row.k-b{background:rgba(240,136,62,.12);border-color:rgba(240,136,62,.5);box-shadow:inset 4px 0 0 var(--orange);padding-left:11px}
+.lwbox>.lwc{height:clamp(300px,calc(100vh - 512px),720px)}
 }
 @media(max-width:900px){.htop{grid-template-columns:1fr}.hc-head{font-size:18px}.hc-num .v{font-size:19px}.hcard{padding:16px}}
 #ws-lane-note{display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden;cursor:pointer}#ws-lane-note.open{display:block}
