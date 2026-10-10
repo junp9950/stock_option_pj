@@ -334,6 +334,34 @@ def start_scheduler() -> BackgroundScheduler:
     # 18:30 그날 ▲ 진입·종가 점수 6↑ 기록 (18:00 시세 다시 받은 뒤) — 차트는 지금 규칙으로 다시 그린 것이라 실제로 뜬 신호를 따로 쌓는다
     scheduler.add_job(_log_signals, 'cron', day_of_week='mon-fri', hour=18, minute=30, id='signal_log', replace_existing=True, max_instances=1)
 
+    def _forward_close() -> None:
+        from backend.services.forward_log import record_close  # noqa: PLC0415
+        db = SessionLocal()
+        try:
+            logger.info("실전 기록 마감: %s", record_close(db))
+        except Exception as exc:  # noqa: BLE001
+            logger.error("실전 기록 마감 실패: %s", exc)
+        finally:
+            db.close()
+    # 18:40 실전 기록 V1.0 — 확정 종가 후보 저장 + 가상 계좌 P(15:12 신호·종가)·S(종가 신호·다음 날 시가)·X(진단) 하루 진행 (2026-10-10)
+    scheduler.add_job(_forward_close, 'cron', day_of_week='mon-fri', hour=18, minute=40, id='forward_close', replace_existing=True, max_instances=1)
+
+    def _forward_monthly() -> None:
+        from backend.services.forward_log import monthly_text  # noqa: PLC0415
+        from backend.services.telegram import _get, send as tg_send  # noqa: PLC0415
+        db = SessionLocal()
+        try:
+            msg = monthly_text(db)
+            if msg:
+                for c in _get(db, "user_watchlist_chats", []) or list(_get(db, "telegram_chats", {}).keys())[:1]:
+                    tg_send(db, msg, c, html=True)
+        except Exception as exc:  # noqa: BLE001
+            logger.error("실전 기록 월간 보고 실패: %s", exc)
+        finally:
+            db.close()
+    # 매달 1일 08:40 지난달 실전 기록 보고 (규칙은 안 바꾸고 보고만)
+    scheduler.add_job(_forward_monthly, 'cron', day=1, hour=8, minute=40, id='forward_monthly', replace_existing=True, max_instances=1)
+
     def _weekly() -> None:
         from backend.services.weekly_review import send_weekly  # noqa: PLC0415
         db = SessionLocal()
@@ -350,6 +378,11 @@ def start_scheduler() -> BackgroundScheduler:
             ce_send(db)
         except Exception as exc:  # noqa: BLE001
             logger.error("종가 진입 후보 알림 실패: %s", type(exc).__name__)
+        try:      # 실전 기록 V1.0: 15:12 후보 전체 저장 (2026-10-10)
+            from backend.services.forward_log import snapshot_1512  # noqa: PLC0415
+            logger.info("실전 기록 15:12: %s", snapshot_1512(db))
+        except Exception as exc:  # noqa: BLE001
+            logger.error("실전 기록 15:12 실패: %s", type(exc).__name__)
         finally:
             db.close()
     # 15:12 종가 진입 후보 (실시간 점수 6↑ · 손절폭 짧은 순) — 종가에 들어가기 전에 볼 수 있게 (휴장일엔 실시간 점수가 없어 안 보냄)
