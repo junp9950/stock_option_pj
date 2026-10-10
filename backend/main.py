@@ -138,12 +138,12 @@ select{background:#21262d;border:1px solid #30363d;color:#c9d1d9;padding:6px 10p
 /* 첫 화면 작업대: 종목 목록 | 신호 찍힌 차트 | 패널 (2026-10-09, 카드형 작업대) */
 .ws{display:grid;grid-template-columns:360px minmax(0,1fr);gap:14px;align-items:start;margin-bottom:14px}
 .ws-list,.ws-main{background:var(--card);border:1px solid var(--line);border-radius:10px;padding:10px}
-.ws-list{max-height:none;display:flex;flex-direction:column;min-height:0;grid-row:2;align-self:stretch;contain:size}   /* 목록 높이 = 차트 높이 (2026-10-10 '아래 빈 공간 메꾸기') */
+.ws-list{max-height:none;display:flex;flex-direction:column;min-height:0;grid-row:1;align-self:stretch;contain:size}   /* 목록 높이 = 차트 높이 (2026-10-10 '아래 빈 공간 메꾸기') */
 .ws-list>#ws-items,.ws-list>#jr-ws-items{flex:1;min-height:0;overflow-y:auto}
 .ws-sub{font-size:11.5px;color:var(--muted);margin:10px 4px 4px;padding-top:8px;border-top:1px solid var(--line2)}.ws-item.dim{opacity:.72}
-.ws-main{min-width:0;padding:12px;grid-row:2}
-/* 종목 정보는 목록·차트 위에 가로로 넓게 — 내용은 칸(column)으로 흘려서 낮게 (2026-10-10) */
-.ws>.cm-panel{background:var(--card);border:1px solid var(--line);border-radius:10px;padding:12px;grid-column:1/-1;grid-row:1;width:auto;display:block;columns:5 230px;column-gap:16px}
+.ws-main{min-width:0;padding:12px;grid-row:1}
+/* 종목 정보는 목록·차트 아래에 가로로 넓게 (10/10 위 → 아래: 차트가 먼저 보이게) — 내용은 칸(column)으로 흘려서 낮게 (2026-10-10) */
+.ws>.cm-panel{background:var(--card);border:1px solid var(--line);border-radius:10px;padding:12px;grid-column:1/-1;grid-row:2;width:auto;display:block;columns:5 230px;column-gap:16px}
 .ws>.cm-panel>*{break-inside:avoid;margin-bottom:10px}.ws>.cm-panel>.cp-rows{break-inside:auto}.ws>.cm-panel .cp-row{break-inside:avoid}
 .ws>.cm-panel:empty{display:none}
 .ws-search{position:relative;margin-bottom:6px}.ws-search input{width:100%;box-sizing:border-box;background:var(--card2);border:1px solid var(--line);color:var(--text);border-radius:16px;padding:7px 12px;font-size:13px;outline:none}.ws-search input:focus{border-color:var(--blue)}#ws-sr{position:absolute;left:0;right:0;top:100%;z-index:30;background:var(--card);border:1px solid var(--line);border-radius:10px;margin-top:4px;max-height:360px;overflow:auto;display:none;box-shadow:0 6px 18px rgba(0,0,0,.4)}#ws-sr.on{display:block}
