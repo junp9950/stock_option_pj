@@ -35,7 +35,7 @@ def log_signals(db: Session) -> str:
     log[str(latest)] = {
         "at": datetime.now().strftime("%H:%M"), "bull": bool(_bull_days(db).get(latest, False)),
         "entry": [{"code": x["code"], "name": x["name"], "kind": x["kind"], "close": x["close"], "stop": round(x["stop"])} for x in entries],
-        "score": [{"code": c, "name": names.get(c, c), "score": v["score"], "ema": v.get("ema", False), "hot": v.get("hot", False), "stop": round(v["stop"])} for c, v in sc.items() if v.get("buy")],
+        "score": [{"code": c, "name": names.get(c, c), "score": v["score"], "ema": v.get("ema", False), "hot": v.get("hot", False), "semi": v.get("semi", False), "stop": round(v["stop"])} for c, v in sc.items() if v.get("buy")],
     }
     try:      # 급락 날 줍기 실제 기록 (시장 -2%↓ 날만 생김)
         from backend.services.stock_signals import _dip_picks  # noqa: PLC0415
