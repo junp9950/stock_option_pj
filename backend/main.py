@@ -989,11 +989,11 @@ function hbWon(v){ const a=Math.abs(v); return (v>0?'+':v<0?'−':'')+(a>=1e6?(a
 function hbFlowsHTML(FL){
   if(!(FL&&FL.KOSPI&&FL.KOSDAQ)) return '';
   const won=hbWon, C=[['frgn','외국인'],['orgn','기관'],['fund','연기금'],['ivtr','투신'],['insu','보험'],['scrt','금융투자'],['prsn','개인']];
-  const md=window._flowMode||'sum', cell=v=>`<td class="mono" style="color:${v>0?'var(--up)':v<0?'var(--down)':'var(--muted)'}">${v==null?'-':won(v)}</td>`;
+  const md=window._flowMode||'today', cell=v=>`<td class="mono" style="color:${v>0?'var(--up)':v<0?'var(--down)':'var(--muted)'}">${v==null?'-':won(v)}</td>`;
   const tag=FL.provisional?` · <b class="hb-prov">장중 잠정치${FL.updated?' '+FL.updated:''}</b>`:'';
   const head=md==='sum'?`최근 ${FL.days}거래일 합 <span>${FL.from.slice(5).replace('-','/')}~${FL.to.slice(5).replace('-','/')}${FL.provisional?' (오늘은 잠정)':''}</span>`:`${FL.to.slice(5).replace('-','/')} 하루 <span></span>`;
   const btn=(k,t)=>`<button class="${md===k?'on':''}" onclick="window._flowMode='${k}';hbFlowsRedraw()">${t}</button>`;
-  return `<div class="hb-flows"><div class="hb-fh">투자자별 순매수 · ${head}${tag}<span class="hb-ftg">${btn('sum',FL.days+'일')}${btn('today',FL.provisional?'오늘(잠정)':'하루')}</span></div><div style="overflow-x:auto"><table><thead><tr><th></th>${C.map(c=>`<th>${c[1]}</th>`).join('')}</tr></thead><tbody>
+  return `<div class="hb-flows"><div class="hb-fh">투자자별 순매수 · ${head}${tag}<span class="hb-ftg">${btn('today',FL.provisional?'오늘(잠정)':'하루')}${btn('sum',FL.days+'일')}</span></div><div style="overflow-x:auto"><table><thead><tr><th></th>${C.map(c=>`<th>${c[1]}</th>`).join('')}</tr></thead><tbody>
     ${['KOSPI','KOSDAQ'].map(k=>{ const src=md==='sum'?FL[k].sum:(FL[k].today||{}); return `<tr><th>${k==='KOSPI'?'코스피':'코스닥'}</th>${C.map(c=>cell(src[c[0]])).join('')}</tr>`; }).join('')}</tbody></table></div></div>`;
 }
 function hbFlowsRedraw(){ const el=document.querySelector('#hc-market .hb-flows'), d=_homeTopArgs[0]; if(el&&d) el.outerHTML=hbFlowsHTML(d.flows); }
