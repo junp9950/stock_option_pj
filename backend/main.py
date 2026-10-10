@@ -171,6 +171,22 @@ select{background:#21262d;border:1px solid #30363d;color:#c9d1d9;padding:6px 10p
 .hc-badge.g{color:var(--blue);border-color:rgba(88,166,255,.45);background:rgba(56,139,253,.10)}
 .hc-badge.n{color:var(--muted);border-color:var(--line)}
 .hc-badge.b{color:var(--orange);border-color:rgba(240,136,62,.5);background:rgba(240,136,62,.10)}
+/* PC: 위 카드 두 개를 낮게 줄여서 목록·차트가 한 화면에 들어오게 (2026-10-10 "차트·종목 검색 아래까지 한 페이지에") */
+@media(min-width:901px){
+.htop{margin-bottom:10px;gap:10px}.hcard{padding:10px 14px;border-radius:12px}
+.hc-h{margin-bottom:4px}.hc-h b{font-size:13.5px}
+#hc-today{display:grid;grid-template-columns:210px minmax(0,1fr) auto;grid-template-areas:"h h h" "sp head nums" "sp flow flow";column-gap:16px;row-gap:4px;align-items:start}
+#hc-today>.hc-h{grid-area:h}#hc-today>.hc-spark{grid-area:sp;height:74px;margin:0}#hc-today>.hc-sx{display:none}
+#hc-today>.hc-head{grid-area:head;font-size:15px;margin:0}#hc-today>.hc-do{grid-area:head;margin:24px 0 0;font-size:12px}
+#hc-today>.hc-nums{grid-area:nums;margin:0}#hc-today .hc-num{padding:0 12px}#hc-today .hc-num .v{font-size:16px;margin:0}#hc-today .hc-num .l,#hc-today .hc-num .s{font-size:11px}
+#hc-today>.hc-flow{grid-area:flow;display:flex;flex-wrap:wrap;gap:2px 6px;align-items:center}#hc-today .hc-pill{margin:0 3px 2px 0;padding:1px 8px;font-size:11.5px}
+#hc-market{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));column-gap:12px;align-content:start}
+#hc-market>.hc-h,#hc-market>.hc-verdict,#hc-market>.hc-sum,#hc-market>.hc-bars{grid-column:1/-1}
+#hc-market>.hc-verdict{margin:0}#hc-market>.hc-verdict b{font-size:14px}#hc-market>.hc-sum{font-size:11px;margin:0 0 2px}#hc-market>.hc-bars{margin:2px 0 4px}
+#hc-market>.hc-row{padding:4px 0;gap:6px;border-top:1px solid var(--line2)}#hc-market .hc-row .t b{font-size:12px}#hc-market .hc-row .t span{display:none}
+#hc-market .hc-row .v{font-size:13px}#hc-market .hc-badge{font-size:10.5px;padding:1px 6px}
+.lwbox>.lwc{height:clamp(300px,calc(100vh - 462px),720px)}
+}
 @media(max-width:900px){.htop{grid-template-columns:1fr}.hc-head{font-size:18px}.hc-num .v{font-size:19px}.hcard{padding:16px}}
 #ws-lane-note{display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden;cursor:pointer}#ws-lane-note.open{display:block}
 .ws-tabs{display:flex;gap:6px;margin-bottom:6px}
@@ -920,7 +936,7 @@ function renderHomeTop(d, live){
     <div class="hc-verdict"><span class="hc-badge ${B[vk][0]}">${B[vk][1].split(' ')[0]}</span><b>${vt}</b></div>
     <div class="hc-sum">근거 ${rows.length}개 중 ${good}개 양호 · 하락장은 쉬고, 시장이 -2% 넘게 빠지는 날은 센 종목 줍기</div>
     <div class="hc-bars">${rows.map(r=>`<i class="${r.k==='g'?'g':r.k==='b'?'b':''}"></i>`).join('')}</div>
-    ${rows.map(r=>`<div class="hc-row"><div class="t"><b>${r.t}</b><span>${r.sub}</span></div><div class="v">${r.v}</div><span class="hc-badge ${B[r.k][0]}">${r.bt||B[r.k][1]}</span></div>`).join('')}`;
+    ${rows.map(r=>`<div class="hc-row" title="${r.t} — ${r.sub}"><div class="t"><b>${r.t}</b><span>${r.sub}</span></div><div class="v">${r.v}</div><span class="hc-badge ${B[r.k][0]}">${r.bt||B[r.k][1]}</span></div>`).join('')}`;
   const ix=k=>{ const x=it[k]; if(!x) return ''; const c=x.pct>=0?'var(--up)':'var(--down)';
     return `<div class="hc-num" style="cursor:pointer" onclick="openIndexChart('${k==='코스피'?'KOSPI':'KOSDAQ'}','${k}')"><div class="l">${k}${x.status==='OPEN'?' · 장중':''}</div><div class="v">${x.close}</div><div class="s" style="color:${c}">${sg(x.pct)}%</div></div>`; };
   const st=d.sectors_today||{}, pill=(x,c)=>`<span class="hc-pill ${c}" title="20일 순위 ${x.rank||'-'}위 (10일 전 ${x.rank_10ago||'-'}위)">${x.family} <b style="color:${x.chg>=0?'var(--up)':'var(--down)'}">${sg(x.chg)}%</b></span>`;
