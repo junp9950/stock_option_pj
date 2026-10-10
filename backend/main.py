@@ -2086,7 +2086,7 @@ function renderWsList(){
     else tg=`${KIND[x.kind]||''}${x.level?' '+Math.round(x.level).toLocaleString():''}${x.note?' · '+x.note:''}`;
     const sub=_ws.tab==='held'&&x.gain!=null?`<div class="ws-tg" style="text-align:right">수익 ${x.gain>0?'+':''}${x.gain}%</div>`:'';
     return `<div class="ws-item${x.code===_ws.code?' on':''}" data-c="${x.code}" onclick="wsOpen('${x.code}','${x.name.replace(/'/g,'')}')">${wsAv(x.code,x.name)}
-      <div class="ws-txt"><div class="ws-nm"><span class="n">${x.name}</span>${(x.lane==='entry'&&_ws.tab==='entry'&&!x.lead)?(()=>{const half=(x.tags||[]).some(t=>t.includes('수량 절반'));return `<span class="b" style="border-color:var(--blue);color:var(--blue)" title="${half?'수량 절반 (손절폭 5~8% · 과열 매수 · 반도체 특별 중 하나)':'정상 수량'}${x.score!=null?' · 종가 진입 점수 '+x.score+'/7':''}">${x.rr?'✅ ':''}매수${half?' · 절반':''}</span>`;})():''}${(x.lead&&x.lane==='entry'&&_ws.tab==='entry')?`<span class="b" style="border-color:#e8590c;color:#e8590c" title="강도 최상위 주도주 — 기본 신호와 별도로 소량 (거래당 위험 0.10%, 2종목까지)">🔥 주도주</span>`:''}</div><div class="ws-tg" title="${tg.replace(/"/g,'')}">${tg}</div></div>
+      <div class="ws-txt"><div class="ws-nm"><span class="n">${x.name}</span>${(x.lane==='entry'&&_ws.tab==='entry'&&!x.lead)?(()=>{const half=(x.tags||[]).some(t=>t.includes('수량 절반'));return `<span class="b" style="border-color:var(--blue);color:var(--blue)" title="${half?'수량 절반 (손절폭 5~8% · 과열 매수 · 반도체 특별 중 하나)':'정상 수량'}${x.score!=null?' · 종가 진입 점수 '+x.score+'/7':''}">${x.rr?'✅ ':''}매수${half?' · 절반':''}</span>`;})():''}${(x.lead&&x.lane==='entry'&&_ws.tab==='entry')?`<span class="b" style="border-color:#e8590c;color:#e8590c" title="강도 최상위 주도주 — 기본 신호와 별도로 소량 (거래당 위험 0.10%, 2종목까지 · 📍 눌림 먼저)">🔥 주도주</span>`:''}</div><div class="ws-tg" title="${tg.replace(/"/g,'')}">${tg}</div></div>
       <div class="ws-px">${x.close?Math.round(x.close).toLocaleString():'-'}${_ws.tab==='track'?`<div style="color:${x.gain>0?'var(--up)':x.gain<0?'var(--down)':'var(--muted)'}" title="진입 뒤">${x.gain>0?'+':''}${x.gain}%</div>`:`<div style="color:${x.chg>0?'var(--up)':x.chg<0?'var(--down)':'var(--muted)'}">${x.chg>0?'+':''}${(x.chg||0).toFixed(2)}%</div>`}${sub}</div></div>`;
   };
   if(_ws.tab==='held'){ const a=L.filter(x=>!x.long), b=L.filter(x=>x.long);
@@ -2096,7 +2096,7 @@ function renderWsList(){
     if(_ws.tab==='entry'){      // 기본 신호 칸과 주도주 칸을 따로 채운다 (2026-10-10 "이 종목 중에 좋은 순위가 뭐란 거고")
       const B=L.filter(x=>!x.lead), Ld=L.filter(x=>x.lead);
       h=(B.length&&Ld.length?`<div class="ws-sub">기본 신호 · 빈 칸 수만큼 위에서부터 (강도 RS 높은 순)</div>`:'')+B.map(row).join('')
-        +(Ld.length?`<div class="ws-sub">🔥 주도주 · 기본과 따로 위에서 2종목까지 소량 (거래당 위험 0.10%)</div>`+Ld.map(row).join(''):'');
+        +(Ld.length?`<div class="ws-sub">🔥 주도주 · 기본과 따로 위에서 2종목까지 소량 (거래당 위험 0.10%) · 📍 눌림 먼저, ⚠️ 과열만이면 맨 뒤</div>`+Ld.map(row).join(''):'');
     } else h=L.map(row).join('');
     if(_ws.tab==='entry'&&L.length<6){      // 오늘 진입이 적은 날: 아래를 비워 두지 않고 다음 후보(대기)를 흐리게 이어서 (2026-10-09 "여기가 붕 뜬다")
       const W=wsItems('wait').slice(0,10);

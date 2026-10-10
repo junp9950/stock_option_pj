@@ -358,7 +358,7 @@ def workspace_list(db: Session) -> dict:
     from backend.services.result_cache import cached  # noqa: PLC0415
     now = datetime.now(ZoneInfo("Asia/Seoul"))
     if not (is_trading_day(now.date()) and 9 <= now.hour < 16):
-        return cached("workspace_list_v13", (), db, lambda: _workspace_list(db))
+        return cached("workspace_list_v14", (), db, lambda: _workspace_list(db))
     return _workspace_list(db)
 
 
@@ -414,10 +414,10 @@ def _workspace_list(db: Session) -> dict:
             _ls = lead_state(db)
         except Exception:  # noqa: BLE001
             _ls = {"on": True}
-        for c_, v_ in sorted(scores.items(), key=lambda kv: -(kv[1].get("rs") or 0)):
+        for c_, v_ in sorted(scores.items(), key=lambda kv: lead_order(kv[1])):
             if v_.get("lead") and not v_.get("buy"):
                 add(c_, (f"🔥 주도주 · 강도 최상위 RS {v_.get('rs') or 0:.0f}" + (" · " + " · ".join(v_.get("lead_state") or []) if v_.get("lead_state") else " · 자리 표시 없음(오르는 날)")
-                         + " · 기본 신호와 별도로 소량 (거래당 위험 0.10%, 2종목까지)" + (f" · ⚠️ {_ls['warn']}" if _ls.get("warn") else "")) if _ls.get("on") else f"주도주 (지금 쉬는 중 — {_ls.get('why', '')})")
+                         + " · 기본 신호와 별도로 소량 (거래당 위험 0.10%, 2종목까지 · 📍 눌림 먼저)" + (f" · ⚠️ {_ls['warn']}" if _ls.get("warn") else "")) if _ls.get("on") else f"주도주 (지금 쉬는 중 — {_ls.get('why', '')})")
     except Exception:  # noqa: BLE001
         pass
     try:      # 급락 날 줍기 (시장 -2%↓ 날 같이 빠진 센 종목 · 손절 20일선 · 크기 절반)
@@ -524,11 +524,12 @@ def _workspace_list(db: Session) -> dict:
         sc = scores.get(y["code"]) or {}
         y["rs"] = sc.get("rs")
         y["lead"] = bool(sc.get("lead") and not sc.get("buy"))
+        y["lead_ord"] = lead_order(sc) if y["lead"] else (9, 0)
     ent = sorted([y for y in cands if y["lane"] == "entry" and y["rs"] is not None and not y["lead"]], key=lambda y: -y["rs"])
     for k_, y in enumerate(ent, 1):
         y["rs_rank"] = k_
         y["tags"] = [f"강도 RS {y['rs']:.0f} · 후보 중 {k_}위"] + y["tags"]
-    cands.sort(key=lambda y: (y["lane"] != "entry", y.get("lead", False), -(y["rs"] if (y["lane"] == "entry" and y.get("rs") is not None) else -1),
+    cands.sort(key=lambda y: (y["lane"] != "entry", y.get("lead", False), y.get("lead_ord", (9, 0)), -(y["rs"] if (y["lane"] == "entry" and y.get("rs") is not None) else -1),
                               (y.get("sec_rank") or 99) > 8, not y["rr"], (y["risk"] or 0) > 5,
                               -(y["score"] if y["score"] is not None else -1), y["risk"] if y["risk"] is not None else 99))
     return {"as_of": str(latest), "live": live_at, "mode": mp.get("mode"),
@@ -721,6 +722,15 @@ def _close_frames(db: Session, latest) -> dict:
         if _CF["key"] == latest:
             return _CF["v"]
         return _close_frames_load(db, latest)
+
+
+def lead_order(v: dict) -> tuple:
+    """주도주 칸 채우는 순서 (2026-10-10 사용자 "과열매수 말고 눌림매수가 좋지"): 📍 눌림·지지 먼저 → 표시 없음 → ⚠️ 과열(📍 없음) 맨 뒤, 같은 칸에선 RS 높은 순.
+    7/30~10/8 지금 규칙 다시 돌림(replay_0730.py): 주도주 신호 62건 중 📍 15건 평균 +1.82R(이김 60%) · 표시 없음 19건 +0.27R · ⚠️ 28건 −0.19R(이김 21%).
+    2칸 계좌: RS 순 −0.9R → 이 순서 +5.2R (대부분 아직 보유 중인 평가이익, 표시는 이 기간을 본 뒤 만든 것)."""
+    st = v.get("lead_state") or v.get("state") or []
+    pin = any("📍" in x for x in st); warn = any("⚠️" in x for x in st)
+    return (0 if pin else 2 if warn else 1, -(v.get("rs") or 0))
 
 
 def _close_frames_load(db: Session, latest) -> dict:
