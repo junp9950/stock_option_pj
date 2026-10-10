@@ -29,7 +29,7 @@ logger = logging.getLogger(__name__)
 VERSION = "V1.0"
 CONFIG = {"signal": "stock_signals._close_scores buy (S0)", "order": "RS desc", "slots": 10, "risk": 0.005,
           "stop": "entry-day low x0.99", "exit": "close<EMA21 -> next open", "cost_buy": 0.0005, "cost_sell": 0.0025,
-          "market_filter": "bull (in S0)", "frozen": "2026-10-10"}
+          "market_filter": "bull (in S0)", "frozen": "2026-10-10", "next_open_cancel_if_open_le_stop": True}
 CONFIG_HASH = hashlib.sha256(json.dumps(CONFIG, sort_keys=True).encode()).hexdigest()[:12]
 STATE_KEY = "fwd_v1_state"
 KST = ZoneInfo("Asia/Seoul")
@@ -139,7 +139,9 @@ def _step(a: dict, name: str, d, bars: dict, cands: list[dict], entry: str) -> d
             op = today[o["code"]][0][1]
             if op <= 0:
                 continue
-            rk = 1 - o["stop"] / op if op > o["stop"] else 0.01
+            if op <= o["stop"]:                           # 시가가 이미 전날 정한 손절가 아래 = 손절 구조가 무효 → 진입 취소 (GPT 검토 10/10, 실행 정의)
+                notes.append(f"시가가 손절 아래라 취소 {o['code']}"); continue
+            rk = 1 - o["stop"] / op
             val = CONFIG["risk"] * E_ / rk
             a["cash"] -= val * (1 + cb)
             a["pos"][o["code"]] = {"sh": val / op, "px0": op, "d0": str(d), "stop": o["stop"], "risk0": rk, "rs": o.get("rs"), "hi": op, "lo": op, "exit_next": False}
