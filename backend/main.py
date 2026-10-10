@@ -136,7 +136,7 @@ select{background:#21262d;border:1px solid #30363d;color:#c9d1d9;padding:6px 10p
 .cp-row .k{color:var(--muted)}.cp-row .v{color:var(--text);text-align:right}
 @media(max-width:900px){.cm-body{flex-direction:column}.cm-panel{width:100%}}
 /* 첫 화면 작업대: 종목 목록 | 신호 찍힌 차트 | 패널 (2026-10-09, 카드형 작업대) */
-.ws{display:grid;grid-template-columns:270px minmax(0,1fr) 320px;gap:14px;align-items:start;margin-bottom:14px}
+.ws{display:grid;grid-template-columns:340px minmax(0,1fr) 320px;gap:14px;align-items:start;margin-bottom:14px}
 .ws-list,.ws-main{background:var(--card);border:1px solid var(--line);border-radius:10px;padding:10px}
 .ws-list{max-height:none;display:flex;flex-direction:column;min-height:0}
 .ws-list>#ws-items,.ws-list>#jr-ws-items{flex:1;min-height:0;overflow-y:auto}
@@ -207,7 +207,7 @@ select{background:#21262d;border:1px solid #30363d;color:#c9d1d9;padding:6px 10p
 .mstrip .sep{width:1px;height:22px;background:var(--line)}
 .mstrip .rg{display:inline-flex;align-items:center;gap:4px;padding:2px 9px;border-radius:12px;border:1px solid var(--line);font-size:12.5px}
 #db-more>summary{font-size:15px;font-weight:700;color:var(--text);cursor:pointer;margin:6px 0 10px}
-@media(max-width:1250px){.ws{grid-template-columns:260px minmax(0,1fr)}.ws #ws-panel{grid-column:1/-1}}
+@media(max-width:1250px){.ws{grid-template-columns:330px minmax(0,1fr)}.ws #ws-panel{grid-column:1/-1}}
 @media(max-width:760px){.ws{grid-template-columns:1fr}.ws-list{max-height:320px}}
 .close-btn{float:right;cursor:pointer;color:#8b949e;font-size:18px;line-height:1}.close-btn:hover{color:#e6edf3}
 .modal-tabs{display:flex;gap:4px;margin-bottom:16px;border-bottom:1px solid #30363d;padding-bottom:0}
