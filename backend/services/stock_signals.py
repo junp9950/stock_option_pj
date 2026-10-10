@@ -388,7 +388,7 @@ def workspace_list(db: Session) -> dict:
     from backend.services.result_cache import cached  # noqa: PLC0415
     now = datetime.now(ZoneInfo("Asia/Seoul"))
     if not (is_trading_day(now.date()) and 9 <= now.hour < 16):
-        return cached("workspace_list_v15", (), db, lambda: _workspace_list(db))
+        return cached("workspace_list_v16", (), db, lambda: _workspace_list(db))
     return _workspace_list(db)
 
 
