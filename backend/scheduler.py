@@ -360,6 +360,20 @@ def start_scheduler() -> BackgroundScheduler:
     # 16:05·18:05 코스피·코스닥 투자자별 순매수 (KIS, 최근 300거래일 덮어쓰기) — 시장 카드 '수급' (2026-10-11)
     scheduler.add_job(_market_flows_job, 'cron', day_of_week='mon-fri', hour='16,18', minute=5, id='market_flows', replace_existing=True, max_instances=1)
 
+    def _market_events_job(full: bool) -> None:
+        from backend.collector.market_events import collect, refresh_recent  # noqa: PLC0415
+        db = SessionLocal()
+        try:
+            logger.info("%s", collect(db) if full else refresh_recent(db))
+        except Exception as exc:  # noqa: BLE001
+            logger.error("시장 일정 실패: %s", type(exc).__name__)
+        finally:
+            db.close()
+    # 06:50·17:50 시장 일정 전체(지난 7일~45일 뒤) — 섹터 캘린더 좌우 일정 (2026-10-11)
+    scheduler.add_job(lambda: _market_events_job(True), 'cron', hour='6,17', minute=50, id='market_events', replace_existing=True, max_instances=1)
+    # 미국 지표 발표 뒤 결과값 (08:30·10:00 ET = 한국 21:30~00:00, FOMC 03:00)
+    scheduler.add_job(lambda: _market_events_job(False), 'cron', hour='0,3,22,23', minute=40, id='market_events_recent', replace_existing=True, max_instances=1)
+
     def _forward_close() -> None:
         from backend.services.forward_log import record_close  # noqa: PLC0415
         db = SessionLocal()

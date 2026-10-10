@@ -1941,6 +1941,15 @@ def _market_flows(db):
         return None
 
 
+@router.get("/market/events")
+def get_market_events(start: date, end: date, db: Session = Depends(get_db)):
+    """섹터 캘린더 좌우 '이번 주 / 이번 달 일정' — 미국 지표·실적, 한국 금통위·만기·휴장·실적 (한국 시간)."""
+    from backend.collector.market_events import events  # noqa: PLC0415
+    if (end - start).days > 70:
+        raise HTTPException(400, "기간은 70일까지")
+    return {"start": str(start), "end": str(end), "items": events(db, start, end)}
+
+
 @router.get("/market/verdict")
 def get_market_verdict(db: Session = Depends(get_db)):
     """세 탭(오늘·차트 후보·종베) 공통 시장 문구 (2026-10-10 "시장 상승·매매 가능이 맞나?"):

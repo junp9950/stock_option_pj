@@ -262,6 +262,32 @@ select{background:#21262d;border:1px solid #30363d;color:#c9d1d9;padding:6px 10p
 @media(max-width:640px){.cal-grid{gap:3px}.cal-c{min-height:86px;padding:5px 4px;gap:3px;border-radius:7px}.cal-c .dn{font-size:12px}.cal-c .mk{display:none}
 .cal-c .top{font-size:10px;padding:3px 4px;flex-direction:column;gap:0}.cal-c .top .v{font-size:10px}.cal-c .sub{font-size:9.5px;flex-direction:column;gap:0}.cal-c .sub.s2{display:none}.cal-c.off{font-size:10px}.cal-c .hn{font-size:9px}.cal-c .top .v,.cal-c .sub .v{display:none}.cal-c{min-height:70px}}
 
+/* 섹터 캘린더 좌우 시장 일정 (2026-10-11) — 달력은 그대로, 빈 양옆에 이번 주 · 이번 달 */
+.cal-layout{display:grid;grid-template-columns:minmax(250px,300px) minmax(0,1180px) minmax(250px,300px);gap:18px;justify-content:center;align-items:start}
+.cal-main{min-width:0}.cal-main .cal-wrap,.cal-main .cal-det{max-width:none}
+.ev-side{position:sticky;top:12px;max-height:calc(100vh - 24px);overflow:auto;background:#11161d;border:1px solid #262c36;border-radius:12px;padding:14px 14px 10px;scrollbar-width:thin}
+.ev-side .eh{display:flex;align-items:baseline;gap:8px;margin-bottom:8px}.ev-side .eh b{font-size:15px;color:#e6edf3}.ev-side .eh .ts{margin-left:auto}
+.ev-flt{display:flex;gap:4px;margin-bottom:10px}
+.ev-flt button{flex:1;background:#0d1117;border:1px solid #262c36;color:#8b949e;border-radius:8px;padding:4px 0;font-size:12px;cursor:pointer}
+.ev-flt button.on{background:#1c2330;border-color:#58a6ff;color:#e6edf3;font-weight:600}
+.ev-day{display:grid;grid-template-columns:38px minmax(0,1fr);gap:8px;padding:9px 0;border-top:1px solid #1f252e}
+.ev-day:first-of-type{border-top:0}
+.ev-day .dl{text-align:center;line-height:1.15}.ev-day .dl .w{font-size:11.5px;color:#8b949e}.ev-day .dl .n{font-size:19px;font-weight:700;color:#e6edf3}
+.ev-day .dl .w.sun,.ev-day .dl .n.sun{color:#f47067}.ev-day .dl .w.sat,.ev-day .dl .n.sat{color:#6cb6ff}
+.ev-day.today .dl .n{color:#0d1117;background:#e6edf3;border-radius:7px;padding:0 3px}.ev-day.past{opacity:.5}
+.ev-r{display:grid;grid-template-columns:auto minmax(0,1fr) auto;gap:6px;align-items:baseline;padding:2px 0;font-size:12.5px;color:#adbac7}
+.ev-r .cn{font-size:10px;font-weight:700;border:1px solid #3d4a5c;border-radius:4px;padding:0 3px;color:#adbac7;line-height:15px}
+.ev-r .cn.kr{border-color:#6e4048;color:#f0a5ad}
+.ev-r .t{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}.ev-r.imp .t{color:#e6edf3;font-weight:600}
+.ev-r .tm{font-size:11.5px;color:#8b949e;white-space:nowrap}
+.ev-r .ek{font-size:10px;color:#8b949e;border:1px solid #30363d;border-radius:8px;padding:0 5px;margin-left:4px;font-weight:400}
+.ev-r .v{grid-column:2/4;font-size:11px;color:#8b949e;margin-top:-1px}
+.ev-r .v b{color:#c9d1d9;font-weight:600}
+.ev-empty{color:#8b949e;font-size:12px;padding:10px 0}
+.ev-mrow .ev-day{grid-template-columns:30px minmax(0,1fr);padding:6px 0}.ev-mrow .ev-day .dl .n{font-size:15px}
+@media(max-width:1500px){.cal-layout{grid-template-columns:minmax(0,1fr) minmax(0,1fr)}.cal-main{grid-column:1/-1;order:-1}.ev-side{position:static;max-height:none}}
+@media(max-width:760px){.cal-layout{grid-template-columns:1fr}}
+
 .why{margin:0 0 12px;color:#8b949e;font-size:12px;line-height:1.65}
 .why summary{cursor:pointer;color:#8b949e;font-size:12px;width:max-content}
 .why[open] summary{margin-bottom:4px}
@@ -628,6 +654,9 @@ select{background:#21262d;border:1px solid #30363d;color:#c9d1d9;padding:6px 10p
 
 <!-- 섹터 캘린더 탭 -->
 <div id="panel-calendar" class="panel content">
+ <div class="cal-layout">
+  <aside class="ev-side" id="ev-week"><span class="ts">일정 불러오는 중…</span></aside>
+  <div class="cal-main">
   <div class="cal-wrap">
     <div class="cal-top">
       <button class="cal-nav" onclick="calMove(-1)" aria-label="이전 달">◀</button>
@@ -638,6 +667,9 @@ select{background:#21262d;border:1px solid #30363d;color:#c9d1d9;padding:6px 10p
     <div id="cal-grid" class="cal-grid"></div>
   </div>
   <div id="cal-detail"></div>
+  </div>
+  <aside class="ev-side" id="ev-month"></aside>
+ </div>
 </div>
 
 <!-- 섹터 수급 탭 -->
@@ -1646,16 +1678,74 @@ async function jrSaveExcl(){
 let _cal=null,_calMonth=null;
 async function loadSectorCal(){
   if(!_cal){ try{ _cal=await fetch(`${API}/sectors/calendar`).then(r=>r.ok?r.json():null); }catch(e){} }
+  evRender();
   if(!_cal||!_cal.days.length){ document.getElementById('cal-grid').innerHTML='<span class="ts">불러오지 못했습니다</span>'; return; }
   const first=!_calMonth;
   if(!_calMonth) _calMonth=_cal.days[_cal.days.length-1].date.slice(0,7);
-  renderCal();
+  renderCal(); if(first) evRender();
   if(first) calPick(_cal.days[_cal.days.length-1].date, true);
+}
+// ── 시장 일정 (달력 좌우) ──────────────────────────────────
+const _ev={}; let _evF='all';
+function evYmd(d){ return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`; }
+function evMonth(mk){ // 'YYYY-MM' → 그 달 일정 (한 번 받은 달은 다시 안 받음)
+  if(!_ev[mk]){ const [y,m]=mk.split('-').map(Number);
+    _ev[mk]=fetch(`${API}/market/events?start=${mk}-01&end=${evYmd(new Date(y,m,0))}`).then(r=>r.ok?r.json():{items:[]}).then(d=>d.items||[]).catch(()=>[]); }
+  return _ev[mk];
+}
+function evWeekRange(){ // 평일이면 이번 주, 주말이면 다음 주 (월~일)
+  const t=new Date(); t.setHours(0,0,0,0); const wd=t.getDay();
+  const mon=new Date(t); mon.setDate(t.getDate()-((wd+6)%7)+(wd===0||wd===6?7:0));
+  const sun=new Date(mon); sun.setDate(mon.getDate()+6);
+  return {mon,sun,next:wd===0||wd===6};
+}
+function evPass(e){ return _evF==='all'||(_evF==='ind'?e.kind!=='earnings':e.kind==='earnings'); }
+function evRow(e, full){
+  const tm=e.ev_time||'', imp=e.importance>=2;
+  const tip=[e.note, e.consensus&&`예상 ${e.consensus}`, e.previous&&`이전 ${e.previous}`].filter(Boolean).join(' · ');
+  let v='';
+  if(full&&e.kind!=='earnings'&&(e.actual||e.consensus)) v=`<div class="v">${e.actual?`결과 <b>${e.actual}</b>${e.consensus?` · 예상 ${e.consensus}`:''}`:`예상 ${e.consensus}`}</div>`;
+  return `<div class="ev-r${imp?' imp':''}" title="${(e.title+(tip?' — '+tip:'')).replace(/"/g,'')}"><span class="cn ${e.country==='KR'?'kr':''}">${e.country==='KR'?'한':'미'}</span>
+    <span class="t">${e.kind==='earnings'?e.title.replace(' 잠정실적',' (잠정)').replace(/ 실적(발표)?$/,''):e.title}${e.kind==='earnings'?'<span class="ek">실적</span>':e.kind==='holiday'?'<span class="ek">휴장</span>':e.kind==='expiry'?'<span class="ek">만기</span>':''}</span><span class="tm">${tm}</span>${v}</div>`;
+}
+function evDay(key, rows, full){
+  const [y,m,d]=key.split('-').map(Number), wdi=new Date(y,m-1,d).getDay(), wc=wdi===0?'sun':wdi===6?'sat':'';
+  const today=evYmd(new Date());
+  return `<div class="ev-day${key===today?' today':key<today?' past':''}"><div class="dl"><div class="w ${wc}">${'일월화수목금토'[wdi]}</div><div class="n ${wc}">${d}</div></div>
+    <div>${rows.map(e=>evRow(e,full)).join('')}</div></div>`;
+}
+function evFilterBar(){
+  return `<div class="ev-flt">${[['all','전체'],['ind','지표·일정'],['earn','실적']].map(([k,l])=>`<button class="${_evF===k?'on':''}" onclick="_evF='${k}';evRender()">${l}</button>`).join('')}</div>`;
+}
+async function evRender(){
+  const {mon,sun,next}=evWeekRange();
+  const wk=[...new Set([evYmd(mon).slice(0,7),evYmd(sun).slice(0,7)])];
+  const mk=_calMonth||evYmd(new Date()).slice(0,7);
+  const [wItems,mItems]=await Promise.all([Promise.all(wk.map(evMonth)).then(a=>a.flat()), evMonth(mk)]);
+  const group=(arr)=>{ const g={}; arr.forEach(e=>(g[e.ev_date]=g[e.ev_date]||[]).push(e)); return g; };
+  // 왼쪽: 이번 주 (중요도 상관없이 전부)
+  const ws=evYmd(mon), we=evYmd(sun);
+  const wg=group(wItems.filter(e=>e.ev_date>=ws&&e.ev_date<=we&&evPass(e)));
+  const md=(d)=>`${d.getMonth()+1}/${d.getDate()}`;
+  document.getElementById('ev-week').innerHTML=`<div class="eh"><b>${next?'다음 주':'이번 주'} 일정</b><span class="ts">${md(mon)} ~ ${md(sun)} · 한국 시간</span></div>${evFilterBar()}
+    ${Object.keys(wg).sort().map(k=>evDay(k,wg[k],true)).join('')||'<div class="ev-empty">일정 없음</div>'}
+    <div class="ts" style="margin-top:8px;line-height:1.5">밤 = 미국 장 시작 전 발표 · 새벽 = 미국 장 마감 후 발표<br>한국 실적은 회사가 공시한 실적 설명회 날짜</div>`;
+  // 오른쪽: 달력에 보이는 달의 중요한 일정만
+  const [y,m]=mk.split('-').map(Number);
+  const mg=group(mItems.filter(e=>e.importance>=2&&evPass(e)));
+  let nextHtml='';
+  if(mk===evYmd(new Date()).slice(0,7)){ // 이번 달을 보고 있으면 다음 달 앞부분도 (받아 둔 만큼)
+    const nk=evYmd(new Date(y,m,1)).slice(0,7), ng=group((await evMonth(nk)).filter(e=>e.importance>=2&&evPass(e)));
+    if(Object.keys(ng).length) nextHtml=`<div class="eh" style="margin-top:12px;padding-top:10px;border-top:1px solid #262c36"><b>${Number(nk.slice(5))}월</b><span class="ts">나온 것까지</span></div>
+      <div class="ev-mrow">${Object.keys(ng).sort().map(k=>evDay(k,ng[k],false)).join('')}</div>`;
+  }
+  document.getElementById('ev-month').innerHTML=`<div class="eh"><b>${m}월 주요 일정</b><span class="ts">중요한 것만</span></div>${evFilterBar()}
+    <div class="ev-mrow">${Object.keys(mg).sort().map(k=>evDay(k,mg[k],false)).join('')||'<div class="ev-empty">일정 없음</div>'}</div>${nextHtml}`;
 }
 function calMove(k){
   const ms=[...new Set(_cal.days.map(d=>d.date.slice(0,7)))];
   const i=ms.indexOf(_calMonth)+k; if(i<0||i>=ms.length) return;
-  _calMonth=ms[i]; document.getElementById('cal-detail').innerHTML=''; renderCal();
+  _calMonth=ms[i]; document.getElementById('cal-detail').innerHTML=''; renderCal(); evRender();
 }
 function calHeat(v){ // 등락이 클수록 진한 빨강
   const k=Math.max(0,Math.min(1,(v-2)/10));
