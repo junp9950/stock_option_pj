@@ -192,9 +192,9 @@ select{background:#21262d;border:1px solid #30363d;color:#c9d1d9;padding:6px 10p
 #hc-market>.hc-row{display:grid;grid-template-columns:minmax(0,1fr) auto auto;column-gap:6px;align-items:center;padding:4px 8px;border:1px solid var(--line2);border-radius:8px;background:var(--card2)}
 #hc-market .hc-row .t{min-width:0}#hc-market .hc-row .t b{font-size:12.5px}#hc-market .hc-row .t span{display:block;font-size:10.5px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 #hc-market .hc-row .v{font-size:14px;text-align:right}#hc-market .hc-row .hc-badge{justify-self:end;font-size:10.5px;padding:1px 6px}
-#hc-market .hc-row.k-g{background:linear-gradient(90deg,rgba(35,134,54,.45),rgba(35,134,54,.10));border-color:#2ea043;box-shadow:inset 5px 0 0 #2ea043;padding-left:12px}#hc-market .hc-row.k-g .v{color:#7ee787;font-weight:800}#hc-market .hc-row.k-g .t b{color:#fff}
-#hc-market .hc-row.k-b{background:linear-gradient(90deg,rgba(218,54,51,.45),rgba(218,54,51,.10));border-color:#f85149;box-shadow:inset 5px 0 0 #f85149;padding-left:12px}#hc-market .hc-row.k-b .v{color:#ffa198;font-weight:800}#hc-market .hc-row.k-b .t b{color:#fff}
-#hc-market .hc-row.k-n{background:linear-gradient(90deg,rgba(232,116,12,.32),rgba(232,116,12,.07));border-color:#e8740c;box-shadow:inset 5px 0 0 #e8740c;padding-left:12px}#hc-market .hc-row.k-n .v{color:#ffb070;font-weight:800}#hc-market .hc-row.k-n .t b{color:#fff}#hc-market .hc-row .hc-badge{font-size:11px;padding:2px 8px}
+#hc-market .hc-row.k-g{background:rgba(35,134,54,.20);border-color:#2ea043;box-shadow:inset 5px 0 0 #2ea043;padding-left:12px}#hc-market .hc-row.k-g .v{color:#7ee787;font-weight:800}#hc-market .hc-row.k-g .t b{color:#fff}
+#hc-market .hc-row.k-b{background:rgba(218,54,51,.20);border-color:#f85149;box-shadow:inset 5px 0 0 #f85149;padding-left:12px}#hc-market .hc-row.k-b .v{color:#ffa198;font-weight:800}#hc-market .hc-row.k-b .t b{color:#fff}
+#hc-market .hc-row.k-n{background:rgba(232,116,12,.18);border-color:#e8740c;box-shadow:inset 5px 0 0 #e8740c;padding-left:12px}#hc-market .hc-row.k-n .v{color:#ffb070;font-weight:800}#hc-market .hc-row.k-n .t b{color:#fff}#hc-market .hc-row .hc-badge{font-size:11px;padding:2px 8px}
 .lwbox>.lwc{height:clamp(300px,calc(100vh - 512px),720px)}
 }
 @media(max-width:900px){.htop{grid-template-columns:1fr}.hc-head{font-size:18px}.hc-num .v{font-size:19px}.hcard{padding:16px}}
