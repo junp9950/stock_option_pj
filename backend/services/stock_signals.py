@@ -251,9 +251,9 @@ def signals(db: Session, code: str, days: int = 260, owner: str | None = None) -
                     why.append("급반등 장(2023년 이후)에서만 통한 자리 → 수량 절반")
                 why.append(f"강도 RS {float(RS[d]):.0f} (시장보다 센 쪽 · 70~95)")
                 why.append(f"손절폭 {rk_[d] * 100:.1f}% · 스탑로스 {L[d] * 0.99:,.0f} (오늘 저가 -1%)"
-                           + (" → ✅ 짧음" if good else " → 수량 절반" if rk_[d] > 0.05 else ""))
+                           + (" → ✅ 짧음" if good else ""))
                 desc = (("반도체·AI 특별 (슈퍼사이클) · " if is_semi else "") + ("이평선 모였다 돌파 · " if bool(ema_buy[d]) else "") + ("과열 매수 (이번 장 한정) · " if is_hot else "")
-                        + f"손절 {L[d] * 0.99:,.0f} (-{rk_[d] * 100:.1f}%)" + (" · 수량 절반" if rk_[d] > 0.05 or is_hot or is_semi else "")
+                        + f"손절 {L[d] * 0.99:,.0f} (-{rk_[d] * 100:.1f}%)" + (" · 수량 절반" if is_hot or is_semi else "")
                         + f" · 점수 {int(sc[d])}/7" + (f" (빠짐: {miss[0]})" if miss else ""))
                 # 연속으로 뜨는 날: 첫날만 '매수', 이어지는 날은 '자리 유지' 점 · 손절폭이 확 짧아지면 '더 좋은 자리' (2026-10-09 "매일 뜬 이유가 뭐야")
                 if not prev_on and add_r is not None:
@@ -429,13 +429,10 @@ def _workspace_list(db: Session) -> dict:
             if v_.get("buy") and not v_.get("hot") and not v_.get("semi") and v_["risk"] <= 0.03:
                 add(c_, "✅ 손익비 좋음" + (" · 이평선 모였다 돌파" if v_.get("ema") else ""))
         for c_, v_ in sorted(scores.items(), key=lambda kv: (-kv[1]["score"], kv[1]["risk"])):
-            if v_.get("buy") and not v_.get("hot") and not v_.get("semi") and 0.03 < v_["risk"] <= 0.05:
+            if v_.get("buy") and not v_.get("hot") and not v_.get("semi") and 0.03 < v_["risk"] <= 0.08:
                 add(c_, "이평선 모였다 돌파 · 매수" if v_.get("ema") and v_["score"] < 6 else "종가 점수 6↑")  # 배지에 점수가 있어 짧게
-        # 손절폭 5~8%는 후순위·수량 줄이기, 8%↑는 대기 (3년 예약 손절 R: 3%↓ +1.42 · 3~5% +0.55 · 5~8% +0.35(앞뒤 .32/.37) · 8%↑ +0.11, atr_stop_b.py)
-        # 2026-10-09 피에스케이 7.1% "너무 높은 거 아니가" → "포함해서 들고 가도 우리 쪽이 높나" → 1R당 같은 금액이면 5~8%도 플러스
-        for c_, v_ in sorted(scores.items(), key=lambda kv: kv[1]["risk"]):
-            if v_.get("buy") and not v_.get("hot") and not v_.get("semi") and 0.05 < v_["risk"] <= 0.08:
-                add(c_, "후순위 · 수량 절반" + (" · 이평선 모였다 돌파" if v_.get("ema") else ""))
+        # 손절폭 5~8% 수량 절반은 뺌 (2026-10-11): 12년 계좌 절반 없음 연 +24.2%·낙폭 -56% vs 절반 +20.4%·-48%, MAR 둘 다 .43
+        # = 공격성 차이일 뿐 → 공격성은 거래당 위험 % 하나로 정함(손절폭이 넓으면 같은 위험 금액이라 수량은 저절로 줄어듦). 8%↑는 대기.
         for c_, v_ in sorted(scores.items(), key=lambda kv: kv[1]["risk"]):
             if (v_["score"] >= 6 or v_.get("ema")) and v_["flags"][1] and v_["risk"] > 0.08 and not v_.get("buy"):
                 add(c_, "⏸ 폭 좁은 날 기다리기")
