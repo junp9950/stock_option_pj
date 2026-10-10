@@ -358,7 +358,7 @@ def workspace_list(db: Session) -> dict:
     from backend.services.result_cache import cached  # noqa: PLC0415
     now = datetime.now(ZoneInfo("Asia/Seoul"))
     if not (is_trading_day(now.date()) and 9 <= now.hour < 16):
-        return cached("workspace_list_v12", (), db, lambda: _workspace_list(db))
+        return cached("workspace_list_v13", (), db, lambda: _workspace_list(db))
     return _workspace_list(db)
 
 
@@ -416,7 +416,8 @@ def _workspace_list(db: Session) -> dict:
             _ls = {"on": True}
         for c_, v_ in sorted(scores.items(), key=lambda kv: -(kv[1].get("rs") or 0)):
             if v_.get("lead") and not v_.get("buy"):
-                add(c_, (f"🔥 주도주 · 강도 최상위 RS {v_.get('rs') or 0:.0f} · 기본 신호와 별도로 소량 (거래당 위험 0.10%, 2종목까지)" + (f" · ⚠️ {_ls['warn']}" if _ls.get("warn") else "")) if _ls.get("on") else f"주도주 (지금 쉬는 중 — {_ls.get('why', '')})")
+                add(c_, (f"🔥 주도주 · 강도 최상위 RS {v_.get('rs') or 0:.0f}" + (" · " + " · ".join(v_.get("lead_state") or []) if v_.get("lead_state") else " · 자리 표시 없음(오르는 날)")
+                         + " · 기본 신호와 별도로 소량 (거래당 위험 0.10%, 2종목까지)" + (f" · ⚠️ {_ls['warn']}" if _ls.get("warn") else "")) if _ls.get("on") else f"주도주 (지금 쉬는 중 — {_ls.get('why', '')})")
     except Exception:  # noqa: BLE001
         pass
     try:      # 급락 날 줍기 (시장 -2%↓ 날 같이 빠진 센 종목 · 손절 20일선 · 크기 절반)
@@ -703,7 +704,7 @@ def close_scores(db: Session) -> dict:
     점수 7 이김 46%·+1.5%. 기간을 반으로 나눠도 둘 다 점수 따라 이김 비율이 올라감(앞 26→47%, 뒤 31→46%). 디스크 캐시."""
     latest = db.execute(text("select max(trading_date) from spot_daily_prices")).scalar()
     from backend.services.result_cache import cached  # noqa: PLC0415
-    v = cached("close_scores_v6", (), db, lambda: _close_scores(db, latest)) or {}
+    v = cached("close_scores_v7", (), db, lambda: _close_scores(db, latest)) or {}
     return v
 
 
@@ -788,6 +789,11 @@ def _close_scores(db: Session, latest, live: dict | None = None, frac: float = 1
                  - np.minimum(np.minimum(e5.iloc[r - 1], e10.iloc[r - 1]), e20.iloc[r - 1])) / C.iloc[r - 1])
     tvx = TV.iloc[r] / TV.iloc[-21:-1].mean()
     ema = (gap_prev <= 0.04) & (c > ehi) & (c > H.iloc[-11:-1].max()) & (chg >= 0.03) & (chg < 0.08) & (tvx >= 1.5)
+    # 주도주 상태 표시용 (2026-10-10 사용자 "과열이어도 조정받거나 선 뚫을 때 탑승 신호를 줘야지, 무지성 꼭대기 매수 아니가")
+    # 매매 규칙은 그대로 · 판단용 정보: 📍 눌림·지지(정배열 8>14>21>55 중 저가가 14·21선 ×1.005 안, 14선 위 양봉 마감) · 🚀 20일 고점 돌파 · ⚠️ 과열(20일선 +15%↑)
+    e8_, e14_, e21_, e55_ = (C.ewm(span=k, adjust=False).mean().iloc[r] for k in (8, 14, 21, 55))
+    al_ = (e8_ > e14_) & (e14_ > e21_) & (e21_ > e55_)
+    hi20_ = H.iloc[-21:-1].max()
     out = {}
     semi = semi_codes(db)
     brk_all = (gap_prev <= 0.04) & (c > ehi) & (c > H.iloc[-11:-1].max()) & (chg >= 0.03) & (chg < 0.29) & (tvx >= 1.5) & liq.iloc[r]
@@ -808,7 +814,16 @@ def _close_scores(db: Session, latest, live: dict | None = None, frac: float = 1
         o_ = O.iloc[r].get(code)
         lead = bool(code in tr_codes and rs_v is not None and rs_v == rs_v and rs_v >= 95 and 0 < rk <= 0.08
                     and o_ is not None and o_ == o_ and c[code] > o_ and bool(pos.get(code, 0) >= 0.5))
-        out[code] = {"score": sum(f), "flags": f, "stop": float(l[code]) * 0.99, "risk": rk, "ema": e_, "lead": lead,
+        lst = []
+        if lead:
+            if bool(al_.get(code, False)) and (l[code] <= e14_[code] * 1.005 or l[code] <= e21_[code] * 1.005) and c[code] > e14_[code]:
+                lst.append("📍 눌림·지지 자리")
+            if hi20_.get(code) == hi20_.get(code) and c[code] > hi20_[code]:
+                lst.append("🚀 20일 고점 돌파")
+            g_ = gap20.get(code)
+            if g_ == g_ and g_ is not None and g_ >= 0.15:
+                lst.append(f"⚠️ 과열 · 20일선 +{g_ * 100:.0f}%")
+        out[code] = {"score": sum(f), "flags": f, "stop": float(l[code]) * 0.99, "risk": rk, "ema": e_, "lead": lead, "lead_state": lst,
                      "rs": round(float(rs_v), 1) if rs_v is not None and rs_v == rs_v else None,     # 후보 순서용 (2026-10-10: RS 높은 순이 12년 무작위 순서 10,000번 중 100백분위)
                      "hot": bool(code in tr_codes and f[1] and rk <= 0.08 and sum(f) == 5 and not f[5] and not f[6] and not e_),
                      "semi": bool(code in semi_ok and not normal),

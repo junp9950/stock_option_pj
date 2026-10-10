@@ -72,7 +72,7 @@ def _cands(scores: dict, prices: dict | None = None, lead: bool = False) -> list
         px = (prices or {}).get(c)
         out.append({"code": c, "score": v["score"], "flags": [bool(x) for x in v["flags"]], "ema": bool(v.get("ema")),
                     "hot": bool(v.get("hot")), "semi": bool(v.get("semi")), "rs": v.get("rs"), "stop": round(float(v["stop"]), 2),
-                    "risk": round(float(v["risk"]), 5), "price": px})
+                    "risk": round(float(v["risk"]), 5), "price": px, "state": v.get("lead_state") or []})
     out.sort(key=lambda x: -(x["rs"] or 0))
     for k, x in enumerate(out, 1):
         x["rs_rank"] = k
