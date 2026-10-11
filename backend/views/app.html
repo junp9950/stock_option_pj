@@ -494,6 +494,16 @@ select{background:var(--c3);border:1px solid var(--ln);color:var(--bd);padding:6
 .us-sr .n{color:var(--text);font-weight:600}.us-sr .b{height:6px;background:var(--line);border-radius:3px;overflow:hidden}.us-sr .b i{display:block;height:100%}.us-sr b{text-align:right;font-family:'IBM Plex Mono',monospace}.us-sr .ts{white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 .us-evs{display:grid;grid-template-columns:1fr 1fr;column-gap:16px}.us-ev{display:flex;gap:8px;font-size:12.5px;padding:3px 0;border-bottom:1px solid var(--line2);white-space:nowrap;overflow:hidden}.us-ev .imp{color:var(--strong);font-weight:600}
 @media(max-width:1100px){.us-top{grid-template-columns:1fr!important}}
+.usr-t{width:100%}.usr-t td,.usr-t th{white-space:nowrap}
+@media(max-width:760px){
+  .usr-t thead{display:none}.usr-t,.usr-t tbody{display:block}
+  .usr-t tr{display:grid;grid-template-columns:28px minmax(0,1fr) auto;column-gap:8px;row-gap:1px;padding:8px 2px;border-bottom:1px solid var(--line2)}
+  .usr-t td{display:block;padding:0!important;border:0!important}
+  .usr-t td:nth-child(1){grid-row:1/3}.usr-t td.nm{overflow:hidden;text-overflow:ellipsis}.usr-t td:nth-child(4){grid-column:3;grid-row:1}
+  .usr-t td.sec{grid-column:2;grid-row:2}.usr-t td:nth-child(5){grid-column:3;grid-row:2}.usr-t td:nth-child(6),.usr-t td:nth-child(7){display:none}
+  .us-evs{grid-template-columns:1fr}.us-sr{grid-template-columns:72px 50px 56px minmax(0,1fr)}
+  .mk-seg{position:sticky;left:0;z-index:3;background:var(--hdr);box-shadow:6px 0 8px var(--hdr)}
+}
 #sv-rep .sv-rl{display:grid;grid-template-columns:1fr;column-gap:24px}
 .sv-dl{display:flex;flex-direction:column}.sv-di{display:flex;align-items:center;gap:8px;padding:6px 4px;border-bottom:1px solid var(--line2);text-decoration:none;color:var(--text);font-size:13px;border-radius:6px}
 .sv-di:hover{background:var(--card2)}.sv-di .d{color:var(--muted);font-size:12px;font-family:'IBM Plex Mono',monospace;flex:none}.sv-di .t{overflow:hidden;text-overflow:ellipsis;white-space:nowrap;min-width:0}
@@ -1069,7 +1079,7 @@ select{background:var(--c3);border:1px solid var(--ln);color:var(--bd);padding:6
     <div class="bx-h"><b>미국 순위</b><span class="ts" id="usr-info">지연 시세 · 시총 10억 달러↑</span>
       <span style="margin-left:auto;display:flex;gap:8px;flex-wrap:wrap"><span class="seg" id="usr-sort"><button data-s="dv" class="on" onclick="usRankLoad('dv')">거래대금</button><button data-s="up" onclick="usRankLoad('up')">상승률</button><button data-s="down" onclick="usRankLoad('down')">하락률</button><button data-s="cap" onclick="usRankLoad('cap')">시총</button></span>
       <select id="usr-cap" onchange="usRankLoad()"><option value="1">시총 10억 달러↑</option><option value="10" selected>100억 달러↑</option><option value="100">1,000억 달러↑</option></select></span></div>
-    <table class="pb-table"><thead><tr><th>순위</th><th>종목</th><th>섹터</th><th style="text-align:right">종가</th><th style="text-align:right">등락</th><th style="text-align:right">거래대금</th><th style="text-align:right">시총</th></tr></thead><tbody id="usr-body"></tbody></table>
+    <table class="usr-t"><thead><tr><th>순위</th><th>종목</th><th>섹터</th><th style="text-align:right">종가</th><th style="text-align:right">등락</th><th style="text-align:right">거래대금</th><th style="text-align:right">시총</th></tr></thead><tbody id="usr-body"></tbody></table>
   </section>
 </div>
 <div id="panel-usheat" class="panel content hbt">
@@ -3502,7 +3512,7 @@ async function usRankLoad(sort){
   const d=await fetch(`${API}/us/rank?sort=${sort}&limit=100&min_cap=${cap}`).then(r=>r.ok?r.json():null).catch(()=>null);
   const L=(d&&d.items)||[];
   body.innerHTML=L.map((x,i)=>`<tr style="cursor:pointer" onclick="switchTab('usstock');svOpen('${x.code}','${String(x.name).replace(/'/g,'')}')"><td class="ts">${i+1}</td>
-    <td><b style="color:var(--strong)">${x.name}</b> <span class="ts">${x.code}</span></td><td class="ts">${x.sector}</td>
+    <td class="nm"><b style="color:var(--strong)">${x.name}</b> <span class="ts">${x.code}</span></td><td class="ts sec">${x.sector}</td>
     <td style="text-align:right">$${(+x.close).toFixed(2)}</td><td style="text-align:right">${usP(x.chg)}</td><td style="text-align:right">${usM(x.dv)}</td><td style="text-align:right">${usM(x.cap)}</td></tr>`).join('')||'<tr><td colspan="7" class="ts">없음</td></tr>';
 }
 async function usHeatLoad(){
