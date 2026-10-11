@@ -2835,6 +2835,15 @@ function pattToggle(){ PATT=!PATT; try{ localStorage.setItem('chart-patt',PATT?'
   document.querySelectorAll('.pattb').forEach(b=>b.classList.toggle('on',PATT));
   if(_ws.code&&_ws.tf==='1d') wsDraw(); if(typeof _sv!=='undefined'&&_sv.code&&_sv.tf==='1d') svDraw();
   if(_cm&&_cm.code&&_cm.tf==='1d'&&document.getElementById('chart-modal-bg').classList.contains('show')) cmTf('1d'); }
+// 차트 위 다각형 칠하기 (봉 번호 · 가격 꼭짓점) — Lightweight Charts 시리즈 플러그인
+class LwPoly{ constructor(pts,fill){ this.pts=pts; this.fill=fill; }
+  attached(p){ this.chart=p.chart; this.series=p.series; }
+  updateAllViews(){}
+  paneViews(){ const me=this; return [{ zOrder(){ return 'bottom'; }, renderer(){ return { draw(target){ target.useBitmapCoordinateSpace(sc=>{
+    if(!me.chart||!me.series) return; const ts=me.chart.timeScale(), ctx=sc.context;
+    const P=me.pts.map(([i,v])=>[ts.logicalToCoordinate(i), me.series.priceToCoordinate(v)]); if(P.some(([x,y])=>x==null||y==null)) return;
+    ctx.beginPath(); P.forEach(([x,y],k)=>{ const X=x*sc.horizontalPixelRatio, Y=y*sc.verticalPixelRatio; k?ctx.lineTo(X,Y):ctx.moveTo(X,Y); }); ctx.closePath(); ctx.fillStyle=me.fill; ctx.fill(); }); } }; } }]; } }
+function hexA(h,a){ const m=String(h).replace('#',''), x=m.length===3?m.split('').map(c=>c+c).join(''):m; return `rgba(${parseInt(x.slice(0,2),16)},${parseInt(x.slice(2,4),16)},${parseInt(x.slice(4,6),16)},${a})`; }
 function chartPatterns(data){
   const n=data.length, out={sq:[],notes:[]}; if(n<60) return out;
   const C=data.map(d=>d.close), H=data.map(d=>d.high), L=data.map(d=>d.low), BH=data.map(d=>Math.max(d.open,d.close)), BL=data.map(d=>Math.min(d.open,d.close));
@@ -2844,47 +2853,57 @@ function chartPatterns(data){
   for(let i=Math.max(60,n-160);i<n;i++){ const w=bw.slice(Math.max(19,i-119),i+1).filter(x=>x!=null).sort((a,b)=>a-b); if(w.length>=60&&bw[i]<=w[Math.floor(w.length*0.2)]) out.sq.push(i); }
   let run=0; for(let i=n-1;i>=0&&out.sq.includes(i);i--) run++;
   if(run) out.notes.push(`🔸 응축 ${run}일째 (가격 폭이 120일 중 가장 좁은 편)`);
-  // 2) 박스: 몸통 기준 고가·저가 폭 16% 안에서 가장 길게 이어진 최근 구간 (20~150일)
-  for(let N=Math.min(150,n-1);N>=20;N--){
-    const s=n-N; let hi=-1e18, lo=1e18; for(let i=s;i<n;i++){ hi=Math.max(hi,BH[i]); lo=Math.min(lo,BL[i]); }
-    if(hi/lo-1<=0.16){ out.box={s,hi,lo,N}; break; }
-  }
-  if(!out.box){   // 지금 막 박스를 벗어났으면 바로 앞 구간
-    for(let N=Math.min(150,n-4);N>=20;N--){ const e=n-3, s=e-N; if(s<0) continue; let hi=-1e18, lo=1e18; for(let i=s;i<e;i++){ hi=Math.max(hi,BH[i]); lo=Math.min(lo,BL[i]); }
-      if(hi/lo-1<=0.16){ out.box={s,e,hi,lo,N}; break; } }
-  }
-  if(out.box){ const b=out.box, c=C[n-1], w=((b.hi/b.lo-1)*100).toFixed(0);
-    const st=c>b.hi*1.005?'상단 돌파':c<b.lo*0.995?'하단 이탈':c>=b.hi-(b.hi-b.lo)*0.2?'상단 근처':c<=b.lo+(b.hi-b.lo)*0.2?'하단 근처':'박스 안';
+  // 2) 박스: 몸통 기준 폭 16% 안에서 가장 길게 이어진 구간 (20~150일) — 지금 이어지는 것, 없으면 최근 15일 안에 끝난 것(돌파·이탈 직전 박스)
+  const C1=C[n-1];
+  for(let j=0;j<=15&&!out.box;j++){ const e=n-1-j;
+    for(let N=Math.min(150,e);N>=20;N--){ const s0=e-N+1; let hi=-1e18, lo=1e18; for(let i=s0;i<=e;i++){ hi=Math.max(hi,BH[i]); lo=Math.min(lo,BL[i]); }
+      if(hi/lo-1<=0.16){ if(j===0||C[e+1]>hi*1.005||C[e+1]<lo*0.995) out.box={s:s0,e,hi,lo,N,j}; break; } } }
+  if(out.box){ const b=out.box, w=((b.hi/b.lo-1)*100).toFixed(0);
+    const st=C1>b.hi*1.005?`상단 돌파${b.j?` (${b.j}일 전)`:''}`:C1<b.lo*0.995?`하단 이탈${b.j?` (${b.j}일 전)`:''}`:C1>=b.hi-(b.hi-b.lo)*0.2?'상단 근처':C1<=b.lo+(b.hi-b.lo)*0.2?'하단 근처':'박스 안';
     out.notes.push(`📦 박스 ${b.N}일 · 폭 ${w}% · ${Math.round(b.lo).toLocaleString()}~${Math.round(b.hi).toLocaleString()} · ${st}`); }
-  // 3) 수렴선: 최근 120일 고점끼리·저점끼리 이은 선 (선을 넘은 봉 없음) — 위는 내려오고 아래는 올라오거나, 둘이 좁혀지면
-  const k=3, from=Math.max(k,n-100), ph=[], pl=[];
-  for(let i=from;i<n-2;i++){ let isH=true, isL=true; for(let j=Math.max(0,i-k);j<=Math.min(n-1,i+k);j++){ if(H[j]>H[i]) isH=false; if(L[j]<L[i]) isL=false; } if(isH) ph.push(i); if(isL) pl.push(i); }
-  // 선을 넘은 봉이 없고, 선에 닿은 봉(1.5% 안)이 많을수록 좋은 선 — 닿은 봉 3개 이상만
-  const fit=(P,V,up)=>{ let best=null;
-    for(let x=0;x<P.length;x++) for(let y=P.length-1;y>x;y--){ const a=P[x], b=P[y]; if(b-a<10||n-1-b>40) continue;
+  // 3) 추세선: 고점끼리·저점끼리 이은 선(넘은 봉 없음 · 닿은 봉 3개↑) — 좁혀지면 삼각형·쐐기, 나란하면 채널. 이미 돌파했으면 돌파 직전 모양
+  const k=3, ph=[], pl=[];
+  for(let i=Math.max(k,n-150);i<n-1;i++){ let isH=true, isL=true; for(let j=Math.max(0,i-k);j<=Math.min(n-1,i+k);j++){ if(BH[j]>BH[i]) isH=false; if(BL[j]<BL[i]) isL=false; } if(isH) ph.push(i); if(isL) pl.push(i); }
+  const fit=(P,V,up,e)=>{ let best=null; const P2=P.filter(i=>i<=e-1&&i>=e-110);
+    for(let x=0;x<P2.length;x++) for(let y=P2.length-1;y>x;y--){ const a=P2[x], b=P2[y]; if(b-a<10||e-b>40) continue;
       const sl=(V[b]-V[a])/(b-a), line=i=>V[a]+sl*(i-a); let ok=true, touch=0;
-      for(let i=a;i<n-2;i++){ const r=V[i]/line(i); if(up?r>1.012:r<0.988){ ok=false; break; } if(up?r>=0.985:r<=1.015) touch++; }
+      for(let i=a;i<=e;i++){ const r=V[i]/line(i); if(up?r>1.015:r<0.985){ ok=false; break; } if(up?r>=0.98:r<=1.02) touch++; }
       if(!ok||touch<3) continue;
-      const score=touch+(b-a)/25;
-      if(!best||score>best.score) best={a,b,sl,v0:V[a],score,touch};
+      const score=touch+(b-a)/25; if(!best||score>best.score) best={a,b,sl,v0:V[a],score};
     } return best; };
-  const U=fit(ph,H,true), D=fit(pl,L,false);
-  if(U&&D){ const lineU=i=>U.v0+U.sl*(i-U.a), lineD=i=>D.v0+D.sl*(i-D.a), s0=Math.max(U.a,D.a);
-    const g0=lineU(s0)/lineD(s0)-1, g1=lineU(n-1)/lineD(n-1)-1, su=U.sl/C[n-1]*100, sd=D.sl/C[n-1]*100;
-    if(g1>0&&g1<g0*0.75&&g0<=0.6){
-      const kind=su<-0.05&&sd>0.05?'대칭 삼각형':Math.abs(su)<=0.05&&sd>0.05?'상승 삼각형':su<-0.05&&Math.abs(sd)<=0.05?'하락 삼각형':su<0&&sd<0?'하락 쐐기':su>0&&sd>0?'상승 쐐기':'수렴';
-      const c=C[n-1], st=c>lineU(n-1)*1.005?' · 위로 돌파':c<lineD(n-1)*0.995?' · 아래로 이탈':` · 위 ${Math.round(lineU(n-1)).toLocaleString()} / 아래 ${Math.round(lineD(n-1)).toLocaleString()}`;
-      out.tri={U,D,kind}; out.notes.push(`📐 ${kind} (폭 ${(g0*100).toFixed(0)}% → ${(g1*100).toFixed(0)}%)${st}`);
-    }
+  for(let j=0;j<=30&&!out.tri;j++){ const e=n-3-j, ago=n-2-e, U=fit(ph,BH,true,e), D=fit(pl,BL,false,e);
+    if(!U||!D) continue;
+    const lineU=i=>U.v0+U.sl*(i-U.a), lineD=i=>D.v0+D.sl*(i-D.a), s0=Math.max(U.a,D.a);
+    const g0=lineU(s0)/lineD(s0)-1, g1=lineU(e)/lineD(e)-1, su=U.sl/C[e]*100, sd=D.sl/C[e]*100;
+    const brk=j?(C[e+1]>lineU(e+1)*1.005?'up':C[e+1]<lineD(e+1)*0.995?'dn':null):null;
+    if(j&&!brk) continue;   // 끝난 모양은 바로 다음 날 돌파·이탈한 것만
+    let kind=null, emo='📐';
+    if(g1>0&&g1<g0*0.75&&g0<=0.6) kind=su<-0.05&&sd>0.05?'대칭 삼각형':Math.abs(su)<=0.05&&sd>0.05?'상승 삼각형':su<-0.05&&Math.abs(sd)<=0.05?'하락 삼각형':su<0&&sd<0?'하락 쐐기':su>0&&sd>0?'상승 쐐기':'수렴';
+    else if(g1>0&&g0<=0.4&&Math.abs(g1-g0)<=g0*0.35){ kind=su>0.05&&sd>0.05?'상승 채널':su<-0.05&&sd<-0.05?'하락 채널':null; emo='📈'; }
+    if(!kind) continue;
+    const uN=lineU(n-1), dN=lineD(n-1), c=C1;
+    let st;
+    if(brk==='up') st=` · 위로 돌파 ${ago}일 전 (그날 ${Math.round(lineU(e+1)).toLocaleString()} 위로)`;
+    else if(brk==='dn') st=` · 아래로 이탈 ${ago}일 전`;
+    else if(c>uN*1.005) st=` · 위로 돌파`;
+    else if(c<dN*0.995) st=` · 아래로 이탈`;
+    else st=` · 위 ${Math.round(uN).toLocaleString()} / 아래 ${Math.round(dN).toLocaleString()}`;
+    out.tri={U,D,kind,e,brk}; out.notes.push(`${emo} ${kind} (폭 ${(g0*100).toFixed(0)}% → ${(g1*100).toFixed(0)}%)${st}`);
   }
   return out;
 }
-function drawPatterns(chart,data){
+function drawPatterns(chart,data,cs){
   _patNote=''; _patNotes=[]; if(!PATT) return;
   const p=chartPatterns(data), n=data.length, T=i=>data[Math.min(n-1,Math.max(0,i))].time;
   const seg=(i0,v0,i1,v1,color,title,w)=>{ const s=chart.addLineSeries({color,lineWidth:w||2,priceLineVisible:false,lastValueVisible:!!title,title:title||'',crosshairMarkerVisible:false}); s.setData([{time:T(i0),value:v0},{time:T(i1),value:v1}]); };
-  if(p.box){ const b=p.box, e=b.e!=null?b.e:n-1, col=cv('--neu'); seg(b.s,b.hi,e,b.hi,col,'박스 위',1); seg(b.s,b.lo,e,b.lo,col,'박스 아래',1); }
-  if(p.tri){ const {U,D}=p.tri; seg(U.a,U.v0,n-1,U.v0+U.sl*(n-1-U.a),'#da3633','위 선',2); seg(D.a,D.v0,n-1,D.v0+D.sl*(n-1-D.a),'#2ea043','아래 선',2); }
+  const stc=(up,dn)=>up?'#2ea043':dn?'#da3633':cv('--neu');   // 돌파 초록 · 이탈 빨강 · 안 흰색(테마 중립)
+  if(p.box){ const b=p.box, e=b.e!=null?b.e:n-1, c=data[n-1].close, col=stc(c>b.hi*1.005,c<b.lo*0.995);
+    if(cs) cs.attachPrimitive(new LwPoly([[b.s,b.hi],[e,b.hi],[e,b.lo],[b.s,b.lo]],hexA(col,.13)));
+    seg(b.s,b.hi,e,b.hi,hexA(col,.9),'박스 위',1); seg(b.s,b.lo,e,b.lo,hexA(col,.9),'박스 아래',1); }
+  if(p.tri){ const {U,D,brk,e}=p.tri, E=brk?Math.min(n-1,e+3):n-1, uE=U.v0+U.sl*(E-U.a), dE=D.v0+D.sl*(E-D.a), c=data[n-1].close;   // 끝난 모양은 돌파한 곳까지만
+    const col=brk?stc(brk==='up',brk==='dn'):stc(c>uE*1.005,c<dE*0.995);
+    if(cs) cs.attachPrimitive(new LwPoly([[U.a,U.v0],[E,uE],[E,dE],[D.a,D.v0]],hexA(col,.11)));
+    seg(U.a,U.v0,E,uE,'#da3633',brk?'':'위 선',2); seg(D.a,D.v0,E,dE,'#2ea043',brk?'':'아래 선',2); }
   if(p.sq.length){ const sq=chart.addHistogramSeries({priceScaleId:'sq',lastValueVisible:false,priceLineVisible:false,base:0});
     chart.priceScale('sq').applyOptions({scaleMargins:{top:0.77,bottom:0.215},visible:false});
     const S=new Set(p.sq); sq.setData(data.map((d,i)=>({time:d.time,value:1,color:S.has(i)?cv('--o'):'rgba(0,0,0,0)'}))); }
@@ -2927,7 +2946,7 @@ function renderLwChart(cid, allCandles, signals, per, opts){
   const closes=data.map(d=>d.close), EN=[5,10,20,60], EC=themeLight()?['#d6336c','#a67c00','#0c8599','#2b8a3e']:['#f778ba','#e3b341','#56d4dd','#3fb950'];
   const ES=EN.map(n=>emaOf(closes,n));
   ES.forEach((a,k)=>{ const ls=chart.addLineSeries({color:EC[k],lineWidth:k===3?2:1,priceLineVisible:false,lastValueVisible:!small,crosshairMarkerVisible:false}); ls.setData(a.map((v,i)=>({time:data[i].time,value:v}))); });
-  if(!intra&&opts&&opts.tf==='1d') drawPatterns(chart,data); else { _patNote=''; _patNotes=[]; }
+  if(!intra&&opts&&opts.tf==='1d') drawPatterns(chart,data,cs); else { _patNote=''; _patNotes=[]; }
   // 기준봉 VWAP (7/30 뒤 +8%·거래 3배 양봉, 없으면 거래 가장 많은 양봉부터)
   _avwapNote='';
   let cyc=intra?data.length:data.findIndex(d=>d.time>='2026-07-30'); if(cyc<0) cyc=data.length;
