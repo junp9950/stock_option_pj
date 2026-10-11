@@ -374,6 +374,26 @@ def start_scheduler() -> BackgroundScheduler:
     # 미국 지표 발표 뒤 결과값 (08:30·10:00 ET = 한국 21:30~00:00, FOMC 03:00)
     scheduler.add_job(lambda: _market_events_job(False), 'cron', hour='0,3,22,23', minute=40, id='market_events_recent', replace_existing=True, max_instances=1)
 
+    def _minute_bars_job(prefill: bool) -> None:
+        from backend.collector import minute_bars as mb  # noqa: PLC0415
+        db = SessionLocal()
+        try:
+            if prefill:      # 오늘 후보·대기 종목은 장 마감 뒤 미리 석 달치 분봉 (차트 열면 바로 길게)
+                from backend.services.stock_signals import workspace_list  # noqa: PLC0415
+                codes = [x.get("code") for x in (workspace_list(db).get("candidates") or [])[:30] if x.get("code")]
+                for c in codes:
+                    mb.request_fill(c)
+                logger.info("분봉 미리 채우기 %d종목 예약", len(codes))
+            else:
+                logger.info("%s", mb.refresh_all(db))
+        except Exception as exc:  # noqa: BLE001
+            logger.error("분봉 작업 실패: %s", type(exc).__name__)
+        finally:
+            db.close()
+    # 16:20 오늘 후보 분봉 미리 채우기 · 20:15 받아 둔 종목 새 봉 덧붙이기 (NXT 20:00 마감 뒤) (2026-10-11)
+    scheduler.add_job(lambda: _minute_bars_job(True), 'cron', day_of_week='mon-fri', hour=16, minute=20, id='minute_prefill', replace_existing=True, max_instances=1)
+    scheduler.add_job(lambda: _minute_bars_job(False), 'cron', day_of_week='mon-fri', hour=20, minute=15, id='minute_refresh', replace_existing=True, max_instances=1)
+
     def _forward_close() -> None:
         from backend.services.forward_log import record_close  # noqa: PLC0415
         db = SessionLocal()

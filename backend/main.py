@@ -2438,10 +2438,17 @@ try{ _ws.per=+localStorage.getItem('ws-per')||130; }catch(e){}
 function wsPeriod(n){ _ws.per=n; try{ localStorage.setItem('ws-per',n); }catch(e){} wsDraw(); }
 _ws.tf='1d';
 const TF_NAME={'1d':'일봉','1w':'주봉','60m':'60분봉','30m':'30분봉','15m':'15분봉','5m':'5분봉','1m':'1분봉'};
-async function tfCandles(code,tf){   // 분봉·주봉 (네이버, 60초 캐시는 서버)
+async function tfCandles(code,tf){   // 분봉: 모아 둔 1분봉(석 달)으로 길게, 처음 여는 종목은 네이버 6일 + 서버가 뒤에서 채움 (2026-10-11)
   const r=await fetch(`${API}/stock/${code}/candles?tf=${tf}`).then(x=>x.ok?x.json():null).catch(()=>null);
   return r&&r.candles&&r.candles.length?r:null;
 }
+function tfCached(c,tf){ const x=c[tf]; return x&&!(x.source==='naver'&&x.filling)?x:null; }   // 채우는 중이던 짧은 분봉은 다시 받음
+function tfNote(cd,tf){
+  if(tf==='1w') return TF_NAME[tf];
+  if(cd.source==='stored') return `${TF_NAME[tf]} · 최근 ${Math.min(cd.days,{'1m':4,'5m':12,'15m':25,'30m':45,'60m':63}[tf]||cd.days)}거래일 (끌어서 과거 보기)`;
+  return `${TF_NAME[tf]} · 최근 약 6거래일${cd.filling?' · 석 달치 받는 중 (1~2분 뒤 자동으로 길어짐)':''}`;
+}
+function tfRetryLater(cd,again){ if(cd&&cd.source==='naver'&&cd.filling) setTimeout(again,75000); }
 async function wsTf(tf){ _ws.tf=tf; wsDraw(); }
 async function wsDraw(){
   document.getElementById('ws-note').style.display='';
@@ -2451,11 +2458,12 @@ async function wsDraw(){
   const c=_ws.cache[_ws.code]; if(!c||!c.cd) return;
   if(_ws.tf!=='1d'){
     const code=_ws.code, tf=_ws.tf; document.getElementById('ws-note').textContent=`${TF_NAME[tf]} 불러오는 중…`;
-    const cd=c[tf]||(c[tf]=await tfCandles(code,tf));
+    const cd=tfCached(c,tf)||(c[tf]=await tfCandles(code,tf));
     if(_ws.code!==code||_ws.tf!==tf) return;
     if(!cd){ document.getElementById('ws-note').textContent=`${TF_NAME[tf]}을 못 받았습니다`; return; }
     renderLwChart('ws-chart',cd.candles,[],tf==='1w'?80:120);
-    document.getElementById('ws-note').textContent=`${TF_NAME[tf]}${tf==='1w'?'':' · 최근 약 6거래일 (네이버)'} · EMA 5·10·20·60 · 신호는 일봉에서만 보여요`;
+    document.getElementById('ws-note').textContent=`${tfNote(cd,tf)} · 신호는 일봉에서만 보여요`;
+    tfRetryLater(cd,()=>{ if(_ws.code===code&&_ws.tf===tf) wsDraw(); });
     return;
   }
   const g=renderLwChart('ws-chart',c.cd.candles,c.sg?c.sg.items:[],_ws.per,{stop:_ws.stop||(c.sg&&c.sg.active&&c.sg.active.stop)});
@@ -2624,11 +2632,12 @@ async function jrWsDraw(){
   const c=_jrWs.cache; if(!c||!c.cd||c.code!==_jrWs.code) return;
   if(tf!=='1d'){
     const code=_jrWs.code; document.getElementById('jr-ws-note').textContent=`${TF_NAME[tf]} 불러오는 중…`;
-    const cd=c[tf]||(c[tf]=await tfCandles(code,tf));
+    const cd=tfCached(c,tf)||(c[tf]=await tfCandles(code,tf));
     if(_jrWs.code!==code||(_jrWs.tf||'1d')!==tf) return;
     if(!cd){ document.getElementById('jr-ws-note').textContent=`${TF_NAME[tf]}을 못 받았습니다`; return; }
     renderLwChart('jr-chart',cd.candles,[],tf==='1w'?80:120);
-    document.getElementById('jr-ws-note').textContent=`${TF_NAME[tf]} · 내가 산·판 날과 신호는 일봉에서만 보여요`;
+    document.getElementById('jr-ws-note').textContent=`${tfNote(cd,tf)} · 내가 산·판 날과 신호는 일봉에서만 보여요`;
+    tfRetryLater(cd,()=>{ if(_jrWs.code===code&&(_jrWs.tf||'1d')===tf) jrWsDraw(); });
     return;
   }
   const g=renderLwChart('jr-chart',c.cd.candles,c.sg?c.sg.items:[],_ws.per);
@@ -2683,11 +2692,12 @@ async function cmTf(tf){
   if(tf==='1d'){ const g=renderLwChart('cm-chart',c.cd.candles,c.sg?c.sg.items:[],90);
     document.getElementById('chart-modal-note').textContent=`일봉 · 1년 (끌어서 과거 보기)`+(g!=null?` · EMA 5·10·20 간격 ${g.toFixed(1)}% ${g<=4?'(모임 ✓)':g>=7?'(벌어짐 ⚠)':''}`:'')+_avwapNote; return; }
   document.getElementById('chart-modal-note').textContent=`${TF_NAME[tf]} 불러오는 중…`;
-  const cd=c[tf]||(c[tf]=await tfCandles(code,tf));
+  const cd=tfCached(c,tf)||(c[tf]=await tfCandles(code,tf));
   if(_cm.code!==code||_cm.tf!==tf) return;
   if(!cd){ document.getElementById('chart-modal-note').textContent=`${TF_NAME[tf]}을 못 받았습니다`; return; }
   renderLwChart('cm-chart',cd.candles,[],tf==='1w'?80:120);
-  document.getElementById('chart-modal-note').textContent=`${TF_NAME[tf]}${tf==='1w'?'':' · 최근 약 6거래일'} · 신호는 일봉에서만 보여요`;
+  document.getElementById('chart-modal-note').textContent=`${tfNote(cd,tf)} · 신호는 일봉에서만 보여요`;
+  tfRetryLater(cd,()=>{ if(_cm.code===code&&_cm.tf===tf&&document.getElementById('chart-modal-bg').classList.contains('show')) cmTf(tf); });
 }
 async function openChartModal(code, name, spikeDate){
   _cm={code,tf:'1d',cache:{}}; document.getElementById('cm-tf').style.display='flex';

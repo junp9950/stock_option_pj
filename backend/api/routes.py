@@ -2172,8 +2172,23 @@ def get_stock_candles(code: str, count: int = 330, tf: str = "1d", db: Session =
     if tf != "1d":
         if tf not in ("1w", "1m", "3m", "5m", "10m", "15m", "30m", "60m"):
             raise HTTPException(status_code=400, detail="tf")
+        if tf != "1w":      # 분봉: 모아 둔 토스 1분봉(석 달)으로 길게, 아직 없으면 네이버 6일 + 뒤에서 채우기 (2026-10-11)
+            from backend.collector import minute_bars as mb  # noqa: PLC0415
+            try:
+                bars, n_days = mb.load(db, code, tf)
+            except Exception:  # noqa: BLE001
+                bars, n_days = [], 0
+            if mb.ready(n_days, tf):
+                newest = bars[-1]["timestamp"][:16] if bars else ""
+                from datetime import datetime as _dt  # noqa: PLC0415
+                from zoneinfo import ZoneInfo as _Z  # noqa: PLC0415
+                now = _dt.now(_Z("Asia/Seoul"))
+                if newest < (now - timedelta(minutes=3)).strftime("%Y-%m-%dT%H:%M") and 8 <= now.hour < 21 and now.weekday() < 5:
+                    mb.request_fill(code)      # 장중엔 새 봉 덧붙이기 (뒤에서)
+                return {"code": code, "tf": tf, "candles": bars, "days": n_days, "source": "stored", "filling": mb.filling(code)}
+            mb.request_fill(code)
         try:
-            return {"code": code, "tf": tf, "candles": _naver_tf_candles(code, tf)}
+            return {"code": code, "tf": tf, "candles": _naver_tf_candles(code, tf), "source": "naver", "filling": tf != "1w"}
         except Exception:  # noqa: BLE001
             raise HTTPException(status_code=502, detail="분봉·주봉을 못 받았습니다")
     rows = db.execute(text("select trading_date, open_price, high_price, low_price, close_price, volume from spot_daily_prices "
