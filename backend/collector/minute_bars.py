@@ -138,7 +138,7 @@ def filling(code: str) -> bool:
 
 
 def load(db: Session, code: str, tf: str, ext: bool = False, before: str | None = None) -> tuple[list[dict], int]:
-    """묶은 분봉 (차트 형식) · DB에 있는 거래일 수. ext=False면 정규장(09:00~15:30, 15:30 종가 체결은 앞 봉에 합침)만 — 시간외(NXT)는 거래가 얇아 화면만 차지."""
+    """묶은 분봉 (차트 형식) · DB에 있는 거래일 수. ext=False면 정규장(09:00~15:30, 15:30 종가 체결은 앞 봉에 합침)만 — 장 후 15:30~20:00(거래소 연장·NXT)·장 전 08:00~09:00(NXT)은 거래가 얇아 화면만 차지."""
     _ensure(db)
     mins = int(tf[:-1])
     b = datetime.fromisoformat(before[:19]) if before else datetime(2100, 1, 1)
