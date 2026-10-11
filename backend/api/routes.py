@@ -1720,6 +1720,16 @@ def search_stocks(q: str = "", db: Session = Depends(get_db)):
         else:
             continue
         hits.append((rank, -tv, c, n, px, ch))
+    # 미국 종목 (2026-10-11 차트 보기만) — 티커·영문·한글 이름, 한국 종목 뒤에 시총 순
+    try:
+        from backend.services.us_stocks import universe  # noqa: PLC0415
+        for x in universe():
+            sym, en, ko = x["code"].upper(), x["en"].upper().replace(" ", ""), x["name"].upper().replace(" ", "")
+            r_ = 0 if q == sym else 1 if sym.startswith(q) or ko.startswith(q) else 2 if (len(q) >= 3 and q in en) or (len(q) >= 2 and q in ko) else None
+            if r_ is not None:
+                hits.append((r_ + 0.5, -x["cap"] / 1e4, x["code"], f"{x['name']} 🇺🇸", x["close"], x["chg"]))
+    except Exception:  # noqa: BLE001
+        pass
     hits.sort()
     return {"items": [{"code": c, "name": n, "close": px, "chg": round(ch, 2)} for _, _, c, n, px, ch in hits[:12]]}
 
@@ -2184,6 +2194,12 @@ def _naver_tf_candles(code: str, tf: str) -> list[dict]:
 def get_stock_candles(code: str, count: int = 330, tf: str = "1d", ext: int = 0, before: str | None = None, db: Session = Depends(get_db)):
     """긴 일봉 (토스는 200봉까지라 앞은 DB, 최근 며칠은 토스 실시간으로 덮음) — 첫 화면 1년 차트용 (2026-10-09).
     tf=1w(주봉)·1m·3m·5m·10m·15m·30m·60m(분봉, 최근 약 6거래일)는 네이버 차트 API."""
+    from backend.services.us_stocks import is_us  # noqa: PLC0415
+    if is_us(code):      # 미국 종목: 토스 봉 (지연 시세 · 차트 보기만, 2026-10-11)
+        from backend.services.us_stocks import candles as us_candles  # noqa: PLC0415
+        if before:
+            return {"code": code, "tf": tf, "candles": [], "source": "us"}
+        return {"code": code, "tf": tf, "candles": us_candles(code, tf, bool(ext)), "source": "us", "us": True}
     if tf != "1d":
         if tf not in ("1w", "1m", "3m", "5m", "10m", "15m", "30m", "60m"):
             raise HTTPException(status_code=400, detail="tf")
@@ -2250,6 +2266,9 @@ def _journal_owner_opt(request: Request, db: Session) -> str | None:
 @router.get("/stock/{code}/chart-signals")
 def get_stock_chart_signals(code: str, request: Request, db: Session = Depends(get_db)):
     """차트에 찍을 신호 (우리 규칙을 그 종목 일봉에 거슬러 적용). 매매 일지 로그인 헤더가 있으면 내 매수·매도도."""
+    from backend.services.us_stocks import is_us  # noqa: PLC0415
+    if is_us(code):
+        return {"items": [], "active": None}
     from backend.services.stock_signals import signals  # noqa: PLC0415
     return signals(db, code, owner=_journal_owner_opt(request, db))
 
@@ -2276,6 +2295,11 @@ def get_workspace_list(db: Session = Depends(get_db)):
 @router.get("/stock/{code}/profile")
 def get_stock_profile(code: str, db: Session = Depends(get_db)):
     """종목 탭: 투자 지표 · 업종 PER · PSR · 분기/연간 실적(컨센서스) · 안정성 · 매출 구성 · 목표가 · 리포트 (2026-10-11)."""
+    from backend.services.us_stocks import is_us, info  # noqa: PLC0415
+    if is_us(code):
+        x = info(code) or {}
+        return {"code": code, "us": True, "name": x.get("name"), "en": x.get("en"), "market": "미국", "market_cap_usd": x.get("cap"),
+                "sector": x.get("sector"), "industry": x.get("industry")}
     from backend.services.stock_profile import profile  # noqa: PLC0415
     return profile(db, code)
 
@@ -2283,6 +2307,9 @@ def get_stock_profile(code: str, db: Session = Depends(get_db)):
 @router.get("/stock/{code}/disclosures")
 def get_stock_disclosures(code: str):
     """종목 탭: 최근 90일 DART 공시 · 위험(증자·CB·감자·소송 등) / 좋음(자사주·무증·공급계약 등) 표시 (2026-10-11)."""
+    from backend.services.us_stocks import is_us  # noqa: PLC0415
+    if is_us(code):
+        return {"code": code, "items": [], "us": True}
     from backend.services.stock_profile import disclosures  # noqa: PLC0415
     return disclosures(code)
 
@@ -2290,6 +2317,9 @@ def get_stock_disclosures(code: str):
 @router.get("/stock/{code}/flows")
 def get_stock_flows(code: str, db: Session = Depends(get_db)):
     """종목 탭: 최근 40거래일 투자자별(기관 세부 포함) 순매수 수량 · 외국인 보유율 · 공매도 20일 (토스)."""
+    from backend.services.us_stocks import is_us  # noqa: PLC0415
+    if is_us(code):
+        return {"code": code, "records": [], "short": [], "us": True}
     from backend.services.stock_profile import flows  # noqa: PLC0415
     return flows(db, code)
 
@@ -2297,6 +2327,9 @@ def get_stock_flows(code: str, db: Session = Depends(get_db)):
 @router.get("/stock/{code}/panel")
 def get_stock_panel(code: str, request: Request, db: Session = Depends(get_db)):
     """종목 차트 창 오른쪽 패널 — 상태 제목·단계·✓/⚠ 칩·카드·세부 지표. 평단·수익은 매매 일지 로그인 때만."""
+    from backend.services.us_stocks import is_us  # noqa: PLC0415
+    if is_us(code):
+        return {"ok": False}
     from backend.services.stock_panel import panel  # noqa: PLC0415
     return panel(db, code, owner=_journal_owner_opt(request, db))
 

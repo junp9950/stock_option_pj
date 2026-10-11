@@ -478,6 +478,7 @@ select{background:var(--c3);border:1px solid var(--ln);color:var(--bd);padding:6
 .sv-panelbox{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:16px}.sv-panelbox>.cp-c1,.sv-panelbox>.cp-c2{display:flex;flex-direction:column;gap:10px;min-width:0}
 .sv-panelbox .cp-chips{display:none}.sv-panelbox .cp-state{background:var(--sunk);border:0}.sv-panelbox .cp-cards{grid-template-columns:repeat(3,1fr)}.sv-panelbox .cp-cards .cp-card{background:var(--sunk);border:0;border-radius:10px}
 .sv-panelbox .cp-rows{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));column-gap:20px;border-top:0}.sv-panelbox .cp-row{font-size:12.5px}
+#sv-body [hidden]{display:none!important}
 #sv-rep .sv-rl{display:grid;grid-template-columns:1fr;column-gap:24px}
 .sv-dl{display:flex;flex-direction:column}.sv-di{display:flex;align-items:center;gap:8px;padding:6px 4px;border-bottom:1px solid var(--line2);text-decoration:none;color:var(--text);font-size:13px;border-radius:6px}
 .sv-di:hover{background:var(--card2)}.sv-di .d{color:var(--muted);font-size:12px;font-family:'IBM Plex Mono',monospace;flex:none}.sv-di .t{overflow:hidden;text-overflow:ellipsis;white-space:nowrap;min-width:0}
@@ -1002,17 +1003,17 @@ select{background:var(--c3);border:1px solid var(--ln);color:var(--bd);padding:6
       </section>
       <div class="sv-side">
         <section class="bx" id="sv-metrics"><span class="ts">불러오는 중…</span></section>
-        <section class="bx" id="sv-mix"></section>
+        <section class="bx sv-kr" id="sv-mix"></section>
       </div>
     </div>
-    <section class="bx"><div class="bx-h"><b>사이트 판단</b><span class="ts">추세 등급 · 신호 앞 체크리스트 · 세부 지표</span></div><div id="sv-panel" class="sv-panelbox"></div></section>
-    <div class="sv-g2">
+    <section class="bx sv-kr"><div class="bx-h"><b>사이트 판단</b><span class="ts">추세 등급 · 신호 앞 체크리스트 · 세부 지표</span></div><div id="sv-panel" class="sv-panelbox"></div></section>
+    <div class="sv-g2 sv-kr">
       <section class="bx" id="sv-earn"></section>
       <section class="bx" id="sv-stab"></section>
       <section class="bx" id="sv-short"></section>
     </div>
-    <section class="bx" id="sv-flow"><span class="ts">수급 불러오는 중…</span></section>
-    <div class="sv-g3">
+    <section class="bx sv-kr" id="sv-flow"><span class="ts">수급 불러오는 중…</span></section>
+    <div class="sv-g3 sv-kr">
       <section class="bx" id="sv-disc"></section>
       <section class="bx" id="sv-rep"></section>
     </div>
@@ -2481,6 +2482,7 @@ async function tfCandles(code,tf){   // 분봉: 모아 둔 1분봉(6개월)으�
 function tfCached(c,tf){ const x=c[tfk(tf)]; return x&&!(x.source==='naver'&&x.filling)?x:null; }   // 채우는 중이던 짧은 분봉은 다시 받음
 function tfNote(cd,tf){
   if(tf==='1w') return TF_NAME[tf];
+  if(cd.source==='us') return `${TF_NAME[tf]} · 미국 ${TFX?'장 전·후 포함':'정규장'} 최근 며칠 · 한국 시간 (지연 시세)`;
   if(cd.source==='stored') return `${TF_NAME[tf]} · 최근 ${Math.min(cd.days,{'1m':10,'3m':15,'5m':20,'15m':40,'30m':63,'60m':63}[tf]||cd.days)}거래일 · ${TFX?'장 전·후 포함':'정규장만'} (끌어서 과거 보기)`;
   return `${TF_NAME[tf]} · 최근 약 6거래일${cd.filling?' · 길게 받는 중 (1~2분 뒤 자동으로 길어짐)':''}`;
 }
@@ -2602,13 +2604,14 @@ function wsSearch(v){      // 종목 검색 (2026-10-09) — 이름·코드·초
     if(document.getElementById('ws-q').value!==v) return;
     const L=(d&&d.items)||[];
     box.innerHTML=L.length?L.map(x=>`<div class="ws-item" onclick="wsPick('${x.code}','${x.name.replace(/'/g,'')}')">${wsAv(x.code,x.name)}<div class="ws-txt"><div class="ws-nm"><span class="n">${x.name}</span></div><div class="ws-tg">${x.code}</div></div>
-      <div class="ws-px">${x.close?Math.round(x.close).toLocaleString():'-'}<div style="color:${x.chg>0?'var(--up)':x.chg<0?'var(--down)':'var(--muted)'}">${x.chg>0?'+':''}${(x.chg||0).toFixed(2)}%</div></div></div>`).join('')
+      <div class="ws-px">${x.close?(/[A-Za-z]/.test(x.code)?'$'+(+x.close).toFixed(2):Math.round(x.close).toLocaleString()):'-'}<div style="color:${x.chg>0?'var(--up)':x.chg<0?'var(--down)':'var(--muted)'}">${x.chg>0?'+':''}${(x.chg||0).toFixed(2)}%</div></div></div>`).join('')
       :'<div class="ts" style="padding:10px">찾는 종목이 없습니다</div>';
     box.classList.add('on');
   },200);
 }
 function wsPick(code,name){
   const q=document.getElementById('ws-q'); q.value=''; q.blur(); wsSearch('');
+  if(/[A-Za-z]/.test(code)){ switchTab('stock'); svOpen(code,name); return; }   // 미국 종목은 종목 탭에서
   wsOpen(code,name);
   const m=document.querySelector('.ws-main'); if(m&&window.innerWidth<900) m.scrollIntoView({behavior:'smooth',block:'start'});
 }
@@ -2823,6 +2826,7 @@ class LwBand{ constructor(runs,fill,txt,label){ this.runs=runs; this.fill=fill; 
 function hexA(h,a){ const m=String(h).replace('#',''), x=m.length===3?m.split('').map(c=>c+c).join(''):m; return `rgba(${parseInt(x.slice(0,2),16)},${parseInt(x.slice(2,4),16)},${parseInt(x.slice(4,6),16)},${a})`; }
 function chartPatterns(data){
   const n=data.length, out={sq:[],notes:[]}; if(n<60) return out;
+  const pf=v=>data[n-1].close<1000&&data.some(d=>d.close%1!==0)?(+v).toFixed(2):Math.round(v).toLocaleString();
   const C=data.map(d=>d.close), H=data.map(d=>d.high), L=data.map(d=>d.low), BH=data.map(d=>Math.max(d.open,d.close)), BL=data.map(d=>Math.min(d.open,d.close));
   // 1) 응축: 볼린저 밴드(20일·2σ) 폭이 최근 120일 중 아래 20% 안
   const bw=new Array(n).fill(null);
@@ -2840,7 +2844,7 @@ function chartPatterns(data){
       if(hi/lo-1<=Math.min(BW,0.16)){ if(j===0||C[e+1]>hi*1.005||C[e+1]<lo*0.995) out.box={s:s0,e,hi,lo,N,j}; break; } } }   // 지금 박스는 16%까지 (넓히면 이탈 봉까지 삼켜서)
   if(out.box){ const b=out.box, w=((b.hi/b.lo-1)*100).toFixed(0);
     const st=C1>b.hi*1.005?`상단 돌파${b.j?` (${b.j}일 전)`:''}`:C1<b.lo*0.995?`하단 이탈${b.j?` (${b.j}일 전)`:''}`:C1>=b.hi-(b.hi-b.lo)*0.2?'상단 근처':C1<=b.lo+(b.hi-b.lo)*0.2?'하단 근처':'박스 안';
-    out.notes.push(`📦 박스 ${b.N}일 · 폭 ${w}% · ${Math.round(b.lo).toLocaleString()}~${Math.round(b.hi).toLocaleString()} · ${st}`); }
+    out.notes.push(`📦 박스 ${b.N}일 · 폭 ${w}% · ${pf(b.lo)}~${pf(b.hi)} · ${st}`); }
   // 2-b) 지난 박스들: 뒤에서부터 박스(25일↑ · 폭 16%↓)를 찾고 그 앞으로 계속 — 최근 것 빼고 최대 5개 (2026-10-11 "최근 박스만 나오나")
   out.boxes=[]; { let e=out.box?out.box.s-1:n-1;
     while(e>=25&&out.boxes.length<5){ let hi=BH[e], lo=BL[e], s0=e;
@@ -2875,11 +2879,11 @@ function chartPatterns(data){
     const {U,D,kind,emo,brk,s0,g0,g1,lineU,lineD}=pick;
     const uN=lineU(n-1), dN=lineD(n-1), c=C1;
     let st;
-    if(brk==='up') st=` · 위로 돌파 ${ago}일 전 (그날 ${Math.round(lineU(e+1)).toLocaleString()} 위로)`;
+    if(brk==='up') st=` · 위로 돌파 ${ago}일 전 (그날 ${pf(lineU(e+1))} 위로)`;
     else if(brk==='dn') st=` · 아래로 이탈 ${ago}일 전`;
     else if(c>uN*1.005) st=` · 위로 돌파`;
     else if(c<dN*0.995) st=` · 아래로 이탈`;
-    else st=` · 위 ${Math.round(uN).toLocaleString()} / 아래 ${Math.round(dN).toLocaleString()}`;
+    else st=` · 위 ${pf(uN)} / 아래 ${pf(dN)}`;
     out.tri={U,D,kind,e,brk,s0}; out.notes.push(`${emo} ${kind} (폭 ${(g0*100).toFixed(0)}% → ${(g1*100).toFixed(0)}%)${st}`);
   }
   // 박스와 추세선 모양이 같은 구간에서 겹치면 더 최근에 끝난(또는 지금 이어지는) 쪽만 (2026-10-11 "박스 두 개가 겹친다")
@@ -2930,13 +2934,14 @@ function renderLwChart(cid, allCandles, signals, per, opts){
   const data=allCandles.map(c=>({time:intra?c.t:(c.timestamp||'').slice(0,10),open:+c.openPrice,high:+c.highPrice,low:+c.lowPrice,close:+c.closePrice,vol:+c.volume,lab:intra?(c.timestamp||'').slice(5,16).replace('-','/').replace('T',' '):(c.timestamp||'').slice(2,10).replace(/-/g,'/')})).filter(d=>d.time);
   if(!data.length) return null;
   const small=el.clientWidth<600;
+  const DEC=data.some(d=>d.close%1!==0||d.close<100&&opts&&opts.us)||(opts&&opts.us), fp=v=>DEC?(+v).toLocaleString(undefined,{minimumFractionDigits:2,maximumFractionDigits:2}):Math.round(v).toLocaleString();   // 미국 종목은 소수 2자리
   const chart=LightweightCharts.createChart(el,{width:el.clientWidth,height:el.clientHeight,
     layout:{background:{type:'solid',color:'rgba(0,0,0,0)'},textColor:cv('--mu'),fontSize:small?10:11},
     grid:{vertLines:{color:'rgba(139,148,158,.07)'},horzLines:{color:'rgba(139,148,158,.10)'}},
     rightPriceScale:{borderColor:cv('--ln'),scaleMargins:{top:0.08,bottom:0.24}},
     timeScale:{borderColor:cv('--ln'),rightOffset:3,barSpacing:small?5:7,minBarSpacing:1,timeVisible:intra,secondsVisible:false},
     crosshair:{mode:0,vertLine:{color:cv('--mu2'),labelBackgroundColor:cv('--mu')},horzLine:{color:cv('--mu2'),labelBackgroundColor:cv('--mu')}},
-    localization:{priceFormatter:p=>Math.round(p).toLocaleString(),dateFormat:'yy/MM/dd'},
+    localization:{priceFormatter:p=>fp(p),dateFormat:'yy/MM/dd'},
     handleScroll:{mouseWheel:true,pressedMouseMove:true,horzTouchDrag:true,vertTouchDrag:false},handleScale:{axisPressedMouseMove:true,mouseWheel:true,pinch:true}});
   const cs=chart.addCandlestickSeries({upColor:'#f85149',downColor:'#3b82f6',borderVisible:false,wickUpColor:'#f85149',wickDownColor:'#3b82f6'});
   cs.setData(data.map(d=>({time:d.time,open:d.open,high:d.high,low:d.low,close:d.close})));
@@ -2957,7 +2962,7 @@ function renderLwChart(cid, allCandles, signals, per, opts){
   if(ai<0&&!intra){ let b=-1; for(let i=Math.max(st,1);i<data.length;i++){ if(data[i].close>data[i].open&&data[i].close>data[i-1].close&&(b<0||data[i].vol>data[b].vol)) b=i; } if(b>=0){ai=b;lab='최대거래 양봉';} }
   if(ai>=0){ let pv=0,vv=0; const av=[]; for(let i=ai;i<data.length;i++){ const tp=(data[i].high+data[i].low+data[i].close)/3; pv+=tp*data[i].vol; vv+=data[i].vol; av.push({time:data[i].time,value:vv?pv/vv:tp}); }
     const ls=chart.addLineSeries({color:'#f0883e',lineWidth:2,lineStyle:2,priceLineVisible:false,lastValueVisible:false,crosshairMarkerVisible:false}); ls.setData(av);
-    const lv=av[av.length-1].value, lc=closes[closes.length-1]; _avwapNote=` · ${lab} ${data[ai].time.slice(5)} VWAP ${Math.round(lv).toLocaleString()} ${lc>=lv?'위 ✓':'아래 ⚠'}`; }
+    const lv=av[av.length-1].value, lc=closes[closes.length-1]; _avwapNote=` · ${lab} ${data[ai].time.slice(5)} VWAP ${fp(lv)} ${lc>=lv?'위 ✓':'아래 ⚠'}`; }
   // 신호 → 화살표 표시 (폰에선 진입·청산·손절·종베 추천·매수매도·위험만 글자)
   const MC={entry:['#58a6ff','arrowUp'],exit:[cv('--bd'),'arrowDown'],exit_bad:['#f0883e','arrowDown'],buy:['#1f6feb','arrowUp'],rest:['#2d9c87','circle'],info:['#8b949e','square'],
             warn:['#f0883e','arrowDown'],trade_buy:[cv('--strong'),'arrowUp'],trade_sell:['#bc8cff','arrowDown'],wait:['#58a6ff','circle'],near:['#6e7681','circle'],note:['#8b949e','circle'],score:['#d2a8ff','circle'],score_better:['#d2a8ff','arrowUp'],score_keep:['#d2a8ff','circle'],score_add:['#d2a8ff','arrowUp'],score_hold:['#d2a8ff','circle'],dip:['#56d4dd','arrowUp'],lead:['#e8590c','arrowUp'],lead_keep:['#e8590c','circle'],shape:['#6e7681','circle']};
@@ -2983,8 +2988,8 @@ function renderLwChart(cid, allCandles, signals, per, opts){
   const leg=document.getElementById(cid+'-leg'), byT={}; data.forEach((d,i)=>byT[d.time]=i);
   const sigBy={}, whyBy={}; (signals||[]).forEach(sg=>{ (sigBy[sg.date]=sigBy[sg.date]||[]).push(sg.label); if(sg.why) whyBy[sg.date]=sg.why; });   // 올린 봉의 우리 신호도 글자로 · 매수면 근거 (한 줄에 하나)
   const show=(i,hov)=>{ if(!leg||i==null||i<0) return; const d=data[i], pc=i>0?data[i-1].close:d.open, ch=(d.close/pc-1)*100, c=ch>=0?'#f85149':'#58a6ff';
-    leg.innerHTML=`<div><b>${d.lab}</b> 시 ${Math.round(d.open).toLocaleString()} 고 ${Math.round(d.high).toLocaleString()} 저 ${Math.round(d.low).toLocaleString()} 종 <b style="color:${c}">${Math.round(d.close).toLocaleString()} (${ch>=0?'+':''}${ch.toFixed(2)}%)</b> · 거래 ${Math.round(d.vol).toLocaleString()}</div>`
-      +`<div>${EN.map((n,k)=>`<span style="color:${EC[k]}">EMA${n} ${Math.round(ES[k][i]).toLocaleString()}</span>`).join(' · ')}</div>`
+    leg.innerHTML=`<div><b>${d.lab}</b> 시 ${fp(d.open)} 고 ${fp(d.high)} 저 ${fp(d.low)} 종 <b style="color:${c}">${fp(d.close)} (${ch>=0?'+':''}${ch.toFixed(2)}%)</b> · 거래 ${Math.round(d.vol).toLocaleString()}</div>`
+      +`<div>${EN.map((n,k)=>`<span style="color:${EC[k]}">EMA${n} ${fp(ES[k][i])}</span>`).join(' · ')}</div>`
       +`<div><b style="color:#58a6ff">${sigBy[d.time]?'신호: '+sigBy[d.time].join(' · '):'&nbsp;'}</b></div>`;
     // 매수 근거 — 매수 봉에 올렸을 때만 차트 위 상자로 (2026-10-09 "매수별로 매수 근거가 필요하다") · 한 줄에 하나
     let wb=el.parentNode.querySelector('.lwwhy'); if(!wb){ wb=document.createElement('div'); wb.className='lwwhy'; el.parentNode.appendChild(wb); }
@@ -3116,7 +3121,7 @@ function svSearch(v){
     if(document.getElementById('sv-q').value!==v) return;
     const L=(d&&d.items)||[];
     box.innerHTML=L.length?L.map(x=>`<div class="ws-item" onclick="svPick('${x.code}','${x.name.replace(/'/g,'')}')">${wsAv(x.code,x.name)}<div class="ws-txt"><div class="ws-nm"><span class="n">${x.name}</span></div><div class="ws-tg">${x.code}</div></div>
-      <div class="ws-px">${x.close?Math.round(x.close).toLocaleString():'-'}<div style="color:${x.chg>0?'var(--up)':x.chg<0?'var(--down)':'var(--muted)'}">${x.chg>0?'+':''}${(x.chg||0).toFixed(2)}%</div></div></div>`).join('')
+      <div class="ws-px">${x.close?(/[A-Za-z]/.test(x.code)?'$'+(+x.close).toFixed(2):Math.round(x.close).toLocaleString()):'-'}<div style="color:${x.chg>0?'var(--up)':x.chg<0?'var(--down)':'var(--muted)'}">${x.chg>0?'+':''}${(x.chg||0).toFixed(2)}%</div></div></div>`).join('')
       :'<div class="ts" style="padding:10px">찾는 종목이 없습니다</div>';
     box.classList.add('on');
   },200);
@@ -3142,7 +3147,8 @@ const svEok=v=>v==null?'-':Math.abs(v)>=10000?(v/10000).toFixed(1)+'조':Math.ro
 const svC=n=>n>0?'var(--r)':n<0?'var(--b)':'var(--mu)';
 const svSg=n=>(n>0?'+':'')+n.toLocaleString();
 async function svOpen(code,name){
-  _sv.code=code; _sv.name=name; _sv.cache={}; svSaveRecent(code,name);
+  name=String(name).replace(' 🇺🇸',''); _sv.code=code; _sv.name=name; _sv.cache={}; _sv.us=/[A-Za-z]/.test(code); svSaveRecent(code,name);
+  document.querySelectorAll('#sv-body .sv-kr').forEach(e=>e.hidden=_sv.us);   // 미국 종목은 차트·기본 정보만 (2026-10-11)
   document.getElementById('sv-empty').hidden=true; document.getElementById('sv-body').hidden=false;
   document.getElementById('sv-recent').innerHTML=`<span class="ts">최근 본</span>${svChips(svRecent())}`;
   document.getElementById('sv-head').innerHTML=`<div class="sv-hd"><span class="nm">${name}</span><span class="ts">${code}</span></div>`;
@@ -3155,11 +3161,14 @@ async function svOpen(code,name){
   const sgP=fetch(`${API}/stock/${code}/chart-signals`).then(r=>r.ok?r.json():null).catch(()=>null);
   const cd=await fetch(`${API}/stock/${code}/candles?count=330`).then(r=>r.ok?r.json():null).catch(()=>null);
   if(_sv.code!==code) return;
-  _sv.cache.cd=cd; svDraw(); svHead();
+  _sv.cache.cd=cd; svDraw(); svHead(); if(_sv.us) svProfileUS();
   _sv.cache.sg=await sgP; if(_sv.code===code&&_sv.tf==='1d') svDraw();
 }
 function svHead(){
   const cd=_sv.cache.cd, p=_sv.prof||{}; if(!cd||!cd.candles||!cd.candles.length) return;
+  if(_sv.us){ const L=cd.candles, z=L[L.length-1], y=L[L.length-2], cl=+z.closePrice, ch=y?(cl/+y.closePrice-1)*100:0;
+    document.getElementById('sv-head').innerHTML=`<div class="sv-hd"><span class="nm">${_sv.name}</span><span class="ts">${_sv.code} · 🇺🇸 미국${p.en&&p.en!==_sv.name?' · '+p.en:''}</span>
+      <span class="px">$${cl.toFixed(2)}</span><span style="color:${svC(ch)};font-weight:700">${ch>=0?'▲':'▼'} ${Math.abs(ch).toFixed(2)}%</span><span class="ts">${(z.timestamp||'').slice(0,10)} 미국 종가 · 지연 시세</span></div>`; return; }
   const L=cd.candles, z=L[L.length-1], y=L[L.length-2], cl=+z.closePrice, ch=y?(cl/+y.closePrice-1)*100:0;
   const all=window._rotMem; let fam=''; if(all&&all.families) for(const [f,arr] of Object.entries(all.families)){ if(arr.some(x=>x.code===_sv.code)){ fam=f; break; } }
   document.getElementById('sv-head').innerHTML=`<div class="sv-hd"><span class="nm">${_sv.name}</span><span class="ts">${_sv.code}${p.market?' · '+p.market:''}${fam?' · '+fam:''}</span>
@@ -3188,16 +3197,32 @@ async function svDraw(){
     const cd=tfCached(c,tf)||(c[tfk(tf)]=await tfCandles(code,tf));
     if(_sv.code!==code||_sv.tf!==tf) return;
     if(!cd){ note.textContent=`${TF_NAME[tf]}을 못 받았습니다`; return; }
-    renderLwChart('sv-chart',cd.candles,[],tf==='1w'?80:120,{code,tf}); note.textContent=`${tfNote(cd,tf)} · 신호는 일봉에서만`;
+    renderLwChart('sv-chart',cd.candles,[],tf==='1w'?80:120,{code,tf,us:_sv.us}); note.textContent=`${tfNote(cd,tf)} · 신호는 일봉에서만`;
     tfRetryLater(cd,()=>{ if(_sv.code===code&&_sv.tf===tf) svDraw(); }); return;
   }
   if(!c.cd||!c.cd.candles||!c.cd.candles.length){ note.textContent='차트를 못 불러왔습니다'; return; }
   const a=c.sg&&c.sg.active;
-  const g=renderLwChart('sv-chart',c.cd.candles,c.sg?c.sg.items:[],_sv.per,{stop:a&&a.stop,code:_sv.code,tf:'1d'});
+  const g=renderLwChart('sv-chart',c.cd.candles,c.sg?c.sg.items:[],_sv.per,{stop:a&&a.stop,code:_sv.code,tf:'1d',us:_sv.us});
   note.textContent=`일봉 · 끌어서 과거 보기`+(g!=null?` · EMA 5·10·20 간격 ${g.toFixed(1)}%`:'')+_avwapNote+(_patNote?'  |  '+_patNote:'')+(a?` · ▲ 진입 신호 ${a.date.slice(5).replace('-','/')} · 손절 ${tk(a.stop).toLocaleString()}`:'');
 }
 function svMetric(k,v,sub,bar){ return `<div class="sv-m"><span class="k">${k}</span><span>${bar||''}${sub?`<span class="ts">${sub}</span>`:''}</span><span class="v">${v}</span></div>`; }
+function svProfileUS(){
+  const p=_sv.prof||{}, cd=_sv.cache.cd, L=(cd&&cd.candles)||[]; svHead();
+  if(!L.length){ document.getElementById('sv-metrics').innerHTML='<span class="ts">불러오는 중…</span>'; return; }
+  const C=L.map(x=>+x.closePrice), last=C[C.length-1], ret=n=>C.length>n?((last/C[C.length-1-n]-1)*100):null, Y=L.slice(-252);
+  const hi=Math.max(...Y.map(x=>+x.highPrice)), lo=Math.min(...Y.map(x=>+x.lowPrice));
+  const r=v=>v==null?'-':`<span style="color:${svC(v)}">${v>0?'+':''}${v.toFixed(1)}%</span>`;
+  document.getElementById('sv-metrics').innerHTML=`<div class="bx-h"><b>기본 정보</b><span class="ts">미국 · 지연 시세 · 차트 보기용</span></div>
+    ${svMetric('시가총액',p.market_cap_usd?(p.market_cap_usd>=1e12?(p.market_cap_usd/1e12).toFixed(2)+'T':(p.market_cap_usd/1e9).toFixed(1)+'B')+' 달러':'-','')}
+    ${svMetric('섹터',p.sector||'-',p.industry||'')}
+    ${svMetric('1개월 · 3개월',`${r(ret(21))} · ${r(ret(63))}`,'')}
+    ${svMetric('6개월 · 1년',`${r(ret(126))} · ${r(ret(252))}`,'')}
+    ${svMetric('52주',`${lo.toFixed(2)} ~ ${hi.toFixed(2)}`,'',`<div class="sv-rng"><b style="left:calc(${Math.max(0,Math.min(100,(last-lo)/(hi-lo)*100))}% - 1px)"></b></div>`)}
+    ${svMetric('52주 고점 대비',r((last/hi-1)*100),'')}
+    <div class="ts" style="margin-top:8px">미국 종목은 매수 신호·수급·공시 없이 차트만 봅니다</div>`;
+}
 function svProfile(){
+  if(_sv.us) return svProfileUS();
   const p=_sv.prof||{}, m=p.metrics||{}; svHead();
   const x=v=>v==null?'-':v.toLocaleString(undefined,{maximumFractionDigits:2});
   const perBar=(m.per!=null&&p.industry_per)?(()=>{ const mx=Math.max(m.per,p.industry_per)*1.1||1; return `<div style="display:grid;gap:3px;margin-bottom:2px"><div class="sv-bar" title="이 종목"><i style="width:${Math.max(2,m.per/mx*100)}%"></i></div><div class="sv-bar" title="업종 평균"><i class="ind" style="width:${Math.max(2,p.industry_per/mx*100)}%"></i></div></div>`; })():'';
