@@ -230,7 +230,7 @@ select{background:var(--c3);border:1px solid var(--ln);color:var(--bd);padding:6
 .ws-legend{display:flex;flex-direction:column;gap:5px;margin-top:8px;font-size:12px;line-height:1.5;color:var(--muted)}
 .ws-legend span{display:block;word-break:keep-all;overflow-wrap:anywhere}.ws-legend i{width:10px;height:10px;border-radius:3px;display:inline-block}
 /* 차트 (Lightweight Charts: 확대·이동·십자선, 2026-10-09) */
-.lwbox{position:relative}.lwc{width:100%;height:clamp(420px,calc(100vh - 250px),720px)}
+.lwbox{position:relative}.lwmore{position:absolute;left:10px;bottom:46px;z-index:6;font-size:12px;padding:4px 10px;border-radius:999px;background:var(--neu);color:var(--neu-on);pointer-events:none}.lwc{width:100%;height:clamp(420px,calc(100vh - 250px),720px)}
 #cm-chart.lwc{height:460px}
 .lwleg{font-size:11.5px;color:var(--body);line-height:1.5;height:56px;overflow:hidden;padding:2px 2px 4px}
 .lwleg>div{white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
@@ -2511,7 +2511,7 @@ function tfExt(){ TFX=!TFX; try{ localStorage.setItem('tf-ext',TFX?'1':'0'); }ca
   if(typeof _sv!=='undefined'&&_sv.code&&_sv.tf!=='1d'&&_sv.tf!=='1w') svDraw();
   if(_cm&&_cm.code&&_cm.tf&&_cm.tf!=='1d'&&_cm.tf!=='1w'&&document.getElementById('chart-modal-bg').classList.contains('show')) cmTf(_cm.tf);
   if(_jrWs&&_jrWs.code&&_jrWs.tf&&_jrWs.tf!=='1d'&&_jrWs.tf!=='1w') jrWsDraw(); }
-async function tfCandles(code,tf){   // 분봉: 모아 둔 1분봉(석 달)으로 길게, 처음 여는 종목은 네이버 6일 + 서버가 뒤에서 채움 (2026-10-11)
+async function tfCandles(code,tf){   // 분봉: 모아 둔 1분봉(6개월)으로 길게, 처음 여는 종목은 네이버 6일 + 서버가 뒤에서 채움 (2026-10-11)
   const r=await fetch(`${API}/stock/${code}/candles?tf=${tf}&ext=${TFX?1:0}`).then(x=>x.ok?x.json():null).catch(()=>null);
   return r&&r.candles&&r.candles.length?r:null;
 }
@@ -2519,7 +2519,7 @@ function tfCached(c,tf){ const x=c[tfk(tf)]; return x&&!(x.source==='naver'&&x.f
 function tfNote(cd,tf){
   if(tf==='1w') return TF_NAME[tf];
   if(cd.source==='stored') return `${TF_NAME[tf]} · 최근 ${Math.min(cd.days,{'1m':10,'5m':20,'15m':40,'30m':63,'60m':63}[tf]||cd.days)}거래일 · ${TFX?'시간외 포함':'정규장'} (끌어서 과거 보기)`;
-  return `${TF_NAME[tf]} · 최근 약 6거래일${cd.filling?' · 석 달치 받는 중 (1~2분 뒤 자동으로 길어짐)':''}`;
+  return `${TF_NAME[tf]} · 최근 약 6거래일${cd.filling?' · 길게 받는 중 (1~2분 뒤 자동으로 길어짐)':''}`;
 }
 function tfRetryLater(cd,again){ if(cd&&cd.source==='naver'&&cd.filling) setTimeout(again,75000); }
 async function wsTf(tf){ _ws.tf=tf; wsDraw(); }
@@ -2534,12 +2534,12 @@ async function wsDraw(){
     const cd=tfCached(c,tf)||(c[tfk(tf)]=await tfCandles(code,tf));
     if(_ws.code!==code||_ws.tf!==tf) return;
     if(!cd){ document.getElementById('ws-note').textContent=`${TF_NAME[tf]}을 못 받았습니다`; return; }
-    renderLwChart('ws-chart',cd.candles,[],tf==='1w'?80:120);
+    renderLwChart('ws-chart',cd.candles,[],tf==='1w'?80:120,{code,tf});
     document.getElementById('ws-note').textContent=`${tfNote(cd,tf)} · 신호는 일봉에서만 보여요`;
     tfRetryLater(cd,()=>{ if(_ws.code===code&&_ws.tf===tf) wsDraw(); });
     return;
   }
-  const g=renderLwChart('ws-chart',c.cd.candles,c.sg?c.sg.items:[],_ws.per,{stop:_ws.stop||(c.sg&&c.sg.active&&c.sg.active.stop)});
+  const g=renderLwChart('ws-chart',c.cd.candles,c.sg?c.sg.items:[],_ws.per,{stop:_ws.stop||(c.sg&&c.sg.active&&c.sg.active.stop),code:_ws.code,tf:'1d'});
   const a=c.sg&&c.sg.active;
   { const L=c.cd.candles, z=L[L.length-1], y=L[L.length-2]; if(z){ const cl=+z.closePrice, ch=y?(cl/+y.closePrice-1)*100:0;
       document.getElementById('ws-px').innerHTML=`${Math.round(cl).toLocaleString()}<span style="color:${ch>=0?'var(--up)':'var(--down)'}">${ch>=0?'+':''}${ch.toFixed(2)}%</span>`; }
@@ -2708,12 +2708,12 @@ async function jrWsDraw(){
     const cd=tfCached(c,tf)||(c[tfk(tf)]=await tfCandles(code,tf));
     if(_jrWs.code!==code||(_jrWs.tf||'1d')!==tf) return;
     if(!cd){ document.getElementById('jr-ws-note').textContent=`${TF_NAME[tf]}을 못 받았습니다`; return; }
-    renderLwChart('jr-chart',cd.candles,[],tf==='1w'?80:120);
+    renderLwChart('jr-chart',cd.candles,[],tf==='1w'?80:120,{code,tf});
     document.getElementById('jr-ws-note').textContent=`${tfNote(cd,tf)} · 내가 산·판 날과 신호는 일봉에서만 보여요`;
     tfRetryLater(cd,()=>{ if(_jrWs.code===code&&(_jrWs.tf||'1d')===tf) jrWsDraw(); });
     return;
   }
-  const g=renderLwChart('jr-chart',c.cd.candles,c.sg?c.sg.items:[],_ws.per);
+  const g=renderLwChart('jr-chart',c.cd.candles,c.sg?c.sg.items:[],_ws.per,{code:_jrWs.code,tf:'1d'});
   document.getElementById('jr-ws-note').textContent=`최근 ${_ws.per}거래일 · EMA 5·10·20·60`+(g!=null?` · EMA 5·10·20 간격 ${g.toFixed(1)}%`:'')+_avwapNote;
 }
 async function jrWsOpen(code,name){
@@ -2762,13 +2762,13 @@ let _cm={code:null,tf:'1d',cache:{}};
 async function cmTf(tf){
   _cm.tf=tf; document.querySelectorAll('#cm-tf button').forEach(b=>b.classList.toggle('on',b.dataset.tf===tf));
   const code=_cm.code, c=_cm.cache; if(!code||!c.cd) return;
-  if(tf==='1d'){ const g=renderLwChart('cm-chart',c.cd.candles,c.sg?c.sg.items:[],90);
+  if(tf==='1d'){ const g=renderLwChart('cm-chart',c.cd.candles,c.sg?c.sg.items:[],90,{code,tf:'1d'});
     document.getElementById('chart-modal-note').textContent=`일봉 · 1년 (끌어서 과거 보기)`+(g!=null?` · EMA 5·10·20 간격 ${g.toFixed(1)}% ${g<=4?'(모임 ✓)':g>=7?'(벌어짐 ⚠)':''}`:'')+_avwapNote; return; }
   document.getElementById('chart-modal-note').textContent=`${TF_NAME[tf]} 불러오는 중…`;
   const cd=tfCached(c,tf)||(c[tfk(tf)]=await tfCandles(code,tf));
   if(_cm.code!==code||_cm.tf!==tf) return;
   if(!cd){ document.getElementById('chart-modal-note').textContent=`${TF_NAME[tf]}을 못 받았습니다`; return; }
-  renderLwChart('cm-chart',cd.candles,[],tf==='1w'?80:120);
+  renderLwChart('cm-chart',cd.candles,[],tf==='1w'?80:120,{code,tf});
   document.getElementById('chart-modal-note').textContent=`${tfNote(cd,tf)} · 신호는 일봉에서만 보여요`;
   tfRetryLater(cd,()=>{ if(_cm.code===code&&_cm.tf===tf&&document.getElementById('chart-modal-bg').classList.contains('show')) cmTf(tf); });
 }
@@ -2792,11 +2792,11 @@ async function openChartModal(code, name, spikeDate){
     }
     if(_cm.code!==code) return;
     _cm.cache={cd:data,sg:null};
-    renderLwChart('cm-chart', data.candles, [], 90);
+    renderLwChart('cm-chart', data.candles, [], 90, {code,tf:'1d'});
     const sig = await sigP;
     if(_cm.code!==code || _cm.tf!=='1d') return;
     _cm.cache.sg=sig;
-    const g = renderLwChart('cm-chart', data.candles, sig?sig.items:[], 90);
+    const g = renderLwChart('cm-chart', data.candles, sig?sig.items:[], 90, {code,tf:'1d'});
     document.getElementById('chart-modal-note').textContent = (spikeDate ? `스파이크일: ${spikeDate}` : `최근 90거래일 일봉`)
       + (g!=null ? ` · EMA 5·10·20 간격 ${g.toFixed(1)}% ${g<=4?'(모임 ✓)':g>=7?'(벌어짐 ⚠)':''}` : '') + _avwapNote;
   }catch(e){
@@ -2827,6 +2827,15 @@ function lwClear(cid){ if(_lw[cid]){ try{ _lw[cid].ro.disconnect(); _lw[cid].cha
 // 테마 색 읽기 (차트 그림은 CSS 변수를 못 읽어서 실제 값으로)
 function cv(n){ return getComputedStyle(document.documentElement).getPropertyValue(n).trim()||'#8b949e'; }
 function themeLight(){ return (document.documentElement.dataset.theme||'dark')!=='dark'; }
+const lwMoreDone={};
+function lwMoreTag(el,t,ms){ const d=document.createElement('div'); d.className='lwmore'; d.textContent=t; el.parentNode.appendChild(d); if(ms) setTimeout(()=>d.remove(),ms); return d; }
+async function lwMore(code,tf,first){
+  if(!first) return [];
+  const u=tf==='1d'?`${API}/stock/${code}/candles?count=250&before=${(first.timestamp||'').slice(0,10)}`
+    :`${API}/stock/${code}/candles?tf=${tf}&ext=${TFX?1:0}&before=${encodeURIComponent((first.timestamp||'').slice(0,19))}`;
+  const r=await fetch(u).then(x=>x.ok?x.json():null).catch(()=>null);
+  return (r&&r.candles)||[];
+}
 function renderLwChart(cid, allCandles, signals, per, opts){
   const el=document.getElementById(cid);
   if(!el) return null;
@@ -2897,9 +2906,26 @@ function renderLwChart(cid, allCandles, signals, per, opts){
     if(w) wb.innerHTML=`<b>매수 근거 · ${d.lab}</b>`+w.map(x=>`<div>· ${String(x).replace(/</g,'&lt;')}</div>`).join(''); };
   show(data.length-1);
   chart.subscribeCrosshairMove(p=>{ const h=p&&p.time&&byT[p.time]!=null; show(h?byT[p.time]:data.length-1,h); });
-  const n=data.length; chart.timeScale().setVisibleLogicalRange({from:Math.max(0,n-(per||90)),to:n+2});
+  const n=data.length; chart.timeScale().setVisibleLogicalRange(opts&&opts.keep?opts.keep:{from:Math.max(0,n-(per||90)),to:n+2});
   const ro=new ResizeObserver(()=>chart.applyOptions({width:el.clientWidth,height:el.clientHeight})); ro.observe(el);
   _lw[cid]={chart,ro};
+  // 왼쪽 끝까지 끌면 더 과거 봉을 불러와 앞에 붙임 (2026-10-11 "옆으로 당기면 과거 차트") — 같은 배열에 붙여서 캐시도 같이 길어짐
+  if(opts&&opts.code&&opts.tf&&opts.tf!=='1w'&&!lwMoreDone[cid+opts.code+opts.tf+(TFX?'x':'')]){
+    let busy=false;
+    chart.timeScale().subscribeVisibleLogicalRangeChange(r=>{
+      if(!r||busy||r.from>6||_lw[cid].chart!==chart) return; busy=true;
+      const tag=lwMoreTag(el,'과거 봉 불러오는 중…');
+      lwMore(opts.code,opts.tf,allCandles[0]).then(older=>{
+        tag.remove(); if(!_lw[cid]||_lw[cid].chart!==chart) return;
+        const key=c=>c.t!=null?c.t:(c.timestamp||'').slice(0,10), seen=new Set(allCandles.map(key));
+        older=(older||[]).filter(c=>!seen.has(key(c)));
+        if(!older.length){ lwMoreDone[cid+opts.code+opts.tf+(TFX?'x':'')]=1; lwMoreTag(el,'더 과거 자료 없음',2500); return; }
+        const cur=chart.timeScale().getVisibleLogicalRange();
+        allCandles.unshift(...older);
+        renderLwChart(cid,allCandles,signals,per,{...opts,keep:{from:cur.from+older.length,to:cur.to+older.length}});
+      }).catch(()=>{ tag.remove(); busy=false; });
+    });
+  }
   const last=ES.slice(0,3).map(a=>a[a.length-1]); return closes.length?(Math.max(...last)-Math.min(...last))/closes[closes.length-1]*100:null;
 }
 // 외부 라이브러리 없이 순수 canvas로 캔들차트 + 거래량 + 눌림목 지지선 그리기 (지금은 안 씀 — Lightweight Charts로 바꿈)
@@ -3207,12 +3233,12 @@ async function svDraw(){
     const cd=tfCached(c,tf)||(c[tfk(tf)]=await tfCandles(code,tf));
     if(_sv.code!==code||_sv.tf!==tf) return;
     if(!cd){ note.textContent=`${TF_NAME[tf]}을 못 받았습니다`; return; }
-    renderLwChart('sv-chart',cd.candles,[],tf==='1w'?80:120); note.textContent=`${tfNote(cd,tf)} · 신호는 일봉에서만`;
+    renderLwChart('sv-chart',cd.candles,[],tf==='1w'?80:120,{code,tf}); note.textContent=`${tfNote(cd,tf)} · 신호는 일봉에서만`;
     tfRetryLater(cd,()=>{ if(_sv.code===code&&_sv.tf===tf) svDraw(); }); return;
   }
   if(!c.cd||!c.cd.candles||!c.cd.candles.length){ note.textContent='차트를 못 불러왔습니다'; return; }
   const a=c.sg&&c.sg.active;
-  const g=renderLwChart('sv-chart',c.cd.candles,c.sg?c.sg.items:[],_sv.per,{stop:a&&a.stop});
+  const g=renderLwChart('sv-chart',c.cd.candles,c.sg?c.sg.items:[],_sv.per,{stop:a&&a.stop,code:_sv.code,tf:'1d'});
   note.textContent=`일봉 · 끌어서 과거 보기`+(g!=null?` · EMA 5·10·20 간격 ${g.toFixed(1)}%`:'')+_avwapNote+(a?` · ▲ 진입 신호 ${a.date.slice(5).replace('-','/')} · 손절 ${Math.round(a.stop).toLocaleString()}`:'');
 }
 function svMetric(k,v,sub,bar){ return `<div class="sv-m"><span class="k">${k}</span><span>${bar||''}${sub?`<span class="ts">${sub}</span>`:''}</span><span class="v">${v}</span></div>`; }

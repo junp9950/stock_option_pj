@@ -1,8 +1,8 @@
 """분봉 길게 (2026-10-11 사용자 "분봉으로 줄일수록 짧아서 아쉽다").
 
 네이버 분봉 API는 최근 약 6거래일만 준다. 토스 1분봉은 nextBefore로 몇 년 전까지 거슬러 받을 수 있어서(한 번에 200개)
-종목을 처음 분봉으로 열면 뒤에서 약 석 달치 1분봉을 받아 표 stock_minute_bars에 쌓고, 3·5·10·15·30·60분봉은 여기서 묶어 만든다.
-- 하루 = 08:00~20:00(NXT 포함) 약 720개 → 토스 3~4번. 석 달(63거래일) ≈ 230번 · 0.2초 쉼 → 종목당 1분 남짓, 한 번에 한 종목씩.
+종목을 처음 분봉으로 열면 뒤에서 약 6개월치 1분봉을 받아 표 stock_minute_bars에 쌓고, 3·5·10·15·30·60분봉은 여기서 묶어 만든다.
+- 하루 = 08:00~20:00(NXT 포함) 약 720개 → 토스 3~4번. 6개월(125거래일) ≈ 450번 · 0.2초 쉼 → 종목당 2~3분, 한 번에 한 종목씩.
 - 한 번 받은 종목은 이후 새 봉만 덧붙임(몇 번). 장 마감 뒤(20:15) 받은 종목 전부 덧붙이고 100일 넘은 봉은 지움.
 시간은 한국 시간(timestamp without time zone).
 """
@@ -20,7 +20,7 @@ from sqlalchemy.orm import Session
 
 logger = logging.getLogger(__name__)
 KST = ZoneInfo("Asia/Seoul")
-KEEP_DAYS = 92            # 달력 기준 약 석 달 (≈ 63거래일)
+KEEP_DAYS = 185           # 달력 기준 약 6개월 (≈ 125거래일) — 차트를 왼쪽으로 끌면 여기까지 (2026-10-11)
 # 분봉마다 보여 줄 거래일 수 (차트는 끌어서 더 앞도 볼 수 있음)
 SHOW_DAYS = {"1m": 10, "3m": 15, "5m": 20, "10m": 30, "15m": 40, "30m": 63, "60m": 63}
 MIN_DAYS_READY = {"1m": 2, "3m": 5, "5m": 8, "10m": 12, "15m": 15, "30m": 25, "60m": 40}
@@ -72,8 +72,8 @@ def _save(db: Session, rows: list[dict]) -> None:
         db.commit()
 
 
-def fill(db: Session, code: str, max_pages: int = 400) -> int:
-    """새 봉 덧붙이기 + 석 달까지 앞쪽 채우기. 받은 페이지 수."""
+def fill(db: Session, code: str, max_pages: int = 800) -> int:
+    """새 봉 덧붙이기 + 6개월까지 앞쪽 채우기. 받은 페이지 수."""
     _ensure(db)
     newest, oldest = db.execute(text("select max(ts), min(ts) from stock_minute_bars where code = :c"), {"c": code}).one()
     cutoff = datetime.now(KST).replace(tzinfo=None) - timedelta(days=KEEP_DAYS)
@@ -89,7 +89,7 @@ def fill(db: Session, code: str, max_pages: int = 400) -> int:
         time.sleep(0.2)
     if newest is None:      # 처음 받는 종목: 위에서 이어서 내려온 만큼이 oldest
         oldest = db.execute(text("select min(ts) from stock_minute_bars where code = :c"), {"c": code}).scalar()
-    # 2) 가장 오래된 봉에서 더 앞으로 석 달까지
+    # 2) 가장 오래된 봉에서 더 앞으로 6개월까지
     if oldest and oldest > cutoff:
         before = (oldest + timedelta(minutes=1)).replace(tzinfo=KST).isoformat()
         while pages < max_pages:
@@ -137,20 +137,21 @@ def filling(code: str) -> bool:
         return code in _pending
 
 
-def load(db: Session, code: str, tf: str, ext: bool = False) -> tuple[list[dict], int]:
+def load(db: Session, code: str, tf: str, ext: bool = False, before: str | None = None) -> tuple[list[dict], int]:
     """묶은 분봉 (차트 형식) · DB에 있는 거래일 수. ext=False면 정규장(09:00~15:30, 15:30 종가 체결은 앞 봉에 합침)만 — 시간외(NXT)는 거래가 얇아 화면만 차지."""
     _ensure(db)
     mins = int(tf[:-1])
-    days = [r[0] for r in db.execute(text("select distinct ts::date from stock_minute_bars where code = :c order by 1 desc limit :n"),
-                                     {"c": code, "n": SHOW_DAYS[tf]}).all()]
+    b = datetime.fromisoformat(before[:19]) if before else datetime(2100, 1, 1)
+    days = [r[0] for r in db.execute(text("select distinct ts::date from stock_minute_bars where code = :c and ts < :b order by 1 desc limit :n"),
+                                     {"c": code, "n": SHOW_DAYS[tf], "b": b}).all()]
     if not days:
         return [], 0
     n_all = db.execute(text("select count(distinct ts::date) from stock_minute_bars where code = :c"), {"c": code}).scalar() or 0
     rows = db.execute(text(
         "select date_bin(make_interval(mins => :m), case when ts::time = time '15:30' then ts - interval '1 minute' else ts end, timestamp '2000-01-01 09:00') b, (array_agg(o order by ts))[1], max(h), min(l), "
-        "(array_agg(c order by ts desc))[1], sum(v) from stock_minute_bars where code = :c and ts >= :d "
+        "(array_agg(c order by ts desc))[1], sum(v) from stock_minute_bars where code = :c and ts >= :d and ts < :b "
         + ("" if ext else "and ts::time between time '09:00' and time '15:30' ") + "group by 1 order by 1"),
-        {"m": mins, "c": code, "d": min(days)}).all()
+        {"m": mins, "c": code, "d": min(days), "b": b}).all()
     import calendar  # noqa: PLC0415
     out = [{"t": calendar.timegm(b.timetuple()), "timestamp": b.strftime("%Y-%m-%dT%H:%M:00+09:00"), "openPrice": o, "highPrice": h,
             "lowPrice": l, "closePrice": c, "volume": int(v or 0)} for b, o, h, l, c, v in rows]
@@ -171,6 +172,6 @@ def refresh_all(db: Session) -> str:
         except Exception as exc:  # noqa: BLE001
             logger.warning("분봉 덧붙이기 실패 %s: %s", c, type(exc).__name__)
         time.sleep(0.2)
-    db.execute(text("delete from stock_minute_bars where ts < now() - interval '100 days'"))
+    db.execute(text("delete from stock_minute_bars where ts < now() - interval '200 days'"))
     db.commit()
     return f"분봉 {len(codes)}종목 덧붙임"

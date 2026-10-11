@@ -2166,7 +2166,7 @@ def _naver_tf_candles(code: str, tf: str) -> list[dict]:
 
 
 @router.get("/stock/{code}/candles")
-def get_stock_candles(code: str, count: int = 330, tf: str = "1d", ext: int = 0, db: Session = Depends(get_db)):
+def get_stock_candles(code: str, count: int = 330, tf: str = "1d", ext: int = 0, before: str | None = None, db: Session = Depends(get_db)):
     """긴 일봉 (토스는 200봉까지라 앞은 DB, 최근 며칠은 토스 실시간으로 덮음) — 첫 화면 1년 차트용 (2026-10-09).
     tf=1w(주봉)·1m·3m·5m·10m·15m·30m·60m(분봉, 최근 약 6거래일)는 네이버 차트 API."""
     if tf != "1d":
@@ -2174,6 +2174,12 @@ def get_stock_candles(code: str, count: int = 330, tf: str = "1d", ext: int = 0,
             raise HTTPException(status_code=400, detail="tf")
         if tf != "1w":      # 분봉: 모아 둔 토스 1분봉(석 달)으로 길게, 아직 없으면 네이버 6일 + 뒤에서 채우기 (2026-10-11)
             from backend.collector import minute_bars as mb  # noqa: PLC0415
+            if before:      # 차트를 왼쪽 끝까지 끌었을 때 — 그 앞 봉 (모아 둔 것만)
+                try:
+                    bars, n_days = mb.load(db, code, tf, bool(ext), before=before)
+                except Exception:  # noqa: BLE001
+                    bars, n_days = [], 0
+                return {"code": code, "tf": tf, "candles": bars, "source": "stored", "filling": False}
             try:
                 bars, n_days = mb.load(db, code, tf, bool(ext))
             except Exception:  # noqa: BLE001
@@ -2194,6 +2200,11 @@ def get_stock_candles(code: str, count: int = 330, tf: str = "1d", ext: int = 0,
             return {"code": code, "tf": tf, "candles": nv, "source": "naver", "filling": tf != "1w"}
         except Exception:  # noqa: BLE001
             raise HTTPException(status_code=502, detail="분봉·주봉을 못 받았습니다")
+    if before:      # 일봉 더 과거 (차트를 왼쪽 끝까지 끌었을 때)
+        rows = db.execute(text("select trading_date, open_price, high_price, low_price, close_price, volume from spot_daily_prices "
+                               "where stock_code = :c and trading_date < :b order by trading_date desc limit :n"), {"c": code, "b": before[:10], "n": min(count, 600)}).all()
+        return {"code": code, "candles": [{"timestamp": f"{r[0]}T00:00:00.000+09:00", "openPrice": str(r[1]), "highPrice": str(r[2]), "lowPrice": str(r[3]),
+                                           "closePrice": str(r[4]), "volume": str(int(r[5] or 0))} for r in rows[::-1]]}
     rows = db.execute(text("select trading_date, open_price, high_price, low_price, close_price, volume from spot_daily_prices "
                            "where stock_code = :c order by trading_date desc limit :n"), {"c": code, "n": min(count, 600)}).all()
     out = {str(r[0]): {"timestamp": f"{r[0]}T00:00:00.000+09:00", "openPrice": str(r[1]), "highPrice": str(r[2]), "lowPrice": str(r[3]),
