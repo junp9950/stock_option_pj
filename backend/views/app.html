@@ -556,7 +556,7 @@ select{background:var(--c3);border:1px solid var(--ln);color:var(--bd);padding:6
   <div class="tab" data-t="candidates" data-m="kr" onclick="switchTab('candidates')">차트 후보</div>
   <div class="tab" data-t="calendar" data-m="kr" onclick="switchTab('calendar')">캘린더</div>
   <div class="tab" data-t="sector" data-m="kr" onclick="switchTab('sector')">섹터 흐름</div>
-  <div class="tab" data-t="journal" data-m="kr" onclick="switchTab('journal')">매매 일지</div>
+  <div class="tab" data-t="journal" data-m="kr" data-priv="1" onclick="switchTab('journal')" hidden>매매 일지</div>
   <div class="tab" data-t="screener" data-m="kr" onclick="switchTab('screener')">거래대금</div>
   <div class="tab" data-t="heatmap" data-m="kr" onclick="switchTab('heatmap')">히트맵</div>
   <div class="tab" data-t="us" data-m="us" onclick="switchTab('us')" hidden>미장 오늘</div>
@@ -1171,7 +1171,7 @@ const tagHtml = tags => (tags||[]).map(t=>{
 let _mk='kr'; try{ _mk=localStorage.getItem('mk')==='us'?'us':'kr'; }catch(e){}
 function setMarketView(m){ _mk=m; try{ localStorage.setItem('mk',m); }catch(e){}
   document.querySelectorAll('.mk-seg button').forEach(b=>b.classList.toggle('on',b.dataset.mk===m));
-  document.querySelectorAll('.tab[data-m]').forEach(t=>t.hidden=t.dataset.m!==m);
+  document.querySelectorAll('.tab[data-m]').forEach(t=>t.hidden=t.dataset.m!==m||(t.dataset.priv&&!jrShowTab()));
   document.body.dataset.mk=m; loadHeader(); }
 function switchMarket(m){ setMarketView(m); switchTab(m==='us'?'us':'home'); }
 // ── 화면 색 (다크 · 화이트 · 웜, 2026-10-11) ──
@@ -1227,6 +1227,7 @@ function switchTab(id) {
   document.getElementById('panel-'+(id==='usstock'?'stock':id)).classList.add('active');
   if(id==='screener')loadTopValue();
   if(id==='journal')loadJournal();
+  jrTabSync();
   if(id==='sector'){loadSector();loadLiveThemes();loadRotation();loadJongbeOnce();}
   if(id==='calendar')loadSectorCal();
   if(id==='heatmap')loadHeatmap();
@@ -1727,6 +1728,9 @@ async function loadJongbePerf(){
 
 // ── 매매 일지 ─────────────────────────────────────────────────
 let _jr=null, _jrGroup='by_kind';
+// 매매 일지 탭은 이 브라우저에서 로그인한 적 있을 때만 보임 (2026-10-11 "사이트에 떠 있는 게 좀 그렇다") — 주소 #journal로는 언제나 들어감
+function jrShowTab(){ const a=jrAuth(); return !!(a.o&&a.p)||_curTab==='journal'; }
+function jrTabSync(){ const t=document.querySelector('.tab[data-t="journal"]'); if(t) t.hidden=_mk!=='kr'||!jrShowTab(); }
 function jrAuth(){ try{ return {o:localStorage.getItem('jr-owner')||'', p:localStorage.getItem('jr-pin')||''}; }catch(e){ return {o:'',p:''}; } }
 function jrH(){ const a=jrAuth(); return {'X-Owner':encodeURIComponent(a.o),'X-Pin':encodeURIComponent(a.p),'Content-Type':'application/json'}; }
 function jrToggle(id){ const el=document.getElementById(id); el.style.display=el.style.display==='none'?'block':'none'; }
@@ -1770,11 +1774,11 @@ async function jrLogin(create){
     return;
   }
   if(!r||!r.ok){ const e=r?await r.json().catch(()=>({})):{}; msg.innerHTML=`<span style="color:var(--r)">❌ ${e.detail||(r?'비밀번호가 맞지 않습니다':'서버에 연결하지 못했습니다')}</span>`; return; }
-  try{ localStorage.setItem('jr-owner',o); localStorage.setItem('jr-pin',p); }catch(e){}
+  try{ localStorage.setItem('jr-owner',o); localStorage.setItem('jr-pin',p); }catch(e){} jrTabSync();
   document.getElementById('jr-pin').value=''; msg.textContent='';
   loadJournal();
 }
-function jrLogout(){ try{ localStorage.removeItem('jr-pin'); }catch(e){} _jr=null; loadJournal(); }
+function jrLogout(){ try{ localStorage.removeItem('jr-pin'); }catch(e){} _jr=null; switchTab('home'); jrTabSync(); }
 // 오늘 신호 몇 주 살지 (2026-10-10 "수량은 매매 일지에서만") — 수량 = 계좌 × 거래당 위험 ÷ (매수가 − 스탑로스)
 // 거래당 위험: 기본 0.5% · 수량 절반 표시 0.25% · 🔥 주도주 0.10%. 가격은 지금 목록 가격(장중이면 실시간).
 async function jrSizeRender(){
