@@ -2239,6 +2239,20 @@ def get_workspace_list(db: Session = Depends(get_db)):
     return workspace_list(db)
 
 
+@router.get("/stock/{code}/profile")
+def get_stock_profile(code: str, db: Session = Depends(get_db)):
+    """종목 탭: 투자 지표 · 업종 PER · PSR · 분기/연간 실적(컨센서스) · 안정성 · 매출 구성 · 목표가 · 리포트 (2026-10-11)."""
+    from backend.services.stock_profile import profile  # noqa: PLC0415
+    return profile(db, code)
+
+
+@router.get("/stock/{code}/flows")
+def get_stock_flows(code: str, db: Session = Depends(get_db)):
+    """종목 탭: 최근 40거래일 투자자별(기관 세부 포함) 순매수 수량 · 외국인 보유율 · 공매도 20일 (토스)."""
+    from backend.services.stock_profile import flows  # noqa: PLC0415
+    return flows(db, code)
+
+
 @router.get("/stock/{code}/panel")
 def get_stock_panel(code: str, request: Request, db: Session = Depends(get_db)):
     """종목 차트 창 오른쪽 패널 — 상태 제목·단계·✓/⚠ 칩·카드·세부 지표. 평단·수익은 매매 일지 로그인 때만."""

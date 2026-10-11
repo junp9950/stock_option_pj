@@ -495,6 +495,30 @@ select{background:var(--c3);border:1px solid var(--ln);color:var(--bd);padding:6
 .hbt .tv-table td.c-name b{color:var(--strong)}.hbt .tv-table td{padding:8px 10px}
 @media(max-width:1200px){.tv-grid{grid-template-columns:1fr}.tv-side{position:static}}
 #jr-login input{width:100%}
+/* 종목 탭 */
+.sv-top{display:flex;flex-wrap:wrap;align-items:center;gap:10px 16px;padding:12px 16px}
+.sv-search{position:relative;flex:0 1 420px;min-width:240px}.sv-search input{width:100%;font-size:14px!important;padding:9px 14px!important;border-radius:12px!important}
+#sv-sr{position:absolute;left:0;right:0;top:100%;z-index:30;background:var(--c1);border:1px solid var(--line);border-radius:12px;margin-top:4px;max-height:380px;overflow:auto;display:none;box-shadow:0 8px 20px var(--shadow)}#sv-sr.on{display:block}
+.sv-recent{display:flex;flex-wrap:wrap;gap:6px}.sv-recent .sv-chip{font-size:12.5px;padding:4px 11px;border-radius:999px;background:var(--card2);color:var(--text);cursor:pointer;border:1px solid var(--line)}.sv-recent .sv-chip:hover{border-color:var(--b)}
+.sv-hd{display:flex;flex-wrap:wrap;align-items:baseline;gap:6px 14px}.sv-hd .nm{font-size:24px;font-weight:800;color:var(--strong)}.sv-hd .px{font-size:24px;font-weight:600;color:var(--strong);font-family:'IBM Plex Mono',monospace}
+.sv-g1{display:grid;grid-template-columns:minmax(0,1fr) 380px;gap:16px;align-items:start}
+.sv-g2{display:grid;grid-template-columns:minmax(0,1.4fr) minmax(0,1fr) minmax(0,1fr);gap:16px;align-items:stretch}
+.sv-g3{display:grid;grid-template-columns:minmax(0,1fr) 380px;gap:16px;align-items:start}
+.sv-side{display:flex;flex-direction:column;min-width:0}
+#panel-stock .lwc{height:clamp(380px,calc(100vh - 360px),620px)}
+.sv-m{display:grid;grid-template-columns:auto minmax(0,1fr) auto;gap:6px 10px;align-items:center;font-size:13px;padding:6px 0;border-bottom:1px solid var(--line2)}.sv-m:last-child{border-bottom:0}
+.sv-m .k{color:var(--muted)}.sv-m .v{font-weight:700;color:var(--strong);font-family:'IBM Plex Mono',monospace;text-align:right;white-space:nowrap}
+.sv-bar{height:6px;border-radius:3px;background:var(--line);position:relative;overflow:hidden}.sv-bar i{position:absolute;left:0;top:0;bottom:0;border-radius:3px;background:var(--b)}.sv-bar i.ind{background:var(--mu)}
+.sv-rng{position:relative;height:6px;border-radius:3px;background:var(--line);margin:6px 0 2px}.sv-rng b{position:absolute;top:-4px;width:3px;height:14px;border-radius:2px;background:var(--strong)}
+.sv-seg{display:inline-flex;background:var(--sunk);border:1px solid var(--line);border-radius:9px;padding:2px;gap:2px;margin-left:auto}.sv-seg button{background:none;border:0;color:var(--muted);border-radius:7px;padding:3px 10px;font-size:12px;cursor:pointer}.sv-seg button.on{background:var(--neu);color:var(--neu-on);font-weight:700}
+.sv-cv{position:relative;height:230px}
+.sv-mixl{display:flex;flex-direction:column;gap:4px;margin-top:8px;font-size:12.5px}.sv-mixl div{display:flex;align-items:center;gap:8px}.sv-mixl i{width:10px;height:10px;border-radius:3px;flex:none}.sv-mixl span{flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}.sv-mixl b{font-family:'IBM Plex Mono',monospace}
+.sv-sum{display:grid;grid-template-columns:repeat(3,1fr);gap:8px;margin:6px 0 10px}.sv-sum>div{background:var(--sunk);border-radius:10px;padding:8px 10px}.sv-sum b{display:block;font-size:15px;font-family:'IBM Plex Mono',monospace;margin-top:2px}
+.sv-ft{width:100%;font-size:12.5px}.sv-ft th,.sv-ft td{text-align:right;padding:6px 8px!important;white-space:nowrap}.sv-ft th:first-child,.sv-ft td:first-child{text-align:left}
+.sv-panelbox .cp-cards{grid-template-columns:repeat(3,1fr)}.sv-panelbox>*{margin-bottom:10px}
+@media(max-width:1300px){.sv-g2{grid-template-columns:1fr 1fr}.sv-g2>#sv-earn{grid-column:1/-1}}
+@media(max-width:1100px){.sv-g1,.sv-g3{grid-template-columns:1fr}}
+@media(max-width:760px){.sv-g2{grid-template-columns:1fr}.sv-hd .nm,.sv-hd .px{font-size:20px}#panel-stock .lwc{height:400px}.sv-sum b{font-size:13px}}
 /* 폰 (2026-10-11 전체 점검) */
 @media(max-width:760px){
   body[data-tab=home] .hd-info{display:none}   /* 첫 화면은 아래 '오늘' 카드에 같은 내용이 있어 머리에선 뺌 */
@@ -532,6 +556,7 @@ select{background:var(--c3);border:1px solid var(--ln);color:var(--bd);padding:6
 
 <nav class="tabs">
   <div class="tab active" onclick="switchTab('home')">오늘</div>
+  <div class="tab" onclick="switchTab('stock')">종목</div>
   <div class="tab" onclick="switchTab('candidates')">차트 후보</div>
   <div class="tab" onclick="switchTab('calendar')">캘린더</div>
   <div class="tab" onclick="switchTab('sector')">섹터 흐름</div>
@@ -990,11 +1015,47 @@ select{background:var(--c3);border:1px solid var(--ln);color:var(--bd);padding:6
     </div>
   </div>
 
+<!-- 종목 탭 (2026-10-11): 검색 → 차트 · 투자 지표 · 실적 추이 · 안정성 · 매출 구성 · 수급 · 공매도 · 리포트 -->
+<div id="panel-stock" class="panel content hbt">
+  <section class="bx sv-top">
+    <div class="sv-search"><input id="sv-q" placeholder="🔍 종목 검색 (이름·코드·초성)" autocomplete="off" oninput="svSearch(this.value)" onkeydown="if(event.key==='Enter'){const f=document.querySelector('#sv-sr .ws-item');if(f)f.click();}else if(event.key==='Escape'){this.value='';svSearch('');}"><div id="sv-sr"></div></div>
+    <div id="sv-recent" class="sv-recent"></div>
+  </section>
+  <div id="sv-empty" class="bx"><div class="bx-h"><b>종목을 검색하세요</b></div><p class="bx-s">이름·코드·초성으로 찾으면 차트, PER·PBR·PSR, 분기 실적, 부채비율, 매출 구성, 투자자별 수급, 공매도, 증권사 목표가가 한 화면에 나옵니다. 다른 탭 차트 창의 "종목 자세히"로도 들어옵니다.</p><div id="sv-sugg" class="sv-recent"></div></div>
+  <div id="sv-body" hidden>
+    <section class="bx" id="sv-head"></section>
+    <div class="sv-g1">
+      <section class="bx sv-chartbox">
+        <div class="ws-ctl"><div class="ws-per" id="sv-tf"><button data-tf="1d" onclick="svTf('1d')">일봉</button><button data-tf="1w" onclick="svTf('1w')">주봉</button><button data-tf="60m" onclick="svTf('60m')">60분</button><button data-tf="30m" onclick="svTf('30m')">30분</button><button data-tf="15m" onclick="svTf('15m')">15분</button><button data-tf="5m" onclick="svTf('5m')">5분</button><button data-tf="1m" onclick="svTf('1m')">1분</button></div>
+        <div class="ws-per" id="sv-per"><button data-n="66" onclick="svPer(66)">3개월</button><button data-n="130" onclick="svPer(130)">6개월</button><button data-n="250" onclick="svPer(250)">1년</button></div></div>
+        <div class="ts" id="sv-note" style="margin:2px 0 6px"></div>
+        <div class="lwbox"><div class="lwleg" id="sv-chart-leg"></div><div id="sv-chart" class="lwc"></div></div>
+      </section>
+      <div class="sv-side">
+        <section class="bx" id="sv-metrics"><span class="ts">불러오는 중…</span></section>
+        <section class="bx"><div class="bx-h"><b>사이트 판단</b><span class="ts">추세 등급 · 신호 체크</span></div><div id="sv-panel" class="sv-panelbox"></div></section>
+      </div>
+    </div>
+    <div class="sv-g2">
+      <section class="bx" id="sv-earn"></section>
+      <section class="bx" id="sv-stab"></section>
+      <section class="bx" id="sv-mix"></section>
+    </div>
+    <div class="sv-g3">
+      <section class="bx" id="sv-flow"><span class="ts">수급 불러오는 중…</span></section>
+      <div class="sv-side">
+        <section class="bx" id="sv-short"></section>
+        <section class="bx" id="sv-rep"></section>
+      </div>
+    </div>
+  </div>
+</div>
+
 <!-- 캔들차트 모달 (토스증권 실시간) -->
 <div class="modal-bg" id="chart-modal-bg" onclick="if(event.target===this)closeChartModal()">
   <div class="modal cm-wide">
     <span class="close-btn" onclick="closeChartModal()">✕</span>
-    <h2 id="chart-modal-title">종목 차트</h2>
+    <h2 id="chart-modal-title" style="display:inline-block;margin-right:10px">종목 차트</h2><button id="cm-more" class="btn btn-gray btn-sm" style="display:none;vertical-align:4px">종목 자세히 →</button>
     <div class="cm-body">
       <div class="cm-chart">
         <div class="note" id="chart-modal-note" style="margin-bottom:8px"></div>
@@ -1101,7 +1162,7 @@ async function loadHeader(){
 function switchTab(id) {
   // 실적 개선 탭은 2026-10-04 숨김 (데이터는 📈 실적 표시로 계속 쓴다, /earnings 주소는 그대로)
   // 2026-10-05 사용자 "당분간 차트 후보 보고 매매" → 차트 후보를 첫 탭으로, 종베는 검증 중으로 뒤로
-  const tabs = ['home','candidates','calendar','sector','journal','screener','heatmap','discussion','suggest'];
+  const tabs = ['home','stock','candidates','calendar','sector','journal','screener','heatmap','discussion','suggest'];
   if(id==='jongbe') id='candidates';   // 종베 탭은 2026-10-11 차트 후보로 합침 (예전 주소 #jongbe도 여기로)
   if(!tabs.includes(id))return;
   _curTab=id; document.body.dataset.tab=id;
@@ -1116,6 +1177,7 @@ function switchTab(id) {
   if(id==='calendar')loadSectorCal();
   if(id==='heatmap')loadHeatmap();
   if(id==='candidates'){loadCandidates();loadJongbeOnce();}
+  if(id==='stock') svInit();
   if(id==='home'){loadDashboard();loadWorkspace();}
   if(id==='suggest')document.getElementById('suggest-frame').src='/suggestions';
   if(id==='discussion'&&!document.getElementById('discussion-frame').src)document.getElementById('discussion-frame').src='/discussion';
@@ -2703,6 +2765,7 @@ async function openChartModal(code, name, spikeDate){
   _cm={code,tf:'1d',cache:{}}; document.getElementById('cm-tf').style.display='flex';
   document.querySelectorAll('#cm-tf button').forEach(b=>b.classList.toggle('on',b.dataset.tf==='1d'));
   document.getElementById('chart-modal-title').textContent = `${name} (${code})`;
+  { const b=document.getElementById('cm-more'); b.style.display='inline-block'; b.onclick=()=>svGo(code,name); }
   document.getElementById('chart-modal-note').textContent = '로딩 중…';
   lwClear('cm-chart');
   document.getElementById('cm-panel').innerHTML='<div class="ts">불러오는 중…</div>';
@@ -2734,7 +2797,7 @@ async function openChartModal(code, name, spikeDate){
 async function openIndexChart(sym, name){
   _cm={code:null,tf:'1d',cache:{}}; document.getElementById('cm-tf').style.display='none';
   document.getElementById('cm-panel').innerHTML='';
-  document.getElementById('chart-modal-title').textContent = `${name}${sym==='FUT'?'':' 지수'} — 일봉`;
+  document.getElementById('chart-modal-title').textContent = `${name}${sym==='FUT'?'':' 지수'} — 일봉`; document.getElementById('cm-more').style.display='none';
   document.getElementById('chart-modal-note').textContent = '로딩 중…';
   lwClear('cm-chart');
   document.getElementById('chart-modal-bg').classList.add('show');
@@ -3063,6 +3126,179 @@ async function tvSide(){
     ${best.length?`<div class="tvs-h">거래 100억↑ 중 많이 오른</div>${best.map(line).join('')}`:''}
     ${worst.length?`<div class="tvs-h">거래 100억↑ 중 많이 내린</div>${worst.map(line).join('')}`:''}`;
 }
+// ── 종목 탭 (2026-10-11) ─────────────────────────────────────
+let _sv={code:null,name:null,tf:'1d',per:130,cache:{},charts:{},earnK:'q',earnR:'매출액',stabR:'부채비율',flowK:'inv'};
+let _svQT=null;
+function svRecent(){ try{ return JSON.parse(localStorage.getItem('sv-recent')||'[]'); }catch(e){ return []; } }
+function svSaveRecent(code,name){ try{ const L=svRecent().filter(x=>x.code!==code); L.unshift({code,name}); localStorage.setItem('sv-recent',JSON.stringify(L.slice(0,10))); }catch(e){} }
+function svChips(L){ return L.map(x=>`<span class="sv-chip" onclick="svOpen('${x.code}','${String(x.name).replace(/'/g,'')}')">${x.name}</span>`).join(''); }
+function svInit(){
+  const R=svRecent(); document.getElementById('sv-recent').innerHTML=R.length?`<span class="ts">최근 본</span>${svChips(R)}`:'';
+  if(!_sv.code){
+    const D=_ws.data; const sug=D&&D.candidates?D.candidates.filter(x=>x.lane==='entry').slice(0,10):[];
+    document.getElementById('sv-sugg').innerHTML=sug.length?`<span class="ts">오늘 진입 후보</span>${svChips(sug)}`:'';
+    if(R.length) svOpen(R[0].code,R[0].name);
+  }
+}
+function svSearch(v){
+  clearTimeout(_svQT); const box=document.getElementById('sv-sr');
+  if(!v.trim()){ box.classList.remove('on'); box.innerHTML=''; return; }
+  _svQT=setTimeout(async()=>{
+    const d=await fetch(`${API}/stocks/search?q=${encodeURIComponent(v)}`).then(r=>r.ok?r.json():null).catch(()=>null);
+    if(document.getElementById('sv-q').value!==v) return;
+    const L=(d&&d.items)||[];
+    box.innerHTML=L.length?L.map(x=>`<div class="ws-item" onclick="svPick('${x.code}','${x.name.replace(/'/g,'')}')">${wsAv(x.code,x.name)}<div class="ws-txt"><div class="ws-nm"><span class="n">${x.name}</span></div><div class="ws-tg">${x.code}</div></div>
+      <div class="ws-px">${x.close?Math.round(x.close).toLocaleString():'-'}<div style="color:${x.chg>0?'var(--up)':x.chg<0?'var(--down)':'var(--muted)'}">${x.chg>0?'+':''}${(x.chg||0).toFixed(2)}%</div></div></div>`).join('')
+      :'<div class="ts" style="padding:10px">찾는 종목이 없습니다</div>';
+    box.classList.add('on');
+  },200);
+}
+function svPick(code,name){ const q=document.getElementById('sv-q'); q.value=''; q.blur(); svSearch(''); svOpen(code,name); }
+document.addEventListener('click',e=>{ if(!e.target.closest('.sv-search')){ const b=document.getElementById('sv-sr'); if(b) b.classList.remove('on'); } });
+function svGo(code,name){ closeChartModal(); switchTab('stock'); svOpen(code,name); }   // 다른 탭 차트 창에서 '종목 자세히'
+const svWon=v=>v==null?'-':Math.abs(v)>=1e12?(v/1e12).toFixed(1)+'조':Math.round(v/1e8).toLocaleString()+'억';
+const svEok=v=>v==null?'-':Math.abs(v)>=10000?(v/10000).toFixed(1)+'조':Math.round(v).toLocaleString()+'억';
+const svC=n=>n>0?'var(--r)':n<0?'var(--b)':'var(--mu)';
+const svSg=n=>(n>0?'+':'')+n.toLocaleString();
+async function svOpen(code,name){
+  _sv.code=code; _sv.name=name; _sv.cache={}; svSaveRecent(code,name);
+  document.getElementById('sv-empty').hidden=true; document.getElementById('sv-body').hidden=false;
+  document.getElementById('sv-recent').innerHTML=`<span class="ts">최근 본</span>${svChips(svRecent())}`;
+  document.getElementById('sv-head').innerHTML=`<div class="sv-hd"><span class="nm">${name}</span><span class="ts">${code}</span></div>`;
+  ['sv-metrics','sv-earn','sv-stab','sv-mix','sv-flow','sv-short','sv-rep'].forEach(id=>document.getElementById(id).innerHTML='<span class="ts">불러오는 중…</span>');
+  document.getElementById('sv-panel').innerHTML='<span class="ts">불러오는 중…</span>';
+  fetch(`${API}/stock/${code}/panel`).then(r=>r.ok?r.json():null).catch(()=>null).then(pn=>{ if(_sv.code===code) renderStockPanel(pn,'sv-panel'); });
+  fetch(`${API}/stock/${code}/profile`).then(r=>r.ok?r.json():null).catch(()=>null).then(p=>{ if(_sv.code===code){ _sv.prof=p; svProfile(); } });
+  fetch(`${API}/stock/${code}/flows`).then(r=>r.ok?r.json():null).catch(()=>null).then(f=>{ if(_sv.code===code){ _sv.flows=f; svFlows(); } });
+  const sgP=fetch(`${API}/stock/${code}/chart-signals`).then(r=>r.ok?r.json():null).catch(()=>null);
+  const cd=await fetch(`${API}/stock/${code}/candles?count=330`).then(r=>r.ok?r.json():null).catch(()=>null);
+  if(_sv.code!==code) return;
+  _sv.cache.cd=cd; svDraw(); svHead();
+  _sv.cache.sg=await sgP; if(_sv.code===code&&_sv.tf==='1d') svDraw();
+}
+function svHead(){
+  const cd=_sv.cache.cd, p=_sv.prof||{}; if(!cd||!cd.candles||!cd.candles.length) return;
+  const L=cd.candles, z=L[L.length-1], y=L[L.length-2], cl=+z.closePrice, ch=y?(cl/+y.closePrice-1)*100:0;
+  const all=window._rotMem; let fam=''; if(all&&all.families) for(const [f,arr] of Object.entries(all.families)){ if(arr.some(x=>x.code===_sv.code)){ fam=f; break; } }
+  document.getElementById('sv-head').innerHTML=`<div class="sv-hd"><span class="nm">${_sv.name}</span><span class="ts">${_sv.code}${p.market?' · '+p.market:''}${fam?' · '+fam:''}</span>
+    <span class="px">${Math.round(cl).toLocaleString()}</span><span style="color:${svC(ch)};font-weight:700">${ch>=0?'▲':'▼'} ${Math.abs(ch).toFixed(2)}%</span>
+    <span class="ts">${(z.timestamp||'').slice(0,10)} 종가${p.market_cap?' · 시총 '+svWon(p.market_cap):''}</span></div>`;
+}
+function svTf(tf){ _sv.tf=tf; svDraw(); }
+function svPer(n){ _sv.per=n; svDraw(); }
+async function svDraw(){
+  document.querySelectorAll('#sv-tf button').forEach(b=>b.classList.toggle('on',b.dataset.tf===_sv.tf));
+  document.getElementById('sv-per').style.display=_sv.tf==='1d'?'flex':'none';
+  document.querySelectorAll('#sv-per button').forEach(b=>b.classList.toggle('on',+b.dataset.n===_sv.per));
+  const c=_sv.cache, code=_sv.code, tf=_sv.tf, note=document.getElementById('sv-note');
+  if(tf!=='1d'){
+    note.textContent=`${TF_NAME[tf]} 불러오는 중…`;
+    const cd=tfCached(c,tf)||(c[tf]=await tfCandles(code,tf));
+    if(_sv.code!==code||_sv.tf!==tf) return;
+    if(!cd){ note.textContent=`${TF_NAME[tf]}을 못 받았습니다`; return; }
+    renderLwChart('sv-chart',cd.candles,[],tf==='1w'?80:120); note.textContent=`${tfNote(cd,tf)} · 신호는 일봉에서만`;
+    tfRetryLater(cd,()=>{ if(_sv.code===code&&_sv.tf===tf) svDraw(); }); return;
+  }
+  if(!c.cd||!c.cd.candles||!c.cd.candles.length){ note.textContent='차트를 못 불러왔습니다'; return; }
+  const a=c.sg&&c.sg.active;
+  const g=renderLwChart('sv-chart',c.cd.candles,c.sg?c.sg.items:[],_sv.per,{stop:a&&a.stop});
+  note.textContent=`일봉 · 끌어서 과거 보기`+(g!=null?` · EMA 5·10·20 간격 ${g.toFixed(1)}%`:'')+_avwapNote+(a?` · ▲ 진입 신호 ${a.date.slice(5).replace('-','/')} · 손절 ${Math.round(a.stop).toLocaleString()}`:'');
+}
+function svMetric(k,v,sub,bar){ return `<div class="sv-m"><span class="k">${k}</span><span>${bar||''}${sub?`<span class="ts">${sub}</span>`:''}</span><span class="v">${v}</span></div>`; }
+function svProfile(){
+  const p=_sv.prof||{}, m=p.metrics||{}; svHead();
+  const x=v=>v==null?'-':v.toLocaleString(undefined,{maximumFractionDigits:2});
+  const perBar=(m.per!=null&&p.industry_per)?(()=>{ const mx=Math.max(m.per,p.industry_per)*1.1||1; return `<div style="display:grid;gap:3px;margin-bottom:2px"><div class="sv-bar" title="이 종목"><i style="width:${Math.max(2,m.per/mx*100)}%"></i></div><div class="sv-bar" title="업종 평균"><i class="ind" style="width:${Math.max(2,p.industry_per/mx*100)}%"></i></div></div>`; })():'';
+  const last=_sv.cache.cd&&_sv.cache.cd.candles?+_sv.cache.cd.candles[_sv.cache.cd.candles.length-1].closePrice:null;
+  const rng=(m.high52&&m.low52&&last)?`<div class="sv-rng"><b style="left:calc(${Math.max(0,Math.min(100,(last-m.low52)/(m.high52-m.low52)*100))}% - 1px)"></b></div>`:'';
+  const op=p.target&&p.target.opinion, opTxt=op==null?'':op>=4.5?'강력 매수':op>=3.5?'매수':op>=2.5?'중립':'매도';
+  document.getElementById('sv-metrics').innerHTML=`<div class="bx-h"><b>투자 지표</b><span class="ts">네이버 · 와이즈리포트</span></div>
+    ${svMetric('PER',m.per!=null?x(m.per)+'배':'-',p.industry_per?`업종 평균 ${x(p.industry_per)}배 ${m.per!=null?(m.per<p.industry_per?'· 업종보다 낮음':'· 업종보다 높음'):''}`:'',perBar)}
+    ${svMetric('추정 PER',m.cns_per!=null?x(m.cns_per)+'배':'-','올해 예상 이익 기준')}
+    ${svMetric('PBR',m.pbr!=null?x(m.pbr)+'배':'-','순자산 대비')}
+    ${svMetric('PSR',m.psr!=null?x(m.psr)+'배':'-','최근 4분기 매출 대비')}
+    ${svMetric('EPS · BPS',`${x(m.eps)} · ${x(m.bps)}`,'원')}
+    ${svMetric('배당',m.div_yield!=null?x(m.div_yield)+'%':'-',m.dividend?`주당 ${x(m.dividend)}원`:'')}
+    ${svMetric('52주',`${x(m.low52)} ~ ${x(m.high52)}`,'',rng)}
+    ${svMetric('외국인 소진율',m.foreign_rate!=null?x(m.foreign_rate)+'%':'-','')}
+    ${p.target&&p.target.price?svMetric('목표가 평균',x(p.target.price),`${opTxt}${last?` · 지금보다 ${((p.target.price/last-1)*100).toFixed(0)}%`:''}`):''}`;
+  svEarn(); svStab(); svMix(); svRep();
+}
+function svChart(id,cfg){ if(_sv.charts[id]){ try{ _sv.charts[id].destroy(); }catch(e){} } const el=document.getElementById(id); if(!el||typeof Chart==='undefined') return; _sv.charts[id]=new Chart(el.getContext('2d'),cfg); }
+function svAxis(){ return {ticks:{color:cv('--mu'),font:{size:11}},grid:{color:themeLight()?'rgba(31,35,40,.08)':'rgba(139,148,158,.12)'},border:{color:cv('--ln')}}; }
+function svEarn(){
+  const p=_sv.prof||{}, d=_sv.earnK==='q'?p.quarter:p.annual, box=document.getElementById('sv-earn');
+  if(!d){ box.innerHTML='<div class="bx-h"><b>실적 추이</b></div><span class="ts">실적 자료가 없습니다</span>'; return; }
+  const rows=['매출액','영업이익','당기순이익'], v=d.rows[_sv.earnR]||[], per=d.periods;
+  const seg=(arr,cur,fn)=>`<span class="sv-seg">${arr.map(([k,l])=>`<button class="${cur===k?'on':''}" onclick="${fn}('${k}')">${l}</button>`).join('')}</span>`;
+  const chg=v.map((x,i)=>i&&x!=null&&v[i-1]?((x/v[i-1]-1)*100*(v[i-1]<0?-1:1)):null);
+  const mg=d.rows['영업이익률']||[];
+  box.innerHTML=`<div class="bx-h" style="align-items:center"><b>실적 추이</b><span class="ts">억원 · 흐린 막대 = 증권사 예상</span>${seg([['q','분기'],['a','연간']],_sv.earnK,'svEarnK')}</div>
+    <div style="margin:4px 0 6px">${seg(rows.map(r=>[r,r.replace('당기','')]),_sv.earnR,'svEarnR')}</div>
+    <div class="sv-cv"><canvas id="sv-earn-c"></canvas></div>
+    <div class="ts" style="display:flex;justify-content:space-around;margin-top:4px">${per.map((x,i)=>`<span style="text-align:center">${x.title.slice(2)}${x.est?' 예상':''}<br><b style="color:${chg[i]==null?'var(--mu)':svC(chg[i])}">${chg[i]==null?'·':(chg[i]>0?'+':'')+chg[i].toFixed(0)+'%'}</b>${mg[i]!=null?`<br>이익률 ${mg[i]}%`:''}</span>`).join('')}</div>`;
+  const B=cv('--b'), R=cv('--r');
+  svChart('sv-earn-c',{type:'bar',data:{labels:per.map(x=>x.title.slice(2)+(x.est?'E':'')),datasets:[{data:v,backgroundColor:v.map((x,i)=>per[i].est?(x<0?R+'55':B+'55'):(x<0?R:B)),borderColor:v.map((x,i)=>per[i].est?(x<0?R:B):'transparent'),borderWidth:v.map((x,i)=>per[i].est?1.5:0),borderRadius:6}]},
+    options:{responsive:true,maintainAspectRatio:false,plugins:{legend:{display:false},tooltip:{callbacks:{label:c=>`${_sv.earnR} ${svEok(c.raw)}`}}},scales:{x:svAxis(),y:{...svAxis(),ticks:{...svAxis().ticks,callback:v=>svEok(v)}}}}});
+}
+function svEarnK(k){ _sv.earnK=k; svEarn(); }
+function svEarnR(r){ _sv.earnR=r; svEarn(); }
+function svStab(){
+  const p=_sv.prof||{}, d=p.quarter, box=document.getElementById('sv-stab');
+  if(!d){ box.innerHTML='<div class="bx-h"><b>안정성 · 수익성</b></div><span class="ts">자료 없음</span>'; return; }
+  const per=d.periods.filter(x=>!x.est), idx=d.periods.map((x,i)=>x.est?-1:i).filter(i=>i>=0);
+  const v=idx.map(i=>(d.rows[_sv.stabR]||[])[i]);
+  const help={'부채비율':'낮을수록 빚 부담 적음','당좌비율':'높을수록 단기 지급 여유','ROE':'자본으로 버는 힘','영업이익률':'매출 중 남는 이익'}[_sv.stabR];
+  box.innerHTML=`<div class="bx-h" style="align-items:center"><b>안정성 · 수익성</b><span class="ts">분기 · %</span></div>
+    <div style="margin:4px 0 6px"><span class="sv-seg" style="margin-left:0">${['부채비율','당좌비율','ROE','영업이익률'].map(k=>`<button class="${_sv.stabR===k?'on':''}" onclick="_sv.stabR='${k}';svStab()">${k}</button>`).join('')}</span></div>
+    <div class="sv-cv"><canvas id="sv-stab-c"></canvas></div><div class="ts" style="margin-top:4px">${help}</div>`;
+  svChart('sv-stab-c',{type:'line',data:{labels:per.map(x=>x.title.slice(2)),datasets:[{data:v,borderColor:cv('--o'),backgroundColor:cv('--o'),pointRadius:4,pointBackgroundColor:cv('--bg'),pointBorderWidth:2,tension:.25}]},
+    options:{responsive:true,maintainAspectRatio:false,plugins:{legend:{display:false},tooltip:{callbacks:{label:c=>`${_sv.stabR} ${c.raw}%`}}},scales:{x:svAxis(),y:{...svAxis(),ticks:{...svAxis().ticks,callback:v=>v+'%'}}}}});
+}
+function svMix(){
+  const p=_sv.prof||{}, mix=(p.mix||[]), box=document.getElementById('sv-mix');
+  const pos=mix.filter(x=>x.pct>0), PAL=['#3b82f6','#2ea043','#a371f7','#db61a2','#58a6ff','#8b949e','#d29922','#f0883e'];
+  if(!mix.length){ box.innerHTML='<div class="bx-h"><b>매출 구성</b></div><span class="ts">자료 없음</span>'; return; }
+  box.innerHTML=`<div class="bx-h"><b>매출 구성</b><span class="ts">주요 제품 · 최근 사업보고서</span></div>
+    <div class="sv-cv" style="height:170px"><canvas id="sv-mix-c"></canvas></div>
+    <div class="sv-mixl">${mix.map((x,i)=>`<div><i style="background:${x.pct>0?PAL[pos.indexOf(x)%PAL.length]:'transparent'};border:1px solid var(--line)"></i><span title="${x.name}">${x.name}</span><b>${x.pct.toFixed(1)}%</b></div>`).join('')}</div>`;
+  svChart('sv-mix-c',{type:'doughnut',data:{labels:pos.map(x=>x.name),datasets:[{data:pos.map(x=>x.pct),backgroundColor:pos.map((x,i)=>PAL[i%PAL.length]),borderColor:cv('--card'),borderWidth:2}]},
+    options:{responsive:true,maintainAspectRatio:false,cutout:'62%',plugins:{legend:{display:false}}}});
+}
+function svRep(){
+  const p=_sv.prof||{}, box=document.getElementById('sv-rep'), R=p.researches||[], P=p.peers||[];
+  box.innerHTML=`<div class="bx-h"><b>증권사 리포트</b>${p.target&&p.target.date?`<span class="ts">목표가 평균 ${p.target.date} 기준</span>`:''}</div>
+    ${R.length?R.map(r=>`<div class="sv-m" style="grid-template-columns:minmax(0,1fr) auto"><a href="https://finance.naver.com/research/company_read.naver?nid=${r.id}" target="_blank" rel="noopener" style="color:var(--text);text-decoration:none;overflow:hidden;text-overflow:ellipsis;white-space:nowrap" title="${(r.title||'').replace(/"/g,'')}">${r.title}</a><span class="ts">${r.broker} · ${(r.date||'').slice(4,6)}/${(r.date||'').slice(6)}</span></div>`).join(''):'<span class="ts">최근 리포트 없음</span>'}
+    ${P.length?`<div class="ts" style="margin:10px 0 4px">같은 업종</div><div class="sv-recent">${P.map(x=>`<span class="sv-chip" onclick="svOpen('${x.code}','${String(x.name).replace(/'/g,'')}')">${x.name} <b style="color:${svC(x.chg||0)}">${x.chg>0?'+':''}${x.chg}%</b></span>`).join('')}</div>`:''}`;
+}
+function svFlows(){
+  const f=_sv.flows||{}, R=f.records||[], box=document.getElementById('sv-flow');
+  if(!R.length){ box.innerHTML='<div class="bx-h"><b>투자자별 수급</b></div><span class="ts">수급 자료를 못 받았습니다</span>'; svShort(); return; }
+  const sum=(k,n)=>R.slice(0,n).reduce((a,x)=>a+(x[k]||0),0), amt=(k,n)=>R.slice(0,n).reduce((a,x)=>a+(x[k]||0)*(x.close||0),0);
+  const card=(lab,k)=>`<div><span class="ts">${lab}</span><b style="color:${svC(sum(k,5))}">5일 ${svWon(amt(k,5))}</b><span class="ts" style="color:${svC(sum(k,20))}">20일 ${svWon(amt(k,20))}</span></div>`;
+  const inv=[['개인','individual'],['외국인','foreigner'],['기관','institution'],['기타법인','other_corp']];
+  const ins=[['금융투자','fin'],['보험','insu'],['투신','trust'],['사모','pef'],['은행','bank'],['기타금융','etc_fin'],['연기금','pension']];
+  const cols=_sv.flowK==='inv'?inv:ins;
+  box.innerHTML=`<div class="bx-h" style="align-items:center"><b>투자자별 수급</b><span class="ts">순매수 · 금액은 수량 × 그날 종가로 어림</span>
+    <span class="sv-seg"><button class="${_sv.flowK==='inv'?'on':''}" onclick="_sv.flowK='inv';svFlows()">투자자별</button><button class="${_sv.flowK==='ins'?'on':''}" onclick="_sv.flowK='ins';svFlows()">기관별</button></span></div>
+    <div class="sv-sum">${card('외국인','foreigner')}${card('기관','institution')}${card('개인','individual')}</div>
+    <div style="overflow-x:auto"><table class="sv-ft"><thead><tr><th>날짜</th><th>종가</th>${cols.map(c=>`<th>${c[0]}</th>`).join('')}${_sv.flowK==='inv'?'<th>외국인 보유</th>':''}</tr></thead>
+    <tbody>${R.slice(0,20).map(x=>`<tr><td>${x.date.slice(5).replace('-','.')}</td><td>${x.close?Math.round(x.close).toLocaleString():'-'}</td>${cols.map(c=>`<td style="color:${svC(x[c[1]])}">${svSg(x[c[1]]||0)}</td>`).join('')}${_sv.flowK==='inv'?`<td>${x.f_hold!=null?(x.f_hold*100).toFixed(2)+'%':'-'}</td>`:''}</tr>`).join('')}</tbody></table></div>
+    <div class="ts" style="margin-top:6px">단위: 주 · 토스 기준 · 최근 20거래일</div>`;
+  svShort();
+}
+function svShort(){
+  const S=(_sv.flows||{}).short||[], box=document.getElementById('sv-short');
+  if(!S.length){ box.innerHTML='<div class="bx-h"><b>공매도</b></div><span class="ts">자료 없음</span>'; return; }
+  const avg=S.reduce((a,x)=>a+(x.ratio||0),0)/S.length*100;
+  box.innerHTML=`<div class="bx-h"><b>공매도</b><span class="ts">거래량 중 공매도 비중 · ${S.length}일 평균 ${avg.toFixed(1)}%</span></div>
+    <div class="sv-cv" style="height:130px"><canvas id="sv-short-c"></canvas></div>
+    ${S.slice(0,5).map(x=>`<div class="sv-m" style="grid-template-columns:auto minmax(0,1fr) auto"><span class="k">${x.date.slice(5).replace('-','.')}</span><span class="ts">${x.volume.toLocaleString()}주 · ${svWon(x.amount)}</span><span class="v" style="${x.ratio*100>=avg*1.5?'color:var(--r)':''}">${(x.ratio*100).toFixed(1)}%</span></div>`).join('')}`;
+  const L=[...S].reverse();
+  svChart('sv-short-c',{type:'bar',data:{labels:L.map(x=>x.date.slice(5)),datasets:[{data:L.map(x=>+(x.ratio*100).toFixed(2)),backgroundColor:L.map(x=>x.ratio*100>=avg*1.5?cv('--r'):cv('--mu')),borderRadius:3}]},
+    options:{responsive:true,maintainAspectRatio:false,plugins:{legend:{display:false}},scales:{x:{...svAxis(),ticks:{display:false}},y:{...svAxis(),ticks:{...svAxis().ticks,callback:v=>v+'%'}}}}});
+}
+
 // 모달 차트 인스턴스
 let _modalPriceChart = null, _modalVolumeChart = null;
 
