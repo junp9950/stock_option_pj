@@ -503,7 +503,7 @@ select{background:var(--c3);border:1px solid var(--ln);color:var(--bd);padding:6
 .sv-hd{display:flex;flex-wrap:wrap;align-items:baseline;gap:6px 14px}.sv-hd .nm{font-size:24px;font-weight:800;color:var(--strong)}.sv-hd .px{font-size:24px;font-weight:600;color:var(--strong);font-family:'IBM Plex Mono',monospace}
 .sv-g1{display:grid;grid-template-columns:minmax(0,1fr) 380px;gap:16px;align-items:start}
 .sv-g2{display:grid;grid-template-columns:minmax(0,1.4fr) minmax(0,1fr) minmax(0,1fr);gap:16px;align-items:stretch}
-.sv-g3{display:grid;grid-template-columns:minmax(0,1fr) 380px;gap:16px;align-items:start}
+.sv-g3{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1fr);gap:16px;align-items:stretch}
 .sv-side{display:flex;flex-direction:column;min-width:0}
 #panel-stock .lwc{height:clamp(380px,calc(100vh - 360px),620px)}
 .sv-m{display:grid;grid-template-columns:auto minmax(0,1fr) auto;gap:6px 10px;align-items:center;font-size:13px;padding:6px 0;border-bottom:1px solid var(--line2)}.sv-m:last-child{border-bottom:0}
@@ -515,7 +515,9 @@ select{background:var(--c3);border:1px solid var(--ln);color:var(--bd);padding:6
 .sv-mixl{display:flex;flex-direction:column;gap:4px;margin-top:8px;font-size:12.5px}.sv-mixl div{display:flex;align-items:center;gap:8px}.sv-mixl i{width:10px;height:10px;border-radius:3px;flex:none}.sv-mixl span{flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}.sv-mixl b{font-family:'IBM Plex Mono',monospace}
 .sv-sum{display:grid;grid-template-columns:repeat(3,1fr);gap:8px;margin:6px 0 10px}.sv-sum>div{background:var(--sunk);border-radius:10px;padding:8px 10px}.sv-sum b{display:block;font-size:15px;font-family:'IBM Plex Mono',monospace;margin-top:2px}
 .sv-ft{width:100%;font-size:12.5px}.sv-ft th,.sv-ft td{text-align:right;padding:6px 8px!important;white-space:nowrap}.sv-ft th:first-child,.sv-ft td:first-child{text-align:left}
-.sv-panelbox .cp-cards{grid-template-columns:repeat(3,1fr)}.sv-panelbox>*{margin-bottom:10px}
+.sv-panelbox .cp-cards{grid-template-columns:repeat(3,1fr)}
+.sv-ft th.ins-h,.sv-ft td.ins-h{font-weight:700;border-left:2px solid var(--line)}.sv-ft th.ins,.sv-ft td.ins{background:color-mix(in srgb,var(--sunk) 70%,transparent)}.sv-ft td.ins{font-size:12px}
+.sv-ft tr.sv-grp th{border-bottom:0;padding-bottom:0!important;font-size:11px}.sv-ft th.ins-g{text-align:center!important;background:color-mix(in srgb,var(--sunk) 70%,transparent);border-radius:8px 8px 0 0}.sv-ft td:last-child,.sv-ft th:last-child{border-left:1px solid var(--line2)}.sv-panelbox>*{margin-bottom:10px}
 @media(max-width:1300px){.sv-g2{grid-template-columns:1fr 1fr}.sv-g2>#sv-earn{grid-column:1/-1}}
 @media(max-width:1100px){.sv-g1,.sv-g3{grid-template-columns:1fr}}
 @media(max-width:760px){.sv-g2{grid-template-columns:1fr}.sv-hd .nm,.sv-hd .px{font-size:20px}#panel-stock .lwc{height:400px}.sv-sum b{font-size:13px}}
@@ -1041,12 +1043,10 @@ select{background:var(--c3);border:1px solid var(--ln);color:var(--bd);padding:6
       <section class="bx" id="sv-stab"></section>
       <section class="bx" id="sv-mix"></section>
     </div>
+    <section class="bx" id="sv-flow"><span class="ts">수급 불러오는 중…</span></section>
     <div class="sv-g3">
-      <section class="bx" id="sv-flow"><span class="ts">수급 불러오는 중…</span></section>
-      <div class="sv-side">
-        <section class="bx" id="sv-short"></section>
-        <section class="bx" id="sv-rep"></section>
-      </div>
+      <section class="bx" id="sv-short"></section>
+      <section class="bx" id="sv-rep"></section>
     </div>
   </div>
 </div>
@@ -3127,7 +3127,7 @@ async function tvSide(){
     ${worst.length?`<div class="tvs-h">거래 100억↑ 중 많이 내린</div>${worst.map(line).join('')}`:''}`;
 }
 // ── 종목 탭 (2026-10-11) ─────────────────────────────────────
-let _sv={code:null,name:null,tf:'1d',per:130,cache:{},charts:{},earnK:'q',earnR:'매출액',stabR:'부채비율',flowK:'inv'};
+let _sv={code:null,name:null,tf:'1d',per:130,cache:{},charts:{},earnK:'q',earnR:'매출액',stabR:'부채비율'};
 let _svQT=null;
 function svRecent(){ try{ return JSON.parse(localStorage.getItem('sv-recent')||'[]'); }catch(e){ return []; } }
 function svSaveRecent(code,name){ try{ const L=svRecent().filter(x=>x.code!==code); L.unshift({code,name}); localStorage.setItem('sv-recent',JSON.stringify(L.slice(0,10))); }catch(e){} }
@@ -3276,15 +3276,15 @@ function svFlows(){
   if(!R.length){ box.innerHTML='<div class="bx-h"><b>투자자별 수급</b></div><span class="ts">수급 자료를 못 받았습니다</span>'; svShort(); return; }
   const sum=(k,n)=>R.slice(0,n).reduce((a,x)=>a+(x[k]||0),0), amt=(k,n)=>R.slice(0,n).reduce((a,x)=>a+(x[k]||0)*(x.close||0),0);
   const card=(lab,k)=>`<div><span class="ts">${lab}</span><b style="color:${svC(sum(k,5))}">5일 ${svWon(amt(k,5))}</b><span class="ts" style="color:${svC(sum(k,20))}">20일 ${svWon(amt(k,20))}</span></div>`;
-  const inv=[['개인','individual'],['외국인','foreigner'],['기관','institution'],['기타법인','other_corp']];
   const ins=[['금융투자','fin'],['보험','insu'],['투신','trust'],['사모','pef'],['은행','bank'],['기타금융','etc_fin'],['연기금','pension']];
-  const cols=_sv.flowK==='inv'?inv:ins;
-  box.innerHTML=`<div class="bx-h" style="align-items:center"><b>투자자별 수급</b><span class="ts">순매수 · 금액은 수량 × 그날 종가로 어림</span>
-    <span class="sv-seg"><button class="${_sv.flowK==='inv'?'on':''}" onclick="_sv.flowK='inv';svFlows()">투자자별</button><button class="${_sv.flowK==='ins'?'on':''}" onclick="_sv.flowK='ins';svFlows()">기관별</button></span></div>
+  const td=(x,k,cls)=>`<td class="${cls||''}" style="color:${svC(x[k])}">${svSg(x[k]||0)}</td>`;
+  box.innerHTML=`<div class="bx-h" style="align-items:center"><b>투자자별 수급</b><span class="ts">순매수 수량(주) · 위 금액은 수량 × 그날 종가로 어림</span></div>
     <div class="sv-sum">${card('외국인','foreigner')}${card('기관','institution')}${card('개인','individual')}</div>
-    <div style="overflow-x:auto"><table class="sv-ft"><thead><tr><th>날짜</th><th>종가</th>${cols.map(c=>`<th>${c[0]}</th>`).join('')}${_sv.flowK==='inv'?'<th>외국인 보유</th>':''}</tr></thead>
-    <tbody>${R.slice(0,20).map(x=>`<tr><td>${x.date.slice(5).replace('-','.')}</td><td>${x.close?Math.round(x.close).toLocaleString():'-'}</td>${cols.map(c=>`<td style="color:${svC(x[c[1]])}">${svSg(x[c[1]]||0)}</td>`).join('')}${_sv.flowK==='inv'?`<td>${x.f_hold!=null?(x.f_hold*100).toFixed(2)+'%':'-'}</td>`:''}</tr>`).join('')}</tbody></table></div>
-    <div class="ts" style="margin-top:6px">단위: 주 · 토스 기준 · 최근 20거래일</div>`;
+    <div style="overflow-x:auto"><table class="sv-ft"><thead>
+      <tr class="sv-grp"><th colspan="5"></th><th colspan="7" class="ins-g">기관 세부</th><th colspan="2"></th></tr>
+      <tr><th>날짜</th><th>종가</th><th>개인</th><th>외국인</th><th class="ins-h">기관계</th>${ins.map(c=>`<th class="ins">${c[0]}</th>`).join('')}<th>기타법인</th><th>외국인 보유</th></tr></thead>
+    <tbody>${R.slice(0,20).map(x=>`<tr><td>${x.date.slice(5).replace('-','.')}</td><td>${x.close?Math.round(x.close).toLocaleString():'-'}</td>${td(x,'individual')}${td(x,'foreigner')}${td(x,'institution','ins-h')}${ins.map(c=>td(x,c[1],'ins')).join('')}${td(x,'other_corp')}<td>${x.f_hold!=null?(x.f_hold*100).toFixed(2)+'%':'-'}</td></tr>`).join('')}</tbody></table></div>
+    <div class="ts" style="margin-top:6px">토스 기준 · 최근 20거래일 · 표는 옆으로 밀어서 보기</div>`;
   svShort();
 }
 function svShort(){
