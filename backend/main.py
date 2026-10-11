@@ -735,14 +735,6 @@ select{background:var(--c3);border:1px solid var(--ln);color:var(--bd);padding:6
   </div>
   </details>
 
-  <!-- 테마 종목 모달 -->
-  <div class="modal-bg" id="sector-modal-bg" onclick="if(event.target===this)closeSectorModal()">
-    <div class="modal">
-      <span class="close-btn" onclick="closeSectorModal()">✕</span>
-      <h2 id="sector-modal-title">테마 소속 종목</h2>
-      <div id="sector-modal-body"></div>
-    </div>
-  </div>
 </div>
 
 <!-- 시장 히트맵 탭 -->
@@ -989,6 +981,15 @@ select{background:var(--c3);border:1px solid var(--ln);color:var(--bd);padding:6
   </div>
 </div>
 
+<!-- 테마·섹터 종목 모달 (2026-10-11 탭 밖으로: 캘린더·오늘 탭에서도 뜨게) -->
+  <div class="modal-bg" id="sector-modal-bg" onclick="if(event.target===this)closeSectorModal()">
+    <div class="modal">
+      <span class="close-btn" onclick="closeSectorModal()">✕</span>
+      <h2 id="sector-modal-title">테마 소속 종목</h2>
+      <div id="sector-modal-body"></div>
+    </div>
+  </div>
+
 <!-- 캔들차트 모달 (토스증권 실시간) -->
 <div class="modal-bg" id="chart-modal-bg" onclick="if(event.target===this)closeChartModal()">
   <div class="modal cm-wide">
@@ -1195,11 +1196,11 @@ function renderHomeTop(d, live){
   document.getElementById('hc-market').innerHTML=FT+rows.map(r=>`<div class="hb-tile k-${r.k}" title="${r.t} — ${r.sub}"><div class="hb-th"><b>${r.t}</b><span class="hc-badge ${B[r.k][0]}">${r.bt||B[r.k][1]}</span></div><div class="hb-tv">${r.v}</div><div class="hb-ts">${r.sub}</div></div>`).join('');
   const ix=k=>{ const x=it[k]; if(!x) return ''; const c=x.pct>=0?'var(--up)':'var(--down)';
     return `<div class="hb-num" style="cursor:pointer" onclick="openIndexChart('${k==='코스피'?'KOSPI':'KOSDAQ'}','${k}')"><div class="l">${k}${x.status==='OPEN'?' · 장중':''}</div><div class="v">${x.close}</div><div class="s mono" style="color:${c}">${sg(x.pct)}%</div></div>`; };
-  const st=d.sectors_today||{}, pill=(x,c)=>`<span class="hc-pill ${c}" title="20일 순위 ${x.rank||'-'}위 (10일 전 ${x.rank_10ago||'-'}위)">${x.family} <b style="color:${x.chg>=0?'var(--up)':'var(--down)'}">${sg(x.chg)}%</b></span>`;
+  const st=d.sectors_today||{}, pill=(x,c)=>`<span class="hc-pill ${c}" style="cursor:pointer" onclick="openFamilyModal('${x.family}')" title="눌러서 종목 보기 · 20일 순위 ${x.rank||'-'}위 (10일 전 ${x.rank_10ago||'-'}위)">${x.family} <b style="color:${x.chg>=0?'var(--up)':'var(--down)'}">${sg(x.chg)}%</b></span>`;
   const cau=mvCaution(_mv);
   document.getElementById('hc-today').innerHTML=`<div class="hb-top"><span class="hb-verdict k-${vk}">${{g:'▲',n:'■',b:'▼'}[vk]} ${vt}</span>${cau?`<span class="hb-cau">${cau.replace(' → ',' · ')}</span>`:''}<span class="hb-sum">근거 ${rows.length}개 중 ${good}개 양호 · ${when}</span></div>
     <div class="hb-idx"><div class="hb-spark"><span class="hc-tg"><button data-s="KOSPI" onclick="hcSpark('KOSPI')">코스피</button><button data-s="FUT" onclick="hcSpark('FUT')">코200선물</button><button data-s="KOSDAQ" onclick="hcSpark('KOSDAQ')">코스닥</button></span><div class="hc-spark" id="hc-spark"></div><div class="hc-sx" id="hc-sx"></div></div>
-    ${ix('코스피')}<div class="hb-num" id="hb-fut" style="cursor:pointer" onclick="hcSpark('FUT')"><div class="l">코200선물</div><div class="v">-</div><div class="s mono">&nbsp;</div></div>${ix('코스닥')}${br.adv_pct!=null?`<div class="hb-num"><div class="l">오른 종목</div><div class="v">${br.adv_pct}%</div><div class="s" style="color:var(--muted);font-size:12px">조용한 종목 뺌</div></div>`:''}</div>
+    ${ix('코스피')}<div class="hb-num" id="hb-fut" style="cursor:pointer" onclick="openIndexChart('FUT','코스피200 선물')" title="눌러서 일봉 차트"><div class="l">코200선물</div><div class="v">-</div><div class="s mono">&nbsp;</div></div>${ix('코스닥')}${br.adv_pct!=null?`<div class="hb-num"><div class="l">오른 종목</div><div class="v">${br.adv_pct}%</div><div class="s" style="color:var(--muted);font-size:12px">조용한 종목 뺌</div></div>`:''}</div>
     ${(st.strong||[]).length?`<div class="hb-flow"><span class="k">강함</span>${st.strong.map(x=>pill(x,'up')).join('')}<span class="k">약함</span>${(st.weak||[]).map(x=>pill(x,'dn')).join('')}</div>`:''}`;      // 종베·스윙 장세 문구는 뺌 (2026-10-11: 추세 매수 '매매 가능'과 헷갈림) — '오늘 판단 자세히'에 그대로 있음
   hbFitChart();
 }
@@ -2066,6 +2067,27 @@ async function openSectorModal(sectorId, name){
   }catch(e){document.getElementById('sector-modal-body').innerHTML='<div style="color:var(--r);padding:16px">오류 발생</div>';}
 }
 function closeSectorModal(){document.getElementById('sector-modal-bg').classList.remove('show');}
+// 넓은 섹터(16개) 종목 — 오늘 카드의 강함·약함 칩을 누르면 (2026-10-11)
+async function openFamilyModal(fam){
+  document.getElementById('sector-modal-title').textContent=fam+' 종목';
+  const body=document.getElementById('sector-modal-body');
+  body.innerHTML='<div style="color:var(--mu);text-align:center;padding:20px">불러오는 중…</div>';
+  document.getElementById('sector-modal-bg').classList.add('show');
+  const all=window._rotMem||await (window._rotMemP||loadRotMembers()).catch(()=>null);
+  let d=all&&all.families&&all.families[fam]?{as_of:all.as_of,items:all.families[fam]}:null;
+  if(!d) d=await fetch(`${API}/sectors/rotation/members?family=${encodeURIComponent(fam)}`).then(r=>r.ok?r.json():null).catch(()=>null);
+  if(!d||!d.items||!d.items.length){ body.innerHTML='<div class="ts" style="padding:16px">종목이 없습니다</div>'; return; }
+  const c=n=>n>0?'var(--r)':n<0?'var(--b)':'var(--mu)', sg=n=>(n>0?'+':'')+n;
+  const line=x=>`<tr style="cursor:pointer" onclick="closeSectorModal();openChartModal('${x.code}','${x.name.replace(/'/g,'')}','')">
+    <td><b>${x.name}</b> <span class="ts">${x.code}</span></td><td style="color:${c(x.chg)};font-weight:600">${sg(x.chg)}%</td><td style="color:${c(x.ret20)}">${sg(x.ret20)}%</td>
+    <td style="${x.gap20>=20?'color:var(--r)':''}">${sg(x.gap20)}%</td><td style="${x.tv_x>=2?'font-weight:700;color:var(--strong)':''}">${x.tv_x}배</td><td class="ts">${x.tv.toLocaleString()}억</td></tr>`;
+  const first=d.items.slice(0,40), rest=d.items.slice(40);
+  window._famRest=rest.map(line).join('');
+  body.innerHTML=`<div class="ts" style="margin-bottom:8px">${d.items.length}종목 (하루 거래대금 10억↑) · ${d.as_of} 기준 · 오늘 등락 순 · 누르면 차트 · 거래 = 평소(20일 평균) 대비</div>
+    <div style="overflow-x:auto"><table class="pb-table"><thead><tr><th>종목</th><th>오늘</th><th>20일</th><th>20일선 이격</th><th>거래</th><th>거래대금</th></tr></thead>
+    <tbody id="fam-body">${first.map(line).join('')}</tbody></table></div>
+    ${rest.length?`<button class="btn btn-gray btn-sm" style="margin-top:8px" onclick="document.getElementById('fam-body').insertAdjacentHTML('beforeend',window._famRest);this.remove()">${rest.length}개 더 보기</button>`:''}`;
+}
 
 
 // ── 시장 히트맵(트리맵) ────────────────────────────────────────
@@ -2702,7 +2724,7 @@ async function openChartModal(code, name, spikeDate){
 async function openIndexChart(sym, name){
   _cm={code:null,tf:'1d',cache:{}}; document.getElementById('cm-tf').style.display='none';
   document.getElementById('cm-panel').innerHTML='';
-  document.getElementById('chart-modal-title').textContent = `${name} 지수 — 일봉`;
+  document.getElementById('chart-modal-title').textContent = `${name}${sym==='FUT'?'':' 지수'} — 일봉`;
   document.getElementById('chart-modal-note').textContent = '로딩 중…';
   lwClear('cm-chart');
   document.getElementById('chart-modal-bg').classList.add('show');

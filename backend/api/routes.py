@@ -1777,9 +1777,9 @@ def get_index_candles(symbol: str, count: int = 150):
     """코스피·코스닥 지수 일봉 (네이버 fchart) — 오늘 탭 지수 카드를 누르면 차트 (2026-10-07). 토스 캔들과 같은 모양으로 돌려줌."""
     import re as _re  # noqa: PLC0415
     import requests  # noqa: PLC0415
-    sym = {"KOSPI": "KOSPI", "KOSDAQ": "KOSDAQ"}.get(symbol.upper())
+    sym = {"KOSPI": "KOSPI", "KOSDAQ": "KOSDAQ", "FUT": "FUT"}.get(symbol.upper())      # FUT = 코스피200 선물 (2026-10-11)
     if not sym:
-        raise HTTPException(status_code=400, detail="KOSPI 또는 KOSDAQ")
+        raise HTTPException(status_code=400, detail="KOSPI · KOSDAQ · FUT")
     r = requests.get("https://fchart.stock.naver.com/sise.nhn", timeout=10, headers={"User-Agent": "Mozilla/5.0"},
                      params={"symbol": sym, "timeframe": "day", "count": str(max(30, min(count, 400))), "requestType": "0"})
     out = []
