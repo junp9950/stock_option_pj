@@ -513,6 +513,7 @@ select{background:var(--c3);border:1px solid var(--ln);color:var(--bd);padding:6
 .me-g .bx,.me-g2 .bx{margin:0}.me-g{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:16px}.me-g2{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:16px;align-items:start}
 .me-row{display:grid;grid-template-columns:minmax(0,1fr) auto auto;gap:10px;align-items:center;padding:8px 2px;border-bottom:1px solid var(--line2);font-size:13px}
 .me-ed{display:flex;gap:6px}.me-ed input{width:110px}.me-add{display:flex;flex-wrap:wrap;gap:6px;margin:4px 0 10px}.me-add input,.me-add select{flex:1;min-width:90px}
+#me-status .sv-m .k{white-space:nowrap}#me-status .sv-m .v{white-space:normal;overflow-wrap:anywhere}
 .me-jobs{display:grid;grid-template-columns:repeat(auto-fill,minmax(260px,1fr));gap:2px 16px;font-size:12.5px}
 @media(max-width:900px){.me-g,.me-g2{grid-template-columns:1fr}.me-ed input{width:84px}}
 #sv-rep .sv-rl{display:grid;grid-template-columns:1fr;column-gap:24px}
@@ -3639,9 +3640,9 @@ async function meStatus(){
   const recent=s=>s&&(s.startsWith(mmdd)||(()=>{ const y=new Date(today-864e5); return s.startsWith(`${String(y.getMonth()+1).padStart(2,'0')}/${String(y.getDate()).padStart(2,'0')}`); })());
   el.innerHTML=`<div class="me-g2">
    <section class="bx"><div class="bx-h"><b>백업</b></div>
-    <div class="sv-m"><span class="k">서버 안 · 04:30</span><span>${ok(bl[0]&&recent(bl[0].at))}</span><span class="v">${bl[0]?bl[0].at+' · '+bl[0].mb+'MB':'없음'}</span></div>
-    <div class="sv-m"><span class="k">서버 밖 · 05:00</span><span>${ok(recent(bo.at))}</span><span class="v">${bo.at?bo.at+' · '+bo.mb+'MB · '+bo.n+'개 보관':'없음'}</span></div>
-    <div class="ts" style="margin-top:4px">${bo.repo||''}${bo.log?' · '+bo.log:''}</div>
+    <div class="sv-m"><span class="k">서버 안 · 04:30 ${ok(bl[0]&&recent(bl[0].at))}</span><span></span><span class="v">${bl[0]?bl[0].at+' · '+bl[0].mb+'MB':'없음'}</span></div>
+    <div class="sv-m"><span class="k">서버 밖 · 05:00 ${ok(recent(bo.at))}</span><span></span><span class="v">${bo.at?bo.at+' · '+bo.mb+'MB':'없음'}</span></div>
+    <div class="ts" style="margin-top:4px">${bo.repo||''}${bo.n?' · 보관 '+bo.n+'개':''}${bo.log?' · '+bo.log:''}</div>
     <div class="bx-h" style="margin-top:14px"><b>데이터</b></div>
     <div class="sv-m"><span class="k">일봉 마지막</span><span></span><span class="v">${(d.data||{}).daily||'-'}</span></div>
     <div class="sv-m"><span class="k">분봉 마지막</span><span></span><span class="v">${((d.data||{}).minute||'-').slice(0,16)}</span></div>

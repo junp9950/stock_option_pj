@@ -90,12 +90,16 @@ def _val(s: str | None) -> str | None:
 
 
 def _get(url: str, **kw):
-    try:
-        r = requests.get(url, headers=UA, timeout=20, **kw)
-        return r.json() if r.ok else None
-    except Exception as exc:  # noqa: BLE001
-        logger.warning("일정 조회 실패 %s: %s", url.split("?")[0], type(exc).__name__)
-        return None
+    # DART·Nasdaq이 잠깐 점검 화면(HTML)이나 시간 초과를 낼 때가 있어 두 번 더 (2026-10-11 일요일 06:50 DART JSONDecodeError)
+    for k in range(3):
+        try:
+            r = requests.get(url, headers=UA, timeout=20, **kw)
+            return r.json() if r.ok else None
+        except Exception as exc:  # noqa: BLE001
+            if k == 2:
+                logger.warning("일정 조회 실패 %s: %s", url.split("?")[0], type(exc).__name__)
+                return None
+            time.sleep(3 + 5 * k)
 
 
 # ── 경제지표 (Nasdaq) ─────────────────────────────────────────

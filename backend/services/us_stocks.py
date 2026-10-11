@@ -359,13 +359,25 @@ def indices() -> dict:
     return _indices_calc()
 
 
+def _nget(url: str, h: dict):
+    """네이버 해외 API — 가끔 응답이 늦어 끊기므로 한 번 더 (2026-10-11 20:54 ReadTimeout)."""
+    for k in range(2):
+        try:
+            return requests.get(url, headers=h, timeout=8).json()
+        except (requests.Timeout, requests.ConnectionError):
+            if k:
+                raise
+            time.sleep(1.5)
+
+
 def _indices_calc() -> dict:
     h = {"User-Agent": "Mozilla/5.0"}
     out = []
+    old = {x["code"]: x for x in ((_IDX.get("x") or (0, {}))[1].get("items") or [])}
     for code, kind, nm, etf, ext in IDX3:
         try:
-            b = requests.get(f"https://api.stock.naver.com/{kind}/{code}/basic", headers=h, timeout=8).json()
-            d = requests.get(f"https://api.stock.naver.com/chart/foreign/{kind}/{code}?periodType=dayCandle", headers=h, timeout=8).json().get("priceInfos") or []
+            b = _nget(f"https://api.stock.naver.com/{kind}/{code}/basic", h)
+            d = _nget(f"https://api.stock.naver.com/chart/foreign/{kind}/{code}?periodType=dayCandle", h).get("priceInfos") or []
             close = float(str(b.get("closePrice")).replace(",", ""))
             pct = float(b.get("fluctuationsRatio") or 0)
             prev = round(close / (1 + pct / 100), 2)
@@ -383,10 +395,12 @@ def _indices_calc() -> dict:
                         "etf_prev": _etf_prev(etf, pts), "daily": cl[-60:]})
         except Exception as exc:  # noqa: BLE001
             logger.warning("미국 지수 실패 %s: %s", code, type(exc).__name__)
+            if code in old:      # 하나 실패해도 화면에서 그 지수가 빠지지 않게 지난 값 그대로 (2026-10-11)
+                out.append(old[code])
     # 시장 판단(국장과 같은 생각): S&P500이 20일선 위 + 20일선이 오르는 중이면 상승, 아래 + 내리는 중이면 하락
     verdict = None
     try:
-        sp = requests.get("https://api.stock.naver.com/chart/foreign/index/.INX?periodType=dayCandle", headers=h, timeout=8).json().get("priceInfos") or []
+        sp = _nget("https://api.stock.naver.com/chart/foreign/index/.INX?periodType=dayCandle", h).get("priceInfos") or []
         cl = [float(x["closePrice"]) for x in sp]
         if len(cl) >= 30:
             ma, ma_prev = sum(cl[-20:]) / 20, sum(cl[-25:-5]) / 20
@@ -395,7 +409,7 @@ def _indices_calc() -> dict:
                        "cum20_pct": round((cl[-1] / cl[-21] - 1) * 100, 2)}
     except Exception:  # noqa: BLE001
         pass
-    res = {"items": out, "verdict": verdict}
+    res = {"items": out, "verdict": verdict or (_IDX.get("x") or (0, {}))[1].get("verdict")}
     if out:
         _IDX["x"] = (time.time(), res); _disk_save()
     return res
