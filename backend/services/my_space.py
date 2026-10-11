@@ -9,7 +9,7 @@ import os
 import re
 import subprocess
 import time
-from datetime import datetime
+from datetime import datetime, timedelta
 from pathlib import Path
 
 from sqlalchemy import text
@@ -132,7 +132,8 @@ def status(db: Session) -> dict:
     except Exception:  # noqa: BLE001
         out["jobs"] = []
     try:
-        out["joblog"] = [{"at": str(c)[:16], "stage": st, "status": s_, "msg": _clean((m or "")[:160])} for c, st, s_, m in db.execute(text(
+        # job_logs.created_at 은 UTC(datetime.utcnow)로 쌓임 → 한국 시간으로
+        out["joblog"] = [{"at": str(c + timedelta(hours=9))[:16] if c else "", "stage": st, "status": s_, "msg": _clean((m or "")[:160])} for c, st, s_, m in db.execute(text(
             "select created_at, stage, status, message from job_logs order by id desc limit 12")).all()]
     except Exception:  # noqa: BLE001
         out["joblog"] = []

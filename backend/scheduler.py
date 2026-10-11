@@ -96,6 +96,11 @@ def start_scheduler() -> BackgroundScheduler:
         _tg("send_summary_once")
 
     def _daily_pipeline_job() -> None:
+        from backend.utils.dates import is_trading_day  # noqa: PLC0415
+        if not is_trading_day(date.today()):
+            # 장 없는 날(주말·휴일)에 지난 장 자료를 다시 받던 것 멈춤 (2026-10-11 일요일 15:41에 돌다가 배포로 끊김)
+            logger.info("Scheduler: 장 없는 날 — 15:41 수집 건너뜀")
+            return
         if _has_today_data():
             # 이미 오늘 데이터 있으면 스킵 (재시도 중 이미 성공한 경우)
             logger.info("Scheduler: today's data already collected, skipping")
