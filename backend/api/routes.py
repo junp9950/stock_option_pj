@@ -2051,6 +2051,11 @@ def warm_caches(db: Session) -> None:
     get_bottom_box(db=db)
     get_support_setups(db=db)
     get_large_pullback(db=db)
+    try:
+        from backend.services.stock_notes import notes  # noqa: PLC0415
+        notes(db)                      # 실적 D-n · 위험 공시 꼬리표 (30분마다)
+    except Exception:  # noqa: BLE001
+        pass
     get_dashboard(db=db)        # 첫 화면 '오늘'
     get_my_pattern(db=db)       # 종베 탭 — dashboard와 캐시 이름이 달라 따로 데워야 함 (2026-10-07 종베 탭이 하루 전 데이터로 남아 있었음)
 
@@ -2260,7 +2265,12 @@ def get_journal_holdings(request: Request, db: Session = Depends(get_db)):
 def get_workspace_list(db: Session = Depends(get_db)):
     """첫 화면 왼쪽 목록: 오늘 후보 · 보유 · 관심."""
     from backend.services.stock_signals import workspace_list  # noqa: PLC0415
-    return workspace_list(db)
+    from backend.services.stock_notes import notes_quick  # noqa: PLC0415
+    r = dict(workspace_list(db) or {})
+    nq = notes_quick()      # 실적 D-n · ⚠ 위험 공시 꼬리표 (2026-10-11) — 계산해 둔 것만
+    codes = {x.get("code") for k in ("candidates", "track", "track_done") if isinstance(r.get(k), list) for x in r[k] if isinstance(x, dict)}
+    r["notes"] = {c: nq[c] for c in codes if c in nq}
+    return r
 
 
 @router.get("/stock/{code}/profile")

@@ -196,8 +196,11 @@ def _kr_earnings(db: Session, back_days: int = 40) -> int:
         key = os.getenv("DART_API_KEY", "")
     if not key:
         return 0
-    caps = db.execute(text("select code, name from stocks where is_active and market_cap is not null order by market_cap desc limit 200")).all()
-    rank = {c: i for i, (c, _) in enumerate(caps)}
+    # 대상: 거래대금 20일 평균 10억↑ 종목 전부(매수 신호 후보 범위, 약 1,000개) — 중요도는 시총 순위로 (2026-10-11 '실적 D-n' 꼬리표용으로 넓힘)
+    caps = db.execute(text("select stock_code from spot_daily_prices where trading_date > current_date - 30 group by stock_code "
+                           "having avg(close_price * volume) >= 1e9 order by avg(close_price * volume) desc")).all()
+    cap_rank = {c: i for i, (c,) in enumerate(db.execute(text("select code from stocks where is_active and market_cap is not null order by market_cap desc")).all())}
+    rank = {c: cap_rank.get(c, 999) for (c,) in caps}
     seen = set(db.execute(text("select rcept_no from market_events_dart_seen")).scalars().all())
     end, bgn = date.today(), date.today() - timedelta(days=back_days)
     found, prelim_cnt = [], {}
@@ -223,7 +226,7 @@ def _kr_earnings(db: Session, back_days: int = 40) -> int:
     for r in found:
         code, rn = r["stock_code"], r["rcept_no"]
         name = r["corp_name"]
-        imp = 2 if rank[code] < 30 else 1
+        imp = 2 if rank[code] < 30 else 1 if rank[code] < 200 else 0      # 0 = 캘린더엔 안 보이고 꼬리표에만 (시총 순위 밖 = 999)
         if "잠정)실적" in r["report_nm"]:
             # 매달 내는 판매·매출 잠정치(현대차·기아·카지노 등)는 40일 안에 두 번 이상 나와서 거른다 — 분기 잠정실적만 남김
             d = datetime.strptime(r["rcept_dt"], "%Y%m%d").date()

@@ -10,6 +10,15 @@ from __future__ import annotations
 from sqlalchemy.orm import Session
 
 
+def _tag(code: str) -> str:
+    """실적 D-n · ⚠ 위험 공시 꼬리표 (2026-10-11) — 계산해 둔 것만, 실패하면 빈칸."""
+    try:
+        from backend.services.stock_notes import notes_quick  # noqa: PLC0415
+        return "".join(f" · <b>{x['label']}</b>" for x in notes_quick().get(code) or [])
+    except Exception:  # noqa: BLE001
+        return ""
+
+
 def text_now(db: Session, k: int = 8) -> str | None:
     from backend.services.stock_signals import close_scores_now, market_breadth  # noqa: PLC0415
     from backend.services.telegram import market_status  # noqa: PLC0415
@@ -57,7 +66,7 @@ def text_now(db: Session, k: int = 8) -> str | None:
                               + (f" · ⚠️ 경고: {ls['warn']}" if ls.get("warn") else ""))
             for c, v in leads[:5]:
                 lead_lines.append(f"  · <b>{names.get(c, c)}</b> RS {v.get('rs') or 0:.0f} · " + (" · ".join(v.get("lead_state") or []) or "자리 표시 없음(오르는 날)")
-                                  + f" · 스탑로스 {v['stop']:,.0f} (-{v['risk'] * 100:.1f}%)")
+                                  + f" · 스탑로스 {v['stop']:,.0f} (-{v['risk'] * 100:.1f}%)" + _tag(c))
     except Exception:  # noqa: BLE001
         pass
     if not rows:
@@ -76,7 +85,7 @@ def text_now(db: Session, k: int = 8) -> str | None:
     out.append("순서: 강도(RS) 높은 순 — 칸이 모자라면 위에서부터 (12년 검증)")
     for c, v in rows[:k]:
         out.append(f"{'✅' if v['risk'] <= 0.03 and not v.get('hot') and not v.get('semi') else '·'} <b>{names.get(c, c)}</b> RS {v.get('rs') or 0:.0f} · {'이평선 돌파 · ' if v.get('ema') else ''}{'과열 매수(이번 장) · 수량 절반 · ' if v.get('hot') else ''}{'반도체·AI 특별 · 수량 절반 · ' if v.get('semi') else ''}{v['score']}/7 · 스탑로스 {v['stop']:,.0f} (-{v['risk'] * 100:.1f}%)"
-                   + (f" · {srk[c][1]} {srk[c][0]}위" if srk.get(c, (99,))[0] <= 8 else " · 섹터 밖"))
+                   + (f" · {srk[c][1]} {srk[c][0]}위" if srk.get(c, (99,))[0] <= 8 else " · 섹터 밖") + _tag(c))
     out += lead_lines
     out.append("파는 법: 사면 바로 스탑로스 예약 (정규장만) · 21일선 아래 종가면 다음 날 아침 정리")
     out.append("<i>3년(같은 위험 금액당): 손절폭 3%↓ 1.4배 · 3~5% 0.55배 · 5~8% 0.35배 · 8%↑ 0.1배 벎 → 수량은 손절폭에 맞춰</i>")
