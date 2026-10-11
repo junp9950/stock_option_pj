@@ -1689,7 +1689,7 @@ def _chosung(s: str) -> str:
 
 
 @router.get("/stocks/search")
-def search_stocks(q: str = "", db: Session = Depends(get_db)):
+def search_stocks(q: str = "", m: str = "", db: Session = Depends(get_db)):
     """종목 검색 — 이름·코드·초성(ㅅㅇㄴ → SK이노베이션) (2026-10-09 사용자 "종목 검색을 할 수 있게"). 최근 시세 있는 종목만, 12개."""
     import time as _t  # noqa: PLC0415
     from backend.services.watchlist import ALIAS  # noqa: PLC0415
@@ -1706,7 +1706,7 @@ def search_stocks(q: str = "", db: Session = Depends(get_db)):
         _SEARCH.update(t=_t.time(), rows=[(c, n, n.upper().replace(" ", ""), _chosung(n.upper().replace(" ", "")), float(px or 0), float(ch or 0), float(tv or 0))
                                           for c, n, px, ch, tv in rows if n])
     hits = []
-    for c, n, nu, cho, px, ch, tv in _SEARCH["rows"]:
+    for c, n, nu, cho, px, ch, tv in (_SEARCH["rows"] if m != "us" else []):
         if q == c or q == nu:
             rank = 0
         elif c.startswith(q) or nu.startswith(q):
@@ -1723,7 +1723,7 @@ def search_stocks(q: str = "", db: Session = Depends(get_db)):
     # 미국 종목 (2026-10-11 차트 보기만) — 티커·영문·한글 이름, 한국 종목 뒤에 시총 순
     try:
         from backend.services.us_stocks import universe  # noqa: PLC0415
-        for x in universe():
+        for x in (universe() if m != "kr" else []):
             sym, en, ko = x["code"].upper(), x["en"].upper().replace(" ", ""), x["name"].upper().replace(" ", "")
             r_ = 0 if q == sym else 1 if sym.startswith(q) or ko.startswith(q) else 2 if (len(q) >= 3 and q in en) or (len(q) >= 2 and q in ko) else None
             if r_ is not None:
@@ -1732,6 +1732,33 @@ def search_stocks(q: str = "", db: Session = Depends(get_db)):
         pass
     hits.sort()
     return {"items": [{"code": c, "name": n, "close": px, "chg": round(ch, 2)} for _, _, c, n, px, ch in hits[:12]]}
+
+
+@router.get("/us/overview")
+def get_us_overview(db: Session = Depends(get_db)):
+    """미장 오늘 (2026-10-11): 지수(ETF) · 섹터 · 대형주 등락 · 거래대금 · 이번 주 미국 일정 — 지연 시세."""
+    from backend.services.us_stocks import overview  # noqa: PLC0415
+    return overview(db)
+
+
+@router.get("/us/indices")
+def get_us_indices():
+    """미장 오늘 위 카드: 나스닥 · 나스닥100 선물 · S&P500 (네이버, 선물 10분 지연) + 장중 선(ETF) + S&P500 기준 시장 판단."""
+    from backend.services.us_stocks import indices  # noqa: PLC0415
+    return indices()
+
+
+@router.get("/us/heatmap")
+def get_us_heatmap(limit: int = 300):
+    from backend.services.us_stocks import heat_items  # noqa: PLC0415
+    return {"items": heat_items(min(limit, 600))}
+
+
+@router.get("/us/rank")
+def get_us_rank(sort: str = "dv", limit: int = 100, min_cap: float = 1):
+    """min_cap은 10억 달러 단위."""
+    from backend.services.us_stocks import rank  # noqa: PLC0415
+    return {"items": rank(sort, min(limit, 300), min_cap * 1e9)}
 
 
 @router.get("/stocks/short-watch")
@@ -2061,6 +2088,11 @@ def warm_caches(db: Session) -> None:
     get_bottom_box(db=db)
     get_support_setups(db=db)
     get_large_pullback(db=db)
+    try:
+        from backend.services.us_stocks import indices as _usi, overview as _uso  # noqa: PLC0415
+        _usi(); _uso(db)               # 미장 오늘 (5분·30분 캐시)
+    except Exception:  # noqa: BLE001
+        pass
     try:
         from backend.services.stock_notes import notes  # noqa: PLC0415
         notes(db)                      # 실적 D-n · 위험 공시 꼬리표 (30분마다)

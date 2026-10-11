@@ -22,7 +22,7 @@ _CANDLE: dict = {}
 KO = {"BRK.B": "버크셔 해서웨이", "SPY": "S&P500 ETF", "QQQ": "나스닥100 ETF", "SOXX": "반도체 ETF(SOXX)", "SMH": "반도체 ETF(SMH)", "TQQQ": "나스닥 3배 ETF",
       "SOXL": "반도체 3배 ETF", "IONQ": "아이온큐", "RGTI": "리게티", "OKLO": "오클로", "SMR": "뉴스케일", "MSTR": "스트래티지", "HOOD": "로빈후드", "RKLB": "로켓랩",
       "ASTS": "AST 스페이스모바일", "TEM": "템퍼스 AI", "CRWV": "코어위브", "NBIS": "네비우스", "SNOW": "스노우플레이크", "CRWD": "크라우드스트라이크",
-      "PANW": "팔로알토", "NET": "클라우드플레어", "SHOP": "쇼피파이", "ABNB": "에어비앤비", "AVAV": "에어로바이론먼트", "LLY": "일라이 릴리", "VST": "비스트라"}
+      "PANW": "팔로알토", "NET": "클라우드플레어", "SHOP": "쇼피파이", "ABNB": "에어비앤비", "AVAV": "에어로바이론먼트", "LLY": "일라이 릴리", "VST": "비스트라", "GOOG": "알파벳(구글) C", "TSM": "TSMC", "BRK.A": "버크셔 해서웨이 A"}
 ETFS = [("SPY", "SPDR S&P 500 ETF"), ("QQQ", "Invesco QQQ"), ("SOXX", "iShares Semiconductor ETF"), ("SMH", "VanEck Semiconductor ETF"),
         ("TQQQ", "ProShares UltraPro QQQ"), ("SOXL", "Direxion Semiconductor Bull 3X"), ("DIA", "SPDR Dow Jones ETF"), ("IWM", "iShares Russell 2000 ETF")]
 
@@ -33,7 +33,7 @@ def is_us(code: str) -> bool:
 
 def universe() -> list[dict]:
     hit = _LIST.get("u")
-    if hit and time.time() - hit[0] < 7 * 86400:
+    if hit and time.time() - hit[0] < 3600:      # 등락·거래량도 같이 쓰므로 1시간마다 (요청 한 번, 0.5초)
         return hit[1]
     try:
         from backend.collector.market_events import US_EARNINGS  # noqa: PLC0415
@@ -55,13 +55,14 @@ def universe() -> list[dict]:
             nm = re.sub(r"\s+(Common Stock|Class [A-C] Common Stock|Ordinary Shares|American Depositary Shares.*|Inc\.?|Corporation|Corp\.?)(\s.*)?$", "",
                         (r.get("name") or "").strip()).strip() or sym
             out.append({"code": sym, "name": ko.get(sym, nm), "en": nm, "cap": cap, "sector": r.get("sector") or "", "industry": r.get("industry") or "",
-                        "close": float(str(r.get("lastsale") or "0").replace("$", "") or 0), "chg": float(str(r.get("pctchange") or "0").replace("%", "") or 0)})
+                        "close": float(str(r.get("lastsale") or "0").replace("$", "") or 0), "chg": float(str(r.get("pctchange") or "0").replace("%", "") or 0),
+                        "vol": float(r.get("volume") or 0)})
     except Exception as exc:  # noqa: BLE001
         logger.warning("미국 종목 목록 실패: %s", type(exc).__name__)
         if hit:
             return hit[1]
     have = {x["code"] for x in out}
-    out += [{"code": s, "name": ko.get(s, n), "en": n, "cap": 0, "sector": "ETF", "industry": "ETF", "close": 0, "chg": 0} for s, n in ETFS if s not in have]
+    out += [{"code": s, "name": ko.get(s, n), "en": n, "cap": 0, "sector": "ETF", "industry": "ETF", "close": 0, "chg": 0, "vol": 0} for s, n in ETFS if s not in have]
     out.sort(key=lambda x: -x["cap"])
     if out:
         _LIST["u"] = (time.time(), out)
@@ -150,3 +151,119 @@ def candles(code: str, tf: str = "1d", ext: bool = False) -> list[dict]:
     if len(_CANDLE) > 300:
         _CANDLE.clear()
     return out
+
+
+SECTOR_KO = {"Technology": "기술", "Finance": "금융", "Health Care": "헬스케어", "Consumer Discretionary": "경기소비재", "Industrials": "산업재",
+             "Energy": "에너지", "Utilities": "유틸리티", "Real Estate": "부동산", "Basic Materials": "소재", "Consumer Staples": "필수소비재",
+             "Telecommunications": "통신", "Miscellaneous": "기타", "ETF": "ETF", "": "기타"}
+INDEX = [("SPY", "S&P500"), ("QQQ", "나스닥100"), ("DIA", "다우"), ("SOXX", "반도체(SOX)"), ("IWM", "러셀2000")]
+
+
+def overview(db=None) -> dict:
+    """미장 오늘: 지수(ETF로 대신) · 섹터 등락(시총 가중) · 대형주 많이 오른/내린 · 거래대금 많은 · 이번 주 미국 일정."""
+    L = [x for x in universe() if x["cap"] > 0]
+    idx = []
+    for sym, nm in INDEX:
+        c = candles(sym, "1d")[-130:]
+        if len(c) >= 2:
+            cl, pv = float(c[-1]["closePrice"]), float(c[-2]["closePrice"])
+            idx.append({"code": sym, "name": nm, "close": cl, "chg": round((cl / pv - 1) * 100, 2), "date": c[-1]["timestamp"][:10],
+                        "spark": [round(float(x["closePrice"]), 2) for x in c[-60:]],
+                        "ma20": sum(float(x["closePrice"]) for x in c[-20:]) / 20})
+    sec: dict = {}
+    for x in L:
+        k = SECTOR_KO.get(x["sector"], x["sector"] or "기타")
+        d = sec.setdefault(k, {"name": k, "cap": 0.0, "w": 0.0, "n": 0, "up": 0, "lead": []})
+        d["cap"] += x["cap"]; d["w"] += x["cap"] * x["chg"]; d["n"] += 1; d["up"] += x["chg"] > 0
+        d["lead"].append(x)
+    sectors = []
+    for d in sec.values():
+        if d["n"] < 5:
+            continue
+        top = sorted(d["lead"], key=lambda x: -x["cap"])[:4]
+        sectors.append({"name": d["name"], "chg": round(d["w"] / d["cap"], 2) if d["cap"] else 0, "n": d["n"], "up_pct": round(d["up"] / d["n"] * 100),
+                        "leaders": [{"code": x["code"], "name": x["name"], "chg": x["chg"]} for x in top]})
+    sectors.sort(key=lambda x: -x["chg"])
+    big = [x for x in L if x["cap"] >= 1e10]
+    pick = lambda arr: [{"code": x["code"], "name": x["name"], "close": x["close"], "chg": x["chg"], "cap": x["cap"], "dv": x["close"] * x["vol"]} for x in arr]
+    out = {"index": idx, "sectors": sectors, "gainers": pick(sorted(big, key=lambda x: -x["chg"])[:10]), "losers": pick(sorted(big, key=lambda x: x["chg"])[:10]),
+           "active": pick(sorted(L, key=lambda x: -(x["close"] * x["vol"]))[:15]), "breadth": {"up": sum(x["chg"] > 0 for x in L), "down": sum(x["chg"] < 0 for x in L), "n": len(L)}}
+    if db is not None:
+        try:
+            from datetime import date  # noqa: PLC0415
+            from backend.collector.market_events import events  # noqa: PLC0415
+            out["events"] = [e for e in events(db, date.today(), date.today() + timedelta(days=7)) if e["country"] == "US" and e["importance"] >= 1][:30]
+        except Exception:  # noqa: BLE001
+            out["events"] = []
+    return out
+
+
+def heat_items(limit: int = 300) -> list[dict]:
+    L = sorted([x for x in universe() if x["cap"] > 0], key=lambda x: -x["cap"])[:limit]
+    return [{"code": x["code"], "name": x["name"], "sector": SECTOR_KO.get(x["sector"], x["sector"] or "기타"), "market_cap": x["cap"], "change_pct": x["chg"]} for x in L]
+
+
+def rank(sort: str = "dv", limit: int = 100, min_cap: float = 1e9) -> list[dict]:
+    L = [x for x in universe() if x["cap"] >= min_cap]
+    key = {"dv": lambda x: -(x["close"] * x["vol"]), "cap": lambda x: -x["cap"], "up": lambda x: -x["chg"], "down": lambda x: x["chg"]}.get(sort)
+    L = sorted(L, key=key)[:limit]
+    return [{"code": x["code"], "name": x["name"], "en": x["en"], "close": x["close"], "chg": x["chg"], "cap": x["cap"], "dv": x["close"] * x["vol"],
+             "sector": SECTOR_KO.get(x["sector"], x["sector"] or "기타"), "industry": x["industry"]} for x in L]
+
+
+# ── 미장 오늘 위 카드: 나스닥 · 나스닥100 선물 · S&P500 (국장 코스피 · 코200선물 · 코스닥 자리) ──
+IDX3 = [(".IXIC", "index", "나스닥", "QQQ", False), ("NQcv1", "futures", "나스닥100 선물", "QQQ", True), (".INX", "index", "S&P500", "SPY", False)]
+_IDX: dict = {}
+
+
+def _etf_prev(etf: str, pts: list) -> float | None:
+    """선 그래프 기준선 = 그 세션 전날 ETF 종가."""
+    if not pts:
+        return None
+    first_us = datetime.fromtimestamp(pts[0]["t"], tz=ZoneInfo("UTC")).replace(tzinfo=KST).astimezone(ET).date().isoformat()
+    d = [x for x in candles(etf, "1d") if x["timestamp"][:10] < first_us]
+    return float(d[-1]["closePrice"]) if d else None
+
+
+def indices() -> dict:
+    hit = _IDX.get("x")
+    if hit and time.time() - hit[0] < 300:
+        return hit[1]
+    h = {"User-Agent": "Mozilla/5.0"}
+    out = []
+    for code, kind, nm, etf, ext in IDX3:
+        try:
+            b = requests.get(f"https://api.stock.naver.com/{kind}/{code}/basic", headers=h, timeout=8).json()
+            d = requests.get(f"https://api.stock.naver.com/chart/foreign/{kind}/{code}?periodType=dayCandle", headers=h, timeout=8).json().get("priceInfos") or []
+            close = float(str(b.get("closePrice")).replace(",", ""))
+            pct = float(b.get("fluctuationsRatio") or 0)
+            prev = round(close - float(str(b.get("compareToPreviousClosePrice") or 0).replace(",", "")) * (1 if pct >= 0 else -1), 2)
+            cl = [float(x["closePrice"]) for x in d]
+            ma20 = sum(cl[-20:]) / 20 if len(cl) >= 20 else None
+            # 장중 선: 지수 분봉은 못 받아서 같은 방향 ETF 1분봉으로 (선물 자리는 장 전·후 포함)
+            m = candles(etf, "5m", ext)
+            last_day = m[-1]["timestamp"][:10] if m else ""
+            if m and not ext:      # 마지막 한 세션 (한국 시각으로 22:30~05:00이라 날짜가 걸쳐서, 마지막 봉에서 8시간 안)
+                t_end = m[-1]["t"]; pts = [x for x in m if t_end - x["t"] <= 7 * 3600]
+            else:
+                t_end = m[-1]["t"] if m else 0; pts = [x for x in m if t_end - x["t"] <= 20 * 3600]
+            out.append({"code": code, "name": nm, "close": close, "pct": pct, "prev": prev, "ma20": ma20, "date": (b.get("localTradedAt") or "")[:10],
+                        "delay": b.get("delayTimeName"), "etf": etf, "points": [[x["timestamp"][11:16], float(x["closePrice"])] for x in pts],
+                        "etf_prev": _etf_prev(etf, pts), "daily": cl[-60:]})
+        except Exception as exc:  # noqa: BLE001
+            logger.warning("미국 지수 실패 %s: %s", code, type(exc).__name__)
+    # 시장 판단(국장과 같은 생각): S&P500이 20일선 위 + 20일선이 오르는 중이면 상승, 아래 + 내리는 중이면 하락
+    verdict = None
+    try:
+        sp = requests.get("https://api.stock.naver.com/chart/foreign/index/.INX?periodType=dayCandle", headers=h, timeout=8).json().get("priceInfos") or []
+        cl = [float(x["closePrice"]) for x in sp]
+        if len(cl) >= 30:
+            ma, ma_prev = sum(cl[-20:]) / 20, sum(cl[-25:-5]) / 20
+            above, up = cl[-1] > ma, ma > ma_prev
+            verdict = {"state": "상승" if above and up else "하락" if not above and not up else "횡보", "vs_ma20_pct": round((cl[-1] / ma - 1) * 100, 2),
+                       "cum20_pct": round((cl[-1] / cl[-21] - 1) * 100, 2)}
+    except Exception:  # noqa: BLE001
+        pass
+    res = {"items": out, "verdict": verdict}
+    _IDX["x"] = (time.time(), res)
+    return res
