@@ -504,6 +504,11 @@ select{background:var(--c3);border:1px solid var(--ln);color:var(--bd);padding:6
   .us-evs{grid-template-columns:1fr}.us-sr{grid-template-columns:72px 50px 56px minmax(0,1fr)}
   .mk-seg{position:sticky;left:0;z-index:3;background:var(--hdr);box-shadow:6px 0 8px var(--hdr)}
 }
+.me-g .bx,.me-g2 .bx{margin:0}.me-g{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:16px}.me-g2{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:16px;align-items:start}
+.me-row{display:grid;grid-template-columns:minmax(0,1fr) auto auto;gap:10px;align-items:center;padding:8px 2px;border-bottom:1px solid var(--line2);font-size:13px}
+.me-ed{display:flex;gap:6px}.me-ed input{width:110px}.me-add{display:flex;flex-wrap:wrap;gap:6px;margin:4px 0 10px}.me-add input,.me-add select{flex:1;min-width:90px}
+.me-jobs{display:grid;grid-template-columns:repeat(auto-fill,minmax(260px,1fr));gap:2px 16px;font-size:12.5px}
+@media(max-width:900px){.me-g,.me-g2{grid-template-columns:1fr}.me-ed input{width:84px}}
 #sv-rep .sv-rl{display:grid;grid-template-columns:1fr;column-gap:24px}
 .sv-dl{display:flex;flex-direction:column}.sv-di{display:flex;align-items:center;gap:8px;padding:6px 4px;border-bottom:1px solid var(--line2);text-decoration:none;color:var(--text);font-size:13px;border-radius:6px}
 .sv-di:hover{background:var(--card2)}.sv-di .d{color:var(--muted);font-size:12px;font-family:'IBM Plex Mono',monospace;flex:none}.sv-di .t{overflow:hidden;text-overflow:ellipsis;white-space:nowrap;min-width:0}
@@ -556,7 +561,7 @@ select{background:var(--c3);border:1px solid var(--ln);color:var(--bd);padding:6
   <div class="tab" data-t="candidates" data-m="kr" onclick="switchTab('candidates')">차트 후보</div>
   <div class="tab" data-t="calendar" data-m="kr" onclick="switchTab('calendar')">캘린더</div>
   <div class="tab" data-t="sector" data-m="kr" onclick="switchTab('sector')">섹터 흐름</div>
-  <div class="tab" data-t="journal" data-m="kr" data-priv="1" onclick="switchTab('journal')" hidden>매매 일지</div>
+  <div class="tab" data-t="journal" data-m="kr" data-priv="1" onclick="switchTab('journal')" hidden>🔒 내 공간</div>
   <div class="tab" data-t="screener" data-m="kr" onclick="switchTab('screener')">거래대금</div>
   <div class="tab" data-t="heatmap" data-m="kr" onclick="switchTab('heatmap')">히트맵</div>
   <div class="tab" data-t="us" data-m="us" onclick="switchTab('us')" hidden>미장 오늘</div>
@@ -616,13 +621,17 @@ select{background:var(--c3);border:1px solid var(--ln);color:var(--bd);padding:6
   </div>
 
   <div id="jr-main" style="display:none">
-    <div style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:8px;margin-bottom:12px">
+    <div id="me-head" style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:8px;margin-bottom:12px">
       <div><b style="color:var(--tx);font-size:16px" id="jr-who"></b> <span class="ts" id="jr-asof"></span></div>
       <div style="display:flex;gap:6px">
         <button class="btn btn-sm" onclick="jrToggle('jr-input')">＋ 기록 넣기</button>
         <button class="btn btn-sm" onclick="jrLogout()">잠그기</button>
       </div>
     </div>
+    <div id="me-nav" class="seg" style="margin-bottom:14px"><button data-k="jr" class="on" onclick="meShow('jr')">매매 일지</button><button data-k="fwd" onclick="meShow('fwd')">실전 기록</button><button data-k="watch" onclick="meShow('watch')">관심·보유</button><button data-k="status" onclick="meShow('status')">서버 상태</button></div>
+    <div id="me-fwd" data-me="fwd" hidden></div>
+    <div id="me-watch" data-me="watch" hidden></div>
+    <div id="me-status" data-me="status" hidden></div>
 
     <div id="jr-input" class="bx" style="display:none;">
       <b style="color:var(--tx)">기록 넣기</b>
@@ -1751,6 +1760,7 @@ async function loadJournal(){
   if(!r||!r.ok){ if(r&&(r.status===401||r.status===429)){ try{localStorage.removeItem('jr-pin');}catch(e){} } document.getElementById('jr-login-msg').textContent=r?'다시 입력해 주세요':'불러오지 못했습니다'; jrShowLogin(); return; }
   _jr=await r.json();
   document.getElementById('jr-login').style.display='none'; document.getElementById('jr-main').style.display='block';
+  try{ const k=localStorage.getItem('me-k'); if(k&&k!=='jr') setTimeout(()=>meShow(k),0); }catch(e){}
   document.getElementById('jr-who').textContent=`${a.o}의 매매 일지`;
   document.getElementById('jr-asof').textContent=_jr.as_of?`· 시세 ${_jr.as_of} 기준`:'';
   if(!document.getElementById('jr-date').value) document.getElementById('jr-date').value=_jr.as_of||'';
@@ -1846,7 +1856,7 @@ function jrRenderTrips(){
       <td data-label="유형">${t.kind}</td><td data-label="산 날 → 판 날">${t.buy_date?t.buy_date.slice(5):'?'} → ${t.sell_date.slice(5)}${t.days!=null?` <span class="ts">${t.days}일</span>`:''}</td>
       <td data-label="매수 → 매도">${Math.round(t.buy_px).toLocaleString()} → ${Math.round(t.sell_px).toLocaleString()} <span class="ts">${t.qty}주</span></td>
       <td data-label="수익률">${jrPct(t.pct)}<br>${jrWon(t.pnl)}</td>
-      <td data-label="규칙 · R" style="font-size:11.5px">${t.rules?(t.rules.broke.length?t.rules.broke.map(b=>`<div style="color:var(--o)">${b}</div>`).join(''):'<div>✅ 지킴</div>')+`<span class="ts">R ${t.rules.r==null?'-':(t.rules.r>0?'+':'')+t.rules.r} · 손절선 ${t.tk(rules.stop).toLocaleString()}</span>`:'<span class="ts">-</span>'}</td><td data-label="산 날 상태" style="font-size:11.5px;max-width:340px">${tags}${det}${pl}</td></tr>`;}).join('')
+      <td data-label="규칙 · R" style="font-size:11.5px">${t.rules?(t.rules.broke.length?t.rules.broke.map(b=>`<div style="color:var(--o)">${b}</div>`).join(''):'<div>✅ 지킴</div>')+`<span class="ts">R ${t.rules.r==null?'-':(t.rules.r>0?'+':'')+t.rules.r} · 손절선 ${tk(t.rules.stop).toLocaleString()}</span>`:'<span class="ts">-</span>'}</td><td data-label="산 날 상태" style="font-size:11.5px;max-width:340px">${tags}${det}${pl}</td></tr>`;}).join('')
     :'<tr><td colspan="7" class="ts" style="text-align:center;padding:14px">없음</td></tr>';
 }
 async function jrImport(preview){
@@ -3528,6 +3538,83 @@ async function usHeatLoad(){
   renderHeatmap(d.items, box, 'usHeatOpen');
 }
 function usHeatOpen(code,name){ switchTab('usstock'); svOpen(code,name); }
+
+// ── 내 공간 (2026-10-11): 매매 일지 · 실전 기록 · 관심·보유 · 서버 상태 — junp 로그인만 ──
+let _meK='jr';
+function meShow(k){
+  _meK=k; try{ localStorage.setItem('me-k',k); }catch(e){}
+  document.querySelectorAll('#me-nav button').forEach(b=>b.classList.toggle('on',b.dataset.k===k));
+  const main=document.getElementById('jr-main');
+  const hb=document.querySelector('#me-head > div:last-child'); if(hb) hb.style.visibility=k==='jr'?'':'hidden';
+  const who=document.getElementById('jr-who'); if(who) who.textContent=k==='jr'?`${jrAuth().o}의 매매 일지`:'내 공간';
+  const asof=document.getElementById('jr-asof'); if(asof) asof.style.display=k==='jr'?'':'none';
+  [...main.children].forEach(el=>{ if(el.id==='me-head'||el.id==='me-nav') return; if(el.dataset.me) el.hidden=el.dataset.me!==k; else el.style.display=(k==='jr'?'':'none'); });
+  if(k==='fwd') meFwd(); if(k==='watch') meWatch(); if(k==='status') meStatus();
+}
+const meWon=v=>v==null?'-':Math.round(v).toLocaleString();
+const meP=(v,d=1)=>v==null?'-':`<span style="color:${v>0?'var(--up)':v<0?'var(--down)':'var(--muted)'}">${v>0?'+':''}${(+v).toFixed(d)}%</span>`;
+async function meGet(u){ const r=await fetch(`${API}${u}`,{headers:jrH()}).catch(()=>null); if(!r) return null; if(r.status===401) return {err:'이 칸은 junp 로그인에서만 보입니다'}; return r.ok?r.json():null; }
+async function meFwd(){
+  const el=document.getElementById('me-fwd'); el.innerHTML='<span class="ts">불러오는 중…</span>';
+  const d=await meGet('/me/forward'); if(!d||d.err){ el.innerHTML=`<span class="ts">${d&&d.err||'불러오지 못했습니다'}</span>`; return; }
+  const card=a=>{
+    if(a.empty) return `<section class="bx"><div class="bx-h"><b>${a.k} · ${a.label}</b></div><span class="ts">아직 기록 없음 — ${d.start}부터 매일 15:12·18:40에 쌓입니다</span></section>`;
+    const eq=a.eq||[], v=eq.map(x=>x[1]), lo=Math.min(1,...v), hi=Math.max(1,...v), W=600, H=70;
+    const line=v.map((x,i)=>`${(v.length>1?i/(v.length-1)*W:0).toFixed(1)},${(4+(hi-x)/((hi-lo)||1)*(H-8)).toFixed(1)}`).join(' ');
+    return `<section class="bx"><div class="bx-h"><b>${a.k} · ${a.label}</b><span class="ts">${eq.length}거래일</span></div>
+      <div class="sv-sum"><div><span class="ts">누적</span><b>${meP((a.equity-1)*100,2)}</b></div><div><span class="ts">최대 낙폭</span><b>${meP(a.mdd,1)}</b></div><div><span class="ts">거래 · 이긴 비율 · 평균 R</span><b>${a.n}건 · ${a.win??'-'}% · ${a.avgR??'-'}</b></div></div>
+      ${v.length>1?`<svg viewBox="0 0 ${W} ${H}" preserveAspectRatio="none" style="width:100%;height:70px"><polyline points="${line}" fill="none" stroke="${a.equity>=1?'var(--up)':'var(--down)'}" stroke-width="1.6" vector-effect="non-scaling-stroke"/></svg>`:''}
+      ${a.pos.length?`<div class="ts" style="margin:6px 0 2px">보유 ${a.pos.length}</div>${a.pos.map(p=>`<div class="sv-m" style="grid-template-columns:minmax(0,1fr) auto auto"><span>${p.name} <span class="ts">${(p.d0||'').slice(5)} ${meWon(p.px0)} · 손절 ${meWon(tk(p.stop))}${p.exit_next?' · ▼ 내일 아침 정리':''}</span></span><span class="ts">${meWon(p.close)}</span><span>${meP(p.gain)}</span></div>`).join('')}`:''}
+      ${a.trades.length?`<div class="ts" style="margin:8px 0 2px">최근 거래</div>${a.trades.slice(0,8).map(t=>`<div class="sv-m" style="grid-template-columns:minmax(0,1fr) auto auto"><span>${t.name} <span class="ts">${(t.d0||'').slice(5)}→${(t.d1||'').slice(5)} · ${t.why}</span></span><span>${meP(t.net)}</span><span class="v">${(+t.R).toFixed(2)}R</span></div>`).join('')}`:''}</section>`;
+  };
+  el.innerHTML=`<p class="bx-s">규칙 ${d.version} 그대로 따라가는 가상 계좌 · 10칸 · 거래당 위험 ${(d.risk*100).toFixed(1)}% · 마지막 기록 ${d.last||'아직 없음'} · 판정은 6개월 뒤부터 (12개월·100건이 1차)</p><div class="me-g">${d.accounts.map(card).join('')}</div>`;
+}
+async function meWatch(){
+  const el=document.getElementById('me-watch'); el.innerHTML='<span class="ts">불러오는 중…</span>';
+  const d=await meGet('/me/watch'); if(!d||d.err){ el.innerHTML=`<span class="ts">${d&&d.err||'불러오지 못했습니다'}</span>`; return; }
+  const K={above:'선 위 마감',near:'선 근처 ±3%',hold:'손절선(지지)',watch:'봉만 보기'};
+  el.innerHTML=`<div class="me-g2">
+   <section class="bx"><div class="bx-h"><b>보유 종목 손절선</b><span class="ts">매매 일지 기준 · 15:40 점검과 장중 손절 알림에 쓰는 선</span></div>
+    ${d.held.map(h=>`<div class="me-row"><div><b>${h.name}</b> <span class="ts">${h.code}${h.long?' · 장기 보유(알림 제외)':''}</span><div class="ts">평단 ${meWon(h.avg)} · 지금 ${meWon(h.close)} · 수익 ${meP(h.gain)}${h.room!=null?` · 손절까지 ${h.room}%`:''}${h.src?` · ${h.src}`:''}</div></div>
+      <div class="me-ed"><input type="number" id="hs-${h.code}" value="${h.stop?Math.round(h.stop):''}" placeholder="손절가"><button class="btn btn-sm" onclick="meSave('${h.code}','hold',document.getElementById('hs-${h.code}').value)">저장</button></div></div>`).join('')||'<span class="ts">보유 종목 없음</span>'}
+   </section>
+   <section class="bx"><div class="bx-h"><b>관심 종목 ${d.items.length}개</b><span class="ts">15:40 텔레그램 점검 목록 (텔레그램 /관심과 같음)</span></div>
+    <div class="me-add"><input id="wa-code" placeholder="종목명·코드"><select id="wa-kind">${Object.entries(K).map(([k,v])=>`<option value="${k}">${v}</option>`).join('')}</select><input id="wa-level" type="number" placeholder="기준가"><input id="wa-note" placeholder="메모"><button class="btn btn-sm" onclick="meSave(document.getElementById('wa-code').value,document.getElementById('wa-kind').value,document.getElementById('wa-level').value,document.getElementById('wa-note').value)">추가</button></div>
+    <div id="me-wl">${d.items.map(x=>`<div class="me-row"><div><b style="cursor:pointer" onclick="openChartModal('${x.code}','${x.name}','')">${x.name}</b> <span class="ts">${K[x.kind]||x.kind}${x.level?' '+meWon(x.level):''}${x.note?' · '+x.note:''}</span></div><div class="ts">${meWon(x.close)}${x.level&&x.close?` (${((x.close/x.level-1)*100).toFixed(1)}%)`:''}</div><button class="btn btn-gray btn-sm" onclick="meSave('${x.code}',null,null,null,true)">빼기</button></div>`).join('')}</div>
+   </section></div>`;
+}
+async function meSave(code,kind,level,note,remove){
+  if(!code) return;
+  const r=await fetch(`${API}/me/watch`,{method:'POST',headers:jrH(),body:JSON.stringify({code:String(code).trim(),kind:kind||null,level:level===''||level==null?null:+level,note:note==null?null:note,remove:!!remove})}).then(r=>r.json()).catch(()=>null);
+  showToast(r?r.msg:'저장 실패',!(r&&r.ok)); meWatch();
+}
+async function meStatus(){
+  const el=document.getElementById('me-status'); el.innerHTML='<span class="ts">불러오는 중…</span>';
+  const d=await meGet('/me/status'); if(!d||d.err){ el.innerHTML=`<span class="ts">${d&&d.err||'불러오지 못했습니다'}</span>`; return; }
+  const today=new Date(), ok=s=>s?'<span class="chipx g">✅</span>':'<span class="chipx r">⚠</span>';
+  const bl=d.backup_local||[], bo=d.backup_offsite||{}, mmdd=`${String(today.getMonth()+1).padStart(2,'0')}/${String(today.getDate()).padStart(2,'0')}`;
+  const recent=s=>s&&(s.startsWith(mmdd)||(()=>{ const y=new Date(today-864e5); return s.startsWith(`${String(y.getMonth()+1).padStart(2,'0')}/${String(y.getDate()).padStart(2,'0')}`); })());
+  el.innerHTML=`<div class="me-g2">
+   <section class="bx"><div class="bx-h"><b>백업</b></div>
+    <div class="sv-m"><span class="k">서버 안 · 04:30</span><span>${ok(bl[0]&&recent(bl[0].at))}</span><span class="v">${bl[0]?bl[0].at+' · '+bl[0].mb+'MB':'없음'}</span></div>
+    <div class="sv-m"><span class="k">서버 밖 · 05:00</span><span>${ok(recent(bo.at))}</span><span class="v">${bo.at?bo.at+' · '+bo.mb+'MB · '+bo.n+'개 보관':'없음'}</span></div>
+    <div class="ts" style="margin-top:4px">${bo.repo||''}${bo.log?' · '+bo.log:''}</div>
+    <div class="bx-h" style="margin-top:14px"><b>데이터</b></div>
+    <div class="sv-m"><span class="k">일봉 마지막</span><span></span><span class="v">${(d.data||{}).daily||'-'}</span></div>
+    <div class="sv-m"><span class="k">분봉 마지막</span><span></span><span class="v">${((d.data||{}).minute||'-').slice(0,16)}</span></div>
+    <div class="sv-m"><span class="k">시장 수급 마지막</span><span></span><span class="v">${(d.data||{}).flows||'-'}</span></div>
+    <div class="sv-m"><span class="k">디스크 남음 · 서버 부하</span><span></span><span class="v">${d.disk?d.disk.free_gb+' / '+d.disk.total_gb+'GB':'-'} · ${d.load??'-'}</span></div>
+    ${d.stop_alert&&d.stop_alert.date?`<div class="sv-m"><span class="k">오늘 손절 알림</span><span></span><span class="v">근접 ${(d.stop_alert.near||[]).length} · 닿음 ${(d.stop_alert.out||[]).length} (${d.stop_alert.date})</span></div>`:''}
+   </section>
+   <section class="bx"><div class="bx-h"><b>최근 24시간 오류</b><span class="ts">${d.errors?d.errors.n+'건':'확인 못 함'}</span></div>
+    ${d.errors&&d.errors.last.length?d.errors.last.map(l=>`<div class="ts" style="padding:3px 0;border-bottom:1px solid var(--line2);word-break:break-all">${l.replace(/</g,'&lt;')}</div>`).join(''):'<span class="ts">없음 ✅</span>'}
+    <div class="bx-h" style="margin-top:14px"><b>최근 작업 기록</b></div>
+    ${(d.joblog||[]).slice(0,8).map(j=>`<div class="sv-m" style="grid-template-columns:auto minmax(0,1fr) auto"><span class="k">${j.at.slice(5)}</span><span class="ts">${j.stage} · ${j.msg}</span><span class="v">${({completed:'✅ 끝',success:'✅ 끝',started:'시작',running:'도는 중',failed:'⛔ 실패',error:'⛔ 실패'})[j.status]||j.status}</span></div>`).join('')||'<span class="ts">없음</span>'}
+   </section>
+   <section class="bx" style="grid-column:1/-1"><div class="bx-h"><b>예약 작업 다음 실행</b><span class="ts">가까운 순 · 한국 시간</span></div>
+    <div class="me-jobs">${(d.jobs||[]).map(j=>`<div><span class="ts">${j.next||'-'}</span> ${j.id}</div>`).join('')||'<span class="ts">스케줄러 정보 없음</span>'}</div>
+   </section></div>`;
+}
 
 // 모달 차트 인스턴스
 let _modalPriceChart = null, _modalVolumeChart = null;

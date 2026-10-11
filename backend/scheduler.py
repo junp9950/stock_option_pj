@@ -11,6 +11,9 @@ from backend.utils.logger import get_logger
 logger = get_logger(__name__)
 
 
+SCHED = None
+
+
 def start_scheduler() -> BackgroundScheduler:
     from datetime import date  # noqa: PLC0415
     from sqlalchemy import func, select  # noqa: PLC0415
@@ -492,5 +495,7 @@ def start_scheduler() -> BackgroundScheduler:
     scheduler.add_job(_telegram_summary_job, "cron", day_of_week="mon-fri", hour=16, minute="10,30", id="telegram_summary_fallback2",
                       replace_existing=True, max_instances=1, coalesce=True)
     scheduler.start()
+    global SCHED
+    SCHED = scheduler      # 내 공간 '서버 상태'에서 다음 실행 시각 보기 (2026-10-11)
     logger.info("Scheduler started: daily_pipeline=15:41 + 18:00 KST, nightly_backfill=03:00 KST, universe_refresh=Mon 08:00 KST")
     return scheduler

@@ -2295,6 +2295,50 @@ def _journal_owner_opt(request: Request, db: Session) -> str | None:
         return None
 
 
+def _me(request: Request, db: Session) -> str:
+    """내 공간: 매매 일지 로그인 + junp 만."""
+    o = _journal_owner_opt(request, db)
+    if o != "junp":
+        raise HTTPException(status_code=401, detail="로그인 필요")
+    return o
+
+
+class MeWatchIn(BaseModel):
+    code: str
+    kind: str | None = None
+    level: float | None = None
+    note: str | None = None
+    remove: bool = False
+
+
+@router.get("/me/forward")
+def get_me_forward(request: Request, db: Session = Depends(get_db)):
+    _me(request, db)
+    from backend.services.my_space import forward  # noqa: PLC0415
+    return forward(db)
+
+
+@router.get("/me/watch")
+def get_me_watch(request: Request, db: Session = Depends(get_db)):
+    _me(request, db)
+    from backend.services.my_space import watch  # noqa: PLC0415
+    return watch(db)
+
+
+@router.post("/me/watch")
+def post_me_watch(body: MeWatchIn, request: Request, db: Session = Depends(get_db)):
+    _me(request, db)
+    from backend.services.my_space import watch_set  # noqa: PLC0415
+    return watch_set(db, body.code, body.kind, body.level, body.note, body.remove)
+
+
+@router.get("/me/status")
+def get_me_status(request: Request, db: Session = Depends(get_db)):
+    _me(request, db)
+    from backend.services.my_space import status  # noqa: PLC0415
+    return status(db)
+
+
 @router.get("/stock/{code}/chart-signals")
 def get_stock_chart_signals(code: str, request: Request, db: Session = Depends(get_db)):
     """차트에 찍을 신호 (우리 규칙을 그 종목 일봉에 거슬러 적용). 매매 일지 로그인 헤더가 있으면 내 매수·매도도."""
