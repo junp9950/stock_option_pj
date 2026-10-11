@@ -2166,7 +2166,7 @@ def _naver_tf_candles(code: str, tf: str) -> list[dict]:
 
 
 @router.get("/stock/{code}/candles")
-def get_stock_candles(code: str, count: int = 330, tf: str = "1d", db: Session = Depends(get_db)):
+def get_stock_candles(code: str, count: int = 330, tf: str = "1d", ext: int = 0, db: Session = Depends(get_db)):
     """긴 일봉 (토스는 200봉까지라 앞은 DB, 최근 며칠은 토스 실시간으로 덮음) — 첫 화면 1년 차트용 (2026-10-09).
     tf=1w(주봉)·1m·3m·5m·10m·15m·30m·60m(분봉, 최근 약 6거래일)는 네이버 차트 API."""
     if tf != "1d":
@@ -2175,7 +2175,7 @@ def get_stock_candles(code: str, count: int = 330, tf: str = "1d", db: Session =
         if tf != "1w":      # 분봉: 모아 둔 토스 1분봉(석 달)으로 길게, 아직 없으면 네이버 6일 + 뒤에서 채우기 (2026-10-11)
             from backend.collector import minute_bars as mb  # noqa: PLC0415
             try:
-                bars, n_days = mb.load(db, code, tf)
+                bars, n_days = mb.load(db, code, tf, bool(ext))
             except Exception:  # noqa: BLE001
                 bars, n_days = [], 0
             if mb.ready(n_days, tf):
@@ -2188,7 +2188,10 @@ def get_stock_candles(code: str, count: int = 330, tf: str = "1d", db: Session =
                 return {"code": code, "tf": tf, "candles": bars, "days": n_days, "source": "stored", "filling": mb.filling(code)}
             mb.request_fill(code)
         try:
-            return {"code": code, "tf": tf, "candles": _naver_tf_candles(code, tf), "source": "naver", "filling": tf != "1w"}
+            nv = _naver_tf_candles(code, tf)
+            if tf != "1w" and not ext:      # 정규장만 (09:00~15:30)
+                nv = [x for x in nv if "09:00" <= x["timestamp"][11:16] <= "15:30"]
+            return {"code": code, "tf": tf, "candles": nv, "source": "naver", "filling": tf != "1w"}
         except Exception:  # noqa: BLE001
             raise HTTPException(status_code=502, detail="분봉·주봉을 못 받았습니다")
     rows = db.execute(text("select trading_date, open_price, high_price, low_price, close_price, volume from spot_daily_prices "

@@ -225,6 +225,7 @@ select{background:var(--c3);border:1px solid var(--ln);color:var(--bd);padding:6
 .ws-ctl{display:flex;flex-wrap:wrap;gap:4px 14px;align-items:center;margin:2px 0 6px}.ws-ctl .ws-per{margin:0}
 .ws-per{display:flex;gap:4px;margin:2px 0 6px}.ws-per button{background:var(--card2);border:1px solid var(--line);color:var(--muted);border-radius:12px;padding:3px 10px;font-size:11.5px;cursor:pointer}
 .ws-per button.on{color:var(--text);border-color:var(--blue)}
+.ws-per button.tfx{margin-left:6px}.ws-per button.tfx.on{background:var(--neu);color:var(--neu-on);border-color:var(--neu)}
 .ws-lg{margin-top:6px}.ws-lg summary{cursor:pointer;font-size:12px;color:var(--muted);list-style:none;display:inline-block;padding:3px 10px;border:1px solid var(--line);border-radius:12px}.ws-lg summary::-webkit-details-marker{display:none}.ws-lg[open] summary{color:var(--text);border-color:var(--blue)}
 .ws-legend{display:flex;flex-direction:column;gap:5px;margin-top:8px;font-size:12px;line-height:1.5;color:var(--muted)}
 .ws-legend span{display:block;word-break:keep-all;overflow-wrap:anywhere}.ws-legend i{width:10px;height:10px;border-radius:3px;display:inline-block}
@@ -502,10 +503,10 @@ select{background:var(--c3);border:1px solid var(--ln);color:var(--bd);padding:6
 .sv-recent{display:flex;flex-wrap:wrap;gap:6px}.sv-recent .sv-chip{font-size:12.5px;padding:4px 11px;border-radius:999px;background:var(--card2);color:var(--text);cursor:pointer;border:1px solid var(--line)}.sv-recent .sv-chip:hover{border-color:var(--b)}
 .sv-hd{display:flex;flex-wrap:wrap;align-items:baseline;gap:6px 14px}.sv-hd .nm{font-size:24px;font-weight:800;color:var(--strong)}.sv-hd .px{font-size:24px;font-weight:600;color:var(--strong);font-family:'IBM Plex Mono',monospace}
 .sv-g1{display:grid;grid-template-columns:minmax(0,1fr) 380px;gap:16px;align-items:start}
-.sv-g2{display:grid;grid-template-columns:minmax(0,1.4fr) minmax(0,1fr) minmax(0,1fr);gap:16px;align-items:stretch}
+.sv-g2{display:grid;grid-template-columns:minmax(0,1.3fr) minmax(0,1fr) minmax(0,1fr);gap:16px;align-items:stretch}
 .sv-g3{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1fr);gap:16px;align-items:stretch}
 .sv-side{display:flex;flex-direction:column;min-width:0}
-#panel-stock .lwc{height:clamp(380px,calc(100vh - 360px),620px)}
+#panel-stock .lwc{height:clamp(380px,calc(100vh - 380px),560px)}
 .sv-m{display:grid;grid-template-columns:auto minmax(0,1fr) auto;gap:6px 10px;align-items:center;font-size:13px;padding:6px 0;border-bottom:1px solid var(--line2)}.sv-m:last-child{border-bottom:0}
 .sv-m .k{color:var(--muted)}.sv-m .v{font-weight:700;color:var(--strong);font-family:'IBM Plex Mono',monospace;text-align:right;white-space:nowrap}
 .sv-bar{height:6px;border-radius:3px;background:var(--line);position:relative;overflow:hidden}.sv-bar i{position:absolute;left:0;top:0;bottom:0;border-radius:3px;background:var(--b)}.sv-bar i.ind{background:var(--mu)}
@@ -515,9 +516,13 @@ select{background:var(--c3);border:1px solid var(--ln);color:var(--bd);padding:6
 .sv-mixl{display:flex;flex-direction:column;gap:4px;margin-top:8px;font-size:12.5px}.sv-mixl div{display:flex;align-items:center;gap:8px}.sv-mixl i{width:10px;height:10px;border-radius:3px;flex:none}.sv-mixl span{flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}.sv-mixl b{font-family:'IBM Plex Mono',monospace}
 .sv-sum{display:grid;grid-template-columns:repeat(3,1fr);gap:8px;margin:6px 0 10px}.sv-sum>div{background:var(--sunk);border-radius:10px;padding:8px 10px}.sv-sum b{display:block;font-size:15px;font-family:'IBM Plex Mono',monospace;margin-top:2px}
 .sv-ft{width:100%;font-size:12.5px}.sv-ft th,.sv-ft td{text-align:right;padding:6px 8px!important;white-space:nowrap}.sv-ft th:first-child,.sv-ft td:first-child{text-align:left}
-.sv-panelbox .cp-cards{grid-template-columns:repeat(3,1fr)}
+.sv-panelbox{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:16px}.sv-panelbox>.cp-c1,.sv-panelbox>.cp-c2{display:flex;flex-direction:column;gap:10px;min-width:0}
+.sv-panelbox .cp-chips{display:none}.sv-panelbox .cp-state{background:var(--sunk);border:0}.sv-panelbox .cp-cards{grid-template-columns:repeat(3,1fr)}.sv-panelbox .cp-cards .cp-card{background:var(--sunk);border:0;border-radius:10px}
+.sv-panelbox .cp-rows{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));column-gap:20px;border-top:0}.sv-panelbox .cp-row{font-size:12.5px}
+#sv-rep .sv-rl{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));column-gap:24px}
+@media(max-width:900px){.sv-panelbox,.sv-panelbox .cp-rows,#sv-rep .sv-rl{grid-template-columns:1fr}}
 .sv-ft th.ins-h,.sv-ft td.ins-h{font-weight:700;border-left:2px solid var(--line)}.sv-ft th.ins,.sv-ft td.ins{background:color-mix(in srgb,var(--sunk) 70%,transparent)}.sv-ft td.ins{font-size:12px}
-.sv-ft tr.sv-grp th{border-bottom:0;padding-bottom:0!important;font-size:11px}.sv-ft th.ins-g{text-align:center!important;background:color-mix(in srgb,var(--sunk) 70%,transparent);border-radius:8px 8px 0 0}.sv-ft td:last-child,.sv-ft th:last-child{border-left:1px solid var(--line2)}.sv-panelbox>*{margin-bottom:10px}
+.sv-ft tr.sv-grp th{border-bottom:0;padding-bottom:0!important;font-size:11px}.sv-ft th.ins-g{text-align:center!important;background:color-mix(in srgb,var(--sunk) 70%,transparent);border-radius:8px 8px 0 0}.sv-ft td:last-child,.sv-ft th:last-child{border-left:1px solid var(--line2)}
 @media(max-width:1300px){.sv-g2{grid-template-columns:1fr 1fr}.sv-g2>#sv-earn{grid-column:1/-1}}
 @media(max-width:1100px){.sv-g1,.sv-g3{grid-template-columns:1fr}}
 @media(max-width:760px){.sv-g2{grid-template-columns:1fr}.sv-hd .nm,.sv-hd .px{font-size:20px}#panel-stock .lwc{height:400px}.sv-sum b{font-size:13px}}
@@ -656,7 +661,7 @@ select{background:var(--c3);border:1px solid var(--ln);color:var(--bd);padding:6
       <div class="ws-main">
         <div class="ws-head"><b id="jr-ws-name">종목을 고르세요</b><span class="ts" id="jr-ws-sub"></span></div>
         <div class="note" id="jr-ws-note" style="margin-bottom:6px"></div>
-        <div class="ws-per" id="jr-ws-tf"><button data-tf="1d" onclick="jrWsTf('1d')">일봉</button><button data-tf="1w" onclick="jrWsTf('1w')">주봉</button><button data-tf="60m" onclick="jrWsTf('60m')">60분</button><button data-tf="30m" onclick="jrWsTf('30m')">30분</button><button data-tf="15m" onclick="jrWsTf('15m')">15분</button><button data-tf="5m" onclick="jrWsTf('5m')">5분</button><button data-tf="1m" onclick="jrWsTf('1m')">1분</button></div>
+        <div class="ws-per" id="jr-ws-tf"><button data-tf="1d" onclick="jrWsTf('1d')">일봉</button><button data-tf="1w" onclick="jrWsTf('1w')">주봉</button><button data-tf="60m" onclick="jrWsTf('60m')">60분</button><button data-tf="30m" onclick="jrWsTf('30m')">30분</button><button data-tf="15m" onclick="jrWsTf('15m')">15분</button><button data-tf="5m" onclick="jrWsTf('5m')">5분</button><button data-tf="1m" onclick="jrWsTf('1m')">1분</button><button class="tfx" onclick="tfExt()" title="분봉에 시간외(NXT 08:00~09:00 · 15:30~20:00) 넣기">시간외</button></div>
       <div class="ws-per" id="jr-ws-per"><button data-n="66" onclick="jrWsPeriod(66)">3개월</button><button data-n="130" onclick="jrWsPeriod(130)">6개월</button><button data-n="250" onclick="jrWsPeriod(250)">1년</button></div>
         <div class="lwbox"><div class="lwleg" id="jr-chart-leg"></div><div id="jr-chart" class="lwc"></div></div>
         <details class="ws-lg"><summary>ⓘ 차트 표시 설명</summary><div class="ws-legend"><span>⬆ 흰색 = 내가 산 날 · ⬇ 보라 = 내가 판 날</span><span>▲ 진입 → ▼ 절반 팔기 · 나머지 팔기 / 손절</span><span>● 보라 숫자 6·7 = 종가 진입 점수</span><span>● 점 = 참고</span></div></details>
@@ -797,7 +802,7 @@ select{background:var(--c3);border:1px solid var(--ln);color:var(--bd);padding:6
       <div class="ws-head"><b id="ws-name">종목을 고르세요</b><span class="ts" id="ws-sub"></span><span class="hb-px" id="ws-px"></span></div>
       <div class="hb-sig" id="ws-sig"></div><div class="hb-chips"><span id="ws-chips-a"></span><span id="ws-chips-b"></span></div>
       <div class="note" id="ws-note" style="margin-bottom:6px"></div>
-      <div class="ws-ctl"><div class="ws-per" id="ws-tf"><button data-tf="1d" onclick="wsTf('1d')">일봉</button><button data-tf="1w" onclick="wsTf('1w')">주봉</button><button data-tf="60m" onclick="wsTf('60m')">60분</button><button data-tf="30m" onclick="wsTf('30m')">30분</button><button data-tf="15m" onclick="wsTf('15m')">15분</button><button data-tf="5m" onclick="wsTf('5m')">5분</button><button data-tf="1m" onclick="wsTf('1m')">1분</button></div>
+      <div class="ws-ctl"><div class="ws-per" id="ws-tf"><button data-tf="1d" onclick="wsTf('1d')">일봉</button><button data-tf="1w" onclick="wsTf('1w')">주봉</button><button data-tf="60m" onclick="wsTf('60m')">60분</button><button data-tf="30m" onclick="wsTf('30m')">30분</button><button data-tf="15m" onclick="wsTf('15m')">15분</button><button data-tf="5m" onclick="wsTf('5m')">5분</button><button data-tf="1m" onclick="wsTf('1m')">1분</button><button class="tfx" onclick="tfExt()" title="분봉에 시간외(NXT 08:00~09:00 · 15:30~20:00) 넣기">시간외</button></div>
       <div class="ws-per" id="ws-per"><button data-n="66" onclick="wsPeriod(66)">3개월</button><button data-n="130" onclick="wsPeriod(130)">6개월</button><button data-n="250" onclick="wsPeriod(250)">1년</button></div></div>
       <div class="lwbox"><div class="lwleg" id="ws-chart-leg"></div><div id="ws-chart" class="lwc"></div></div>
       <details class="ws-lg"><summary>ⓘ 차트 표시 설명</summary><div class="ws-legend"><span>▲ <b>진입</b> = 사기 좋은 자리 (2~3주 보유 · 급등봉 당일은 안 냄) → 스탑로스 = 신호 봉 저가 -1% 예약 · ▼ 14일선 아래 종가 절반 · 21일선 아래 종가 나머지</span><span>↑ 주황 <b>🔥주도</b> = 주도주 매수 (강도 최상위 RS 95↑ · 정배열 · 양봉 위쪽 마감 · 손절폭 8%↓ · 기본 매수와 별도로 소량, 거래당 위험 0.10%) → 스탑로스 = 그날 저가 -1% · 21일선 아래 종가면 다음 날 아침 정리 · 들고 있는 동안 또 뜨면 작은 주황 점 · 봉에 올리면 📍 눌림 / 🚀 돌파 / ⚠️ 과열 표시</span><span>↑ 하늘색 <b>줍기</b> = 급락 날 줍기 · 시험 중 (상승장에서 시장 -2%↓ 날 · 뜨는 섹터 3곳의 주도주가 같이 빠졌을 때 · 손절 20일선 · 수량 절반)</span><span>↑ 보라 <b>매수</b> = 종가 매수 신호 (점수 6↑ · 강도 70~95 · 손절폭 8%↓ · 상승장, ✅ = 손절폭 3%↓) · 다음 날도 이어지면 작은 보라 점 = 자리 유지, ↑ <b>더 좋음</b> = 손절폭이 확 짧아진 날 · 산 뒤 아직 들고 있는데 또 뜨면: ↑ <b>더 사기</b> = 첫 매수가 +1R↑ (같은 크기까지 · 전체 손절을 새 저가 -1%로 올림), ● <b>보유 중</b> = 첫 매수가 +1R 안 됨 → 더 사지 않기 · 봉에 올리면 위에 매수 근거 (점수 6↑ 또는 이평선 모였다 돌파 + 정배열 · 강도 · 손절폭) → 사면 바로 스탑로스 = 그날 저가 -1% 예약 · 21일선 아래 종가면 다음 날 아침 정리</span><span>· 회색 점 = 버틴 종목(시장 빠진 날 버팀, 참고)</span><span>· 회색 작은 점 = 돌파 모양만 나온 날 (매수 아님 · 봉에 올리면 이유 — 정배열·강도·손절폭까지 맞으면 보라 매수로 뜸)</span><span>● 초록 = 오르던 종목의 거래 적은 눌림</span><span>· 작은 점 = 참고 (돌파 대기 · 아깝게 놓침 · 상승 추세 시작) — 봉에 올리면 위에 내용</span><span>■ 회색 = 급등봉 · 1년 최대 거래</span><span>▼ 주황 = 조심</span><span>· 두 손가락으로 확대, 끌어서 이동, 누르면 그 날 가격</span></div></details>
@@ -1028,26 +1033,24 @@ select{background:var(--c3);border:1px solid var(--ln);color:var(--bd);padding:6
     <section class="bx" id="sv-head"></section>
     <div class="sv-g1">
       <section class="bx sv-chartbox">
-        <div class="ws-ctl"><div class="ws-per" id="sv-tf"><button data-tf="1d" onclick="svTf('1d')">일봉</button><button data-tf="1w" onclick="svTf('1w')">주봉</button><button data-tf="60m" onclick="svTf('60m')">60분</button><button data-tf="30m" onclick="svTf('30m')">30분</button><button data-tf="15m" onclick="svTf('15m')">15분</button><button data-tf="5m" onclick="svTf('5m')">5분</button><button data-tf="1m" onclick="svTf('1m')">1분</button></div>
+        <div class="ws-ctl"><div class="ws-per" id="sv-tf"><button data-tf="1d" onclick="svTf('1d')">일봉</button><button data-tf="1w" onclick="svTf('1w')">주봉</button><button data-tf="60m" onclick="svTf('60m')">60분</button><button data-tf="30m" onclick="svTf('30m')">30분</button><button data-tf="15m" onclick="svTf('15m')">15분</button><button data-tf="5m" onclick="svTf('5m')">5분</button><button data-tf="1m" onclick="svTf('1m')">1분</button><button class="tfx" onclick="tfExt()" title="분봉에 시간외(NXT 08:00~09:00 · 15:30~20:00) 넣기">시간외</button></div>
         <div class="ws-per" id="sv-per"><button data-n="66" onclick="svPer(66)">3개월</button><button data-n="130" onclick="svPer(130)">6개월</button><button data-n="250" onclick="svPer(250)">1년</button></div></div>
         <div class="ts" id="sv-note" style="margin:2px 0 6px"></div>
         <div class="lwbox"><div class="lwleg" id="sv-chart-leg"></div><div id="sv-chart" class="lwc"></div></div>
       </section>
       <div class="sv-side">
         <section class="bx" id="sv-metrics"><span class="ts">불러오는 중…</span></section>
-        <section class="bx"><div class="bx-h"><b>사이트 판단</b><span class="ts">추세 등급 · 신호 체크</span></div><div id="sv-panel" class="sv-panelbox"></div></section>
+        <section class="bx" id="sv-mix"></section>
       </div>
     </div>
+    <section class="bx"><div class="bx-h"><b>사이트 판단</b><span class="ts">추세 등급 · 신호 앞 체크리스트 · 세부 지표</span></div><div id="sv-panel" class="sv-panelbox"></div></section>
     <div class="sv-g2">
       <section class="bx" id="sv-earn"></section>
       <section class="bx" id="sv-stab"></section>
-      <section class="bx" id="sv-mix"></section>
+      <section class="bx" id="sv-short"></section>
     </div>
     <section class="bx" id="sv-flow"><span class="ts">수급 불러오는 중…</span></section>
-    <div class="sv-g3">
-      <section class="bx" id="sv-short"></section>
-      <section class="bx" id="sv-rep"></section>
-    </div>
+    <section class="bx" id="sv-rep"></section>
   </div>
 </div>
 
@@ -1059,7 +1062,7 @@ select{background:var(--c3);border:1px solid var(--ln);color:var(--bd);padding:6
     <div class="cm-body">
       <div class="cm-chart">
         <div class="note" id="chart-modal-note" style="margin-bottom:8px"></div>
-        <div class="ws-per" id="cm-tf"><button data-tf="1d" onclick="cmTf('1d')">일봉</button><button data-tf="1w" onclick="cmTf('1w')">주봉</button><button data-tf="60m" onclick="cmTf('60m')">60분</button><button data-tf="30m" onclick="cmTf('30m')">30분</button><button data-tf="15m" onclick="cmTf('15m')">15분</button><button data-tf="5m" onclick="cmTf('5m')">5분</button><button data-tf="1m" onclick="cmTf('1m')">1분</button></div>
+        <div class="ws-per" id="cm-tf"><button data-tf="1d" onclick="cmTf('1d')">일봉</button><button data-tf="1w" onclick="cmTf('1w')">주봉</button><button data-tf="60m" onclick="cmTf('60m')">60분</button><button data-tf="30m" onclick="cmTf('30m')">30분</button><button data-tf="15m" onclick="cmTf('15m')">15분</button><button data-tf="5m" onclick="cmTf('5m')">5분</button><button data-tf="1m" onclick="cmTf('1m')">1분</button><button class="tfx" onclick="tfExt()" title="분봉에 시간외(NXT 08:00~09:00 · 15:30~20:00) 넣기">시간외</button></div>
         <div class="lwbox"><div class="lwleg" id="cm-chart-leg"></div><div id="cm-chart" class="lwc"></div></div>
       </div>
       <aside class="cm-panel" id="cm-panel"></aside>
@@ -2500,14 +2503,22 @@ try{ _ws.per=+localStorage.getItem('ws-per')||130; }catch(e){}
 function wsPeriod(n){ _ws.per=n; try{ localStorage.setItem('ws-per',n); }catch(e){} wsDraw(); }
 _ws.tf='1d';
 const TF_NAME={'1d':'일봉','1w':'주봉','60m':'60분봉','30m':'30분봉','15m':'15분봉','5m':'5분봉','1m':'1분봉'};
+let TFX=false; try{ TFX=localStorage.getItem('tf-ext')==='1'; }catch(e){}   // 분봉에 시간외(NXT 08:00~09:00 · 15:30~20:00) 넣기
+function tfk(tf){ return tf+(TFX&&tf!=='1w'?'x':''); }
+function tfExt(){ TFX=!TFX; try{ localStorage.setItem('tf-ext',TFX?'1':'0'); }catch(e){}
+  document.querySelectorAll('.tfx').forEach(b=>b.classList.toggle('on',TFX));
+  if(_ws.code&&_ws.tf!=='1d'&&_ws.tf!=='1w') wsDraw();
+  if(typeof _sv!=='undefined'&&_sv.code&&_sv.tf!=='1d'&&_sv.tf!=='1w') svDraw();
+  if(_cm&&_cm.code&&_cm.tf&&_cm.tf!=='1d'&&_cm.tf!=='1w'&&document.getElementById('chart-modal-bg').classList.contains('show')) cmTf(_cm.tf);
+  if(_jrWs&&_jrWs.code&&_jrWs.tf&&_jrWs.tf!=='1d'&&_jrWs.tf!=='1w') jrWsDraw(); }
 async function tfCandles(code,tf){   // 분봉: 모아 둔 1분봉(석 달)으로 길게, 처음 여는 종목은 네이버 6일 + 서버가 뒤에서 채움 (2026-10-11)
-  const r=await fetch(`${API}/stock/${code}/candles?tf=${tf}`).then(x=>x.ok?x.json():null).catch(()=>null);
+  const r=await fetch(`${API}/stock/${code}/candles?tf=${tf}&ext=${TFX?1:0}`).then(x=>x.ok?x.json():null).catch(()=>null);
   return r&&r.candles&&r.candles.length?r:null;
 }
-function tfCached(c,tf){ const x=c[tf]; return x&&!(x.source==='naver'&&x.filling)?x:null; }   // 채우는 중이던 짧은 분봉은 다시 받음
+function tfCached(c,tf){ const x=c[tfk(tf)]; return x&&!(x.source==='naver'&&x.filling)?x:null; }   // 채우는 중이던 짧은 분봉은 다시 받음
 function tfNote(cd,tf){
   if(tf==='1w') return TF_NAME[tf];
-  if(cd.source==='stored') return `${TF_NAME[tf]} · 최근 ${Math.min(cd.days,{'1m':4,'5m':12,'15m':25,'30m':45,'60m':63}[tf]||cd.days)}거래일 (끌어서 과거 보기)`;
+  if(cd.source==='stored') return `${TF_NAME[tf]} · 최근 ${Math.min(cd.days,{'1m':10,'5m':20,'15m':40,'30m':63,'60m':63}[tf]||cd.days)}거래일 · ${TFX?'시간외 포함':'정규장'} (끌어서 과거 보기)`;
   return `${TF_NAME[tf]} · 최근 약 6거래일${cd.filling?' · 석 달치 받는 중 (1~2분 뒤 자동으로 길어짐)':''}`;
 }
 function tfRetryLater(cd,again){ if(cd&&cd.source==='naver'&&cd.filling) setTimeout(again,75000); }
@@ -2520,7 +2531,7 @@ async function wsDraw(){
   const c=_ws.cache[_ws.code]; if(!c||!c.cd) return;
   if(_ws.tf!=='1d'){
     const code=_ws.code, tf=_ws.tf; document.getElementById('ws-note').textContent=`${TF_NAME[tf]} 불러오는 중…`;
-    const cd=tfCached(c,tf)||(c[tf]=await tfCandles(code,tf));
+    const cd=tfCached(c,tf)||(c[tfk(tf)]=await tfCandles(code,tf));
     if(_ws.code!==code||_ws.tf!==tf) return;
     if(!cd){ document.getElementById('ws-note').textContent=`${TF_NAME[tf]}을 못 받았습니다`; return; }
     renderLwChart('ws-chart',cd.candles,[],tf==='1w'?80:120);
@@ -2694,7 +2705,7 @@ async function jrWsDraw(){
   const c=_jrWs.cache; if(!c||!c.cd||c.code!==_jrWs.code) return;
   if(tf!=='1d'){
     const code=_jrWs.code; document.getElementById('jr-ws-note').textContent=`${TF_NAME[tf]} 불러오는 중…`;
-    const cd=tfCached(c,tf)||(c[tf]=await tfCandles(code,tf));
+    const cd=tfCached(c,tf)||(c[tfk(tf)]=await tfCandles(code,tf));
     if(_jrWs.code!==code||(_jrWs.tf||'1d')!==tf) return;
     if(!cd){ document.getElementById('jr-ws-note').textContent=`${TF_NAME[tf]}을 못 받았습니다`; return; }
     renderLwChart('jr-chart',cd.candles,[],tf==='1w'?80:120);
@@ -2754,7 +2765,7 @@ async function cmTf(tf){
   if(tf==='1d'){ const g=renderLwChart('cm-chart',c.cd.candles,c.sg?c.sg.items:[],90);
     document.getElementById('chart-modal-note').textContent=`일봉 · 1년 (끌어서 과거 보기)`+(g!=null?` · EMA 5·10·20 간격 ${g.toFixed(1)}% ${g<=4?'(모임 ✓)':g>=7?'(벌어짐 ⚠)':''}`:'')+_avwapNote; return; }
   document.getElementById('chart-modal-note').textContent=`${TF_NAME[tf]} 불러오는 중…`;
-  const cd=tfCached(c,tf)||(c[tf]=await tfCandles(code,tf));
+  const cd=tfCached(c,tf)||(c[tfk(tf)]=await tfCandles(code,tf));
   if(_cm.code!==code||_cm.tf!==tf) return;
   if(!cd){ document.getElementById('chart-modal-note').textContent=`${TF_NAME[tf]}을 못 받았습니다`; return; }
   renderLwChart('cm-chart',cd.candles,[],tf==='1w'?80:120);
@@ -3193,7 +3204,7 @@ async function svDraw(){
   const c=_sv.cache, code=_sv.code, tf=_sv.tf, note=document.getElementById('sv-note');
   if(tf!=='1d'){
     note.textContent=`${TF_NAME[tf]} 불러오는 중…`;
-    const cd=tfCached(c,tf)||(c[tf]=await tfCandles(code,tf));
+    const cd=tfCached(c,tf)||(c[tfk(tf)]=await tfCandles(code,tf));
     if(_sv.code!==code||_sv.tf!==tf) return;
     if(!cd){ note.textContent=`${TF_NAME[tf]}을 못 받았습니다`; return; }
     renderLwChart('sv-chart',cd.candles,[],tf==='1w'?80:120); note.textContent=`${tfNote(cd,tf)} · 신호는 일봉에서만`;
@@ -3268,7 +3279,7 @@ function svMix(){
 function svRep(){
   const p=_sv.prof||{}, box=document.getElementById('sv-rep'), R=p.researches||[], P=p.peers||[];
   box.innerHTML=`<div class="bx-h"><b>증권사 리포트</b>${p.target&&p.target.date?`<span class="ts">목표가 평균 ${p.target.date} 기준</span>`:''}</div>
-    ${R.length?R.map(r=>`<div class="sv-m" style="grid-template-columns:minmax(0,1fr) auto"><a href="https://finance.naver.com/research/company_read.naver?nid=${r.id}" target="_blank" rel="noopener" style="color:var(--text);text-decoration:none;overflow:hidden;text-overflow:ellipsis;white-space:nowrap" title="${(r.title||'').replace(/"/g,'')}">${r.title}</a><span class="ts">${r.broker} · ${(r.date||'').slice(4,6)}/${(r.date||'').slice(6)}</span></div>`).join(''):'<span class="ts">최근 리포트 없음</span>'}
+    <div class="sv-rl">${R.length?R.map(r=>`<div class="sv-m" style="grid-template-columns:minmax(0,1fr) auto"><a href="https://finance.naver.com/research/company_read.naver?nid=${r.id}" target="_blank" rel="noopener" style="color:var(--text);text-decoration:none;overflow:hidden;text-overflow:ellipsis;white-space:nowrap" title="${(r.title||'').replace(/"/g,'')}">${r.title}</a><span class="ts">${r.broker} · ${(r.date||'').slice(4,6)}/${(r.date||'').slice(6)}</span></div>`).join(''):'<span class="ts">최근 리포트 없음</span>'}</div>
     ${P.length?`<div class="ts" style="margin:10px 0 4px">같은 업종</div><div class="sv-recent">${P.map(x=>`<span class="sv-chip" onclick="svOpen('${x.code}','${String(x.name).replace(/'/g,'')}')">${x.name} <b style="color:${svC(x.chg||0)}">${x.chg>0?'+':''}${x.chg}%</b></span>`).join('')}</div>`:''}`;
 }
 function svFlows(){
@@ -3523,6 +3534,7 @@ try{ try{ const v=localStorage.getItem('vr-mincap'); if(v!==null) document.getEl
   for(const id of ['jb-noflag','jb-nocred','cd-noflag','cd-nocred']){ const v=localStorage.getItem(id); if(v!==null) document.getElementById(id).checked=v==='1'; } }catch(e){}
 switchTab(location.hash ? location.hash.slice(1) : 'home');
 setTheme((()=>{ try{ return localStorage.getItem('theme')||'dark'; }catch(e){ return 'dark'; } })());
+document.querySelectorAll('.tfx').forEach(b=>b.classList.toggle('on',TFX));
 loadHeader(); setInterval(()=>{ const n=new Date(), hm=n.getHours()*100+n.getMinutes(); if(n.getDay()>0&&n.getDay()<6&&hm>=900&&hm<=1540&&!document.hidden) loadHeader(); }, 60000);
 const chartQuery=new URLSearchParams(location.search);
 if (/^[0-9A-Z]{6}$/.test(chartQuery.get('chart')||'')) openChartModal(chartQuery.get('chart'),chartQuery.get('name')||chartQuery.get('chart'),'');

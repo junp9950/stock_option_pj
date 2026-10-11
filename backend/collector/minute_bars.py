@@ -22,7 +22,7 @@ logger = logging.getLogger(__name__)
 KST = ZoneInfo("Asia/Seoul")
 KEEP_DAYS = 92            # 달력 기준 약 석 달 (≈ 63거래일)
 # 분봉마다 보여 줄 거래일 수 (차트는 끌어서 더 앞도 볼 수 있음)
-SHOW_DAYS = {"1m": 4, "3m": 8, "5m": 12, "10m": 20, "15m": 25, "30m": 45, "60m": 63}
+SHOW_DAYS = {"1m": 10, "3m": 15, "5m": 20, "10m": 30, "15m": 40, "30m": 63, "60m": 63}
 MIN_DAYS_READY = {"1m": 2, "3m": 5, "5m": 8, "10m": 12, "15m": 15, "30m": 25, "60m": 40}
 
 _q: "queue.Queue[str]" = queue.Queue()
@@ -137,8 +137,8 @@ def filling(code: str) -> bool:
         return code in _pending
 
 
-def load(db: Session, code: str, tf: str) -> tuple[list[dict], int]:
-    """묶은 분봉 (차트 형식) · DB에 있는 거래일 수."""
+def load(db: Session, code: str, tf: str, ext: bool = False) -> tuple[list[dict], int]:
+    """묶은 분봉 (차트 형식) · DB에 있는 거래일 수. ext=False면 정규장(09:00~15:30, 15:30 종가 체결은 앞 봉에 합침)만 — 시간외(NXT)는 거래가 얇아 화면만 차지."""
     _ensure(db)
     mins = int(tf[:-1])
     days = [r[0] for r in db.execute(text("select distinct ts::date from stock_minute_bars where code = :c order by 1 desc limit :n"),
@@ -147,8 +147,9 @@ def load(db: Session, code: str, tf: str) -> tuple[list[dict], int]:
         return [], 0
     n_all = db.execute(text("select count(distinct ts::date) from stock_minute_bars where code = :c"), {"c": code}).scalar() or 0
     rows = db.execute(text(
-        "select date_bin(make_interval(mins => :m), ts, timestamp '2000-01-01 09:00') b, (array_agg(o order by ts))[1], max(h), min(l), "
-        "(array_agg(c order by ts desc))[1], sum(v) from stock_minute_bars where code = :c and ts >= :d group by 1 order by 1"),
+        "select date_bin(make_interval(mins => :m), case when ts::time = time '15:30' then ts - interval '1 minute' else ts end, timestamp '2000-01-01 09:00') b, (array_agg(o order by ts))[1], max(h), min(l), "
+        "(array_agg(c order by ts desc))[1], sum(v) from stock_minute_bars where code = :c and ts >= :d "
+        + ("" if ext else "and ts::time between time '09:00' and time '15:30' ") + "group by 1 order by 1"),
         {"m": mins, "c": code, "d": min(days)}).all()
     import calendar  # noqa: PLC0415
     out = [{"t": calendar.timegm(b.timetuple()), "timestamp": b.strftime("%Y-%m-%dT%H:%M:00+09:00"), "openPrice": o, "highPrice": h,
