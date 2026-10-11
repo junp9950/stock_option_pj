@@ -496,6 +496,6 @@ def start_scheduler() -> BackgroundScheduler:
                       replace_existing=True, max_instances=1, coalesce=True)
     scheduler.start()
     global SCHED
-    SCHED = scheduler      # 내 공간 '서버 상태'에서 다음 실행 시각 보기 (2026-10-11)
+    SCHED = scheduler      # 관리 탭 '서버 상태'에서 다음 실행 시각 보기 (2026-10-11)
     logger.info("Scheduler started: daily_pipeline=15:41 + 18:00 KST, nightly_backfill=03:00 KST, universe_refresh=Mon 08:00 KST")
     return scheduler
