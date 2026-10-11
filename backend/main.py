@@ -538,7 +538,6 @@ select{background:var(--c3);border:1px solid var(--ln);color:var(--bd);padding:6
   <div class="tab" onclick="switchTab('journal')">매매 일지</div>
   <div class="tab" onclick="switchTab('screener')">거래대금</div>
   <div class="tab" onclick="switchTab('heatmap')">히트맵</div>
-  <div class="tab" onclick="switchTab('jongbe')">종베</div>
   <div class="tab" onclick="switchTab('discussion')">토론</div>
   <div class="tab" onclick="switchTab('suggest')">건의</div>
 </nav>
@@ -577,95 +576,6 @@ select{background:var(--c3);border:1px solid var(--ln);color:var(--bd);padding:6
 </div>
 
 <!-- 종베 후보 탭 -->
-<div id="panel-jongbe" class="panel content hbt">
-  <section class="bx" id="mp-box">불러오는 중…</section>
-  <div class="jb-row">
-  <section class="bx"><div class="bx-h"><b>① 시장</b></div>
-  <div id="jb-market" style="border-radius:12px;padding:10px 14px;border:1px solid var(--line)">불러오는 중…</div>
-  <p class="bx-s" style="margin:10px 0 0">시장 상승·횡보 → 뜨거운 섹터 → 그날 섹터에 돈 몰림 → 거래 실린 양봉, 또는 <b style="color:var(--y2)">🕯 큰 양봉 다음 날 밑꼬리 도지</b>. <b>파는 법:</b> 다음 날 +2% 미만이면 전부 정리, +2% 이상이면 30% · 그다음 날도 오르면 30% 더 · 나머지는 최고 종가 -15% 이탈 시.</p></section>
-  <section class="bx">
-  <div style="display:flex;flex-wrap:wrap;align-items:center;gap:10px;margin-bottom:8px">
-    <b style="font-size:16px;font-weight:800;color:var(--strong)">② 뜨는 섹터</b> <span class="ts" id="jb-date"></span>
-    <label style="font-size:12.5px;color:var(--bd)">시총
-      <select id="jb-mincap" onchange="try{localStorage.setItem('jb-mincap',this.value)}catch(e){};renderJongbe()">
-        <option value="0">전체</option><option value="500">500억 이상</option><option value="1000" selected>1,000억 이상</option><option value="2000">2,000억 이상</option>
-        <option value="3000">3,000억 이상</option><option value="10000">1조 이상</option>
-      </select></label>
-    <label style="font-size:12.5px;color:var(--bd);cursor:pointer" title="20일선보다 +20% 넘게 뜬 종목과 그날 +12% 넘게 오른 종목을 뺍니다. 3년 확인: 평균 수익은 비슷한데 다음 날 -5% 넘는 손실이 2~4배"><input type="checkbox" id="jb-safe" checked onchange="try{localStorage.setItem('jb-safe',this.checked?'1':'0')}catch(e){};renderJongbe()"> 급등·과열 빼기</label>
-    <label style="font-size:12.5px;color:var(--bd);cursor:pointer"><input type="checkbox" id="jb-showb" onchange="renderJongbe()"> B등급도 보기</label>
-    <label style="font-size:12.5px;color:var(--bd);cursor:pointer" title="투자주의·경고·위험, 단기과열, 관리종목을 모든 목록에서 뺍니다"><input type="checkbox" id="jb-noflag" onchange="try{localStorage.setItem('jb-noflag',this.checked?'1':'0')}catch(e){};renderJongbe()"> 경고 빼기</label>
-    <label style="font-size:12.5px;color:var(--bd);cursor:pointer" title="신용 매수 불가(증거금 100%, 한국투자증권 기준) 종목을 뺍니다"><input type="checkbox" id="jb-nocred" onchange="try{localStorage.setItem('jb-nocred',this.checked?'1':'0')}catch(e){};renderJongbe()"> 신용불가(한투) 빼기</label>
-    <span class="ts" id="jb-count"></span>
-  </div>
-  <div id="jb-fams" style="display:flex;flex-wrap:wrap;gap:8px"></div>
-  </section></div>
-  <section class="bx"><div class="bx-h"><b>③ 오늘 종가에 살 종목 (종베)</b><span class="ts">뜨는 섹터의 좋은 차트</span></div>
-  <table class="pb-table">
-    <thead><tr><th>종목</th><th>등급</th><th>그날 봉</th><th>섹터</th><th>종가</th></tr></thead>
-    <tbody id="jb-body"><tr><td colspan="5" style="color:var(--mu);text-align:center;padding:20px">로딩 중…</td></tr></tbody>
-  </table>
-  <div id="jb-limit" class="ts" hidden></div></section>
-  <section class="bx">
-    <div class="bx-h"><b>🔔 오늘 거래대금 신기록</b> <span class="ts" id="vrc-info"></span></div>
-    <p class="bx-s">오늘 거래대금이 6개월 넘게 만의 최고인 종목 (거래대금 30억↑). 오래된 기록일수록 위. 관심 등록용 — 터진 날 추격보다 며칠 쉬는 걸 보고 들어가기.</p>
-    <div id="vrc-body" style="display:flex;flex-wrap:wrap;gap:6px">로딩 중…</div>
-    <span class="ts" id="lu-info" hidden></span>
-    <div id="lu-body" class="ts" hidden></div>
-  </section>
-
-  <section class="bx">
-    <div class="bx-h"><b>③ 며칠~몇 주 들고 갈 종목 (스윙·선취매)</b> <span class="ts" id="jb-ch-info"></span></div>
-    <p class="bx-s"><b style="color:var(--g)">🚀 돌파</b>·<b>돌파 대기</b> = 120일 박스 상단(20일 넘게 묵은 고점) 처음 넘음·-3% 이내 (이미 많이 오른 종목·꼬리만 남은 종목 뺌) · <b style="color:var(--g)">🚀 꼬리 돌파</b> = 종가 고점 넘고 버티다 옛 꼬리 끝까지 종가로 넘음(물린 사람 0) · <b style="color:var(--g)">저가 지킴</b> = 대량거래 봉 저가 안 깸 · <b style="color:var(--b)">눌림</b> = 20일 고점 -5~-15% · <b style="color:var(--y2)">버팀</b> = 섹터 빠진 날 안 빠짐</p>
-    <table class="pb-table">
-      <thead><tr><th>종목</th><th>근거</th><th>오늘</th><th>섹터</th><th>종가</th></tr></thead>
-      <tbody id="jb-charts"><tr><td colspan="5" style="color:var(--mu);text-align:center;padding:16px">불러오는 중…</td></tr></tbody>
-    </table>
-  </section>
-
-  <section class="bx">
-    <div class="bx-h"><b>④ 다음에 뜰 섹터 후보</b><span class="ts">움직이기 시작</span></div>
-    <p class="bx-s">상위 3 밖인데 최근 5일 시장보다 +2%p↑ · 20일 안 돈 유입(섹터 거래대금 1.5배 + 섹터 +1%) 2번↑ · 순위 5일 새 3계단↑ 중 하나. 누르면 그 섹터 종목이 보입니다.</p>
-    <div id="jb-movers" style="display:flex;flex-wrap:wrap;gap:8px"></div>
-    <div id="jb-mover-detail" style="margin-top:8px"></div>
-  </section>
-
-  <div class="jb-row two">
-  <section class="bx">
-    <b style="color:var(--strong);font-size:15px">✅ 보유·관심 종목 체크</b> <span class="ts">종목명이나 코드를 쉼표로 (브라우저에 기억됩니다)</span>
-    <div style="display:flex;gap:8px;margin-top:8px;flex-wrap:wrap">
-      <input id="jb-q" placeholder="예: 디케이티, 원익, 에스피지" style="flex:1;min-width:220px;background:var(--bg);border:1px solid var(--ln);color:var(--bd);padding:6px 10px;border-radius:6px">
-      <button class="btn btn-sm" onclick="jbCheck()">확인</button>
-    </div>
-    <div id="jb-check" style="margin-top:10px"></div>
-  </section>
-
-  <section class="bx">
-    <b style="color:var(--strong);font-size:15px">🔎 공매도·대차잔고 감시</b> <span class="ts">대차잔고 = 빌려 간 주식(공매도 실탄). 교환사채·유상증자 앞두고 늘면 매도 압력. 종목명·코드 쉼표로 (브라우저 기억)</span>
-    <div style="display:flex;gap:8px;margin-top:8px;flex-wrap:wrap">
-      <input id="sw-q" placeholder="예: 가온전선, 티에스이" style="flex:1;min-width:220px;background:var(--bg);border:1px solid var(--ln);color:var(--bd);padding:6px 10px;border-radius:6px">
-      <button class="btn btn-sm" onclick="swCheck()">확인</button>
-    </div>
-    <div id="sw-out" style="margin-top:10px"></div>
-  </section>
-  </div>
-
-  <div style="display:none;border:1px solid var(--ln);border-radius:10px;padding:12px 16px;margin-bottom:20px"><!-- 2026-10-05 숨김: 사용자가 진입 종목을 직접 알려 주기로 -->
-    <b style="color:var(--tx)">📝 차트 판단 기록</b> <span class="ts" id="lb-stats"></span>
-    <p class="ts" style="margin:4px 0 8px">목록 종목 옆 👍(살 만함) · 👎(아님)를 눌러 주세요 — 결과를 모를 때 누른 판단이 고르는 눈을 배우는 재료입니다. 👎는 이유 한 단어(매물대·꼬리·거래 약함 등)를 적으면 더 빨리 배웁니다.
-      나중에 보고 "이거 왜 안 들어갔지" 싶은 종목은 아래에 날짜와 함께 따로 남겨 주세요(결과를 알고 고른 것이라 따로 씁니다).</p>
-    <div style="display:flex;gap:6px;flex-wrap:wrap">
-      <input id="lb-mname" placeholder="놓친 종목 (예: 필옵틱스)" style="flex:1;min-width:140px;background:var(--bg);border:1px solid var(--ln);color:var(--bd);padding:6px 10px;border-radius:6px">
-      <input id="lb-mdate" type="date" style="background:var(--bg);border:1px solid var(--ln);color:var(--bd);padding:5px 8px;border-radius:6px">
-      <input id="lb-mmemo" placeholder="그날 들어갔어야 한 이유 (선택)" style="flex:2;min-width:180px;background:var(--bg);border:1px solid var(--ln);color:var(--bd);padding:6px 10px;border-radius:6px">
-      <button class="btn btn-sm" onclick="lbMissed()">남기기</button>
-    </div>
-    <div id="lb-missed" class="ts" style="margin-top:8px"></div>
-  </div>
-
-  <details class="why"><summary>📒 이 화면 종베 후보의 실제 다음 날 결과</summary>
-  <div id="jb-perf" class="ts">로딩 중…</div></details>
-</div>
-
 <!-- 매매 일지 탭 -->
 <div id="panel-journal" class="panel content hbt">
   <div id="jr-login" class="bx" style="max-width:440px;margin:40px auto;padding:24px">
@@ -771,6 +681,7 @@ select{background:var(--c3);border:1px solid var(--ln);color:var(--bd);padding:6
 <!-- 섹터 수급 탭 -->
 <div id="panel-sector" class="panel content hbt">
  <div class="sx-grid">
+  <div>
   <section class="bx">
     <div class="bx-h"><b>섹터 순위</b><span class="ts" id="rot-info"></span></div>
     <p class="bx-s">지금 어느 섹터에 돈이 붙었나 · 20일 상승 순 · 섹터를 누르면 종목이 펼쳐집니다 (다음에 오를 곳을 맞히는 표는 아님)</p>
@@ -780,11 +691,19 @@ select{background:var(--c3);border:1px solid var(--ln);color:var(--bd);padding:6
     </table>
   </section>
   <section class="bx">
+    <div class="bx-h"><b>다음에 뜰 섹터 후보</b><span class="ts">움직이기 시작</span></div>
+    <p class="bx-s">상위 3 밖인데 최근 5일 시장보다 +2%p↑ · 20일 안 돈 유입(섹터 거래대금 1.5배 + 섹터 +1%) 2번↑ · 순위 5일 새 3계단↑ 중 하나. 누르면 그 섹터 종목이 보입니다.</p>
+    <div id="jb-movers" style="display:flex;flex-wrap:wrap;gap:8px"></div>
+    <div id="jb-mover-detail" style="margin-top:8px"></div>
+  </section>
+  </div>
+  <section class="bx">
     <div class="bx-h"><b>오늘 강한 테마</b><span class="ts" id="live-theme-info"></span></div>
     <p class="bx-s">1분마다 갱신 · 막대 = 테마 종목 중 오른 비율 · 거래 = <span id="live-theme-tvdate">평소</span> 대비 · 누르면 종목</p>
     <div id="live-theme-body" class="lt-list"><span class="ts">불러오는 중…</span></div>
   </section>
  </div>
+
 
   <details class="why" style="margin-top:8px"><summary>외국인·기관 수급 테마 표 보기 (참고용)</summary>
   <!-- 매집 감지 테마 -->
@@ -925,6 +844,11 @@ select{background:var(--c3);border:1px solid var(--ln);color:var(--bd);padding:6
   </details>
   <details class="sec" data-k="vr">
     <summary>🔥 대량거래 관심종목 <span class="ts" id="vr-sum"></span></summary>
+    <div style="margin:4px 0 12px"><div style="font-size:14px;font-weight:700;color:var(--text);margin:4px 0 2px">🔔 오늘 거래대금 신기록 <span class="ts" id="vrc-info"></span></div>
+    <p class="lead" style="margin:2px 0 6px">오늘 거래대금이 6개월 넘게 만의 최고인 종목 (거래대금 30억↑). 오래된 기록일수록 위. 관심 등록용 — 터진 날 추격보다 며칠 쉬는 걸 보고 들어가기.</p>
+    <div id="vrc-body" style="display:flex;flex-wrap:wrap;gap:6px">로딩 중…</div>
+    <span class="ts" id="lu-info" hidden></span>
+    <div id="lu-body" class="ts" hidden></div></div>
 
     <div style="display:flex;flex-wrap:wrap;align-items:center;gap:10px;margin-bottom:8px">
       <select id="vr-stage" onchange="renderVolumeRecords()">
@@ -992,6 +916,77 @@ select{background:var(--c3);border:1px solid var(--ln);color:var(--bd);padding:6
     <div id="bb-burst" style="margin-bottom:8px"></div>
     <div id="bb-body" class="cc-grid ts">로딩 중…</div>
   </details>
+  <details class="sec" data-k="jb">
+    <summary>🕯 종베 후보 — 오늘 종가에 살 종목 <span class="ts" id="jb-date"></span></summary>
+    <div id="mp-box" style="margin:4px 0 12px">불러오는 중…</div>
+    <p class="lead" style="margin-top:6px">시장 상승·횡보 → 뜨거운 섹터 → 그날 섹터에 돈 몰림 → 거래 실린 양봉, 또는 <b style="color:var(--y2)">🕯 큰 양봉 다음 날 밑꼬리 도지</b>. <b>파는 법:</b> 다음 날 +2% 미만이면 전부 정리, +2% 이상이면 30% · 그다음 날도 오르면 30% 더 · 나머지는 최고 종가 -15% 이탈 시.</p>
+    <div style="display:flex;flex-wrap:wrap;align-items:center;gap:10px;margin-bottom:8px">
+    <b style="font-size:13px;color:var(--text)">뜨는 섹터</b>
+    <label style="font-size:12.5px;color:var(--bd)">시총
+      <select id="jb-mincap" onchange="try{localStorage.setItem('jb-mincap',this.value)}catch(e){};renderJongbe()">
+        <option value="0">전체</option><option value="500">500억 이상</option><option value="1000" selected>1,000억 이상</option><option value="2000">2,000억 이상</option>
+        <option value="3000">3,000억 이상</option><option value="10000">1조 이상</option>
+      </select></label>
+    <label style="font-size:12.5px;color:var(--bd);cursor:pointer" title="20일선보다 +20% 넘게 뜬 종목과 그날 +12% 넘게 오른 종목을 뺍니다. 3년 확인: 평균 수익은 비슷한데 다음 날 -5% 넘는 손실이 2~4배"><input type="checkbox" id="jb-safe" checked onchange="try{localStorage.setItem('jb-safe',this.checked?'1':'0')}catch(e){};renderJongbe()"> 급등·과열 빼기</label>
+    <label style="font-size:12.5px;color:var(--bd);cursor:pointer"><input type="checkbox" id="jb-showb" onchange="renderJongbe()"> B등급도 보기</label>
+    <label style="font-size:12.5px;color:var(--bd);cursor:pointer" title="투자주의·경고·위험, 단기과열, 관리종목을 모든 목록에서 뺍니다"><input type="checkbox" id="jb-noflag" onchange="try{localStorage.setItem('jb-noflag',this.checked?'1':'0')}catch(e){};renderJongbe()"> 경고 빼기</label>
+    <label style="font-size:12.5px;color:var(--bd);cursor:pointer" title="신용 매수 불가(증거금 100%, 한국투자증권 기준) 종목을 뺍니다"><input type="checkbox" id="jb-nocred" onchange="try{localStorage.setItem('jb-nocred',this.checked?'1':'0')}catch(e){};renderJongbe()"> 신용불가(한투) 빼기</label>
+    <span class="ts" id="jb-count"></span>
+  </div>
+  <div id="jb-fams" style="display:flex;flex-wrap:wrap;gap:8px"></div>
+    <div style="margin-top:10px">
+  <table class="pb-table">
+    <thead><tr><th>종목</th><th>등급</th><th>그날 봉</th><th>섹터</th><th>종가</th></tr></thead>
+    <tbody id="jb-body"><tr><td colspan="5" style="color:var(--mu);text-align:center;padding:20px">로딩 중…</td></tr></tbody>
+  </table>
+  <div id="jb-limit" class="ts" hidden></div>
+    </div>
+    <details class="why"><summary>📒 이 화면 종베 후보의 실제 다음 날 결과</summary>
+  <div id="jb-perf" class="ts">로딩 중…</div></details>
+  </details>
+  <details class="sec" data-k="sw">
+    <summary>📈 스윙·선취매 — 며칠~몇 주 들고 갈 종목 <span class="ts" id="jb-ch-info"></span></summary>
+    <p class="lead" style="margin-top:6px"><b style="color:var(--g)">🚀 돌파</b>·<b>돌파 대기</b> = 120일 박스 상단(20일 넘게 묵은 고점) 처음 넘음·-3% 이내 (이미 많이 오른 종목·꼬리만 남은 종목 뺌) · <b style="color:var(--g)">🚀 꼬리 돌파</b> = 종가 고점 넘고 버티다 옛 꼬리 끝까지 종가로 넘음(물린 사람 0) · <b style="color:var(--g)">저가 지킴</b> = 대량거래 봉 저가 안 깸 · <b style="color:var(--b)">눌림</b> = 20일 고점 -5~-15% · <b style="color:var(--y2)">버팀</b> = 섹터 빠진 날 안 빠짐</p>
+    <table class="pb-table">
+      <thead><tr><th>종목</th><th>근거</th><th>오늘</th><th>섹터</th><th>종가</th></tr></thead>
+      <tbody id="jb-charts"><tr><td colspan="5" style="color:var(--mu);text-align:center;padding:16px">불러오는 중…</td></tr></tbody>
+    </table>
+  </details>
+  <details class="sec" data-k="tools">
+    <summary>🧰 보유·관심 종목 체크 · 공매도 감시</summary>
+  <div class="jb-row two">
+  <section class="bx" style="background:var(--sunk)">
+    <b style="color:var(--strong);font-size:15px">✅ 보유·관심 종목 체크</b> <span class="ts">종목명이나 코드를 쉼표로 (브라우저에 기억됩니다)</span>
+    <div style="display:flex;gap:8px;margin-top:8px;flex-wrap:wrap">
+      <input id="jb-q" placeholder="예: 디케이티, 원익, 에스피지" style="flex:1;min-width:220px;background:var(--bg);border:1px solid var(--ln);color:var(--bd);padding:6px 10px;border-radius:6px">
+      <button class="btn btn-sm" onclick="jbCheck()">확인</button>
+    </div>
+    <div id="jb-check" style="margin-top:10px"></div>
+  </section>
+
+  <section class="bx" style="background:var(--sunk)">
+    <b style="color:var(--strong);font-size:15px">🔎 공매도·대차잔고 감시</b> <span class="ts">대차잔고 = 빌려 간 주식(공매도 실탄). 교환사채·유상증자 앞두고 늘면 매도 압력. 종목명·코드 쉼표로 (브라우저 기억)</span>
+    <div style="display:flex;gap:8px;margin-top:8px;flex-wrap:wrap">
+      <input id="sw-q" placeholder="예: 가온전선, 티에스이" style="flex:1;min-width:220px;background:var(--bg);border:1px solid var(--ln);color:var(--bd);padding:6px 10px;border-radius:6px">
+      <button class="btn btn-sm" onclick="swCheck()">확인</button>
+    </div>
+    <div id="sw-out" style="margin-top:10px"></div>
+  </section>
+  </div>
+  </details>
+  <div id="jb-market" hidden></div>
+  <div style="display:none;border:1px solid var(--ln);border-radius:10px;padding:12px 16px;margin-bottom:20px"><!-- 2026-10-05 숨김: 사용자가 진입 종목을 직접 알려 주기로 -->
+    <b style="color:var(--tx)">📝 차트 판단 기록</b> <span class="ts" id="lb-stats"></span>
+    <p class="ts" style="margin:4px 0 8px">목록 종목 옆 👍(살 만함) · 👎(아님)를 눌러 주세요 — 결과를 모를 때 누른 판단이 고르는 눈을 배우는 재료입니다. 👎는 이유 한 단어(매물대·꼬리·거래 약함 등)를 적으면 더 빨리 배웁니다.
+      나중에 보고 "이거 왜 안 들어갔지" 싶은 종목은 아래에 날짜와 함께 따로 남겨 주세요(결과를 알고 고른 것이라 따로 씁니다).</p>
+    <div style="display:flex;gap:6px;flex-wrap:wrap">
+      <input id="lb-mname" placeholder="놓친 종목 (예: 필옵틱스)" style="flex:1;min-width:140px;background:var(--bg);border:1px solid var(--ln);color:var(--bd);padding:6px 10px;border-radius:6px">
+      <input id="lb-mdate" type="date" style="background:var(--bg);border:1px solid var(--ln);color:var(--bd);padding:5px 8px;border-radius:6px">
+      <input id="lb-mmemo" placeholder="그날 들어갔어야 한 이유 (선택)" style="flex:2;min-width:180px;background:var(--bg);border:1px solid var(--ln);color:var(--bd);padding:6px 10px;border-radius:6px">
+      <button class="btn btn-sm" onclick="lbMissed()">남기기</button>
+    </div>
+    <div id="lb-missed" class="ts" style="margin-top:8px"></div>
+  </div>
 </div>
 
 <!-- 캔들차트 모달 (토스증권 실시간) -->
@@ -1105,7 +1100,8 @@ async function loadHeader(){
 function switchTab(id) {
   // 실적 개선 탭은 2026-10-04 숨김 (데이터는 📈 실적 표시로 계속 쓴다, /earnings 주소는 그대로)
   // 2026-10-05 사용자 "당분간 차트 후보 보고 매매" → 차트 후보를 첫 탭으로, 종베는 검증 중으로 뒤로
-  const tabs = ['home','candidates','calendar','sector','journal','screener','heatmap','jongbe','discussion','suggest'];
+  const tabs = ['home','candidates','calendar','sector','journal','screener','heatmap','discussion','suggest'];
+  if(id==='jongbe') id='candidates';   // 종베 탭은 2026-10-11 차트 후보로 합침 (예전 주소 #jongbe도 여기로)
   if(!tabs.includes(id))return;
   _curTab=id; document.body.dataset.tab=id;
   try{ history.replaceState(null,'',id==='home'?location.pathname:'#'+id); }catch(e){}   // 새로고침해도 이 탭에 남게
@@ -1114,12 +1110,11 @@ function switchTab(id) {
   document.querySelectorAll('.panel').forEach(p=>p.classList.remove('active'));
   document.getElementById('panel-'+id).classList.add('active');
   if(id==='screener')loadTopValue();
-  if(id==='jongbe')loadJongbe();
   if(id==='journal')loadJournal();
-  if(id==='sector'){loadSector();loadLiveThemes();loadRotation();}
+  if(id==='sector'){loadSector();loadLiveThemes();loadRotation();loadJongbeOnce();}
   if(id==='calendar')loadSectorCal();
   if(id==='heatmap')loadHeatmap();
-  if(id==='candidates')loadCandidates();
+  if(id==='candidates'){loadCandidates();loadJongbeOnce();}
   if(id==='home'){loadDashboard();loadWorkspace();}
   if(id==='suggest')document.getElementById('suggest-frame').src='/suggestions';
   if(id==='discussion'&&!document.getElementById('discussion-frame').src)document.getElementById('discussion-frame').src='/discussion';
@@ -1403,6 +1398,9 @@ async function loadMyPattern(){
    <div>${N.map(x=>chip(x,'#1f6feb')).join('')||'<span class="ts">없음</span>'}</div>
    <div class="ts" style="margin-top:6px">⚠ 매매 기록에서 손실이 난 자리: 20일선 아래·20일 고점 -8%↓에서 산 것 평균 -1.43%, 거래 0.5배↓ 날 매수 -1.51%. ⚠️이격 20%↑ = 20일선보다 20% 넘게 위 (3년 20일 뒤 −0.8~−1.4%p · 내 종베도 약했음).</div>`;
 }
+// 종베 후보·스윙·다음 섹터는 차트 후보·섹터 흐름 탭에 들어감 — 5분 안엔 다시 안 받음
+let _jbAt=0;
+function loadJongbeOnce(){ if(Date.now()-_jbAt>300000){ _jbAt=Date.now(); loadJongbe(); } }
 async function loadJongbe(){
   loadMyPattern();
   let d=null;
@@ -1413,7 +1411,6 @@ async function loadJongbe(){
   const mk=document.getElementById('jb-market');
   if(!d){ mk.textContent='불러오지 못했습니다'; return; }
   const st=(d.market&&d.market.state)||'-';
-  mvBanner(mk);      // 세 탭 같은 문구 (2026-10-10)
   document.getElementById('jb-date').textContent=`· ${d.trading_date} 장 마감 기준`;
   const stc={'과열':'var(--r)','주의':'var(--strong)'};
   document.getElementById('jb-fams').innerHTML=d.families.map(f=>{
