@@ -28,12 +28,72 @@ ETFS = [("SPY", "SPDR S&P 500 ETF"), ("QQQ", "Invesco QQQ"), ("SOXX", "iShares S
 
 
 def is_us(code: str) -> bool:
-    return bool(re.search(r"[A-Za-z]", code or ""))
+    """미국 티커는 영문자로 시작. 한국 코드는 숫자로 시작(새 코드 0004V0·0080Y0처럼 중간에 영문이 들어가도 한국)."""
+    return bool(re.match(r"[A-Za-z]", code or ""))
+
+
+# ── 오늘 시세 덮어쓰기 (2026-10-11 점검: 스크리너는 하루 전 값이라 Nasdaq 관심종목 시세로 20개씩 받아 덮음) ──
+_Q: dict = {"t": 0.0, "busy": False, "data": {}}
+
+
+def _refresh_quotes(syms: list[str]) -> None:
+    from concurrent.futures import ThreadPoolExecutor  # noqa: PLC0415
+    h = {"User-Agent": "Mozilla/5.0", "Accept": "application/json"}
+
+    def one(chunk):
+        q = "&".join("symbol=" + x.lower().replace(".", "%2F") + "%7cstocks" for x in chunk)
+        for k in range(3):
+            try:
+                d = requests.get("https://api.nasdaq.com/api/quote/watchlist?" + q, headers=h, timeout=20).json().get("data") or []
+                res = {}
+                for r in d:
+                    try:
+                        res[(r.get("symbol") or "").upper().replace("/", ".")] = (float(str(r.get("lastSalePrice") or "0").replace("$", "").replace(",", "")),
+                                                                                float(str(r.get("percentageChange") or "0").replace("%", "").replace("+", "") or 0),
+                                                                                float(str(r.get("volume") or "0").replace(",", "") or 0))
+                    except ValueError:
+                        pass
+                return res
+            except Exception:  # noqa: BLE001
+                time.sleep(1 + k)
+        return {}
+    try:
+        chunks = [syms[i:i + 20] for i in range(0, len(syms), 20)]
+        out = {}
+        with ThreadPoolExecutor(4) as ex:
+            for r in ex.map(one, chunks):
+                out.update(r)
+        if len(out) > len(syms) * 0.5:
+            _Q.update(data=out, t=time.time())
+    finally:
+        _Q["busy"] = False
+
+
+def _quotes_kick(syms: list[str]) -> None:
+    if time.time() - _Q["t"] < 1200 or _Q["busy"]:
+        return
+    _Q["busy"] = True
+    import threading  # noqa: PLC0415
+    threading.Thread(target=_refresh_quotes, args=(syms,), daemon=True).start()
 
 
 def universe() -> list[dict]:
+    """종목 목록(스크리너, 6시간) + 오늘 시세(Nasdaq 관심종목 시세, 20분, 뒤에서 받음)를 덮은 것."""
+    base = _universe_base()
+    _quotes_kick([x["code"] for x in base if x["cap"] > 0])
+    q = _Q["data"]
+    if not q:
+        return base
+    return [({**x, "close": q[x["code"]][0], "chg": q[x["code"]][1], "vol": q[x["code"]][2] or x["vol"]} if x["code"] in q else x) for x in base]
+
+
+def quotes_age() -> float | None:
+    return time.time() - _Q["t"] if _Q["t"] else None
+
+
+def _universe_base() -> list[dict]:
     hit = _LIST.get("u")
-    if hit and time.time() - hit[0] < 3600:      # 등락·거래량도 같이 쓰므로 1시간마다 (요청 한 번, 0.5초)
+    if hit and time.time() - hit[0] < 6 * 3600:      # 종목·시총은 자주 안 바뀜 (시세는 위에서 따로)
         return hit[1]
     try:
         from backend.collector.market_events import US_EARNINGS  # noqa: PLC0415
@@ -80,7 +140,12 @@ def _pages(code: str, interval: str, n_pages: int) -> list[dict]:
         p = {"symbol": code, "interval": interval, "count": 200}
         if before:
             p["before"] = before
-        r = toss_client._get("/candles", p)  # noqa: SLF001
+        r = None
+        for k in range(3):
+            r = toss_client._get("/candles", p)  # noqa: SLF001
+            if r is not None and r.status_code == 429:
+                time.sleep(2 + 3 * k); continue
+            break
         if r is None or r.status_code != 200:
             break
         res = r.json().get("result") or {}
@@ -100,16 +165,18 @@ def candles(code: str, tf: str = "1d", ext: bool = False) -> list[dict]:
     hit = _CANDLE.get(key)
     if hit and time.time() - hit[0] < 1800:
         return hit[1]
-    if tf in ("1d", "1w"):
+    if tf == "1w":
+        day = candles(code, "1d")
+    if tf == "1d":
         raw = sorted(_pages(code, "1d", 4), key=lambda c: c["timestamp"])
         day = []
         for c in raw:
             d = datetime.fromisoformat(c["timestamp"]).astimezone(ET).date()      # 토스 미국 일봉은 한국 13시(= 미국 0시) 표시 → 미국 날짜
             day.append({"timestamp": f"{d}T00:00:00.000+09:00", "openPrice": c["openPrice"], "highPrice": c["highPrice"], "lowPrice": c["lowPrice"],
                         "closePrice": c["closePrice"], "volume": c.get("volume") or "0"})
-        if tf == "1d":
-            out = day
-        else:
+        out = day
+    if tf == "1w":
+        if True:      # 주봉 = 일봉 캐시를 월요일 기준으로 묶음
             wk: dict = {}
             for c in day:
                 d = datetime.fromisoformat(c["timestamp"][:10])
@@ -123,7 +190,7 @@ def candles(code: str, tf: str = "1d", ext: bool = False) -> list[dict]:
                     w["closePrice"] = c["closePrice"]
                 w["volume"] = float(w["volume"]) + float(c["volume"] or 0)
             out = [wk[k] for k in sorted(wk)]
-    else:
+    elif tf != "1d":
         mins = int(tf[:-1])
         pages = {1: 5, 3: 10, 5: 14, 15: 20, 30: 25, 60: 25}.get(mins, 10)      # 1분봉 200개씩 — 많을수록 첫 표시가 느림(한 번 받으면 30분 저장)
         raw = sorted(_pages(code, "1m", pages), key=lambda c: c["timestamp"])
@@ -135,7 +202,11 @@ def candles(code: str, tf: str = "1d", ext: bool = False) -> list[dict]:
             if not ext and not reg:
                 continue
             base = t0.replace(hour=9, minute=30, second=0, microsecond=0)
-            k = base + timedelta(minutes=((t0 - base).total_seconds() // 60 // mins) * mins) if t0 >= base else t0.replace(second=0, microsecond=0)
+            if t0 >= base:
+                k = base + timedelta(minutes=((t0 - base).total_seconds() // 60 // mins) * mins)
+            else:      # 장 전: 자정 기준으로 같은 간격
+                mm = t0.hour * 60 + t0.minute
+                k = t0.replace(hour=0, minute=0, second=0, microsecond=0) + timedelta(minutes=(mm // mins) * mins)
             b = buckets.get(k)
             v = float(c.get("volume") or 0)
             if not b:
@@ -147,7 +218,8 @@ def candles(code: str, tf: str = "1d", ext: bool = False) -> list[dict]:
             b, kst = buckets[k], k.astimezone(KST)
             out.append({"t": calendar.timegm(kst.replace(tzinfo=None).timetuple()), "timestamp": kst.strftime("%Y-%m-%dT%H:%M:00+09:00"),
                         "openPrice": b["o"], "highPrice": b["h"], "lowPrice": b["l"], "closePrice": b["c"], "volume": b["v"]})
-    _CANDLE[key] = (time.time(), out)
+    if out:      # 못 받았으면 저장 안 함 (다음에 다시)
+        _CANDLE[key] = (time.time(), out)
     if len(_CANDLE) > 300:
         _CANDLE.clear()
     return out
@@ -237,7 +309,7 @@ def indices() -> dict:
             d = requests.get(f"https://api.stock.naver.com/chart/foreign/{kind}/{code}?periodType=dayCandle", headers=h, timeout=8).json().get("priceInfos") or []
             close = float(str(b.get("closePrice")).replace(",", ""))
             pct = float(b.get("fluctuationsRatio") or 0)
-            prev = round(close - float(str(b.get("compareToPreviousClosePrice") or 0).replace(",", "")) * (1 if pct >= 0 else -1), 2)
+            prev = round(close / (1 + pct / 100), 2)
             cl = [float(x["closePrice"]) for x in d]
             ma20 = sum(cl[-20:]) / 20 if len(cl) >= 20 else None
             # 장중 선: 지수 분봉은 못 받아서 같은 방향 ETF 1분봉으로 (선물 자리는 장 전·후 포함)

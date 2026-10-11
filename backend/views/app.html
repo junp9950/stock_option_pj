@@ -1187,7 +1187,7 @@ function themeSwitched(){}
 // ── 머리 정보: 시장 판단 · 지수 · 다음 주요 일정 · 기준 시각 ──
 async function loadHeader(){
   const box=document.getElementById('hd-info'); if(!box) return;
-  if(_mk==='us'){ const I=_usI||await fetch(`${API}/us/indices`).then(r=>r.ok?r.json():null).catch(()=>null); if(I) _usI=I;
+  if(_mk==='us'){ const I=(_usI&&Date.now()-_usAt<300000)?_usI:await fetch(`${API}/us/indices`).then(r=>r.ok?r.json():null).catch(()=>null); if(I&&I!==_usI){ _usI=I; _usAt=Date.now(); }
     if(_mk!=='us') return;
     const v=I&&I.verdict, k=v&&{'상승':'k-g','횡보':'k-n','하락':'k-b'}[v.state], g={'상승':'▲','횡보':'■','하락':'▼'};
     box.innerHTML=(k?`<span class="hd-v ${k}" title="S&P500 20일선 대비 ${v.vs_ma20_pct}%">${g[v.state]} 미국 ${v.state}</span>`:'')+(I?I.items.map((x,i)=>`<span class="hd-ix" onclick="switchTab('us');_usSym=${i};usSpark()" title="${x.delay||''}"><span class="l">${x.name}</span><b>${x.close.toLocaleString(undefined,{maximumFractionDigits:2})}</b><span style="color:${x.pct>=0?'var(--r)':'var(--b)'}">${x.pct>=0?'▲':'▼'} ${Math.abs(x.pct).toFixed(2)}%</span></span>`).join(''):'');
@@ -2692,14 +2692,14 @@ function wsSearch(v){      // 종목 검색 (2026-10-09) — 이름·코드·초
     if(document.getElementById('ws-q').value!==v) return;
     const L=(d&&d.items)||[];
     box.innerHTML=L.length?L.map(x=>`<div class="ws-item" onclick="wsPick('${x.code}','${x.name.replace(/'/g,'')}')">${wsAv(x.code,x.name)}<div class="ws-txt"><div class="ws-nm"><span class="n">${x.name}</span></div><div class="ws-tg">${x.code}</div></div>
-      <div class="ws-px">${x.close?(/[A-Za-z]/.test(x.code)?'$'+(+x.close).toFixed(2):Math.round(x.close).toLocaleString()):'-'}<div style="color:${x.chg>0?'var(--up)':x.chg<0?'var(--down)':'var(--muted)'}">${x.chg>0?'+':''}${(x.chg||0).toFixed(2)}%</div></div></div>`).join('')
+      <div class="ws-px">${x.close?(/^[A-Za-z]/.test(x.code)?'$'+(+x.close).toFixed(2):Math.round(x.close).toLocaleString()):'-'}<div style="color:${x.chg>0?'var(--up)':x.chg<0?'var(--down)':'var(--muted)'}">${x.chg>0?'+':''}${(x.chg||0).toFixed(2)}%</div></div></div>`).join('')
       :'<div class="ts" style="padding:10px">찾는 종목이 없습니다</div>';
     box.classList.add('on');
   },200);
 }
 function wsPick(code,name){
   const q=document.getElementById('ws-q'); q.value=''; q.blur(); wsSearch('');
-  if(/[A-Za-z]/.test(code)){ switchTab('usstock'); svOpen(code,name); return; }   // 미국 종목은 미장 종목 탭에서
+  if(/^[A-Za-z]/.test(code)){ switchTab('usstock'); svOpen(code,name); return; }   // 미국 종목은 미장 종목 탭에서
   wsOpen(code,name);
   const m=document.querySelector('.ws-main'); if(m&&window.innerWidth<900) m.scrollIntoView({behavior:'smooth',block:'start'});
 }
@@ -3195,10 +3195,10 @@ function svSaveRecent(code,name){ try{ const L=svRecent().filter(x=>x.code!==cod
 function svChips(L){ return L.map(x=>`<span class="sv-chip" onclick="svOpen('${x.code}','${String(x.name).replace(/'/g,'')}')">${x.name}</span>`).join(''); }
 let _svM='kr';
 function svInit(m){
-  _svM=m||'kr'; const isUS=_svM==='us', mine=x=>/[A-Za-z]/.test(x.code)===isUS;
+  _svM=m||'kr'; const isUS=_svM==='us', mine=x=>/^[A-Za-z]/.test(x.code)===isUS;
   document.getElementById('sv-q').placeholder=isUS?'🔍 미국 종목 검색 (티커·영문·한글)':'🔍 종목 검색 (이름·코드·초성)';
   const R=svRecent().filter(mine); document.getElementById('sv-recent').innerHTML=R.length?`<span class="ts">최근 본</span>${svChips(R)}`:'';
-  if(_sv.code&&/[A-Za-z]/.test(_sv.code)!==isUS){ _sv.code=null; document.getElementById('sv-body').hidden=true; document.getElementById('sv-empty').hidden=false; }
+  if(_sv.code&&/^[A-Za-z]/.test(_sv.code)!==isUS){ _sv.code=null; document.getElementById('sv-body').hidden=true; document.getElementById('sv-empty').hidden=false; }
   if(isUS&&!_sv.code&&!R.length){ svOpen('NVDA','엔비디아'); return; }
   if(!_sv.code){
     const D=_ws.data; const sug=D&&D.candidates?D.candidates.filter(x=>x.lane==='entry').slice(0,10):[];
@@ -3214,7 +3214,7 @@ function svSearch(v){
     if(document.getElementById('sv-q').value!==v) return;
     const L=(d&&d.items)||[];
     box.innerHTML=L.length?L.map(x=>`<div class="ws-item" onclick="svPick('${x.code}','${x.name.replace(/'/g,'')}')">${wsAv(x.code,x.name)}<div class="ws-txt"><div class="ws-nm"><span class="n">${x.name}</span></div><div class="ws-tg">${x.code}</div></div>
-      <div class="ws-px">${x.close?(/[A-Za-z]/.test(x.code)?'$'+(+x.close).toFixed(2):Math.round(x.close).toLocaleString()):'-'}<div style="color:${x.chg>0?'var(--up)':x.chg<0?'var(--down)':'var(--muted)'}">${x.chg>0?'+':''}${(x.chg||0).toFixed(2)}%</div></div></div>`).join('')
+      <div class="ws-px">${x.close?(/^[A-Za-z]/.test(x.code)?'$'+(+x.close).toFixed(2):Math.round(x.close).toLocaleString()):'-'}<div style="color:${x.chg>0?'var(--up)':x.chg<0?'var(--down)':'var(--muted)'}">${x.chg>0?'+':''}${(x.chg||0).toFixed(2)}%</div></div></div>`).join('')
       :'<div class="ts" style="padding:10px">찾는 종목이 없습니다</div>';
     box.classList.add('on');
   },200);
@@ -3240,10 +3240,10 @@ const svEok=v=>v==null?'-':Math.abs(v)>=10000?(v/10000).toFixed(1)+'조':Math.ro
 const svC=n=>n>0?'var(--r)':n<0?'var(--b)':'var(--mu)';
 const svSg=n=>(n>0?'+':'')+n.toLocaleString();
 async function svOpen(code,name){
-  name=String(name).replace(' 🇺🇸',''); _sv.code=code; _sv.name=name; _sv.cache={}; _sv.us=/[A-Za-z]/.test(code); svSaveRecent(code,name); _svM=_sv.us?'us':'kr';
+  name=String(name).replace(' 🇺🇸',''); _sv.code=code; _sv.name=name; _sv.cache={}; _sv.us=/^[A-Za-z]/.test(code); svSaveRecent(code,name); _svM=_sv.us?'us':'kr';
   document.querySelectorAll('#sv-body .sv-kr').forEach(e=>e.hidden=_sv.us);   // 미국 종목은 차트·기본 정보만 (2026-10-11)
   document.getElementById('sv-empty').hidden=true; document.getElementById('sv-body').hidden=false;
-  document.getElementById('sv-recent').innerHTML=`<span class="ts">최근 본</span>${svChips(svRecent().filter(x=>/[A-Za-z]/.test(x.code)===_sv.us))}`;
+  document.getElementById('sv-recent').innerHTML=`<span class="ts">최근 본</span>${svChips(svRecent().filter(x=>/^[A-Za-z]/.test(x.code)===_sv.us))}`;
   document.getElementById('sv-head').innerHTML=`<div class="sv-hd"><span class="nm">${name}</span><span class="ts">${code}</span></div>`;
   ['sv-metrics','sv-earn','sv-stab','sv-mix','sv-flow','sv-short','sv-rep','sv-disc'].forEach(id=>document.getElementById(id).innerHTML='<span class="ts">불러오는 중…</span>');
   _sv.disc=null; fetch(`${API}/stock/${code}/disclosures`).then(r=>r.ok?r.json():null).catch(()=>null).then(d=>{ if(_sv.code===code){ _sv.disc=d; svDisc(); svHead(); } });
@@ -3410,11 +3410,12 @@ function svShort(){
 }
 
 // ── 미장 (2026-10-11) ─────────────────────────────────────────
-let _usO=null, _usI=null, _usSym=0, _us={code:null,name:null,tf:'1d',per:130,cache:{},list:'gainers'};
+let _usO=null, _usI=null, _usAt=0, _usSym=0, _us={code:null,name:null,tf:'1d',per:130,cache:{},list:'gainers'};
 const usM=v=>v>=1e12?(v/1e12).toFixed(2)+'T':v>=1e9?(v/1e9).toFixed(1)+'B':v>=1e6?(v/1e6).toFixed(0)+'M':Math.round(v).toLocaleString();
 const usC=n=>n>0?'var(--up)':n<0?'var(--down)':'var(--muted)';
 const usP=n=>`<span style="color:${usC(n)}">${n>0?'+':''}${(+n).toFixed(2)}%</span>`;
 async function usLoad(){
+  _usAt=Date.now();
   const [I,O]=await Promise.all([fetch(`${API}/us/indices`).then(r=>r.ok?r.json():null).catch(()=>null), fetch(`${API}/us/overview`).then(r=>r.ok?r.json():null).catch(()=>null)]);
   if(I) _usI=I; if(O) _usO=O;
   usTop(); usSide(); usList(_us.list);
@@ -3750,7 +3751,7 @@ try{ try{ const v=localStorage.getItem('vr-mincap'); if(v!==null) document.getEl
 switchTab(location.hash ? location.hash.slice(1) : (_mk==='us'?'us':'home'));
 setTheme((()=>{ try{ return localStorage.getItem('theme')||'dark'; }catch(e){ return 'dark'; } })());
 document.querySelectorAll('.tfx').forEach(b=>b.classList.toggle('on',TFX));
-loadHeader(); setInterval(()=>{ const n=new Date(), hm=n.getHours()*100+n.getMinutes(); if(n.getDay()>0&&n.getDay()<6&&hm>=900&&hm<=1540&&!document.hidden) loadHeader(); }, 60000);
+loadHeader(); setInterval(()=>{ const n=new Date(), hm=n.getHours()*100+n.getMinutes(); if(document.hidden) return; if(_mk==='us'){ if(n.getMinutes()%5===0){ loadHeader(); if(_curTab==='us') usLoad(); } return; } if(n.getDay()>0&&n.getDay()<6&&hm>=900&&hm<=1540) loadHeader(); }, 60000);   // 미장은 5분마다 (지연 시세)
 const chartQuery=new URLSearchParams(location.search);
 if (/^[0-9A-Z]{6}$/.test(chartQuery.get('chart')||'')) openChartModal(chartQuery.get('chart'),chartQuery.get('name')||chartQuery.get('chart'),'');
 </script>
