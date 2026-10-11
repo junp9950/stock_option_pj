@@ -225,7 +225,7 @@ select{background:var(--c3);border:1px solid var(--ln);color:var(--bd);padding:6
 .ws-ctl{display:flex;flex-wrap:wrap;gap:4px 14px;align-items:center;margin:2px 0 6px}.ws-ctl .ws-per{margin:0}
 .ws-per{display:flex;gap:4px;margin:2px 0 6px}.ws-per button{background:var(--card2);border:1px solid var(--line);color:var(--muted);border-radius:12px;padding:3px 10px;font-size:11.5px;cursor:pointer}
 .ws-per button.on{color:var(--text);border-color:var(--blue)}
-.ws-per button.tfx{margin-left:6px}.ws-per button.tfx.on{background:var(--neu);color:var(--neu-on);border-color:var(--neu)}
+.ws-per button.tfx,.ws-per button.pattb{margin-left:6px}.ws-per button.tfx.on,.ws-per button.pattb.on{background:var(--neu);color:var(--neu-on);border-color:var(--neu)}
 .ws-lg{margin-top:6px}.ws-lg summary{cursor:pointer;font-size:12px;color:var(--muted);list-style:none;display:inline-block;padding:3px 10px;border:1px solid var(--line);border-radius:12px}.ws-lg summary::-webkit-details-marker{display:none}.ws-lg[open] summary{color:var(--text);border-color:var(--blue)}
 .ws-legend{display:flex;flex-direction:column;gap:5px;margin-top:8px;font-size:12px;line-height:1.5;color:var(--muted)}
 .ws-legend span{display:block;word-break:keep-all;overflow-wrap:anywhere}.ws-legend i{width:10px;height:10px;border-radius:3px;display:inline-block}
@@ -662,7 +662,7 @@ select{background:var(--c3);border:1px solid var(--ln);color:var(--bd);padding:6
         <div class="ws-head"><b id="jr-ws-name">종목을 고르세요</b><span class="ts" id="jr-ws-sub"></span></div>
         <div class="note" id="jr-ws-note" style="margin-bottom:6px"></div>
         <div class="ws-per" id="jr-ws-tf"><button data-tf="1d" onclick="jrWsTf('1d')">일봉</button><button data-tf="1w" onclick="jrWsTf('1w')">주봉</button><button data-tf="60m" onclick="jrWsTf('60m')">60분</button><button data-tf="30m" onclick="jrWsTf('30m')">30분</button><button data-tf="15m" onclick="jrWsTf('15m')">15분</button><button data-tf="5m" onclick="jrWsTf('5m')">5분</button><button data-tf="1m" onclick="jrWsTf('1m')">1분</button><button class="tfx" onclick="tfExt()" title="분봉에 시간외(NXT 08:00~09:00 · 15:30~20:00) 넣기">시간외</button></div>
-      <div class="ws-per" id="jr-ws-per"><button data-n="66" onclick="jrWsPeriod(66)">3개월</button><button data-n="130" onclick="jrWsPeriod(130)">6개월</button><button data-n="250" onclick="jrWsPeriod(250)">1년</button></div>
+      <div class="ws-per" id="jr-ws-per"><button data-n="66" onclick="jrWsPeriod(66)">3개월</button><button data-n="130" onclick="jrWsPeriod(130)">6개월</button><button data-n="250" onclick="jrWsPeriod(250)">1년</button><button class="pattb" onclick="pattToggle()" title="박스 · 수렴선 · 응축(주황 띠) 표시">모양선</button></div>
         <div class="lwbox"><div class="lwleg" id="jr-chart-leg"></div><div id="jr-chart" class="lwc"></div></div>
         <details class="ws-lg"><summary>ⓘ 차트 표시 설명</summary><div class="ws-legend"><span>⬆ 흰색 = 내가 산 날 · ⬇ 보라 = 내가 판 날</span><span>▲ 진입 → ▼ 절반 팔기 · 나머지 팔기 / 손절</span><span>● 보라 숫자 6·7 = 종가 진입 점수</span><span>● 점 = 참고</span></div></details>
       </div>
@@ -803,7 +803,7 @@ select{background:var(--c3);border:1px solid var(--ln);color:var(--bd);padding:6
       <div class="hb-sig" id="ws-sig"></div><div class="hb-chips"><span id="ws-chips-a"></span><span id="ws-chips-b"></span></div>
       <div class="note" id="ws-note" style="margin-bottom:6px"></div>
       <div class="ws-ctl"><div class="ws-per" id="ws-tf"><button data-tf="1d" onclick="wsTf('1d')">일봉</button><button data-tf="1w" onclick="wsTf('1w')">주봉</button><button data-tf="60m" onclick="wsTf('60m')">60분</button><button data-tf="30m" onclick="wsTf('30m')">30분</button><button data-tf="15m" onclick="wsTf('15m')">15분</button><button data-tf="5m" onclick="wsTf('5m')">5분</button><button data-tf="1m" onclick="wsTf('1m')">1분</button><button class="tfx" onclick="tfExt()" title="분봉에 시간외(NXT 08:00~09:00 · 15:30~20:00) 넣기">시간외</button></div>
-      <div class="ws-per" id="ws-per"><button data-n="66" onclick="wsPeriod(66)">3개월</button><button data-n="130" onclick="wsPeriod(130)">6개월</button><button data-n="250" onclick="wsPeriod(250)">1년</button></div></div>
+      <div class="ws-per" id="ws-per"><button data-n="66" onclick="wsPeriod(66)">3개월</button><button data-n="130" onclick="wsPeriod(130)">6개월</button><button data-n="250" onclick="wsPeriod(250)">1년</button><button class="pattb" onclick="pattToggle()" title="박스 · 수렴선 · 응축(주황 띠) 표시">모양선</button></div></div>
       <div class="lwbox"><div class="lwleg" id="ws-chart-leg"></div><div id="ws-chart" class="lwc"></div></div>
       <details class="ws-lg"><summary>ⓘ 차트 표시 설명</summary><div class="ws-legend"><span>▲ <b>진입</b> = 사기 좋은 자리 (2~3주 보유 · 급등봉 당일은 안 냄) → 스탑로스 = 신호 봉 저가 -1% 예약 · ▼ 14일선 아래 종가 절반 · 21일선 아래 종가 나머지</span><span>↑ 주황 <b>🔥주도</b> = 주도주 매수 (강도 최상위 RS 95↑ · 정배열 · 양봉 위쪽 마감 · 손절폭 8%↓ · 기본 매수와 별도로 소량, 거래당 위험 0.10%) → 스탑로스 = 그날 저가 -1% · 21일선 아래 종가면 다음 날 아침 정리 · 들고 있는 동안 또 뜨면 작은 주황 점 · 봉에 올리면 📍 눌림 / 🚀 돌파 / ⚠️ 과열 표시</span><span>↑ 하늘색 <b>줍기</b> = 급락 날 줍기 · 시험 중 (상승장에서 시장 -2%↓ 날 · 뜨는 섹터 3곳의 주도주가 같이 빠졌을 때 · 손절 20일선 · 수량 절반)</span><span>↑ 보라 <b>매수</b> = 종가 매수 신호 (점수 6↑ · 강도 70~95 · 손절폭 8%↓ · 상승장, ✅ = 손절폭 3%↓) · 다음 날도 이어지면 작은 보라 점 = 자리 유지, ↑ <b>더 좋음</b> = 손절폭이 확 짧아진 날 · 산 뒤 아직 들고 있는데 또 뜨면: ↑ <b>더 사기</b> = 첫 매수가 +1R↑ (같은 크기까지 · 전체 손절을 새 저가 -1%로 올림), ● <b>보유 중</b> = 첫 매수가 +1R 안 됨 → 더 사지 않기 · 봉에 올리면 위에 매수 근거 (점수 6↑ 또는 이평선 모였다 돌파 + 정배열 · 강도 · 손절폭) → 사면 바로 스탑로스 = 그날 저가 -1% 예약 · 21일선 아래 종가면 다음 날 아침 정리</span><span>· 회색 점 = 버틴 종목(시장 빠진 날 버팀, 참고)</span><span>· 회색 작은 점 = 돌파 모양만 나온 날 (매수 아님 · 봉에 올리면 이유 — 정배열·강도·손절폭까지 맞으면 보라 매수로 뜸)</span><span>● 초록 = 오르던 종목의 거래 적은 눌림</span><span>· 작은 점 = 참고 (돌파 대기 · 아깝게 놓침 · 상승 추세 시작) — 봉에 올리면 위에 내용</span><span>■ 회색 = 급등봉 · 1년 최대 거래</span><span>▼ 주황 = 조심</span><span>· 두 손가락으로 확대, 끌어서 이동, 누르면 그 날 가격</span></div></details>
     </div>
@@ -1034,7 +1034,7 @@ select{background:var(--c3);border:1px solid var(--ln);color:var(--bd);padding:6
     <div class="sv-g1">
       <section class="bx sv-chartbox">
         <div class="ws-ctl"><div class="ws-per" id="sv-tf"><button data-tf="1d" onclick="svTf('1d')">일봉</button><button data-tf="1w" onclick="svTf('1w')">주봉</button><button data-tf="60m" onclick="svTf('60m')">60분</button><button data-tf="30m" onclick="svTf('30m')">30분</button><button data-tf="15m" onclick="svTf('15m')">15분</button><button data-tf="5m" onclick="svTf('5m')">5분</button><button data-tf="1m" onclick="svTf('1m')">1분</button><button class="tfx" onclick="tfExt()" title="분봉에 시간외(NXT 08:00~09:00 · 15:30~20:00) 넣기">시간외</button></div>
-        <div class="ws-per" id="sv-per"><button data-n="66" onclick="svPer(66)">3개월</button><button data-n="130" onclick="svPer(130)">6개월</button><button data-n="250" onclick="svPer(250)">1년</button></div></div>
+        <div class="ws-per" id="sv-per"><button data-n="66" onclick="svPer(66)">3개월</button><button data-n="130" onclick="svPer(130)">6개월</button><button data-n="250" onclick="svPer(250)">1년</button><button class="pattb" onclick="pattToggle()" title="박스 · 수렴선 · 응축(주황 띠) 표시">모양선</button></div></div>
         <div class="ts" id="sv-note" style="margin:2px 0 6px"></div>
         <div class="lwbox"><div class="lwleg" id="sv-chart-leg"></div><div id="sv-chart" class="lwc"></div></div>
       </section>
@@ -2506,7 +2506,7 @@ const TF_NAME={'1d':'일봉','1w':'주봉','60m':'60분봉','30m':'30분봉','15
 let TFX=false; try{ TFX=localStorage.getItem('tf-ext')==='1'; }catch(e){}   // 분봉에 시간외(NXT 08:00~09:00 · 15:30~20:00) 넣기
 function tfk(tf){ return tf+(TFX&&tf!=='1w'?'x':''); }
 function tfExt(){ TFX=!TFX; try{ localStorage.setItem('tf-ext',TFX?'1':'0'); }catch(e){}
-  document.querySelectorAll('.tfx').forEach(b=>b.classList.toggle('on',TFX));
+  document.querySelectorAll('.tfx').forEach(b=>b.classList.toggle('on',TFX));document.querySelectorAll('.pattb').forEach(b=>b.classList.toggle('on',PATT));
   if(_ws.code&&_ws.tf!=='1d'&&_ws.tf!=='1w') wsDraw();
   if(typeof _sv!=='undefined'&&_sv.code&&_sv.tf!=='1d'&&_sv.tf!=='1w') svDraw();
   if(_cm&&_cm.code&&_cm.tf&&_cm.tf!=='1d'&&_cm.tf!=='1w'&&document.getElementById('chart-modal-bg').classList.contains('show')) cmTf(_cm.tf);
@@ -2545,6 +2545,7 @@ async function wsDraw(){
       document.getElementById('ws-px').innerHTML=`${Math.round(cl).toLocaleString()}<span style="color:${ch>=0?'var(--up)':'var(--down)'}">${ch>=0?'+':''}${ch.toFixed(2)}%</span>`; }
     const ch=[]; if(g!=null) ch.push(hbChip(g<=4?'g':g>=7?'b':'n',`EMA 5·10·20 간격 ${g.toFixed(1)}%${g<=4?' · 모임':g>=7?' · 벌어짐':''}`));
     const vm=_avwapNote.match(/· (.+?) (\d\d-\d\d) VWAP ([\d,]+) (위|아래)/); if(vm) ch.push(hbChip(vm[4]==='위'?'g':'b',`${vm[1]} ${vm[2]} VWAP ${vm[3]} ${vm[4]}`));
+    _patNotes.forEach(t=>ch.push(hbChip(/돌파/.test(t)?'g':/이탈/.test(t)?'b':'n',t)));
     document.getElementById('ws-chips-a').innerHTML=ch.join(''); hbFitChart(); }
   document.getElementById('ws-note').innerHTML=(a?`<b style="color:var(--blue)">▲ 진입 신호 ${a.date.slice(5).replace('-','/')} ${Math.round(a.entry).toLocaleString()} · ${a.days}일째 · ${a.gain>0?'+':''}${a.gain.toFixed(1)}% · 손절 ${Math.round(a.stop).toLocaleString()}${a.half?' · 절반 익절함':''}</b> · `:'')
     +'';      // 기간·EMA 설명은 뺌(칩·범례에 있음), 손절 점선 설명은 신호 줄로 (2026-10-11 차트 잘림)
@@ -2714,7 +2715,7 @@ async function jrWsDraw(){
     return;
   }
   const g=renderLwChart('jr-chart',c.cd.candles,c.sg?c.sg.items:[],_ws.per,{code:_jrWs.code,tf:'1d'});
-  document.getElementById('jr-ws-note').textContent=`최근 ${_ws.per}거래일 · EMA 5·10·20·60`+(g!=null?` · EMA 5·10·20 간격 ${g.toFixed(1)}%`:'')+_avwapNote;
+  document.getElementById('jr-ws-note').textContent=`최근 ${_ws.per}거래일 · EMA 5·10·20·60`+(g!=null?` · EMA 5·10·20 간격 ${g.toFixed(1)}%`:'')+_avwapNote+(_patNote?'  |  '+_patNote:'');
 }
 async function jrWsOpen(code,name){
   _jrWs.code=code;
@@ -2763,7 +2764,7 @@ async function cmTf(tf){
   _cm.tf=tf; document.querySelectorAll('#cm-tf button').forEach(b=>b.classList.toggle('on',b.dataset.tf===tf));
   const code=_cm.code, c=_cm.cache; if(!code||!c.cd) return;
   if(tf==='1d'){ const g=renderLwChart('cm-chart',c.cd.candles,c.sg?c.sg.items:[],90,{code,tf:'1d'});
-    document.getElementById('chart-modal-note').textContent=`일봉 · 1년 (끌어서 과거 보기)`+(g!=null?` · EMA 5·10·20 간격 ${g.toFixed(1)}% ${g<=4?'(모임 ✓)':g>=7?'(벌어짐 ⚠)':''}`:'')+_avwapNote; return; }
+    document.getElementById('chart-modal-note').textContent=`일봉 · 1년 (끌어서 과거 보기)`+(g!=null?` · EMA 5·10·20 간격 ${g.toFixed(1)}% ${g<=4?'(모임 ✓)':g>=7?'(벌어짐 ⚠)':''}`:'')+_avwapNote+(_patNote?'  |  '+_patNote:''); return; }
   document.getElementById('chart-modal-note').textContent=`${TF_NAME[tf]} 불러오는 중…`;
   const cd=tfCached(c,tf)||(c[tfk(tf)]=await tfCandles(code,tf));
   if(_cm.code!==code||_cm.tf!==tf) return;
@@ -2798,7 +2799,7 @@ async function openChartModal(code, name, spikeDate){
     _cm.cache.sg=sig;
     const g = renderLwChart('cm-chart', data.candles, sig?sig.items:[], 90, {code,tf:'1d'});
     document.getElementById('chart-modal-note').textContent = (spikeDate ? `스파이크일: ${spikeDate}` : `최근 90거래일 일봉`)
-      + (g!=null ? ` · EMA 5·10·20 간격 ${g.toFixed(1)}% ${g<=4?'(모임 ✓)':g>=7?'(벌어짐 ⚠)':''}` : '') + _avwapNote;
+      + (g!=null ? ` · EMA 5·10·20 간격 ${g.toFixed(1)}% ${g<=4?'(모임 ✓)':g>=7?'(벌어짐 ⚠)':''}` : '') + _avwapNote + (_patNote?'  |  '+_patNote:'');
   }catch(e){
     console.error(e);
     document.getElementById('chart-modal-note').textContent = '차트 로딩 실패';
@@ -2827,6 +2828,69 @@ function lwClear(cid){ if(_lw[cid]){ try{ _lw[cid].ro.disconnect(); _lw[cid].cha
 // 테마 색 읽기 (차트 그림은 CSS 변수를 못 읽어서 실제 값으로)
 function cv(n){ return getComputedStyle(document.documentElement).getPropertyValue(n).trim()||'#8b949e'; }
 function themeLight(){ return (document.documentElement.dataset.theme||'dark')!=='dark'; }
+// ── 차트 모양 찾기 (2026-10-11): 박스 · 수렴선(삼각형·쐐기) · 응축(볼린저 폭 좁음) — 일봉, 그 종목을 열 때 브라우저에서 계산 ──
+let PATT=true; try{ PATT=localStorage.getItem('chart-patt')!=='0'; }catch(e){}
+let _patNote='', _patNotes=[];
+function pattToggle(){ PATT=!PATT; try{ localStorage.setItem('chart-patt',PATT?'1':'0'); }catch(e){}
+  document.querySelectorAll('.pattb').forEach(b=>b.classList.toggle('on',PATT));
+  if(_ws.code&&_ws.tf==='1d') wsDraw(); if(typeof _sv!=='undefined'&&_sv.code&&_sv.tf==='1d') svDraw();
+  if(_cm&&_cm.code&&_cm.tf==='1d'&&document.getElementById('chart-modal-bg').classList.contains('show')) cmTf('1d'); }
+function chartPatterns(data){
+  const n=data.length, out={sq:[],notes:[]}; if(n<60) return out;
+  const C=data.map(d=>d.close), H=data.map(d=>d.high), L=data.map(d=>d.low), BH=data.map(d=>Math.max(d.open,d.close)), BL=data.map(d=>Math.min(d.open,d.close));
+  // 1) 응축: 볼린저 밴드(20일·2σ) 폭이 최근 120일 중 아래 20% 안
+  const bw=new Array(n).fill(null);
+  for(let i=19;i<n;i++){ let s=0; for(let j=i-19;j<=i;j++) s+=C[j]; const m=s/20; let v=0; for(let j=i-19;j<=i;j++) v+=(C[j]-m)**2; bw[i]=4*Math.sqrt(v/20)/m; }
+  for(let i=Math.max(60,n-160);i<n;i++){ const w=bw.slice(Math.max(19,i-119),i+1).filter(x=>x!=null).sort((a,b)=>a-b); if(w.length>=60&&bw[i]<=w[Math.floor(w.length*0.2)]) out.sq.push(i); }
+  let run=0; for(let i=n-1;i>=0&&out.sq.includes(i);i--) run++;
+  if(run) out.notes.push(`🔸 응축 ${run}일째 (가격 폭이 120일 중 가장 좁은 편)`);
+  // 2) 박스: 몸통 기준 고가·저가 폭 16% 안에서 가장 길게 이어진 최근 구간 (20~150일)
+  for(let N=Math.min(150,n-1);N>=20;N--){
+    const s=n-N; let hi=-1e18, lo=1e18; for(let i=s;i<n;i++){ hi=Math.max(hi,BH[i]); lo=Math.min(lo,BL[i]); }
+    if(hi/lo-1<=0.16){ out.box={s,hi,lo,N}; break; }
+  }
+  if(!out.box){   // 지금 막 박스를 벗어났으면 바로 앞 구간
+    for(let N=Math.min(150,n-4);N>=20;N--){ const e=n-3, s=e-N; if(s<0) continue; let hi=-1e18, lo=1e18; for(let i=s;i<e;i++){ hi=Math.max(hi,BH[i]); lo=Math.min(lo,BL[i]); }
+      if(hi/lo-1<=0.16){ out.box={s,e,hi,lo,N}; break; } }
+  }
+  if(out.box){ const b=out.box, c=C[n-1], w=((b.hi/b.lo-1)*100).toFixed(0);
+    const st=c>b.hi*1.005?'상단 돌파':c<b.lo*0.995?'하단 이탈':c>=b.hi-(b.hi-b.lo)*0.2?'상단 근처':c<=b.lo+(b.hi-b.lo)*0.2?'하단 근처':'박스 안';
+    out.notes.push(`📦 박스 ${b.N}일 · 폭 ${w}% · ${Math.round(b.lo).toLocaleString()}~${Math.round(b.hi).toLocaleString()} · ${st}`); }
+  // 3) 수렴선: 최근 120일 고점끼리·저점끼리 이은 선 (선을 넘은 봉 없음) — 위는 내려오고 아래는 올라오거나, 둘이 좁혀지면
+  const k=3, from=Math.max(k,n-100), ph=[], pl=[];
+  for(let i=from;i<n-2;i++){ let isH=true, isL=true; for(let j=Math.max(0,i-k);j<=Math.min(n-1,i+k);j++){ if(H[j]>H[i]) isH=false; if(L[j]<L[i]) isL=false; } if(isH) ph.push(i); if(isL) pl.push(i); }
+  // 선을 넘은 봉이 없고, 선에 닿은 봉(1.5% 안)이 많을수록 좋은 선 — 닿은 봉 3개 이상만
+  const fit=(P,V,up)=>{ let best=null;
+    for(let x=0;x<P.length;x++) for(let y=P.length-1;y>x;y--){ const a=P[x], b=P[y]; if(b-a<10||n-1-b>40) continue;
+      const sl=(V[b]-V[a])/(b-a), line=i=>V[a]+sl*(i-a); let ok=true, touch=0;
+      for(let i=a;i<n-2;i++){ const r=V[i]/line(i); if(up?r>1.012:r<0.988){ ok=false; break; } if(up?r>=0.985:r<=1.015) touch++; }
+      if(!ok||touch<3) continue;
+      const score=touch+(b-a)/25;
+      if(!best||score>best.score) best={a,b,sl,v0:V[a],score,touch};
+    } return best; };
+  const U=fit(ph,H,true), D=fit(pl,L,false);
+  if(U&&D){ const lineU=i=>U.v0+U.sl*(i-U.a), lineD=i=>D.v0+D.sl*(i-D.a), s0=Math.max(U.a,D.a);
+    const g0=lineU(s0)/lineD(s0)-1, g1=lineU(n-1)/lineD(n-1)-1, su=U.sl/C[n-1]*100, sd=D.sl/C[n-1]*100;
+    if(g1>0&&g1<g0*0.75&&g0<=0.6){
+      const kind=su<-0.05&&sd>0.05?'대칭 삼각형':Math.abs(su)<=0.05&&sd>0.05?'상승 삼각형':su<-0.05&&Math.abs(sd)<=0.05?'하락 삼각형':su<0&&sd<0?'하락 쐐기':su>0&&sd>0?'상승 쐐기':'수렴';
+      const c=C[n-1], st=c>lineU(n-1)*1.005?' · 위로 돌파':c<lineD(n-1)*0.995?' · 아래로 이탈':` · 위 ${Math.round(lineU(n-1)).toLocaleString()} / 아래 ${Math.round(lineD(n-1)).toLocaleString()}`;
+      out.tri={U,D,kind}; out.notes.push(`📐 ${kind} (폭 ${(g0*100).toFixed(0)}% → ${(g1*100).toFixed(0)}%)${st}`);
+    }
+  }
+  return out;
+}
+function drawPatterns(chart,data){
+  _patNote=''; _patNotes=[]; if(!PATT) return;
+  const p=chartPatterns(data), n=data.length, T=i=>data[Math.min(n-1,Math.max(0,i))].time;
+  const seg=(i0,v0,i1,v1,color,title,w)=>{ const s=chart.addLineSeries({color,lineWidth:w||2,priceLineVisible:false,lastValueVisible:!!title,title:title||'',crosshairMarkerVisible:false}); s.setData([{time:T(i0),value:v0},{time:T(i1),value:v1}]); };
+  if(p.box){ const b=p.box, e=b.e!=null?b.e:n-1, col=cv('--neu'); seg(b.s,b.hi,e,b.hi,col,'박스 위',1); seg(b.s,b.lo,e,b.lo,col,'박스 아래',1); }
+  if(p.tri){ const {U,D}=p.tri; seg(U.a,U.v0,n-1,U.v0+U.sl*(n-1-U.a),'#da3633','위 선',2); seg(D.a,D.v0,n-1,D.v0+D.sl*(n-1-D.a),'#2ea043','아래 선',2); }
+  if(p.sq.length){ const sq=chart.addHistogramSeries({priceScaleId:'sq',lastValueVisible:false,priceLineVisible:false,base:0});
+    chart.priceScale('sq').applyOptions({scaleMargins:{top:0.77,bottom:0.215},visible:false});
+    const S=new Set(p.sq); sq.setData(data.map((d,i)=>({time:d.time,value:1,color:S.has(i)?cv('--o'):'rgba(0,0,0,0)'}))); }
+  _patNotes=p.notes; _patNote=p.notes.join('  |  ');
+}
+
 const lwMoreDone={};
 function lwMoreTag(el,t,ms){ const d=document.createElement('div'); d.className='lwmore'; d.textContent=t; el.parentNode.appendChild(d); if(ms) setTimeout(()=>d.remove(),ms); return d; }
 async function lwMore(code,tf,first){
@@ -2863,6 +2927,7 @@ function renderLwChart(cid, allCandles, signals, per, opts){
   const closes=data.map(d=>d.close), EN=[5,10,20,60], EC=themeLight()?['#d6336c','#a67c00','#0c8599','#2b8a3e']:['#f778ba','#e3b341','#56d4dd','#3fb950'];
   const ES=EN.map(n=>emaOf(closes,n));
   ES.forEach((a,k)=>{ const ls=chart.addLineSeries({color:EC[k],lineWidth:k===3?2:1,priceLineVisible:false,lastValueVisible:!small,crosshairMarkerVisible:false}); ls.setData(a.map((v,i)=>({time:data[i].time,value:v}))); });
+  if(!intra&&opts&&opts.tf==='1d') drawPatterns(chart,data); else { _patNote=''; _patNotes=[]; }
   // 기준봉 VWAP (7/30 뒤 +8%·거래 3배 양봉, 없으면 거래 가장 많은 양봉부터)
   _avwapNote='';
   let cyc=intra?data.length:data.findIndex(d=>d.time>='2026-07-30'); if(cyc<0) cyc=data.length;
@@ -3239,7 +3304,7 @@ async function svDraw(){
   if(!c.cd||!c.cd.candles||!c.cd.candles.length){ note.textContent='차트를 못 불러왔습니다'; return; }
   const a=c.sg&&c.sg.active;
   const g=renderLwChart('sv-chart',c.cd.candles,c.sg?c.sg.items:[],_sv.per,{stop:a&&a.stop,code:_sv.code,tf:'1d'});
-  note.textContent=`일봉 · 끌어서 과거 보기`+(g!=null?` · EMA 5·10·20 간격 ${g.toFixed(1)}%`:'')+_avwapNote+(a?` · ▲ 진입 신호 ${a.date.slice(5).replace('-','/')} · 손절 ${Math.round(a.stop).toLocaleString()}`:'');
+  note.textContent=`일봉 · 끌어서 과거 보기`+(g!=null?` · EMA 5·10·20 간격 ${g.toFixed(1)}%`:'')+_avwapNote+(_patNote?'  |  '+_patNote:'')+(a?` · ▲ 진입 신호 ${a.date.slice(5).replace('-','/')} · 손절 ${Math.round(a.stop).toLocaleString()}`:'');
 }
 function svMetric(k,v,sub,bar){ return `<div class="sv-m"><span class="k">${k}</span><span>${bar||''}${sub?`<span class="ts">${sub}</span>`:''}</span><span class="v">${v}</span></div>`; }
 function svProfile(){
