@@ -421,6 +421,21 @@ select{background:var(--c3);border:1px solid var(--ln);color:var(--bd);padding:6
 #panel-home .ws>.cm-panel .cp-cards .cp-card{background:var(--sunk);border:0;border-radius:10px;padding:10px 12px}
 #panel-home .ws>.cm-panel .cp-rows{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));column-gap:20px;border-top:0}
 #panel-home .ws>.cm-panel .cp-row{font-size:13px;border-bottom:1px solid var(--line)}
+/* 매매 일지 보유 종목 차트도 첫 화면과 같은 카드 (2026-10-11) */
+#panel-journal .ws{gap:16px}
+#panel-journal .ws-list,#panel-journal .ws-main{background:var(--card);border:0;border-radius:16px;padding:16px}
+#panel-journal .ws-main{padding:18px 20px}
+#panel-journal .ws-search input{background:var(--sunk);border:1px solid var(--line);border-radius:12px;padding:10px 14px;font-size:14px}
+#panel-journal .ws-tabs{gap:6px}#panel-journal .ws-tabs button{background:var(--card2);border:0;border-radius:10px;padding:8px 0;font-size:13px}
+#panel-journal .ws-tabs button.on{background:var(--neu);color:var(--neu-on);font-weight:700}
+#panel-journal .ws-sub{border-top:1px solid var(--line);font-size:12px}
+#panel-journal .ws-head b#ws-name{font-size:22px;font-weight:800;color:var(--strong)}
+#panel-journal .ws>.cm-panel{background:transparent;border:0;padding:0;columns:auto;display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:16px}
+#panel-journal .ws>.cm-panel>.cp-c1,#panel-journal .ws>.cm-panel>.cp-c2{background:var(--card);border-radius:16px;padding:16px 18px;display:flex;flex-direction:column;gap:12px;margin:0}
+#panel-journal .ws>.cm-panel .cp-state{background:transparent;border:0;padding:0}
+#panel-journal .ws>.cm-panel .cp-cards .cp-card{background:var(--sunk);border:0;border-radius:10px;padding:10px 12px}
+#panel-journal .ws>.cm-panel .cp-rows{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));column-gap:20px;border-top:0}
+#panel-journal .ws>.cm-panel .cp-row{font-size:13px;border-bottom:1px solid var(--line)}
 @media(min-width:901px){#panel-home .lwbox>.lwc{height:var(--hb-ch,clamp(340px,calc(100vh - 560px),640px))}}   /* --hb-ch = 화면 높이에 맞춘 값 (hbFitChart) */
 /* 위 영역 납작하게 (2026-10-11 차트 잘림) — 타일 = 1줄째 제목·배지 / 2줄째 값·설명 */
 @media(min-width:901px){
@@ -500,6 +515,7 @@ select{background:var(--c3);border:1px solid var(--ln);color:var(--bd);padding:6
 .sv-top{display:flex;flex-wrap:wrap;align-items:center;gap:10px 16px;padding:12px 16px}
 .sv-search{position:relative;flex:0 1 420px;min-width:240px}.sv-search input{width:100%;font-size:14px!important;padding:9px 14px!important;border-radius:12px!important}
 #sv-sr{position:absolute;left:0;right:0;top:100%;z-index:30;background:var(--c1);border:1px solid var(--line);border-radius:12px;margin-top:4px;max-height:380px;overflow:auto;display:none;box-shadow:0 8px 20px var(--shadow)}#sv-sr.on{display:block}
+.jr-cards{display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:10px;margin-bottom:14px}.jr-card{background:var(--card);border-radius:14px;padding:12px 14px}.jr-card .v{font-size:19px;font-weight:700;color:var(--strong);font-family:'IBM Plex Mono',monospace;margin:2px 0}
 .sv-recent{display:flex;flex-wrap:wrap;gap:6px}#sv-sr .ws-item.kb,#ws-sr .ws-item.kb{background:var(--card2);box-shadow:inset 3px 0 0 var(--b)}.sv-recent .sv-chip{font-size:12.5px;padding:4px 11px;border-radius:999px;background:var(--card2);color:var(--text);cursor:pointer;border:1px solid var(--line)}.sv-recent .sv-chip:hover{border-color:var(--b)}
 .sv-hd{display:flex;flex-wrap:wrap;align-items:baseline;gap:6px 14px}.sv-hd .nm{font-size:24px;font-weight:800;color:var(--strong)}.sv-hd .px{font-size:24px;font-weight:600;color:var(--strong);font-family:'IBM Plex Mono',monospace}
 .sv-g1{display:grid;grid-template-columns:minmax(0,1fr) 380px;gap:16px;align-items:start}
@@ -519,7 +535,10 @@ select{background:var(--c3);border:1px solid var(--ln);color:var(--bd);padding:6
 .sv-panelbox{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:16px}.sv-panelbox>.cp-c1,.sv-panelbox>.cp-c2{display:flex;flex-direction:column;gap:10px;min-width:0}
 .sv-panelbox .cp-chips{display:none}.sv-panelbox .cp-state{background:var(--sunk);border:0}.sv-panelbox .cp-cards{grid-template-columns:repeat(3,1fr)}.sv-panelbox .cp-cards .cp-card{background:var(--sunk);border:0;border-radius:10px}
 .sv-panelbox .cp-rows{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));column-gap:20px;border-top:0}.sv-panelbox .cp-row{font-size:12.5px}
-#sv-rep .sv-rl{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));column-gap:24px}
+#sv-rep .sv-rl{display:grid;grid-template-columns:1fr;column-gap:24px}
+.sv-dl{display:flex;flex-direction:column}.sv-di{display:flex;align-items:center;gap:8px;padding:6px 4px;border-bottom:1px solid var(--line2);text-decoration:none;color:var(--text);font-size:13px;border-radius:6px}
+.sv-di:hover{background:var(--card2)}.sv-di .d{color:var(--muted);font-size:12px;font-family:'IBM Plex Mono',monospace;flex:none}.sv-di .t{overflow:hidden;text-overflow:ellipsis;white-space:nowrap;min-width:0}
+.sv-di.risk .t{color:var(--strong);font-weight:600}
 @media(max-width:900px){.sv-panelbox,.sv-panelbox .cp-rows,#sv-rep .sv-rl{grid-template-columns:1fr}}
 .sv-ft th.ins-h,.sv-ft td.ins-h{font-weight:700;border-left:2px solid var(--line)}.sv-ft th.ins,.sv-ft td.ins{background:color-mix(in srgb,var(--sunk) 70%,transparent)}.sv-ft td.ins{font-size:12px}
 .sv-ft tr.sv-grp th{border-bottom:0;padding-bottom:0!important;font-size:11px}.sv-ft th.ins-g{text-align:center!important;background:color-mix(in srgb,var(--sunk) 70%,transparent);border-radius:8px 8px 0 0}.sv-ft td:last-child,.sv-ft th:last-child{border-left:1px solid var(--line2)}
@@ -645,7 +664,7 @@ select{background:var(--c3);border:1px solid var(--ln);color:var(--bd);padding:6
     </div>
 
     <div id="jr-size" class="bx" style="font-size:13px"></div>
-    <div id="jr-cards" style="display:flex;flex-wrap:wrap;gap:8px;margin-bottom:14px"></div>
+    <div id="jr-cards" class="jr-cards"></div>
     <div id="jr-insights" class="bx" style="font-size:13px;line-height:1.7"></div>
 
     <section class="bx"><div class="bx-h"><b>나눠 보기</b></div>
@@ -1050,7 +1069,10 @@ select{background:var(--c3);border:1px solid var(--ln);color:var(--bd);padding:6
       <section class="bx" id="sv-short"></section>
     </div>
     <section class="bx" id="sv-flow"><span class="ts">수급 불러오는 중…</span></section>
-    <section class="bx" id="sv-rep"></section>
+    <div class="sv-g3">
+      <section class="bx" id="sv-disc"></section>
+      <section class="bx" id="sv-rep"></section>
+    </div>
   </div>
 </div>
 
@@ -1730,11 +1752,12 @@ async function jrSizeRender(){
     <span class="ts">계좌 금액</span><input id="jr-cap" type="number" inputmode="numeric" value="${cap||''}" placeholder="예: 100000000" style="width:140px;background:var(--bg);border:1px solid var(--ln);color:var(--bd);padding:4px 8px;border-radius:6px">
     <button class="btn btn-sm" onclick="jrCapSave()">저장</button><span class="ts">거래당 위험: 기본 0.5% · 수량 절반 0.25% · 🔥 주도주 0.10%</span></div>`;
   if(!cap){ el.innerHTML=head+'<div class="ts">계좌 금액을 넣으면 오늘 매수 신호마다 몇 주인지 계산합니다.</div>'; return; }
+  el.innerHTML=head+'<div class="ts">오늘 신호 불러오는 중…</div>';
   const d=await fetch(`${API}/workspace/list`).then(r=>r.ok?r.json():null).catch(()=>null);
   const L=((d&&d.candidates)||[]).filter(x=>(x.lane||'entry')==='entry'&&x.close&&x.risk);
   if(!L.length){ el.innerHTML=head+'<div class="ts">오늘은 매수 신호가 없습니다.</div>'; return; }
   const row=x=>{ const half=(x.tags||[]).some(t=>t.includes('수량 절반')); const rp=x.lead?0.001:half?0.0025:0.005;
-    const stop=x.close*(1-x.risk/100), per=x.close-stop, q=per>0?Math.floor(cap*rp/per):0;
+    const stop=tk(x.stop||x.close*(1-x.risk/100)), per=x.close-stop, q=per>0?Math.floor(cap*rp/per):0;
     return `<tr><td>${x.lead?'🔥 ':''}<b>${x.name}</b></td><td style="text-align:right">${Math.round(x.close).toLocaleString()}</td><td style="text-align:right">${tk(stop).toLocaleString()} <span class="ts">(-${x.risk}%)</span></td><td style="text-align:right">${(rp*100).toFixed(2).replace(/0$/,'')}%</td><td style="text-align:right"><b>${q.toLocaleString()}주</b></td><td style="text-align:right">${Math.round(q*x.close).toLocaleString()}원</td></tr>`; };
   el.innerHTML=head+`<table class="pb-table"><thead><tr><th>종목</th><th style="text-align:right">가격</th><th style="text-align:right">스탑로스</th><th style="text-align:right">위험</th><th style="text-align:right">수량</th><th style="text-align:right">금액</th></tr></thead><tbody>${L.map(row).join('')}</tbody></table>
     <div class="ts" style="margin-top:4px">${d.live?d.live+' 실시간 가격':'종가'} 기준 · 손절에 걸리면 계좌의 위험 % 만큼만 잃는 수량 · 금액이 계좌보다 크면 칸 수를 줄이기</div>`;
@@ -1746,14 +1769,14 @@ async function jrCapSave(){
 }
 function jrRender(){
   const s=_jr.summary, all=s.all||{count:0};
-  const card=(t,v,sub)=>`<div style="border:1px solid var(--ln);border-radius:10px;padding:10px 14px;min-width:110px"><div class="ts">${t}</div><div style="font-size:17px;font-weight:600;color:var(--tx)">${v}</div>${sub?`<div class="ts">${sub}</div>`:''}</div>`;
+  const card=(t,v,sub)=>`<div class="jr-card"><div class="ts">${t}</div><div class="v">${v}</div>${sub?`<div class="ts">${sub}</div>`:''}</div>`;
   document.getElementById('jr-cards').innerHTML=!all.count?'<div class="ts">아직 청산된 매매가 없습니다. 위 "＋ 기록 넣기"로 체결 내역을 붙여넣으세요.</div>':
     card('청산',`${all.count}건`,'')+card('이긴 비율',`${all.win_pct}%`,'')+card('평균 수익률',jrPct(all.avg_pct),`이익 ${all.avg_win_pct??'-'}% · 손실 ${all.avg_loss_pct??'-'}%`)
     +card('손익 합계',jrWon(all.pnl),`투입 대비 ${all.ret_on_cost_pct}%`)+card('최고 / 최악',`${jrPct(all.best_pct)} / ${jrPct(all.worst_pct)}`,'')
     +(s.pool_cmp?card('내 선택 vs 같은 날 후보',`${jrPct(s.pool_cmp.my_avg_pct)} / ${jrPct(s.pool_cmp.pool_avg_pct)}`,`${s.pool_cmp.count}건 중 후보 평균 이김 ${s.pool_cmp.beat_pct}%`):'');
   document.getElementById('jr-insights').innerHTML='<b style="color:var(--tx)">🔎 숫자로 보이는 것</b><br>'+(_jr.insights.length?_jr.insights.map(x=>'· '+x).join('<br>'):'<span class="ts">아직 없음</span>');
   const groups={by_rule:'규칙별',by_kind:'유형별',by_state:'산 날 상태별',by_user_tag:'내 근거별',by_family:'섹터별',by_day:'날짜별 실현손익',by_month:'월별 실현손익'};
-  document.getElementById('jr-groupbtns').innerHTML=Object.entries(groups).map(([k,v])=>`<button class="btn btn-sm" style="${k===_jrGroup?'border-color:var(--b);color:var(--b)':''}" onclick="_jrGroup='${k}';jrRender()">${v}</button>`).join('');
+  document.getElementById('jr-groupbtns').innerHTML=`<span class="seg" style="flex-wrap:wrap">${Object.entries(groups).map(([k,v])=>`<button class="${k===_jrGroup?'on':''}" onclick="_jrGroup='${k}';jrRender()">${v}</button>`).join('')}</span>`;
   document.getElementById('jr-gname').textContent=groups[_jrGroup];
   const g=Object.entries(s[_jrGroup]||{}).sort((a,b)=>(_jrGroup==='by_month'||_jrGroup==='by_day')?b[0].localeCompare(a[0]):b[1].count-a[1].count);
   document.getElementById('jr-group').innerHTML=g.length?g.map(([k,v])=>`<tr><td><b>${k}</b></td><td data-label="건수">${v.count}</td><td data-label="이긴 비율">${v.win_pct}%</td><td data-label="평균">${jrPct(v.avg_pct)}</td>
@@ -3336,7 +3359,8 @@ async function svOpen(code,name){
   document.getElementById('sv-empty').hidden=true; document.getElementById('sv-body').hidden=false;
   document.getElementById('sv-recent').innerHTML=`<span class="ts">최근 본</span>${svChips(svRecent())}`;
   document.getElementById('sv-head').innerHTML=`<div class="sv-hd"><span class="nm">${name}</span><span class="ts">${code}</span></div>`;
-  ['sv-metrics','sv-earn','sv-stab','sv-mix','sv-flow','sv-short','sv-rep'].forEach(id=>document.getElementById(id).innerHTML='<span class="ts">불러오는 중…</span>');
+  ['sv-metrics','sv-earn','sv-stab','sv-mix','sv-flow','sv-short','sv-rep','sv-disc'].forEach(id=>document.getElementById(id).innerHTML='<span class="ts">불러오는 중…</span>');
+  _sv.disc=null; fetch(`${API}/stock/${code}/disclosures`).then(r=>r.ok?r.json():null).catch(()=>null).then(d=>{ if(_sv.code===code){ _sv.disc=d; svDisc(); svHead(); } });
   document.getElementById('sv-panel').innerHTML='<span class="ts">불러오는 중…</span>';
   fetch(`${API}/stock/${code}/panel`).then(r=>r.ok?r.json():null).catch(()=>null).then(pn=>{ if(_sv.code===code) renderStockPanel(pn,'sv-panel'); });
   fetch(`${API}/stock/${code}/profile`).then(r=>r.ok?r.json():null).catch(()=>null).then(p=>{ if(_sv.code===code){ _sv.prof=p; svProfile(); } });
@@ -3353,7 +3377,17 @@ function svHead(){
   const all=window._rotMem; let fam=''; if(all&&all.families) for(const [f,arr] of Object.entries(all.families)){ if(arr.some(x=>x.code===_sv.code)){ fam=f; break; } }
   document.getElementById('sv-head').innerHTML=`<div class="sv-hd"><span class="nm">${_sv.name}</span><span class="ts">${_sv.code}${p.market?' · '+p.market:''}${fam?' · '+fam:''}</span>
     <span class="px">${Math.round(cl).toLocaleString()}</span><span style="color:${svC(ch)};font-weight:700">${ch>=0?'▲':'▼'} ${Math.abs(ch).toFixed(2)}%</span>
-    <span class="ts">${(z.timestamp||'').slice(0,10)} 종가${p.market_cap?' · 시총 '+svWon(p.market_cap):''}</span></div>`;
+    <span class="ts">${(z.timestamp||'').slice(0,10)} 종가${p.market_cap?' · 시총 '+svWon(p.market_cap):''}</span>${(()=>{ const r=((_sv.disc||{}).items||[]).filter(x=>x.kind==='risk'&&x.date>=new Date(Date.now()-30*864e5).toISOString().slice(0,10).replace(/-/g,'')); return r.length?`<span class="chipx r" title="${r.map(x=>x.title).join(' / ').replace(/"/g,'')}" style="cursor:pointer" onclick="document.getElementById('sv-disc').scrollIntoView({behavior:'smooth',block:'center'})">⚠ 30일 안 위험 공시 ${r.length}건 · ${r[0].title.replace(/\[.*?\]/g,'').slice(0,18)}</span>`:''; })()}</div>`;
+}
+// 최근 공시 (DART 90일) — 위험(증자·CB·감자·소송 등) 빨강 ⚠ · 좋음(자사주·무증·공급계약 등) 초록 ▲
+function svDisc(){
+  const d=_sv.disc||{}, L0=d.items||[], box=document.getElementById('sv-disc');
+  const L=[...L0.filter(x=>x.kind==='risk'),...L0.filter(x=>x.kind!=='risk')];   // 위험 공시는 맨 위
+  const n=L.filter(x=>x.kind==='risk').length;
+  box.innerHTML=`<div class="bx-h"><b>최근 공시</b><span class="ts">90일 · DART${n?` · <b style="color:var(--r)">⚠ 위험 공시 ${n}건</b>`:''}</span></div>
+    ${d.error?'<span class="ts">공시를 못 받았습니다</span>':L.length?`<div class="sv-dl">${L.slice(0,14).map(x=>`<a class="sv-di ${x.kind}" href="https://dart.fss.or.kr/dsaf001/main.do?rcpNo=${x.rcp}" target="_blank" rel="noopener" title="${(x.title||'').replace(/"/g,'')} · ${x.by||''}">
+      <span class="d">${(x.date||'').slice(4,6)}/${(x.date||'').slice(6)}</span>${x.kind==='risk'?'<span class="chipx r">⚠ 위험</span>':x.kind==='good'?'<span class="chipx g">▲ 좋음</span>':''}<span class="t">${x.title}</span></a>`).join('')}</div>
+      ${L.length>14?`<div class="ts" style="margin-top:6px">외 ${L.length-14}건 · 누르면 DART 원문</div>`:'<div class="ts" style="margin-top:6px">누르면 DART 원문</div>'}`:'<span class="ts">최근 90일 공시 없음</span>'}`;
 }
 function svTf(tf){ _sv.tf=tf; svDraw(); }
 function svPer(n){ _sv.per=n; svDraw(); }

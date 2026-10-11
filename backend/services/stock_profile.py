@@ -138,3 +138,42 @@ def flows(db: Session, code: str, days: int = 40) -> dict:
     if len(_F) > 300:
         _F.clear()
     return out
+
+
+# ── 최근 공시 (DART, 2026-10-11 "유상증자·CB 같은 위험 공시를 차트 보고 들어가기 전에") ──
+_D: dict = {}
+RISK_KW = ["유상증자", "전환사채", "신주인수권부사채", "교환사채", "감자", "최대주주변경", "최대주주 변경", "소송", "횡령", "배임", "불성실공시",
+           "관리종목", "상장폐지", "매매거래정지", "거래정지", "투자주의환기", "자기주식처분", "주식관련사채", "회생", "부도", "영업정지", "감사의견"]
+GOOD_KW = ["자기주식취득", "자기주식 취득", "자기주식소각", "주식소각", "무상증자", "단일판매", "공급계약", "현금ㆍ현물배당", "현금배당", "특허권취득"]
+
+
+def disclosures(code: str, days: int = 90) -> dict:
+    hit = _D.get(code)
+    if hit and time.time() - hit[0] < 1800:
+        return hit[1]
+    import os  # noqa: PLC0415
+    from datetime import date, timedelta  # noqa: PLC0415
+    out: dict = {"code": code, "items": []}
+    try:
+        key = open(os.path.expanduser("~/.dart_key")).read().strip()
+    except OSError:
+        key = os.getenv("DART_API_KEY", "")
+    try:
+        from dart_analyzer.corp_code import find_corp  # noqa: PLC0415
+        corp = find_corp(code)
+        j = requests.get("https://opendart.fss.or.kr/api/list.json", timeout=10, params={
+            "crtfc_key": key, "corp_code": corp.corp_code, "bgn_de": (date.today() - timedelta(days=days)).strftime("%Y%m%d"),
+            "end_de": date.today().strftime("%Y%m%d"), "page_count": 100}).json()
+        for r in j.get("list") or []:
+            nm = re.sub(r"\s+", " ", r.get("report_nm") or "").strip()
+            kind = "risk" if any(k in nm.replace(" ", "") or k in nm for k in RISK_KW) else "good" if any(k in nm for k in GOOD_KW) else ""
+            if "[기재정정]" in nm or "[첨부정정]" in nm:
+                kind = kind or ""
+            out["items"].append({"date": r.get("rcept_dt"), "title": nm, "kind": kind, "by": r.get("flr_nm"), "rcp": r.get("rcept_no")})
+    except Exception as exc:  # noqa: BLE001
+        logger.warning("공시 실패 %s: %s", code, type(exc).__name__)
+        out["error"] = True
+    _D[code] = (time.time(), out)
+    if len(_D) > 300:
+        _D.clear()
+    return out

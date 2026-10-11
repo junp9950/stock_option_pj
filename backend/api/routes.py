@@ -1956,12 +1956,16 @@ def get_market_verdict(db: Session = Depends(get_db)):
     매수 켜고 끄기 = 시장 국면 하나(12년 검증된 필터). 시장 폭 좁아짐은 참고 한 줄(흔들릴 확률 88% vs 76%, 낙폭 같음, 20일 뒤 더 오름)."""
     from backend.screener.market_regime import current_regime  # noqa: PLC0415
     from backend.services.stock_signals import market_breadth  # noqa: PLC0415
-    m = current_regime(db) or {}
-    try:
-        b = market_breadth(db) or {}
-    except Exception:  # noqa: BLE001
-        b = {}
-    return {**m, "weak": bool(b.get("weak")), "narrow": bool(b.get("narrow")), "breadth_pct": b.get("pct")}
+    from backend.services.result_cache import cached  # noqa: PLC0415
+
+    def _calc():
+        m = current_regime(db) or {}
+        try:
+            b = market_breadth(db) or {}
+        except Exception:  # noqa: BLE001
+            b = {}
+        return {**m, "weak": bool(b.get("weak")), "narrow": bool(b.get("narrow")), "breadth_pct": b.get("pct")}
+    return cached("market_verdict_v1", (), db, _calc)      # 일봉이 바뀔 때만 다시 계산 (머리 줄이 모든 화면에서 부름, 2026-10-11)
 
 
 @router.get("/jongbe/scoreboard")
@@ -2011,6 +2015,12 @@ def get_chart_candidates(min_cap: float = 0, db: Session = Depends(get_db)):
 
 def warm_caches(db: Session) -> None:
     """화면 기본값으로 미리 계산해 둔다. 데이터가 그대로면 즉시 끝난다."""
+    # 맨 먼저: 머리 줄 시장 판단 · 첫 화면 '오늘' 카드 · 목록 — 배포 직후 첫 접속이 10초 넘게 걸리던 것 (2026-10-11)
+    for fn in (lambda: get_market_verdict(db=db), lambda: get_dashboard(db=db), lambda: get_workspace_list(db=db)):
+        try:
+            fn()
+        except Exception:  # noqa: BLE001
+            pass
     # 첫 화면(작업대)에 쓰는 것부터 — 재시작 직후 차트 창 패널이 늦던 것 (2026-10-09)
     try:
         get_my_pattern(db=db)
@@ -2258,6 +2268,13 @@ def get_stock_profile(code: str, db: Session = Depends(get_db)):
     """종목 탭: 투자 지표 · 업종 PER · PSR · 분기/연간 실적(컨센서스) · 안정성 · 매출 구성 · 목표가 · 리포트 (2026-10-11)."""
     from backend.services.stock_profile import profile  # noqa: PLC0415
     return profile(db, code)
+
+
+@router.get("/stock/{code}/disclosures")
+def get_stock_disclosures(code: str):
+    """종목 탭: 최근 90일 DART 공시 · 위험(증자·CB·감자·소송 등) / 좋음(자사주·무증·공급계약 등) 표시 (2026-10-11)."""
+    from backend.services.stock_profile import disclosures  # noqa: PLC0415
+    return disclosures(code)
 
 
 @router.get("/stock/{code}/flows")

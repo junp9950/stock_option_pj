@@ -470,6 +470,20 @@ def start_scheduler() -> BackgroundScheduler:
     scheduler.add_job(_telegram_alert_job, "interval", minutes=2, id="telegram_alerts", replace_existing=True, max_instances=1, coalesce=True)
     scheduler.add_job(_telegram_close_check_job, "cron", day_of_week="mon-fri", hour=15, minute=15, id="telegram_close_check",
                       replace_existing=True, max_instances=1)
+    def _stop_check_job() -> None:
+        from backend.services.watchlist import intraday_stop_check  # noqa: PLC0415
+        db = SessionLocal()
+        try:
+            r = intraday_stop_check(db)
+            if r.startswith("알림"):
+                logger.info("장중 손절 알림: %s", r)
+        except Exception as exc:  # noqa: BLE001
+            logger.error("장중 손절 알림 실패: %s", type(exc).__name__)
+        finally:
+            db.close()
+    # 장중 3분마다 보유 종목 손절선 근처(1%)·닿음 텔레그램 (2026-10-11)
+    scheduler.add_job(_stop_check_job, "cron", day_of_week="mon-fri", hour="9-15", minute="*/3", id="intraday_stop_check",
+                      replace_existing=True, max_instances=1, coalesce=True)
     # 사용자 관심 종목 장 마감 점검 (backend/services/watchlist.py) — 휴장일이면 토스 일봉 날짜로 걸러져 안 보냄
     scheduler.add_job(lambda: _tg_watch(), "cron", day_of_week="mon-fri", hour=15, minute=40, id="user_watchlist_report",
                       replace_existing=True, max_instances=1, coalesce=True)

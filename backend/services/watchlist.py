@@ -477,3 +477,63 @@ def post_report(db: Session, force: bool = False) -> str | None:
     if rest:
         out += ["", "· 아직", "<i>" + chr(10).join(rest) + "</i>"]
     return chr(10).join(out)
+
+
+# ── 보유 종목 장중 손절 알림 (2026-10-11 "장중에 손절가 근처·이탈이면 바로") ──────────────
+# 3분마다 보유 종목(장기 보유 제외) 지금가를 토스 1분봉으로 보고, 손절선 1% 안이면 ⚠️ 한 번, 닿으면 ⛔ 한 번 (종목·날짜별 한 번씩).
+# 손절선은 장 마감 점검과 같은 곳(관심 목록 hold 줄 → 정리 글 메모). 금액은 안 적음.
+STOP_STATE = "stop_alert_state"
+
+
+def intraday_stop_check(db: Session) -> str:
+    from html import escape  # noqa: PLC0415
+    from backend.services.telegram import _get, _put, send, is_market_time  # noqa: PLC0415
+    from backend.services.toss_client import fetch_candles  # noqa: PLC0415
+    from backend.utils.dates import is_trading_day  # noqa: PLC0415
+    from backend.utils.ticks import tick_floor  # noqa: PLC0415
+    now = datetime.now(ZoneInfo("Asia/Seoul"))
+    if not is_market_time(now) or not is_trading_day(now.date()) or (now.hour, now.minute) > (15, 20):
+        return "장 시간 아님"
+    skip = set(_get(db, "held_exclude", None) or HELD_EXCLUDE)
+    pos = [p for p in _positions(db) if p["code"] not in skip]
+    if not pos:
+        return "보유 없음"
+    wl = {x["code"]: x for x in _items(db)}
+    try:
+        posts = post_items(db)
+    except Exception:  # noqa: BLE001
+        posts = {}
+    today = now.date().isoformat()
+    st = _get(db, STOP_STATE, {}) or {}
+    if st.get("date") != today:
+        st = {"date": today, "near": [], "out": []}
+    msgs = []
+    for p in pos:
+        stop = _plan(db, p["code"], wl, posts)["stop"]
+        if not stop:
+            continue
+        try:
+            c = fetch_candles(p["code"], interval="1m", count=2) or []
+        except Exception:  # noqa: BLE001
+            c = []
+        if not c:
+            continue
+        last = c[-1]
+        px, lo = float(last["closePrice"]), float(last["lowPrice"])
+        stop_t = tick_floor(stop)
+        nm = escape(p["name"])
+        if min(px, lo) <= stop_t and p["code"] not in st["out"]:
+            st["out"].append(p["code"])
+            msgs.append(f"⛔ <b>{nm}</b> 손절가 {stop_t:,.0f} 닿음 · 지금 {px:,.0f}\n   예약을 안 걸었으면 확인하세요")
+        elif px <= stop_t * 1.01 and p["code"] not in st["near"] and p["code"] not in st["out"]:
+            st["near"].append(p["code"])
+            msgs.append(f"⚠️ <b>{nm}</b> 손절가 {stop_t:,.0f}까지 {(px / stop_t - 1) * 100:.1f}% · 지금 {px:,.0f}")
+        time.sleep(0.2)
+    _put(db, STOP_STATE, st)
+    if not msgs:
+        return "알림 없음"
+    chats = _get(db, CHAT_KEY, None) or list(_get(db, "telegram_chats", {}).keys())[:1]
+    text_ = f"🔔 <b>보유 종목 손절선 {now:%H:%M}</b>\n" + "\n".join(msgs)
+    for ch in chats:
+        send(db, text_, ch, html=True)
+    return f"알림 {len(msgs)}건"
