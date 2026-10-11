@@ -15,6 +15,7 @@
 from __future__ import annotations
 
 import threading
+from backend.utils.ticks import tick_floor
 from backend.services.trading_rules import entry_masks, market_returns, relative_strength
 
 import numpy as np
@@ -250,16 +251,16 @@ def signals(db: Session, code: str, days: int = 260, owner: str | None = None) -
                     why.append(f"과열 매수 · 점수 5/7, 빠진 건 과열 두 개뿐 (20일선 +{(float(C[d] / ma20[d]) - 1) * 100:.0f}% · 이평선 간격 {float((ehi_t[d] - elo_t[d]) / C[d]) * 100:.0f}%)")
                     why.append("급반등 장(2023년 이후)에서만 통한 자리 → 수량 절반")
                 why.append(f"강도 RS {float(RS[d]):.0f} (시장보다 센 쪽 · 70~95)")
-                why.append(f"손절폭 {rk_[d] * 100:.1f}% · 스탑로스 {L[d] * 0.99:,.0f} (오늘 저가 -1%)"
+                why.append(f"손절폭 {rk_[d] * 100:.1f}% · 스탑로스 {tick_floor(L[d] * 0.99):,.0f} (오늘 저가 -1%)"
                            + (" → ✅ 짧음" if good else ""))
                 desc = (("반도체·AI 특별 (슈퍼사이클) · " if is_semi else "") + ("이평선 모였다 돌파 · " if bool(ema_buy[d]) else "") + ("과열 매수 (이번 장 한정) · " if is_hot else "")
-                        + f"손절 {L[d] * 0.99:,.0f} (-{rk_[d] * 100:.1f}%)" + (" · 수량 절반" if is_hot or is_semi else "")
+                        + f"손절 {tick_floor(L[d] * 0.99):,.0f} (-{rk_[d] * 100:.1f}%)" + (" · 수량 절반" if is_hot or is_semi else "")
                         + f" · 점수 {int(sc[d])}/7" + (f" (빠짐: {miss[0]})" if miss else ""))
                 # 연속으로 뜨는 날: 첫날만 '매수', 이어지는 날은 '자리 유지' 점 · 손절폭이 확 짧아지면 '더 좋은 자리' (2026-10-09 "매일 뜬 이유가 뭐야")
                 if not prev_on and add_r is not None:
                     if add_r >= 1:
-                        why.append(f"들고 있는 첫 매수 {add_r:+.1f}R → 같은 크기까지 더 사도 됨 · 전체 손절을 {L[d] * 0.99:,.0f}로 올리기")
-                        items.append({"date": str(d), "label": f"더 사기 가능 (첫 매수 {add_r:+.1f}R) · 손절 올리기 {L[d] * 0.99:,.0f} · {desc}", "kind": "score_add",
+                        why.append(f"들고 있는 첫 매수 {add_r:+.1f}R → 같은 크기까지 더 사도 됨 · 전체 손절을 {tick_floor(L[d] * 0.99):,.0f}로 올리기")
+                        items.append({"date": str(d), "label": f"더 사기 가능 (첫 매수 {add_r:+.1f}R) · 손절 올리기 {tick_floor(L[d] * 0.99):,.0f} · {desc}", "kind": "score_add",
                                       "pos": "below", "price": float(L[d]), "score": int(sc[d]), "why": why})
                     else:
                         why.append(f"들고 있는 첫 매수 {add_r:+.1f}R (+1R 안 됨) → 더 사지 않기 · 안 들고 있으면 새로 사도 되는 자리")
@@ -302,9 +303,9 @@ def signals(db: Session, code: str, days: int = 260, owner: str | None = None) -
                     st_.append(f"⚠️ 과열 · 20일선 +{(C[d] / ma20[d] - 1) * 100:.0f}%")
                 why = ["시장 상승·횡보장 · 종가 > 20일선 > 60일선 (정배열)", f"강도 RS {float(RS[d]):.0f} (최상위 95↑)",
                        f"양봉 · 종가가 그날 범위 위쪽 ({float((C[d] - L[d]) / rng[d]) * 100:.0f}%)",
-                       f"손절폭 {rk_[d] * 100:.1f}% · 스탑로스 {L[d] * 0.99:,.0f} (오늘 저가 -1%)",
+                       f"손절폭 {rk_[d] * 100:.1f}% · 스탑로스 {tick_floor(L[d] * 0.99):,.0f} (오늘 저가 -1%)",
                        "기본 신호와 별도로 소량 (거래당 위험 0.10%) · 21일선 아래 종가면 다음 날 아침 정리"] + st_
-                items.append({"date": str(d), "label": f"🔥 주도주 매수 (소량) · 손절 {L[d] * 0.99:,.0f} (-{rk_[d] * 100:.1f}%) · RS {float(RS[d]):.0f}"
+                items.append({"date": str(d), "label": f"🔥 주도주 매수 (소량) · 손절 {tick_floor(L[d] * 0.99):,.0f} (-{rk_[d] * 100:.1f}%) · RS {float(RS[d]):.0f}"
                               + (" · " + " · ".join(st_) if st_ else ""), "kind": "lead", "pos": "below", "price": float(L[d]), "why": why})
             elif d >= start:
                 items.append({"date": str(d), "label": "🔥 주도주 보유 중 (또 뜸) · 더 사지 않기", "kind": "lead_keep", "pos": "below", "price": float(L[d])})
@@ -388,7 +389,7 @@ def workspace_list(db: Session) -> dict:
     from backend.services.result_cache import cached  # noqa: PLC0415
     now = datetime.now(ZoneInfo("Asia/Seoul"))
     if not (is_trading_day(now.date()) and 9 <= now.hour < 16):
-        return cached("workspace_list_v16", (), db, lambda: _workspace_list(db))
+        return cached("workspace_list_v17", (), db, lambda: _workspace_list(db))
     return _workspace_list(db)
 
 
@@ -609,7 +610,7 @@ def entry_today(db: Session, asof=None) -> list[dict]:
     if _ENTRY["key"] == latest:
         return _ENTRY["v"]
     from backend.services.result_cache import cached  # noqa: PLC0415
-    v = cached("entry_today_v2", (), db, lambda: {"date": str(latest), "items": _entry_today(db, latest)}) or {}
+    v = cached("entry_today_v3", (), db, lambda: {"date": str(latest), "items": _entry_today(db, latest)}) or {}
     if v.get("date") == str(latest):
         _ENTRY.update(key=latest, v=v["items"])
     return v.get("items", [])
@@ -647,7 +648,7 @@ def _entry_today(db: Session, asof=None) -> list[dict]:
     hit = (box | (ema & up60)) & (tt7 >= 6) & calm
     names = dict(db.execute(text("select code, name from stocks")).all())
     out = [{"code": c, "name": names.get(c, c), "kind": "박스 위로 돌파" if bool(box[c]) else "이평선 모였다 돌파", "close": float(C[c].iloc[r]),
-            "stop": float(L[c].iloc[r]) * 0.99, "chg": float(chg[c].iloc[r]) * 100} for c in hit[hit].index]
+            "stop": tick_floor(float(L[c].iloc[r]) * 0.99), "chg": float(chg[c].iloc[r]) * 100} for c in hit[hit].index]
     out.sort(key=lambda x: -x["chg"])
     return out
 
@@ -732,7 +733,7 @@ def close_scores(db: Session) -> dict:
     점수 7 이김 46%·+1.5%. 기간을 반으로 나눠도 둘 다 점수 따라 이김 비율이 올라감(앞 26→47%, 뒤 31→46%). 디스크 캐시."""
     latest = db.execute(text("select max(trading_date) from spot_daily_prices")).scalar()
     from backend.services.result_cache import cached  # noqa: PLC0415
-    v = cached("close_scores_v8", (), db, lambda: _close_scores(db, latest)) or {}
+    v = cached("close_scores_v9", (), db, lambda: _close_scores(db, latest)) or {}
     return v
 
 
@@ -844,7 +845,7 @@ def _close_scores(db: Session, latest, live: dict | None = None, frac: float = 1
             g_ = gap20.get(code)
             if g_ == g_ and g_ is not None and g_ >= 0.15:
                 lst.append(f"⚠️ 과열 · 20일선 +{g_ * 100:.0f}%")
-        out[code] = {"score": sum(f), "flags": f, "stop": float(l[code]) * 0.99, "risk": rk, "ema": e_, "lead": lead, "lead_state": lst,
+        out[code] = {"score": sum(f), "flags": f, "stop": tick_floor(float(l[code]) * 0.99), "risk": rk, "ema": e_, "lead": lead, "lead_state": lst,
                      "rs": float(rs_v) if rs_v is not None and rs_v == rs_v else None,     # 후보 순서용 (2026-10-10: RS 높은 순이 12년 무작위 순서 10,000번 중 100백분위)
                      "hot": bool(hot_mask.get(code, False)),
                      "semi": bool(code in semi_ok and not normal),
@@ -945,7 +946,7 @@ def _dip_picks(db: Session, latest, live: dict | None = None, frac: float = 1.0,
                     and hi60.get(code, -1) >= -0.10 and chg[code] < 0):
                 continue
             seen.add(code)
-            stop = float(e20[code]) * 0.99
+            stop = tick_floor(float(e20[code]) * 0.99)
             out["items"].append({"code": code, "name": names.get(code, code), "chg": round(float(chg[code]) * 100, 2), "close": float(c[code]),
                                  "stop": round(stop), "risk": round((1 - stop / float(c[code])) * 100, 1), "family": f})
     out["items"].sort(key=lambda x: x["risk"])          # 손절이 가까운 것부터 보여 줌 (순서일 뿐, 거르지는 않음)
@@ -1091,7 +1092,7 @@ def tracking(db: Session) -> dict:
     날짜마다 그날까지 데이터로 점수를 다시 계산한다 (signal_log가 쌓이기 전 날짜는 '다시 계산'). DB 날짜가 바뀔 때만 · 디스크 캐시."""
     latest = db.execute(text("select max(trading_date) from spot_daily_prices")).scalar()
     from backend.services.result_cache import cached  # noqa: PLC0415
-    return cached("tracking_v14", (), db, lambda: _tracking(db, latest)) or {}
+    return cached("tracking_v15", (), db, lambda: _tracking(db, latest)) or {}
 
 
 def _tracking(db: Session, latest, days: int = 20, lead_days: int = 60) -> dict:
@@ -1136,7 +1137,7 @@ def _tracking(db: Session, latest, days: int = 20, lead_days: int = 60) -> dict:
         current = ctx["close"].get(code,p["px0"])
         line = ctx["ema"].get(code)
         tag = p.get("tag")
-        alive.append({"code":code,"name":names.get(code,code),"date":p["d0"],"entry":p["px0"],"stop":round(p["stop"]),
+        alive.append({"code":code,"name":names.get(code,code),"date":p["d0"],"entry":p["px0"],"stop":round(tick_floor(p["stop"])),
           "score":tag if isinstance(tag,(int,float)) else None,"lead":tag=="lead","dip":tag=="dip",
           "gain":round((current/p["px0"]-1)*100,1),"to21":round((current/line-1)*100,1) if line else None,
           "sell_tmr":p["exit_next"],"days":sum(str(d)>p["d0"] for d in C.index)})

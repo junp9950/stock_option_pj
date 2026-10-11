@@ -4,6 +4,7 @@
 손절 = 최근 15일 박스 하단 아래 마감."""
 from __future__ import annotations
 
+from backend.utils.ticks import tick_floor
 import pandas as pd
 from sqlalchemy import text
 from sqlalchemy.orm import Session
@@ -45,7 +46,7 @@ def scan(db: Session) -> dict:
         lo15, hi15 = float(L[c].tail(15).min()), float(H[c].tail(15).max())
         if hi15 / lo15 - 1 > MAX_BOX:
             continue
-        stop = round(lo15 * 0.99)
+        stop = round(tick_floor(lo15 * 0.99))
         items.append({"code": c, "name": names.get(c, c), "close": round(cl), "change_pct": round((cl / float(s.iloc[-2]) - 1) * 100, 2),
                       "off_hi60_pct": round(off * 100, 1), "hi60": round(hi60), "vol_ratio": round(vr, 2),
                       "box_pct": round((hi15 / lo15 - 1) * 100, 1), "stop": stop, "stop_pct": round((stop / cl - 1) * 100, 1),

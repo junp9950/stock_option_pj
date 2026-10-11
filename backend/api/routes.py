@@ -1761,7 +1761,7 @@ def get_large_pullback(db: Session = Depends(get_db)):
     """대형주 눌림 박스 (에이피알형) — 하루 500억↑ · 60일 고점 -5~-20% · 120일선 근처 위 · 거래 마름."""
     from backend.screener.large_pullback import scan  # noqa: PLC0415
     from backend.services.result_cache import cached  # noqa: PLC0415
-    return cached("large_pullback", (), db, lambda: scan(db))
+    return cached("large_pullback_v2", (), db, lambda: scan(db))
 
 
 @router.get("/screener/value-records")

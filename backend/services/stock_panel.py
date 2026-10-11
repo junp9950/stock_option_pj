@@ -6,6 +6,7 @@
 """
 from __future__ import annotations
 
+from backend.utils.ticks import tick_floor
 import threading
 from datetime import date
 
@@ -193,7 +194,7 @@ def _panel(db: Session, code: str, owner: str | None = None) -> dict:
         stage, title = 1, ("종가 매수 신호 · " + tags[0] if tags[0].startswith(("✅ 손익비", "종가 점수", "후순위")) else tags[0])
         sub = " · ".join(tags[1:]) or "오늘 우리 후보 목록에 있음"
         if tags[0].startswith("⬇ 급락"):
-            sub = f"시장 급락에 같이 빠진 센 종목 · 손절 20일선 {float(ema[20]) * 0.99:,.0f}원 (-1%) · 수량 절반 · 21일선 아래 종가면 다음 날 아침 정리"
+            sub = f"시장 급락에 같이 빠진 센 종목 · 손절 20일선 {tick_floor(float(ema[20]) * 0.99):,.0f}원 (-1%) · 수량 절반 · 21일선 아래 종가면 다음 날 아침 정리"
         elif tags[0].startswith(("종가 매수", "✅ 손익비", "종가 점수", "후순위", "참고")):
             # 사용자 (2026-10-09): "추세매매가 하고 싶은 거다 · 종베는 그냥 진입 시점일 뿐" → 종가에 사서 21일선까지 끌고 간다
             try:
@@ -201,7 +202,7 @@ def _panel(db: Session, code: str, owner: str | None = None) -> dict:
                 _s = _csn(db).get("scores", {}).get(code)
             except Exception:  # noqa: BLE001
                 _s = None
-            _stop = _s["stop"] if _s else float(L.iloc[-1]) * 0.99
+            _stop = tick_floor(_s["stop"] if _s else float(L.iloc[-1]) * 0.99)
             # 2026-10-09 "스탑로스 걸어 놓고 냉정하게": 손절은 예약 주문, 추세 매도는 종가 판단 → 다음 날 아침
             sub = (f"종가에 진입 · 스탑로스 {_stop:,.0f}원 예약 (오늘 저가 -1%) · 21일선 아래 종가면 다음 날 아침 정리"
                    + (f" · {sub}" if tags[1:] else ""))
@@ -296,11 +297,11 @@ def _panel(db: Session, code: str, owner: str | None = None) -> dict:
     else:
         checks.append({"ok": False, "k": "신호", "v": "아직 확정 신호 없음"})
     if act:                                   # 스윙 진입: 신호 봉 저가 -1%
-        stop_ref, stop_lab = act["stop"], "진입 손절"
+        stop_ref, stop_lab = tick_floor(act["stop"]), "진입 손절"
     elif tags and tags[0].startswith("⬇ 급락"):  # 급락 날 줍기: 20일선 -1% (12년 R +0.35~0.38, 그날 저가 손절은 다음 날 흔들림에 잘림)
-        stop_ref, stop_lab = ema[20] * 0.99, "20일선 -1%"
+        stop_ref, stop_lab = tick_floor(ema[20] * 0.99), "20일선 -1%"
     else:                                     # 종가 진입: 오늘 저가 -1% (3년: 손절폭 3%↓ R +1.7 · 8%↑ R 0, trend_exit.py)
-        stop_ref, stop_lab = float(L.iloc[-1]) * 0.99, "스탑로스(오늘 저가 -1%)"
+        stop_ref, stop_lab = tick_floor(float(L.iloc[-1]) * 0.99), "스탑로스(오늘 저가 -1%)"
     dist = (1 - stop_ref / c) * 100 if stop_ref else 99      # 종가에서 손절선까지 내려가는 폭 (목록의 손절폭과 같은 기준)
     checks.append({"ok": dist <= 5, "k": "손절 거리", "v": f"{stop_lab} {stop_ref:,.0f}까지 {dist:.1f}%"
                    + (" ✅ 손익비 좋음 (3%↓)" if dist <= 3 else "" if dist <= 5 else " (멀어서 손익비 나쁨)")})

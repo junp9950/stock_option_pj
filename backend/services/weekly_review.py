@@ -8,6 +8,7 @@
 """
 from __future__ import annotations
 
+from backend.utils.ticks import tick_floor
 import logging
 from datetime import date, datetime, timedelta
 
@@ -91,7 +92,7 @@ def _alt_today(db: Session, latest) -> dict:
     # 돌파 진입 = 오늘 처음 EMA8>14>21>55 정배열 + 거래량 50일 평균(오늘 포함) 1.5배↑ + 양봉 (역산 7/7 일치)
     v50 = pd.DataFrame(V).rolling(50).mean().values
     brk = al[r] & ~al[r - 1] & (V[r] >= v50[r] * 1.5) & (Cn[r] > O[r]) & liq[r]
-    pick = lambda m: [{"code": codes[j], "close": float(Cn[r, j]), "stop": round(float(L[r, j]) * 0.99)} for j in np.where(m)[0]]  # noqa: E731
+    pick = lambda m: [{"code": codes[j], "close": float(Cn[r, j]), "stop": round(tick_floor(float(L[r, j]) * 0.99))} for j in np.where(m)[0]]  # noqa: E731
     return {"entry": pick(e_now), "pull": pick(pull), "breakout": pick(brk)}
 
 

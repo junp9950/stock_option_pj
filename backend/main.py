@@ -1735,7 +1735,7 @@ async function jrSizeRender(){
   if(!L.length){ el.innerHTML=head+'<div class="ts">오늘은 매수 신호가 없습니다.</div>'; return; }
   const row=x=>{ const half=(x.tags||[]).some(t=>t.includes('수량 절반')); const rp=x.lead?0.001:half?0.0025:0.005;
     const stop=x.close*(1-x.risk/100), per=x.close-stop, q=per>0?Math.floor(cap*rp/per):0;
-    return `<tr><td>${x.lead?'🔥 ':''}<b>${x.name}</b></td><td style="text-align:right">${Math.round(x.close).toLocaleString()}</td><td style="text-align:right">${Math.round(stop).toLocaleString()} <span class="ts">(-${x.risk}%)</span></td><td style="text-align:right">${(rp*100).toFixed(2).replace(/0$/,'')}%</td><td style="text-align:right"><b>${q.toLocaleString()}주</b></td><td style="text-align:right">${Math.round(q*x.close).toLocaleString()}원</td></tr>`; };
+    return `<tr><td>${x.lead?'🔥 ':''}<b>${x.name}</b></td><td style="text-align:right">${Math.round(x.close).toLocaleString()}</td><td style="text-align:right">${tk(stop).toLocaleString()} <span class="ts">(-${x.risk}%)</span></td><td style="text-align:right">${(rp*100).toFixed(2).replace(/0$/,'')}%</td><td style="text-align:right"><b>${q.toLocaleString()}주</b></td><td style="text-align:right">${Math.round(q*x.close).toLocaleString()}원</td></tr>`; };
   el.innerHTML=head+`<table class="pb-table"><thead><tr><th>종목</th><th style="text-align:right">가격</th><th style="text-align:right">스탑로스</th><th style="text-align:right">위험</th><th style="text-align:right">수량</th><th style="text-align:right">금액</th></tr></thead><tbody>${L.map(row).join('')}</tbody></table>
     <div class="ts" style="margin-top:4px">${d.live?d.live+' 실시간 가격':'종가'} 기준 · 손절에 걸리면 계좌의 위험 % 만큼만 잃는 수량 · 금액이 계좌보다 크면 칸 수를 줄이기</div>`;
 }
@@ -1787,7 +1787,7 @@ function jrRenderTrips(){
       <td data-label="유형">${t.kind}</td><td data-label="산 날 → 판 날">${t.buy_date?t.buy_date.slice(5):'?'} → ${t.sell_date.slice(5)}${t.days!=null?` <span class="ts">${t.days}일</span>`:''}</td>
       <td data-label="매수 → 매도">${Math.round(t.buy_px).toLocaleString()} → ${Math.round(t.sell_px).toLocaleString()} <span class="ts">${t.qty}주</span></td>
       <td data-label="수익률">${jrPct(t.pct)}<br>${jrWon(t.pnl)}</td>
-      <td data-label="규칙 · R" style="font-size:11.5px">${t.rules?(t.rules.broke.length?t.rules.broke.map(b=>`<div style="color:var(--o)">${b}</div>`).join(''):'<div>✅ 지킴</div>')+`<span class="ts">R ${t.rules.r==null?'-':(t.rules.r>0?'+':'')+t.rules.r} · 손절선 ${t.rules.stop.toLocaleString()}</span>`:'<span class="ts">-</span>'}</td><td data-label="산 날 상태" style="font-size:11.5px;max-width:340px">${tags}${det}${pl}</td></tr>`;}).join('')
+      <td data-label="규칙 · R" style="font-size:11.5px">${t.rules?(t.rules.broke.length?t.rules.broke.map(b=>`<div style="color:var(--o)">${b}</div>`).join(''):'<div>✅ 지킴</div>')+`<span class="ts">R ${t.rules.r==null?'-':(t.rules.r>0?'+':'')+t.rules.r} · 손절선 ${t.tk(rules.stop).toLocaleString()}</span>`:'<span class="ts">-</span>'}</td><td data-label="산 날 상태" style="font-size:11.5px;max-width:340px">${tags}${det}${pl}</td></tr>`;}).join('')
     :'<tr><td colspan="7" class="ts" style="text-align:center;padding:14px">없음</td></tr>';
 }
 async function jrImport(preview){
@@ -2395,7 +2395,7 @@ async function loadSupportSetups(){
     return `<div class="cc-f k-${k}">${{g:'▲',n:'■',b:'▼'}[k]} ${t} · ${f.period} 영업익 ${f.op_yoy!=null?(f.op_yoy>0?'+':'')+f.op_yoy+'%':'-'} · 매출 ${f.rev_yoy!=null?(f.rev_yoy>0?'+':'')+f.rev_yoy+'%':'-'}${f.margin!=null?' · 이익률 '+f.margin+'%':''}</div>`; };
   el.innerHTML=d.items.length?d.items.map(x=>`<div class="cc" onclick="openChartModal('${x.code}','${x.name}','')">
     <div class="cc-h"><b>${x.name}</b>${flagTag(x)}${rsTag(x)}<span class="cc-t">${x.type}</span></div>
-    <div class="cc-p"><span>손절 <b class="mono" style="color:var(--down)">${x.stop.toLocaleString()}</b> <span class="mono">(${x.stop_pct}%)</span></span><span>위 <b class="mono" style="color:var(--up)">${x.target.toLocaleString()}</b> <span class="mono">(+${x.target_pct}%)</span></span></div>
+    <div class="cc-p"><span>손절 <b class="mono" style="color:var(--down)">${tk(x.stop).toLocaleString()}</b> <span class="mono">(${x.stop_pct}%)</span></span><span>위 <b class="mono" style="color:var(--up)">${x.target.toLocaleString()}</b> <span class="mono">(+${x.target_pct}%)</span></span></div>
     <div class="cc-s">현재 ${x.close.toLocaleString()}원 · 거래 터질 때의 ${x.dry}배 · 터진 뒤 ${x.since_burst}일${x.families.length?' · '+x.families[0]:''}</div>
     ${fund(x)}<div class="cc-lb" onclick="event.stopPropagation()">${lbBtns(x,'손절 짧은 자리',_ssDate)}</div></div>`).join('')
     :'지금은 없습니다';
@@ -2422,7 +2422,7 @@ async function loadLargePullback(){
   document.getElementById('lp-info').textContent=`${d.trading_date} · ${d.items.length}개${d.market==='하락'?' · 🔴 하락장 — 보기만':''}`;
   el.innerHTML=d.items.length?d.items.map(x=>`<div class="cc" onclick="openChartModal('${x.code}','${x.name}','')">
     <div class="cc-h"><b>${x.name}</b>${rsTag(x)}<span class="mono" style="margin-left:auto;color:${x.change_pct>=0?'var(--up)':'var(--down)'}">${x.change_pct>0?'+':''}${x.change_pct}%</span></div>
-    <div class="cc-p"><span>손절 <b class="mono" style="color:var(--down)">${x.stop.toLocaleString()}</b> <span class="mono">(${x.stop_pct}%)</span></span></div>
+    <div class="cc-p"><span>손절 <b class="mono" style="color:var(--down)">${tk(x.stop).toLocaleString()}</b> <span class="mono">(${x.stop_pct}%)</span></span></div>
     <div class="cc-s">고점 ${x.off_hi60_pct}% · 15일 박스 폭 ${x.box_pct}% · 거래 ${x.vol_ratio}배 · 하루 ${x.liq_eok.toLocaleString()}억${x.families.length?' · '+x.families[0]:''}</div></div>`).join(''):'지금은 없습니다';
 }
 async function loadBottomBox(){
@@ -2547,7 +2547,7 @@ async function wsDraw(){
     const vm=_avwapNote.match(/· (.+?) (\d\d-\d\d) VWAP ([\d,]+) (위|아래)/); if(vm) ch.push(hbChip(vm[4]==='위'?'g':'b',`${vm[1]} ${vm[2]} VWAP ${vm[3]} ${vm[4]}`));
     _patNotes.forEach(t=>ch.push(hbChip(/돌파/.test(t)?'g':/이탈/.test(t)?'b':'n',t)));
     document.getElementById('ws-chips-a').innerHTML=ch.join(''); hbFitChart(); }
-  document.getElementById('ws-note').innerHTML=(a?`<b style="color:var(--blue)">▲ 진입 신호 ${a.date.slice(5).replace('-','/')} ${Math.round(a.entry).toLocaleString()} · ${a.days}일째 · ${a.gain>0?'+':''}${a.gain.toFixed(1)}% · 손절 ${Math.round(a.stop).toLocaleString()}${a.half?' · 절반 익절함':''}</b> · `:'')
+  document.getElementById('ws-note').innerHTML=(a?`<b style="color:var(--blue)">▲ 진입 신호 ${a.date.slice(5).replace('-','/')} ${Math.round(a.entry).toLocaleString()} · ${a.days}일째 · ${a.gain>0?'+':''}${a.gain.toFixed(1)}% · 손절 ${tk(a.stop).toLocaleString()}${a.half?' · 절반 익절함':''}</b> · `:'')
     +'';      // 기간·EMA 설명은 뺌(칩·범례에 있음), 손절 점선 설명은 신호 줄로 (2026-10-11 차트 잘림)
   document.getElementById('ws-note').style.display=document.getElementById('ws-note').innerHTML.trim()?'':'none';
 }
@@ -2591,7 +2591,7 @@ function renderWsList(){
     return [(x.rr?'✅ ':'')+'매수','w',x.rr?'손절폭 3% 이하 · 손익비 좋은 자리':'평소 수량']; };
   const hbRow=x=>{ const bd=hbBadge(x), all=(x.tags||[]).join(' · ').replace(/"/g,'');
     let sub;
-    if(_ws.tab==='track') sub=`${x.date.slice(5).replace('-','/')} ${Math.round(x.entry).toLocaleString()} · 스탑 ${x.stop.toLocaleString()} · 21선 ${x.to21>0?'+':''}${x.to21}%`;
+    if(_ws.tab==='track') sub=`${x.date.slice(5).replace('-','/')} ${Math.round(x.entry).toLocaleString()} · 스탑 ${tk(x.stop).toLocaleString()} · 21선 ${x.to21>0?'+':''}${x.to21}%`;
     else if(_ws.tab==='entry'&&x.lead) sub=`${hbState(x)} · 손절 −${x.risk}%`;
     else if(_ws.tab==='entry') sub=[x.risk!=null?`손절 −${x.risk}%`:'',x.score!=null?`${x.score}/7`:'',hbSect(x)].filter(Boolean).join(' · ');
     else sub=(x.risk!=null?`손절 −${x.risk}% · `:'')+(x.tags||[]).join(' · ');
@@ -2603,9 +2603,9 @@ function renderWsList(){
   const row=x=>{
     if(['entry','wait','track'].includes(_ws.tab)) return hbRow(x);
     let tg='';
-    if(_ws.tab==='track') tg=(x.sell_tmr?'⚠ 내일 아침 정리 · ':'')+(x.dip?'⬇ 줍기 · ':'')+(x.lead?'🔥 주도주 · ':'')+`${x.date.slice(5).replace('-','/')} ${Math.round(x.entry).toLocaleString()} · 스탑 ${x.stop.toLocaleString()} · 21선 ${x.to21>0?'+':''}${x.to21}%`;
+    if(_ws.tab==='track') tg=(x.sell_tmr?'⚠ 내일 아침 정리 · ':'')+(x.dip?'⬇ 줍기 · ':'')+(x.lead?'🔥 주도주 · ':'')+`${x.date.slice(5).replace('-','/')} ${Math.round(x.entry).toLocaleString()} · 스탑 ${tk(x.stop).toLocaleString()} · 21선 ${x.to21>0?'+':''}${x.to21}%`;
     else if(_ws.tab!=='watch') tg=(x.risk!=null?`손절 ${x.risk}% · `:'')+x.tags.filter(t=>t!=='종가 점수 6↑'||x.tags.length===1).join(' · ')+(x.family?` · ${x.family}`:'');   // 손절폭 = 종가에서 그날 저가 -1%까지
-    else if(_ws.tab==='held') tg=(x.stop?`손절 ${Math.round(x.stop).toLocaleString()}${x.room!=null?` · ${x.room<0?'⛔ 이탈':x.room<=2?'⚠ '+x.room+'% 남음':x.room+'% 남음'}`:''}`:'손절선 없음')+(x.long?' · 장기':'');
+    else if(_ws.tab==='held') tg=(x.stop?`손절 ${tk(x.stop).toLocaleString()}${x.room!=null?` · ${x.room<0?'⛔ 이탈':x.room<=2?'⚠ '+x.room+'% 남음':x.room+'% 남음'}`:''}`:'손절선 없음')+(x.long?' · 장기':'');
     else tg=`${KIND[x.kind]||''}${x.level?' '+Math.round(x.level).toLocaleString():''}${x.note?' · '+x.note:''}`;
     const sub=_ws.tab==='held'&&x.gain!=null?`<div class="ws-tg" style="text-align:right">수익 ${x.gain>0?'+':''}${x.gain}%</div>`:'';
     return `<div class="ws-item${x.code===_ws.code?' on':''}" data-c="${x.code}" onclick="wsOpen('${x.code}','${x.name.replace(/'/g,'')}')">${wsAv(x.code,x.name)}
@@ -2662,10 +2662,10 @@ async function wsOpen(code,name){
   document.getElementById('ws-panel').innerHTML='<div class="ts">불러오는 중…</div>';
   // 시안 B: 목록에 있는 종목이면 신호 줄(배지·손절·점수·RS)과 차트 손절선 (2026-10-11 "손절선 나오는 건 좋네")
   { const D=_ws.data||{}, x=(D.candidates||[]).find(y=>y.code===code&&y.lane==='entry'), t=(D.track||[]).find(y=>y.code===code);
-    _ws.stop=x&&x.stop?x.stop:x&&x.close&&x.risk!=null?x.close*(1-x.risk/100):t?t.stop:null;
+    _ws.stop=tk(x&&x.stop?x.stop:x&&x.close&&x.risk!=null?x.close*(1-x.risk/100):t?t.stop:null);
     const sig=document.getElementById('ws-sig'), hot=x&&(x.tags||[]).some(v=>v.includes('과열 매수')), semi=x&&(x.tags||[]).some(v=>v.includes('반도체·AI 특별'));
-    sig.innerHTML=x?`<span class="hb-b ${x.lead?'w':hot||semi?'o':'w'}" style="font-size:12px;padding:3px 10px">${x.lead?'주도 · 아주 적게':hot?'과열 · 적게 매수':semi?'반도체 특별 · 적게 매수':'매수'}</span><span>종가 매수 · 손절 <b class="mono">${Math.round(_ws.stop).toLocaleString()}</b> (−${x.risk}%)${x.score!=null?' · 점수 '+x.score+'/7':''}${x.rs!=null?' · RS '+Math.round(x.rs):''} · <span style="color:var(--muted)">차트 점선 = 손절선</span></span>`
-      :t?`<span class="hb-b ${t.sell_tmr?'r':'o'}" style="font-size:12px;padding:3px 10px">${t.sell_tmr?'▼ 내일 아침 정리':'신호 추적 중'}</span><span>${t.date.slice(5).replace('-','/')} ${Math.round(t.entry).toLocaleString()}에 신호 · 스탑 <b class="mono">${t.stop.toLocaleString()}</b> · 21선 ${t.to21>0?'+':''}${t.to21}% · ${t.gain>0?'+':''}${t.gain}%</span>`:'';
+    sig.innerHTML=x?`<span class="hb-b ${x.lead?'w':hot||semi?'o':'w'}" style="font-size:12px;padding:3px 10px">${x.lead?'주도 · 아주 적게':hot?'과열 · 적게 매수':semi?'반도체 특별 · 적게 매수':'매수'}</span><span>종가 매수 · 손절 <b class="mono">${tk(_ws.stop).toLocaleString()}</b> (−${x.risk}%)${x.score!=null?' · 점수 '+x.score+'/7':''}${x.rs!=null?' · RS '+Math.round(x.rs):''} · <span style="color:var(--muted)">차트 점선 = 손절선</span></span>`
+      :t?`<span class="hb-b ${t.sell_tmr?'r':'o'}" style="font-size:12px;padding:3px 10px">${t.sell_tmr?'▼ 내일 아침 정리':'신호 추적 중'}</span><span>${t.date.slice(5).replace('-','/')} ${Math.round(t.entry).toLocaleString()}에 신호 · 스탑 <b class="mono">${tk(t.stop).toLocaleString()}</b> · 21선 ${t.to21>0?'+':''}${t.to21}% · ${t.gain>0?'+':''}${t.gain}%</span>`:'';
     document.getElementById('ws-chips-a').innerHTML=''; document.getElementById('ws-chips-b').innerHTML=''; document.getElementById('ws-px').innerHTML=''; }
   // 패널은 따로 — 차트는 패널을 기다리지 않고 먼저 그림 (2026-10-09 "오래 걸리노")
   fetch(`${API}/stock/${code}/panel`).then(r=>r.ok?r.json():null).catch(()=>null).then(pn=>{ if(_ws.code===code) renderStockPanel(pn,'ws-panel'); });
@@ -2688,7 +2688,7 @@ async function jrWsLoad(){
   const el=document.getElementById('jr-ws-items');
   if(!d){ el.innerHTML='<div class="ts" style="padding:10px">못 불러왔습니다</div>'; return; }
   _jrWs.data=d; document.getElementById('jr-ws-asof').textContent=d.live?`장중 ${d.live} 가격`:`${d.as_of} 정규장 종가`;
-  const row=x=>{ const tg=(x.stop?`손절 ${Math.round(x.stop).toLocaleString()}${x.room!=null?` · ${x.room<0?'⛔ 이탈':x.room<=2?'⚠ '+x.room+'% 남음':x.room+'% 남음'}`:''}`:'손절선 없음');
+  const row=x=>{ const tg=(x.stop?`손절 ${tk(x.stop).toLocaleString()}${x.room!=null?` · ${x.room<0?'⛔ 이탈':x.room<=2?'⚠ '+x.room+'% 남음':x.room+'% 남음'}`:''}`:'손절선 없음');
     return `<div class="ws-item${x.code===_jrWs.code?' on':''}" data-c="${x.code}" onclick="jrWsOpen('${x.code}','${x.name.replace(/'/g,'')}')">${wsAv(x.code,x.name)}
       <div class="ws-txt"><div class="ws-nm">${x.name}</div><div class="ws-tg">${tg}</div></div>
       <div class="ws-px">${x.close?Math.round(x.close).toLocaleString():'-'}<div style="color:${x.chg>0?'var(--up)':x.chg<0?'var(--down)':'var(--muted)'}">${x.chg>0?'+':''}${(x.chg||0).toFixed(2)}%</div>${x.gain!=null?`<div class="ws-tg">수익 ${x.gain>0?'+':''}${x.gain}%</div>`:''}</div></div>`; };
@@ -2826,6 +2826,8 @@ function closeChartModal(){ document.getElementById('chart-modal-bg').classList.
 const _lw={};
 function lwClear(cid){ if(_lw[cid]){ try{ _lw[cid].ro.disconnect(); _lw[cid].chart.remove(); }catch(e){} delete _lw[cid]; } const el=document.getElementById(cid); if(el) el.innerHTML=''; const lg=document.getElementById(cid+'-leg'); if(lg) lg.innerHTML=''; }
 // 테마 색 읽기 (차트 그림은 CSS 변수를 못 읽어서 실제 값으로)
+// 호가 단위로 내림 (손절가 표시용, 2026-10-11 "손절가가 1원 단위까지 나온다")
+function tk(p){ p=+p; if(!p) return p; const t=p<2000?1:p<5000?5:p<20000?10:p<50000?50:p<200000?100:p<500000?500:1000; return Math.floor(p/t+1e-9)*t; }
 function cv(n){ return getComputedStyle(document.documentElement).getPropertyValue(n).trim()||'#8b949e'; }
 function themeLight(){ return (document.documentElement.dataset.theme||'dark')!=='dark'; }
 // ── 차트 모양 찾기 (2026-10-11): 박스 · 수렴선(삼각형·쐐기) · 응축(볼린저 폭 좁음) — 일봉, 그 종목을 열 때 브라우저에서 계산 ──
@@ -2973,7 +2975,7 @@ function renderLwChart(cid, allCandles, signals, per, opts){
     handleScroll:{mouseWheel:true,pressedMouseMove:true,horzTouchDrag:true,vertTouchDrag:false},handleScale:{axisPressedMouseMove:true,mouseWheel:true,pinch:true}});
   const cs=chart.addCandlestickSeries({upColor:'#f85149',downColor:'#3b82f6',borderVisible:false,wickUpColor:'#f85149',wickDownColor:'#3b82f6'});
   cs.setData(data.map(d=>({time:d.time,open:d.open,high:d.high,low:d.low,close:d.close})));
-  if(opts&&opts.stop>0) cs.createPriceLine({price:+opts.stop,color:cv('--neu'),lineWidth:1,lineStyle:2,axisLabelVisible:true,title:'손절 '+Math.round(opts.stop).toLocaleString()});   // 손절선 (2026-10-11 시안 B)
+  if(opts&&opts.stop>0) cs.createPriceLine({price:tk(opts.stop),color:cv('--neu'),lineWidth:1,lineStyle:2,axisLabelVisible:true,title:'손절 '+tk(opts.stop).toLocaleString()});   // 손절선 (2026-10-11 시안 B)
   const vs=chart.addHistogramSeries({priceFormat:{type:'volume'},priceScaleId:'vol',lastValueVisible:false,priceLineVisible:false});
   chart.priceScale('vol').applyOptions({scaleMargins:{top:0.8,bottom:0}});
   vs.setData(data.map(d=>({time:d.time,value:d.vol,color:d.close>=d.open?'rgba(248,81,73,.5)':'rgba(59,130,246,.5)'})));
@@ -3371,7 +3373,7 @@ async function svDraw(){
   if(!c.cd||!c.cd.candles||!c.cd.candles.length){ note.textContent='차트를 못 불러왔습니다'; return; }
   const a=c.sg&&c.sg.active;
   const g=renderLwChart('sv-chart',c.cd.candles,c.sg?c.sg.items:[],_sv.per,{stop:a&&a.stop,code:_sv.code,tf:'1d'});
-  note.textContent=`일봉 · 끌어서 과거 보기`+(g!=null?` · EMA 5·10·20 간격 ${g.toFixed(1)}%`:'')+_avwapNote+(_patNote?'  |  '+_patNote:'')+(a?` · ▲ 진입 신호 ${a.date.slice(5).replace('-','/')} · 손절 ${Math.round(a.stop).toLocaleString()}`:'');
+  note.textContent=`일봉 · 끌어서 과거 보기`+(g!=null?` · EMA 5·10·20 간격 ${g.toFixed(1)}%`:'')+_avwapNote+(_patNote?'  |  '+_patNote:'')+(a?` · ▲ 진입 신호 ${a.date.slice(5).replace('-','/')} · 손절 ${tk(a.stop).toLocaleString()}`:'');
 }
 function svMetric(k,v,sub,bar){ return `<div class="sv-m"><span class="k">${k}</span><span>${bar||''}${sub?`<span class="ts">${sub}</span>`:''}</span><span class="v">${v}</span></div>`; }
 function svProfile(){
