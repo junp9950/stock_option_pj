@@ -3416,10 +3416,10 @@ const usC=n=>n>0?'var(--up)':n<0?'var(--down)':'var(--muted)';
 const usP=n=>`<span style="color:${usC(n)}">${n>0?'+':''}${(+n).toFixed(2)}%</span>`;
 async function usLoad(){
   _usAt=Date.now();
-  const [I,O]=await Promise.all([fetch(`${API}/us/indices`).then(r=>r.ok?r.json():null).catch(()=>null), fetch(`${API}/us/overview`).then(r=>r.ok?r.json():null).catch(()=>null)]);
-  if(I) _usI=I; if(O) _usO=O;
-  usTop(); usSide(); usList(_us.list);
-  if(!_us.code&&O&&O.index&&O.index[0]) usOpen('QQQ','나스닥100 ETF');
+  if(!_us.code) usOpen('QQQ','나스닥100 ETF');      // 차트는 따로 바로
+  // 오는 대로 그림 (지수 카드 · 섹터·목록 서로 안 기다림)
+  fetch(`${API}/us/overview`).then(r=>r.ok?r.json():null).catch(()=>null).then(O=>{ if(O){ _usO=O; } usSide(); usList(_us.list); if(_usI) usTop(); });
+  fetch(`${API}/us/indices`).then(r=>r.ok?r.json():null).catch(()=>null).then(I=>{ if(I){ _usI=I; } usTop(); });
 }
 function usTop(){
   const el=document.getElementById('us-today'), I=_usI, O=_usO||{}; if(!I){ el.innerHTML='<span class="ts">미국 지수를 못 불러왔습니다</span>'; return; }

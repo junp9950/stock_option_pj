@@ -19,6 +19,7 @@ logger = get_logger(__name__)
 KST, ET = ZoneInfo("Asia/Seoul"), ZoneInfo("America/New_York")
 _LIST: dict = {}
 _CANDLE: dict = {}
+_IDX: dict = {}
 KO = {"BRK.B": "버크셔 해서웨이", "SPY": "S&P500 ETF", "QQQ": "나스닥100 ETF", "SOXX": "반도체 ETF(SOXX)", "SMH": "반도체 ETF(SMH)", "TQQQ": "나스닥 3배 ETF",
       "SOXL": "반도체 3배 ETF", "IONQ": "아이온큐", "RGTI": "리게티", "OKLO": "오클로", "SMR": "뉴스케일", "MSTR": "스트래티지", "HOOD": "로빈후드", "RKLB": "로켓랩",
       "ASTS": "AST 스페이스모바일", "TEM": "템퍼스 AI", "CRWV": "코어위브", "NBIS": "네비우스", "SNOW": "스노우플레이크", "CRWD": "크라우드스트라이크",
@@ -34,6 +35,31 @@ def is_us(code: str) -> bool:
 
 # ── 오늘 시세 덮어쓰기 (2026-10-11 점검: 스크리너는 하루 전 값이라 Nasdaq 관심종목 시세로 20개씩 받아 덮음) ──
 _Q: dict = {"t": 0.0, "busy": False, "data": {}}
+_DISK = __import__("pathlib").Path.home() / ".cache" / "stock_us_cache.json"      # 재시작 직후에도 바로 보이게 (시세·지수 마지막 값)
+
+
+def _disk_load() -> None:
+    if _Q.get("loaded"):
+        return
+    _Q["loaded"] = True
+    try:
+        import json  # noqa: PLC0415
+        d = json.loads(_DISK.read_text())
+        if d.get("q"):
+            _Q["data"] = {k: tuple(v) for k, v in d["q"].items()}; _Q["t"] = d.get("qt", 0) - 1500      # 오래된 값 → 곧 새로 받음
+        if d.get("idx"):
+            _IDX["x"] = (d.get("it", 0) - 600, d["idx"])
+    except Exception:  # noqa: BLE001
+        pass
+
+
+def _disk_save() -> None:
+    try:
+        import json  # noqa: PLC0415
+        _DISK.parent.mkdir(parents=True, exist_ok=True)
+        _DISK.write_text(json.dumps({"q": _Q["data"], "qt": _Q["t"], "idx": (_IDX.get("x") or (0, None))[1], "it": (_IDX.get("x") or (0, None))[0]}))
+    except Exception:  # noqa: BLE001
+        pass
 
 
 def _refresh_quotes(syms: list[str]) -> None:
@@ -64,7 +90,7 @@ def _refresh_quotes(syms: list[str]) -> None:
             for r in ex.map(one, chunks):
                 out.update(r)
         if len(out) > len(syms) * 0.5:
-            _Q.update(data=out, t=time.time())
+            _Q.update(data=out, t=time.time()); _disk_save()
     finally:
         _Q["busy"] = False
 
@@ -79,6 +105,7 @@ def _quotes_kick(syms: list[str]) -> None:
 
 def universe() -> list[dict]:
     """종목 목록(스크리너, 6시간) + 오늘 시세(Nasdaq 관심종목 시세, 20분, 뒤에서 받음)를 덮은 것."""
+    _disk_load()
     base = _universe_base()
     _quotes_kick([x["code"] for x in base if x["cap"] > 0])
     q = _Q["data"]
@@ -234,14 +261,7 @@ INDEX = [("SPY", "S&P500"), ("QQQ", "나스닥100"), ("DIA", "다우"), ("SOXX",
 def overview(db=None) -> dict:
     """미장 오늘: 지수(ETF로 대신) · 섹터 등락(시총 가중) · 대형주 많이 오른/내린 · 거래대금 많은 · 이번 주 미국 일정."""
     L = [x for x in universe() if x["cap"] > 0]
-    idx = []
-    for sym, nm in INDEX:
-        c = candles(sym, "1d")[-130:]
-        if len(c) >= 2:
-            cl, pv = float(c[-1]["closePrice"]), float(c[-2]["closePrice"])
-            idx.append({"code": sym, "name": nm, "close": cl, "chg": round((cl / pv - 1) * 100, 2), "date": c[-1]["timestamp"][:10],
-                        "spark": [round(float(x["closePrice"]), 2) for x in c[-60:]],
-                        "ma20": sum(float(x["closePrice"]) for x in c[-20:]) / 20})
+    idx = []      # 지수는 indices() (2026-10-11 느려서 뺌 — ETF 일봉 5개를 토스에서 받느라 첫 화면이 늦었음)
     sec: dict = {}
     for x in L:
         k = SECTOR_KO.get(x["sector"], x["sector"] or "기타")
@@ -285,7 +305,6 @@ def rank(sort: str = "dv", limit: int = 100, min_cap: float = 1e9) -> list[dict]
 
 # ── 미장 오늘 위 카드: 나스닥 · 나스닥100 선물 · S&P500 (국장 코스피 · 코200선물 · 코스닥 자리) ──
 IDX3 = [(".IXIC", "index", "나스닥", "QQQ", False), ("NQcv1", "futures", "나스닥100 선물", "QQQ", True), (".INX", "index", "S&P500", "SPY", False)]
-_IDX: dict = {}
 
 
 def _etf_prev(etf: str, pts: list) -> float | None:
@@ -297,10 +316,50 @@ def _etf_prev(etf: str, pts: list) -> float | None:
     return float(d[-1]["closePrice"]) if d else None
 
 
+def _spark(etf: str, ext: bool) -> list[dict]:
+    """장중 선용 5분 간격 — 1분봉을 최근 세션만큼만 (정규장 3쪽 = 600분, 장 전·후 포함 6쪽)."""
+    key = ("spark", etf, ext)
+    hit = _CANDLE.get(key)
+    if hit and time.time() - hit[0] < 600:
+        return hit[1]
+    raw = sorted(_pages(etf, "1m", 6 if ext else 3), key=lambda c: c["timestamp"])
+    b: dict = {}
+    for c in raw:
+        t0 = (datetime.fromisoformat(c["timestamp"]) - timedelta(minutes=1)).astimezone(ET)
+        if not ext and not ((9, 30) <= (t0.hour, t0.minute) < (16, 0)):
+            continue
+        k = t0.replace(minute=t0.minute - t0.minute % 5, second=0, microsecond=0)
+        b[k] = c["closePrice"]
+    out = []
+    for k in sorted(b):
+        kst = k.astimezone(KST)
+        out.append({"t": calendar.timegm(kst.replace(tzinfo=None).timetuple()), "timestamp": kst.strftime("%Y-%m-%dT%H:%M:00+09:00"), "closePrice": b[k], "openPrice": b[k]})
+    if out:
+        _CANDLE[key] = (time.time(), out)
+    return out
+
+
 def indices() -> dict:
+    """5분 지나면 저장해 둔 값을 바로 주고 뒤에서 새로 받음 (화면이 기다리지 않게)."""
+    _disk_load()
     hit = _IDX.get("x")
     if hit and time.time() - hit[0] < 300:
         return hit[1]
+    if hit:
+        if not _IDX.get("busy"):
+            _IDX["busy"] = True
+            import threading  # noqa: PLC0415
+            def _bg():
+                try:
+                    _indices_calc()
+                finally:
+                    _IDX["busy"] = False
+            threading.Thread(target=_bg, daemon=True).start()
+        return hit[1]
+    return _indices_calc()
+
+
+def _indices_calc() -> dict:
     h = {"User-Agent": "Mozilla/5.0"}
     out = []
     for code, kind, nm, etf, ext in IDX3:
@@ -313,7 +372,7 @@ def indices() -> dict:
             cl = [float(x["closePrice"]) for x in d]
             ma20 = sum(cl[-20:]) / 20 if len(cl) >= 20 else None
             # 장중 선: 지수 분봉은 못 받아서 같은 방향 ETF 1분봉으로 (선물 자리는 장 전·후 포함)
-            m = candles(etf, "5m", ext)
+            m = _spark(etf, ext)
             last_day = m[-1]["timestamp"][:10] if m else ""
             if m and not ext:      # 마지막 한 세션 (한국 시각으로 22:30~05:00이라 날짜가 걸쳐서, 마지막 봉에서 8시간 안)
                 t_end = m[-1]["t"]; pts = [x for x in m if t_end - x["t"] <= 7 * 3600]
@@ -337,5 +396,6 @@ def indices() -> dict:
     except Exception:  # noqa: BLE001
         pass
     res = {"items": out, "verdict": verdict}
-    _IDX["x"] = (time.time(), res)
+    if out:
+        _IDX["x"] = (time.time(), res); _disk_save()
     return res
