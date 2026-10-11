@@ -561,7 +561,7 @@ select{background:var(--c3);border:1px solid var(--ln);color:var(--bd);padding:6
   <div class="tab" data-t="candidates" data-m="kr" onclick="switchTab('candidates')">차트 후보</div>
   <div class="tab" data-t="calendar" data-m="kr" onclick="switchTab('calendar')">캘린더</div>
   <div class="tab" data-t="sector" data-m="kr" onclick="switchTab('sector')">섹터 흐름</div>
-  <div class="tab" data-t="journal" data-m="kr" data-priv="1" onclick="switchTab('journal')" hidden>🔒 내 공간</div>
+  <div class="tab" data-t="journal" data-m="kr" data-priv="1" onclick="switchTab('journal')" hidden>🔒 관리</div>
   <div class="tab" data-t="screener" data-m="kr" onclick="switchTab('screener')">거래대금</div>
   <div class="tab" data-t="heatmap" data-m="kr" onclick="switchTab('heatmap')">히트맵</div>
   <div class="tab" data-t="us" data-m="us" onclick="switchTab('us')" hidden>미장 오늘</div>
@@ -3539,14 +3539,14 @@ async function usHeatLoad(){
 }
 function usHeatOpen(code,name){ switchTab('usstock'); svOpen(code,name); }
 
-// ── 내 공간 (2026-10-11): 매매 일지 · 실전 기록 · 관심·보유 · 서버 상태 — junp 로그인만 ──
+// ── 관리 탭 (2026-10-11): 매매 일지 · 실전 기록 · 관심·보유 · 서버 상태 — junp 로그인만 ──
 let _meK='jr';
 function meShow(k){
   _meK=k; try{ localStorage.setItem('me-k',k); }catch(e){}
   document.querySelectorAll('#me-nav button').forEach(b=>b.classList.toggle('on',b.dataset.k===k));
   const main=document.getElementById('jr-main');
   const hb=document.querySelector('#me-head > div:last-child'); if(hb) hb.style.visibility=k==='jr'?'':'hidden';
-  const who=document.getElementById('jr-who'); if(who) who.textContent=k==='jr'?`${jrAuth().o}의 매매 일지`:'내 공간';
+  const who=document.getElementById('jr-who'); if(who) who.textContent=k==='jr'?`${jrAuth().o}의 매매 일지`:'관리';
   const asof=document.getElementById('jr-asof'); if(asof) asof.style.display=k==='jr'?'':'none';
   [...main.children].forEach(el=>{ if(el.id==='me-head'||el.id==='me-nav') return; if(el.dataset.me) el.hidden=el.dataset.me!==k; else el.style.display=(k==='jr'?'':'none'); });
   if(k==='fwd') meFwd(); if(k==='watch') meWatch(); if(k==='status') meStatus();

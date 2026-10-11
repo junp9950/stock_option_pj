@@ -2296,7 +2296,7 @@ def _journal_owner_opt(request: Request, db: Session) -> str | None:
 
 
 def _me(request: Request, db: Session) -> str:
-    """내 공간: 매매 일지 로그인 + junp 만."""
+    """관리 탭: 매매 일지 로그인 + junp 만."""
     o = _journal_owner_opt(request, db)
     if o != "junp":
         raise HTTPException(status_code=401, detail="로그인 필요")
