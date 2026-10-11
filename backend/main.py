@@ -500,7 +500,7 @@ select{background:var(--c3);border:1px solid var(--ln);color:var(--bd);padding:6
 .sv-top{display:flex;flex-wrap:wrap;align-items:center;gap:10px 16px;padding:12px 16px}
 .sv-search{position:relative;flex:0 1 420px;min-width:240px}.sv-search input{width:100%;font-size:14px!important;padding:9px 14px!important;border-radius:12px!important}
 #sv-sr{position:absolute;left:0;right:0;top:100%;z-index:30;background:var(--c1);border:1px solid var(--line);border-radius:12px;margin-top:4px;max-height:380px;overflow:auto;display:none;box-shadow:0 8px 20px var(--shadow)}#sv-sr.on{display:block}
-.sv-recent{display:flex;flex-wrap:wrap;gap:6px}.sv-recent .sv-chip{font-size:12.5px;padding:4px 11px;border-radius:999px;background:var(--card2);color:var(--text);cursor:pointer;border:1px solid var(--line)}.sv-recent .sv-chip:hover{border-color:var(--b)}
+.sv-recent{display:flex;flex-wrap:wrap;gap:6px}#sv-sr .ws-item.kb,#ws-sr .ws-item.kb{background:var(--card2);box-shadow:inset 3px 0 0 var(--b)}.sv-recent .sv-chip{font-size:12.5px;padding:4px 11px;border-radius:999px;background:var(--card2);color:var(--text);cursor:pointer;border:1px solid var(--line)}.sv-recent .sv-chip:hover{border-color:var(--b)}
 .sv-hd{display:flex;flex-wrap:wrap;align-items:baseline;gap:6px 14px}.sv-hd .nm{font-size:24px;font-weight:800;color:var(--strong)}.sv-hd .px{font-size:24px;font-weight:600;color:var(--strong);font-family:'IBM Plex Mono',monospace}
 .sv-g1{display:grid;grid-template-columns:minmax(0,1fr) 380px;gap:16px;align-items:start}
 .sv-g2{display:grid;grid-template-columns:minmax(0,1.3fr) minmax(0,1fr) minmax(0,1fr);gap:16px;align-items:stretch}
@@ -792,7 +792,7 @@ select{background:var(--c3);border:1px solid var(--ln);color:var(--bd);padding:6
   <div id="db-verdict" style="display:none"></div>
   <div class="ws">
     <div class="ws-list">
-      <div class="ws-search"><input id="ws-q" placeholder="🔍 종목 검색 (이름·코드·초성)" autocomplete="off" oninput="wsSearch(this.value)" onkeydown="if(event.key==='Enter'){const f=document.querySelector('#ws-sr .ws-item');if(f)f.click();}else if(event.key==='Escape'){this.value='';wsSearch('');}"><div id="ws-sr"></div></div>
+      <div class="ws-search"><input id="ws-q" placeholder="🔍 종목 검색 (이름·코드·초성)" autocomplete="off" oninput="wsSearch(this.value)" onkeydown="srKey(event,'ws-sr',wsSearch)"><div id="ws-sr"></div></div>
       <div class="ws-tabs"><button data-t="entry" onclick="wsTab('entry')">오늘 진입</button><button data-t="wait" onclick="wsTab('wait')">대기</button><button data-t="track" onclick="wsTab('track')">신호 추적</button></div>
       <div class="ts" id="ws-lane-note" style="margin:0 4px 4px" title="눌러서 펼치기" onclick="this.classList.toggle('open')"></div>
       <div class="ts" id="ws-asof" style="margin:0 4px 4px"></div>
@@ -1025,7 +1025,7 @@ select{background:var(--c3);border:1px solid var(--ln);color:var(--bd);padding:6
 <!-- 종목 탭 (2026-10-11): 검색 → 차트 · 투자 지표 · 실적 추이 · 안정성 · 매출 구성 · 수급 · 공매도 · 리포트 -->
 <div id="panel-stock" class="panel content hbt">
   <section class="bx sv-top">
-    <div class="sv-search"><input id="sv-q" placeholder="🔍 종목 검색 (이름·코드·초성)" autocomplete="off" oninput="svSearch(this.value)" onkeydown="if(event.key==='Enter'){const f=document.querySelector('#sv-sr .ws-item');if(f)f.click();}else if(event.key==='Escape'){this.value='';svSearch('');}"><div id="sv-sr"></div></div>
+    <div class="sv-search"><input id="sv-q" placeholder="🔍 종목 검색 (이름·코드·초성)" autocomplete="off" oninput="svSearch(this.value)" onkeydown="srKey(event,'sv-sr',svSearch)"><div id="sv-sr"></div></div>
     <div id="sv-recent" class="sv-recent"></div>
   </section>
   <div id="sv-empty" class="bx"><div class="bx-h"><b>종목을 검색하세요</b></div><p class="bx-s">이름·코드·초성으로 찾으면 차트, PER·PBR·PSR, 분기 실적, 부채비율, 매출 구성, 투자자별 수급, 공매도, 증권사 목표가가 한 화면에 나옵니다. 다른 탭 차트 창의 "종목 자세히"로도 들어옵니다.</p><div id="sv-sugg" class="sv-recent"></div></div>
@@ -2864,23 +2864,29 @@ function chartPatterns(data){
   // 3) 추세선: 고점끼리·저점끼리 이은 선(넘은 봉 없음 · 닿은 봉 3개↑) — 좁혀지면 삼각형·쐐기, 나란하면 채널. 이미 돌파했으면 돌파 직전 모양
   const k=3, ph=[], pl=[];
   for(let i=Math.max(k,n-150);i<n-1;i++){ let isH=true, isL=true; for(let j=Math.max(0,i-k);j<=Math.min(n-1,i+k);j++){ if(BH[j]>BH[i]) isH=false; if(BL[j]<BL[i]) isL=false; } if(isH) ph.push(i); if(isL) pl.push(i); }
-  const fit=(P,V,up,e)=>{ let best=null; const P2=P.filter(i=>i<=e-1&&i>=e-110);
+  const fit=(P,V,up,e)=>{ const all=[]; const P2=P.filter(i=>i<=e-1&&i>=e-110);
     for(let x=0;x<P2.length;x++) for(let y=P2.length-1;y>x;y--){ const a=P2[x], b=P2[y]; if(b-a<10||e-b>40) continue;
       const sl=(V[b]-V[a])/(b-a), line=i=>V[a]+sl*(i-a); let ok=true, touch=0;
       for(let i=a;i<=e;i++){ const r=V[i]/line(i); if(up?r>1.015:r<0.985){ ok=false; break; } if(up?r>=0.98:r<=1.02) touch++; }
       if(!ok||touch<3) continue;
-      const score=touch+(b-a)/25; if(!best||score>best.score) best={a,b,sl,v0:V[a],score};
-    } return best; };
-  for(let j=0;j<=30&&!out.tri;j++){ const e=n-3-j, ago=n-2-e, U=fit(ph,BH,true,e), D=fit(pl,BL,false,e);
-    if(!U||!D) continue;
-    const lineU=i=>U.v0+U.sl*(i-U.a), lineD=i=>D.v0+D.sl*(i-D.a), s0=Math.max(U.a,D.a);
-    const g0=lineU(s0)/lineD(s0)-1, g1=lineU(e)/lineD(e)-1, su=U.sl/C[e]*100, sd=D.sl/C[e]*100;
-    const brk=j?(C[e+1]>lineU(e+1)*1.005?'up':C[e+1]<lineD(e+1)*0.995?'dn':null):null;
-    if(j&&!brk) continue;   // 끝난 모양은 바로 다음 날 돌파·이탈한 것만
-    let kind=null, emo='📐';
-    if(g1>0&&g1<g0*0.75&&g0<=0.6) kind=su<-0.05&&sd>0.05?'대칭 삼각형':Math.abs(su)<=0.05&&sd>0.05?'상승 삼각형':su<-0.05&&Math.abs(sd)<=0.05?'하락 삼각형':su<0&&sd<0?'하락 쐐기':su>0&&sd>0?'상승 쐐기':'수렴';
-    else if(g1>0&&g0<=0.4&&Math.abs(g1-g0)<=g0*0.35){ kind=su>0.05&&sd>0.05?'상승 채널':su<-0.05&&sd<-0.05?'하락 채널':null; emo='📈'; }
-    if(!kind) continue;
+      all.push({a,b,sl,v0:V[a],score:touch+(b-a)/25});
+    } return all.sort((x,y)=>y.score-x.score).slice(0,12); };
+  for(let j=0;j<=30&&!out.tri;j++){ const e=n-3-j, ago=n-2-e, Us=fit(ph,BH,true,e), Ds=fit(pl,BL,false,e);
+    let pick=null;
+    for(const U of Us) for(const D of Ds){
+      const lineU=i=>U.v0+U.sl*(i-U.a), lineD=i=>D.v0+D.sl*(i-D.a), s0=Math.max(U.a,D.a);
+      if(Math.abs(U.a-D.a)>0.6*(e-Math.min(U.a,D.a))) continue;   // 위·아래 선이 비슷한 때 시작해야 한 모양 (고점 선만 길게 늘어진 것 빼기)
+      const g0=lineU(s0)/lineD(s0)-1, g1=lineU(e)/lineD(e)-1, su=U.sl/C[e]*100, sd=D.sl/C[e]*100;
+      const brk=j?(C[e+1]>lineU(e+1)*1.005?'up':C[e+1]<lineD(e+1)*0.995?'dn':null):null;
+      if(j&&!brk) continue;   // 끝난 모양은 바로 다음 날 돌파·이탈한 것만
+      let kind=null, emo='📐';
+      if(g1>0&&g1<g0*0.75&&g0<=0.6) kind=su<-0.05&&sd>0.05?'대칭 삼각형':Math.abs(su)<=0.05&&sd>0.05?'상승 삼각형':su<-0.05&&Math.abs(sd)<=0.05?'하락 삼각형':su<0&&sd<0?'하락 쐐기':su>0&&sd>0?'상승 쐐기':'수렴';
+      else if(g1>0&&g0<=0.4&&Math.abs(g1-g0)<=g0*0.35){ kind=su>0.05&&sd>0.05?'상승 채널':su<-0.05&&sd<-0.05?'하락 채널':null; emo='📈'; }
+      if(!kind) continue;
+      const sc=U.score+D.score; if(!pick||sc>pick.sc) pick={U,D,kind,emo,brk,s0,g0,g1,sc,lineU,lineD};
+    }
+    if(!pick) continue;
+    const {U,D,kind,emo,brk,s0,g0,g1,lineU,lineD}=pick;
     const uN=lineU(n-1), dN=lineD(n-1), c=C1;
     let st;
     if(brk==='up') st=` · 위로 돌파 ${ago}일 전 (그날 ${Math.round(lineU(e+1)).toLocaleString()} 위로)`;
@@ -2888,8 +2894,12 @@ function chartPatterns(data){
     else if(c>uN*1.005) st=` · 위로 돌파`;
     else if(c<dN*0.995) st=` · 아래로 이탈`;
     else st=` · 위 ${Math.round(uN).toLocaleString()} / 아래 ${Math.round(dN).toLocaleString()}`;
-    out.tri={U,D,kind,e,brk}; out.notes.push(`${emo} ${kind} (폭 ${(g0*100).toFixed(0)}% → ${(g1*100).toFixed(0)}%)${st}`);
+    out.tri={U,D,kind,e,brk,s0}; out.notes.push(`${emo} ${kind} (폭 ${(g0*100).toFixed(0)}% → ${(g1*100).toFixed(0)}%)${st}`);
   }
+  // 박스와 추세선 모양이 같은 구간에서 겹치면 더 최근에 끝난(또는 지금 이어지는) 쪽만 (2026-10-11 "박스 두 개가 겹친다")
+  if(out.box&&out.tri){ const b=out.box, t=out.tri, ts=Math.min(t.U.a,t.D.a), te=t.brk?t.e+1:n-1, be=b.j?b.e+1:n-1;
+    const ov=Math.min(be,te)-Math.max(b.s,ts), short=Math.min(be-b.s,te-ts);
+    if(short>0&&ov>short*0.5){ if(be>=te){ delete out.tri; out.notes=out.notes.filter(x=>!/삼각형|쐐기|채널|수렴/.test(x)); } else { delete out.box; out.notes=out.notes.filter(x=>!x.startsWith('📦')); } } }
   return out;
 }
 function drawPatterns(chart,data,cs){
@@ -2900,10 +2910,10 @@ function drawPatterns(chart,data,cs){
   if(p.box){ const b=p.box, e=b.e!=null?b.e:n-1, c=data[n-1].close, col=stc(c>b.hi*1.005,c<b.lo*0.995);
     if(cs) cs.attachPrimitive(new LwPoly([[b.s,b.hi],[e,b.hi],[e,b.lo],[b.s,b.lo]],hexA(col,.13)));
     seg(b.s,b.hi,e,b.hi,hexA(col,.9),'박스 위',1); seg(b.s,b.lo,e,b.lo,hexA(col,.9),'박스 아래',1); }
-  if(p.tri){ const {U,D,brk,e}=p.tri, E=brk?Math.min(n-1,e+3):n-1, uE=U.v0+U.sl*(E-U.a), dE=D.v0+D.sl*(E-D.a), c=data[n-1].close;   // 끝난 모양은 돌파한 곳까지만
+  if(p.tri){ const {U,D,brk,e,s0}=p.tri, E=brk?Math.min(n-1,e+3):n-1, lu=i=>U.v0+U.sl*(i-U.a), ld=i=>D.v0+D.sl*(i-D.a), uE=lu(E), dE=ld(E), c=data[n-1].close;   // 끝난 모양은 돌파한 곳까지만 · 두 선이 다 있는 구간만 칠함
     const col=brk?stc(brk==='up',brk==='dn'):stc(c>uE*1.005,c<dE*0.995);
-    if(cs) cs.attachPrimitive(new LwPoly([[U.a,U.v0],[E,uE],[E,dE],[D.a,D.v0]],hexA(col,.11)));
-    seg(U.a,U.v0,E,uE,'#da3633',brk?'':'위 선',2); seg(D.a,D.v0,E,dE,'#2ea043',brk?'':'아래 선',2); }
+    if(cs) cs.attachPrimitive(new LwPoly([[s0,lu(s0)],[E,uE],[E,dE],[s0,ld(s0)]],hexA(col,.11)));
+    seg(s0,lu(s0),E,uE,'#da3633',brk?'':'위 선',2); seg(s0,ld(s0),E,dE,'#2ea043',brk?'':'아래 선',2); }
   if(p.sq.length){ const sq=chart.addHistogramSeries({priceScaleId:'sq',lastValueVisible:false,priceLineVisible:false,base:0});
     chart.priceScale('sq').applyOptions({scaleMargins:{top:0.77,bottom:0.215},visible:false});
     const S=new Set(p.sq); sq.setData(data.map((d,i)=>({time:d.time,value:1,color:S.has(i)?cv('--o'):'rgba(0,0,0,0)'}))); }
@@ -3273,6 +3283,19 @@ function svSearch(v){
       :'<div class="ts" style="padding:10px">찾는 종목이 없습니다</div>';
     box.classList.add('on');
   },200);
+}
+// 검색 목록 키보드: ↑↓로 고르고 Enter로 열기, Esc로 닫기 (2026-10-11)
+function srKey(e,boxId,searchFn){
+  const box=document.getElementById(boxId), items=[...box.querySelectorAll('.ws-item')];
+  let i=items.findIndex(x=>x.classList.contains('kb'));
+  if(e.key==='ArrowDown'||e.key==='ArrowUp'){
+    if(!items.length) return; e.preventDefault();
+    i=e.key==='ArrowDown'?(i+1)%items.length:(i<=0?items.length-1:i-1);
+    items.forEach((x,k)=>x.classList.toggle('kb',k===i)); items[i].scrollIntoView({block:'nearest'});
+  } else if(e.key==='Enter'){
+    e.preventDefault(); const go=()=>{ const L=[...box.querySelectorAll('.ws-item')], t=L.find(x=>x.classList.contains('kb'))||L[0]; if(t) t.click(); };
+    if(e.isComposing) setTimeout(go,250); else go();   // 한글 입력 중 Enter는 글자 확정 뒤 목록이 바뀔 틈을 줌
+  } else if(e.key==='Escape'){ e.target.value=''; searchFn(''); }
 }
 function svPick(code,name){ const q=document.getElementById('sv-q'); q.value=''; q.blur(); svSearch(''); svOpen(code,name); }
 document.addEventListener('click',e=>{ if(!e.target.closest('.sv-search')){ const b=document.getElementById('sv-sr'); if(b) b.classList.remove('on'); } });
