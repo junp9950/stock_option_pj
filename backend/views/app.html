@@ -129,7 +129,7 @@ select{background:var(--c3);border:1px solid var(--ln);color:var(--bd);padding:6
 .sig-sum{display:flex;gap:6px}.sig-g{display:grid;grid-template-columns:minmax(0,1.2fr) minmax(0,1fr);gap:22px;margin-top:12px}
 .sig-t{font-weight:700;color:var(--tx);margin-bottom:6px;font-size:14px}.sig-r{display:grid;grid-template-columns:minmax(0,1fr) 84px 84px 70px;gap:8px;align-items:center;padding:6px 4px;border-bottom:1px solid var(--line2);font-size:13px;cursor:pointer}
 .sig-r:hover{background:var(--sunk)}.sig-r.hd{cursor:default;font-size:11.5px;color:var(--mu);padding-top:0}.sig-r.hd:hover{background:none}.sig-r .v{text-align:right;font-variant-numeric:tabular-nums}.sig-r .sl{color:var(--b)}.sig-r.hd span:not(:first-child){text-align:right}
-.sig-r .nm{min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}.sig-empty{padding:10px 4px;font-size:13px;color:var(--tx)}.sig-how{margin-top:12px;padding-top:10px;border-top:1px solid var(--line2);font-size:12.5px;color:var(--tx);line-height:1.7}
+.sig-r .nm{min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}.sig-warn{padding:8px 10px;margin:0 0 6px;border:1px solid var(--r);border-radius:8px;font-size:12.5px;color:var(--tx);line-height:1.6}.sig-empty{padding:10px 4px;font-size:13px;color:var(--tx)}.sig-how{margin-top:12px;padding-top:10px;border-top:1px solid var(--line2);font-size:12.5px;color:var(--tx);line-height:1.7}
 @media(max-width:900px){#panel-home.active{display:flex;flex-direction:column}#panel-home>.sig-card{order:-1}.sig-g{grid-template-columns:1fr;gap:16px}.sig-r{grid-template-columns:minmax(0,1fr) 70px 70px 52px;font-size:12.5px}}
 .htop{display:grid;grid-template-columns:minmax(0,1.25fr) minmax(0,1fr);gap:14px;margin-bottom:14px}
 .hc-spark{position:relative;height:92px;margin:2px 0 8px}.hc-spark svg{width:100%;height:100%;display:block}
@@ -1221,13 +1221,16 @@ async function loadHeader(){
   const nx=((ev&&ev.items)||[]).filter(e=>e.importance>=2&&e.kind!=='holiday'&&tOf(e)>now).sort((a,b)=>tOf(a)-tOf(b))[0];
   const wd=d=>'일월화수목금토'[new Date(d).getDay()];
   const evh=nx?`<span class="hd-ev" onclick="switchTab('calendar')" title="캘린더에서 보기"><span class="l">다음 일정</span><span class="cn ${nx.country==='KR'?'kr':''}">${nx.country==='KR'?'한':'미'}</span><span class="t">${+nx.ev_date.slice(5,7)}/${+nx.ev_date.slice(8)}(${wd(nx.ev_date)}) ${nx.ev_time||''} ${nx.title}</span></span>`:'';
-  box.innerHTML=(k?`<span class="hd-v ${k}" title="시장 판단 (전종목 평균 지수 · 20일선 대비 ${m.vs_ma20_pct}%)">${g[m.state]} ${mvText(m)}</span>`:'')+ix('코스피',ks)+ix('코스닥',kq)+evh;
+  // 장중에 판단이 '쉬기'로 바뀌면 머리 줄도 따라감 (2026-10-12 오늘 카드는 '하락·쉬기'인데 머리 줄만 '상승·매매 가능'이던 것)
+  const rest=ks&&ks.status&&ks.status!=='CLOSE'&&H.dl&&H.dl.mode&&H.dl.mode.mode==='쉬기'&&m&&m.state!=='하락';
+  box.innerHTML=(rest?`<span class="hd-v k-b" title="장중 판단 (지난 장 마감 판단은 ${m.state})">▼ 장중 하락 · 쉬기</span>`:k?`<span class="hd-v ${k}" title="시장 판단 (전종목 평균 지수 · 20일선 대비 ${m.vs_ma20_pct}%)">${g[m.state]} ${mvText(m)}</span>`:'')+ix('코스피',ks)+ix('코스닥',kq)+evh;
   const live=ks&&ks.status&&ks.status!=='CLOSE';
   const hh=String(now.getHours()).padStart(2,'0')+':'+String(now.getMinutes()).padStart(2,'0');
   document.getElementById('hd-asof').textContent=live?`장중 · ${hh} 기준`:(ks&&ks.date?`장 마감 · ${+ks.date.slice(5,7)}/${+ks.date.slice(8)} 기준`:'장 마감 후 자동 갱신'); };
   const get=(k,u)=>fetch(u).then(r=>r.ok?r.json():null).catch(()=>null).then(v=>{ if(v) H[k]=v; draw(); });
   await Promise.all([get('m',`${API}/market/verdict`),get('ks',`${API}/index/intraday/KOSPI`),get('kq',`${API}/index/intraday/KOSDAQ`),
-    get('ev',`${API}/market/events?start=${ymd(now)}&end=${ymd(end)}`)]);
+    get('ev',`${API}/market/events?start=${ymd(now)}&end=${ymd(end)}`),
+    (now.getDay()>0&&now.getDay()<6&&now.getHours()>=9&&now.getHours()<16)?get('dl',`${API}/dashboard/dip-live`):null]);
 }
 function switchTab(id) {
   // 실적 개선 탭은 2026-10-04 숨김 (데이터는 📈 실적 표시로 계속 쓴다, /earnings 주소는 그대로)
@@ -2711,6 +2714,9 @@ async function renderSigCard(){
   const el=document.getElementById('hc-sig'); if(!el) return;
   const d=_ws.data||{}, m=await fetch(`${API}/market/verdict`).then(r=>r.ok?r.json():null).catch(()=>null);
   const bear=m&&m.state==='하락';
+  // 장중에 시장이 크게 빠져 장중 판단이 '쉬는 날'이면 매수 칸 위에 경고 (2026-10-12 이틀 연속 급락 — 카드는 지난 장 판단이라 '매수'로 보였다)
+  const lv=d.live?await fetch(`${API}/dashboard/dip-live`).then(r=>r.ok?r.json():null).catch(()=>null):null;
+  const liveRest=!bear&&lv&&lv.mode&&lv.mode.mode==='쉬기';
   const all=(d.candidates||[]).filter(x=>(x.lane||'entry')==='entry');
   const B=bear?[]:all.filter(x=>!x.lead).slice(0,10), Ld=bear?[]:all.filter(x=>x.lead).slice(0,2);
   const S=(d.track||[]).filter(x=>x.sell_tmr), keep=(d.track||[]).length-S.length;
@@ -2721,7 +2727,7 @@ async function renderSigCard(){
   const dd=(d.as_of||'').slice(5).replace('-','/');
   const when=d.live?`장중 ${d.live} 기준 · 아직 바뀔 수 있음 (15:20쯤 확정)`:`${dd} 장 마감 기준 · 다음 신호는 다음 장 15:20쯤`;
   const head=`<div class="sig-h"><b>📢 오늘의 매매 신호</b><span class="ts">${when}</span>
-    <span class="sig-sum">${bear?'<span class="hb-b r">⛔ 쉬는 날</span>':`<span class="hb-b w">▲ 매수 ${B.length+Ld.length}</span>`}<span class="hb-b ${S.length?'r':'n'}">▼ 매도 ${S.length}</span></span>
+    <span class="sig-sum">${bear?'<span class="hb-b r">⛔ 쉬는 날</span>':liveRest?`<span class="hb-b r">⛔ 장중 쉬는 날</span><span class="hb-b n">매수 후보 ${B.length+Ld.length}</span>`:`<span class="hb-b w">▲ 매수 ${B.length+Ld.length}</span>`}<span class="hb-b ${S.length?'r':'n'}">▼ 매도 ${S.length}</span></span>
     <button class="btn btn-gray btn-sm" onclick="sigToggle()">${closed?'펼치기':'접기'}</button></div>`;
   if(closed){ el.innerHTML=head; return; }
   const brow=x=>`<div class="sig-r" onclick="sigOpen('${x.code}','${x.name.replace(/'/g,'')}')"><span class="nm"><b>${x.name}</b>${x.lead?' <span class="ts">주도주 · 아주 적게</span>':half(x)?' <span class="ts">평소 절반</span>':''}</span>
@@ -2729,7 +2735,7 @@ async function renderSigCard(){
   const srow=x=>`<div class="sig-r s" onclick="sigOpen('${x.code}','${x.name.replace(/'/g,'')}')"><span class="nm"><b>${x.name}</b> <span class="ts">${x.date.slice(5).replace('-','/')} 신호</span></span>
     <span class="v">${x.close?won(x.close):'-'}</span><span class="v" style="color:${x.gain>0?'var(--up)':x.gain<0?'var(--down)':'var(--muted)'}">${x.gain>0?'+':''}${x.gain}%</span><span class="v">다음 장 아침</span></div>`;
   const buyBox=bear?`<div class="sig-empty">⛔ <b>시장이 내리는 중이라 오늘은 새로 사지 않습니다.</b><br><span class="ts">이 사이트 규칙은 하락장에서 쉽니다. 시장이 다시 오르면 매수 신호가 뜹니다.</span></div>`
-    :(B.length||Ld.length)?`<div class="sig-r hd"><span>종목</span><span>${d.live?'지금 가격':dd+' 종가'}</span><span>손절가</span><span>투자금의</span></div>${B.map(brow).join('')}${Ld.map(brow).join('')}`
+    :(B.length||Ld.length)?(liveRest?`<div class="sig-warn">⛔ <b>지금 시장이 크게 빠지는 중이라 장중 판단은 ‘쉬는 날’입니다.</b> 이대로 마감하면 아래 매수 신호는 사라질 수 있어요. 15:20쯤 다시 확인하고, 그때도 빠져 있으면 사지 마세요.</div>`:'')+`<div class="sig-r hd"><span>종목</span><span>${d.live?'지금 가격':dd+' 종가'}</span><span>손절가</span><span>투자금의</span></div>${B.map(brow).join('')}${Ld.map(brow).join('')}`
     :`<div class="sig-empty">오늘은 조건에 맞는 종목이 없습니다. <span class="ts">억지로 사지 않는 날입니다.</span></div>`;
   const sellBox=(S.length?`<div class="sig-r hd"><span>종목</span><span>${d.live?'지금 가격':dd+' 종가'}</span><span>신호 뒤</span><span>팔 때</span></div>${S.map(srow).join('')}`
     :`<div class="sig-empty">오늘 새로 팔 종목은 없습니다.</div>`)+`<div class="ts" style="margin-top:6px">사 둔 종목이 <b>손절가 아래로 내려가면 그 자리에서 매도</b>됩니다(예약 주문). 그 밖의 신호 ${keep}개는 계속 들고 갑니다.</div>`;
