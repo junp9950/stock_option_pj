@@ -32,6 +32,7 @@ HELP = ("주식 레이더 봇 명령\n"
         "종목토론 알림에 '답장' — 그 글에 댓글(댓글 알림이면 답글)로 달림 · /이름 우라늄 — 댓글 이름 정하기\n"
         "/board — (그룹에서) 이 방을 종목토론·건의사항 알림 전용으로 · /board_off — 해제\n"
         "/주도주 — 주도주(RS 95↑) 상태 · /주도주 끄기 이유 · /주도주 켜기 이유\n"
+        "/스톱 — 손절가 자동 주문 상태 · /스톱끄기 (오늘 걸린 것도 취소) · /스톱켜기\n"
         "/stop — 알림 끄기")
 
 
@@ -706,6 +707,16 @@ def poll(db: Session) -> None:
                 ls = FL.lead_state(db)
                 send(db, ("주도주: 켜짐" if ls["on"] else f"주도주: 꺼짐 — {ls['why']}") + (f" · ⚠️ {ls['warn']}" if ls.get("warn") else "")
                      + "\n/주도주 끄기 이유 · /주도주 켜기 이유 (끄고 켠 때를 기록합니다)", cid)
+        elif txt.startswith("/스톱"):        # 메리츠 손절가 자동 주문 — 계좌 정보라 사장님 대화방(telegram_chats)에서만 (2026-10-13)
+            from backend.services import stop_orders as SO  # noqa: PLC0415
+            if cid not in chats:
+                send(db, "이 명령은 알림 대화방에서만 됩니다.", cid); continue
+            if txt.startswith("/스톱끄기"):
+                send(db, SO.set_on(db, False), cid)
+            elif txt.startswith("/스톱켜기"):
+                send(db, SO.set_on(db, True), cid)
+            else:
+                send(db, SO.status(db), cid)
         elif txt.startswith("/종베목록"):
             from backend.services import jongbe_check as JC  # noqa: PLC0415
             from backend.db.models import UserJongbe  # noqa: PLC0415

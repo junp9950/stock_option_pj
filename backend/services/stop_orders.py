@@ -1,0 +1,259 @@
+"""손절가 자동 주문 (메리츠 스톱지정가) — 2026-10-13 사용자 "손절가 주문은 내일부터 걸어 줘, 내일 매수 종목부터".
+
+규칙
+- 대상: 2026-10-14부터 새로 사거나 더 산 수량만. 10/13까지 들고 있던 것(기준 잔고)은 건드리지 않는다.
+- 손절가: 관리 탭 '관심·보유'의 손절선(hold 줄)이 있으면 그것, 없으면 사이트 규칙 = 산 날 저가 −1%(호가 단위 내림).
+  산 날 장중에는 저가가 확정 전이라 그때까지의 저가로 걸고, 다음 날 아침 확정 저가로 다시 건다.
+- 주문: 감시가 = 손절가, 지정가 = 손절가 −1%(호가 내림, 갭 하락에도 체결되게 — 사용자 승인). KRX 정규장만 · 당일 유효라 매일 아침 다시 건다.
+- 시각: 08:50 아침 걸기(안 되면 09:01 다시) · 장중 5분마다 새로 산 것·손절선 바뀐 것·체결 확인 · 15:40 마감 정리.
+- 안전: 하루 주문 15건 상한, 수량은 실제 잔고를 넘지 않음, 브로커 경고가 오면 자동 확인하지 않고 알림만,
+  텔레그램 /스톱끄기 · /스톱켜기 · /스톱 (상태). 알림은 사장님 대화방(telegram_chats)에만.
+상태: settings 'meritz_stop' = {on, start, baseline{lot: qty}, lots{lot: {...}}, orders{date: [...]}, notified[]}
+"""
+from __future__ import annotations
+
+import logging
+from datetime import date, datetime, timedelta
+from zoneinfo import ZoneInfo
+
+from sqlalchemy import text
+from sqlalchemy.orm import Session
+
+logger = logging.getLogger(__name__)
+KST = ZoneInfo("Asia/Seoul")
+KEY = "meritz_stop"
+START = "2026-10-14"
+MAX_ORDERS_DAY = 15
+
+
+def _now() -> datetime:
+    return datetime.now(KST)
+
+
+def _st(db: Session) -> dict:
+    from backend.services.telegram import _get  # noqa: PLC0415
+    s = _get(db, KEY, None) or {}
+    s.setdefault("on", True); s.setdefault("start", START); s.setdefault("baseline", {}); s.setdefault("lots", {})
+    s.setdefault("orders", {}); s.setdefault("notified", [])
+    return s
+
+
+def _save(db: Session, s: dict) -> None:
+    from backend.services.telegram import _put  # noqa: PLC0415
+    s["orders"] = dict(sorted(s["orders"].items())[-10:])          # 최근 10일치만
+    s["notified"] = s["notified"][-200:]
+    _put(db, KEY, s)
+
+
+def _tell(db: Session, msg: str) -> None:
+    from backend.services.telegram import send  # noqa: PLC0415
+    try:
+        send(db, msg)            # 기본 = telegram_chats(사장님 대화방)만. 게시판 방에는 안 감
+    except Exception as exc:  # noqa: BLE001
+        logger.warning("스톱 알림 실패: %s", type(exc).__name__)
+
+
+def _lot(h: dict) -> str:
+    return f"{h['code']}|{'신용' if h['credit'] else '현금'}|{h['loan_date']}"
+
+
+def _trading_days_before(d: date, n: int) -> date:
+    from backend.utils.dates import is_trading_day  # noqa: PLC0415
+    k = 0
+    while k < n:
+        d -= timedelta(days=1)
+        if is_trading_day(d):
+            k += 1
+    return d
+
+
+def _buy_date(h: dict, today: date) -> date:
+    if h["credit"] and len(h["loan_date"]) == 8:      # 대출일 = 결제일(T+2) → 2영업일 전이 산 날
+        ld = date(int(h["loan_date"][:4]), int(h["loan_date"][4:6]), int(h["loan_date"][6:]))
+        return min(_trading_days_before(ld, 2), today)
+    return today
+
+
+def _stop_for(db: Session, code: str, buy: date, today: date) -> tuple[int | None, str, bool]:
+    """(손절가, 근거, 확정 여부)."""
+    from backend.services.telegram import _get  # noqa: PLC0415
+    from backend.utils.ticks import tick_floor  # noqa: PLC0415
+    for x in _get(db, "user_watchlist", []) or []:
+        if x.get("code") == code and x.get("kind") == "hold" and (x.get("level") or 0) > 0:
+            return int(x["level"]), "관리 탭 손절선", True
+    low = None
+    if buy < today:
+        low = db.execute(text("select low_price from spot_daily_prices where stock_code = :c and trading_date = :d"), {"c": code, "d": buy}).scalar()
+        final = True
+    else:
+        try:
+            from backend.services import toss_client as t  # noqa: PLC0415
+            x = t._get("/candles", {"symbol": code, "interval": "1d", "count": 1}).json()["result"]["candles"][0]  # noqa: SLF001
+            if x["timestamp"][:10] == str(today):
+                low = float(x["lowPrice"])
+        except Exception:  # noqa: BLE001
+            low = None
+        final = _now().hour * 100 + _now().minute >= 1530
+    if not low:
+        return None, "산 날 저가를 못 받음", False
+    return int(tick_floor(float(low) * 0.99)), "산 날 저가 −1%", final
+
+
+def sync(db: Session, s: dict, today: date) -> list[str]:
+    """실제 잔고로 기준·대상 수량을 맞춘다. 알림 문장 목록을 돌려준다."""
+    from backend.services import meritz as M  # noqa: PLC0415
+    msgs = []
+    hs = M.holdings()
+    now_q = {}
+    meta = {}
+    for h in hs:
+        now_q[_lot(h)] = now_q.get(_lot(h), 0) + h["qty"]; meta[_lot(h)] = h
+    if str(today) < s["start"]:
+        s["baseline"] = now_q            # 시작 전: 지금 들고 있는 것 전부가 기준(주문 안 함)
+        return msgs
+    for lot, q in now_q.items():
+        base = s["baseline"].get(lot, 0)
+        extra = q - base
+        L = s["lots"].get(lot)
+        if extra > 0 and not L:
+            h = meta[lot]
+            buy = _buy_date(h, today)
+            stop, src, final = _stop_for(db, h["code"], buy, today)
+            s["lots"][lot] = {"code": h["code"], "name": h["name"], "credit": h["credit"], "loan_date": h["loan_date"], "qty": extra,
+                              "buy": str(buy), "stop": stop, "src": src, "final": final, "avg": h["avg"]}
+            msgs.append(f"🆕 새로 산 것 감지: {h['name']} {extra}주 ({'신용' if h['credit'] else '현금'}) · 손절가 "
+                        + (f"{stop:,} ({src})" if stop else f"없음 — {src}, 관리 탭에서 손절선을 넣어 주세요"))
+        elif L and extra != L["qty"]:
+            if extra <= 0:
+                msgs.append(f"✅ {L['name']} 새로 산 수량이 정리됐습니다 (손절 주문 대상에서 뺌)")
+                s["lots"].pop(lot, None)
+            else:
+                L["qty"] = extra
+        if q < base:                     # 기준 잔고를 판 경우 기준도 줄인다(다음에 다시 사면 새 것으로 보게)
+            s["baseline"][lot] = q
+    for lot in list(s["lots"]):
+        if lot not in now_q:
+            msgs.append(f"✅ {s['lots'][lot]['name']} 잔고에서 사라짐 (매도·손절) — 손절 주문 대상에서 뺌")
+            s["lots"].pop(lot)
+    for lot in list(s["baseline"]):
+        if lot not in now_q:
+            s["baseline"].pop(lot)
+    return msgs
+
+
+def _place(db: Session, s: dict, lot: str, L: dict, today: date) -> str:
+    from backend.services import meritz as M  # noqa: PLC0415
+    from backend.utils.ticks import tick_floor  # noqa: PLC0415
+    day = s["orders"].setdefault(str(today), [])
+    if len(day) >= MAX_ORDERS_DAY:
+        return f"⚠ {L['name']}: 오늘 주문 상한({MAX_ORDERS_DAY}건)이라 안 걸었습니다"
+    if not L.get("stop"):
+        return f"⚠ {L['name']}: 손절가가 없어 안 걸었습니다 — 관리 탭에서 손절선을 넣어 주세요"
+    trig = int(L["stop"]); lim = int(tick_floor(trig * 0.99))
+    r = M.stop_sell(L["code"], L["qty"], trig, lim, L["credit"], L.get("loan_date", ""))
+    day.append({"lot": lot, "code": L["code"], "name": L["name"], "qty": L["qty"], "trigger": trig, "limit": lim, "order_no": r["order_no"],
+                "ok": r["ok"], "at": _now().strftime("%H:%M"), "msg": r["msg"] if not r["ok"] else "", "warn": r["warn"]})
+    if r["ok"]:
+        return f"🛑 {L['name']} {L['qty']}주 · 감시 {trig:,} → 지정가 {lim:,} ({L['src']})"
+    return f"⚠ {L['name']} 주문 실패 — {r['warn'] or r['msg']} (직접 걸어 주세요)"
+
+
+def _open_order(s: dict, lot: str, today: date) -> dict | None:
+    xs = [o for o in s["orders"].get(str(today), []) if o["lot"] == lot and o["ok"] and not o.get("done")]
+    return xs[-1] if xs else None
+
+
+def run(db: Session, phase: str) -> str:
+    """phase: morning(08:50) · retry(09:01) · intraday(5분) · close(15:40) · late(20:10 장 후 시간외에 산 것) · baseline(기준 잡기)."""
+    from backend.services import meritz as M  # noqa: PLC0415
+    from backend.utils.dates import is_trading_day  # noqa: PLC0415
+    if not M.enabled():
+        return "메리츠 키 없음"
+    today = _now().date()
+    if phase not in ("baseline", "late") and not is_trading_day(today):
+        return "장 없는 날"
+    s = _st(db)
+    try:
+        msgs = sync(db, s, today)
+    except Exception as exc:  # noqa: BLE001
+        _save(db, s)
+        logger.warning("스톱 잔고 확인 실패: %s", exc)
+        if phase in ("morning", "retry") and str(today) >= s["start"]:
+            _tell(db, f"⚠ 손절 주문: 메리츠 잔고를 못 읽어 오늘 아침 주문을 못 걸었습니다 ({exc}). 직접 걸어 주세요.")
+        return f"잔고 확인 실패: {exc}"
+    out = list(msgs)
+    if str(today) >= s["start"] and s["on"] and phase in ("morning", "retry", "intraday"):
+        day = s["orders"].setdefault(str(today), [])
+        for lot, L in s["lots"].items():
+            # 아침: 확정 저가(전날까지 산 것)나 관리 탭 손절선으로 다시 계산. 장중: 관리 탭 손절선이 바뀐 것만
+            # (산 날 장중 손절가는 그때까지 저가 −1%로 두고 따라 내리지 않는다 — 따라 내리면 영영 안 걸림)
+            if phase in ("morning", "retry"):
+                stop, src, final = _stop_for(db, L["code"], date.fromisoformat(L["buy"]), today)
+                if stop:
+                    L.update(stop=stop, src=src, final=final)
+            else:
+                stop, src, final = _stop_for(db, L["code"], date.fromisoformat(L["buy"]), today)
+                if stop and src == "관리 탭 손절선":
+                    L.update(stop=stop, src=src, final=True)
+            o = _open_order(s, lot, today)
+            if o and (o["trigger"] != L.get("stop") or o["qty"] != L["qty"]):
+                c = M.cancel(L["code"], o["order_no"], o["qty"], o["trigger"], o["limit"])
+                if not c["ok"]:
+                    out.append(f"⚠ {L['name']} 기존 손절 주문 취소 실패 — {c['msg']} (직접 확인해 주세요)")
+                    continue
+                o["done"] = "취소"
+                out.append(f"↺ {L['name']} 손절가 바뀜: {o['trigger']:,} → {L.get('stop') or 0:,}")
+                o = None
+            if o:
+                continue
+            fails = [x for x in day if x["lot"] == lot and not x["ok"]]
+            if len(fails) >= 2 or (fails and phase == "intraday"):
+                continue                  # 하루 두 번(아침·09:01)까지만 시도 — 실패 알림이 5분마다 쏟아지지 않게
+            out.append(_place(db, s, lot, L, today))
+    # 체결 확인 (내 손절 주문이 체결됐으면 알림)
+    if str(today) >= s["start"] and phase in ("intraday", "close") and s["orders"].get(str(today)):
+        try:
+            hist = {str(x.get("oder_no")): x for x in M.orders_today(today.strftime("%Y%m%d"), "1")}
+            for o in s["orders"].get(str(today), []):
+                h = hist.get(str(o.get("order_no")))
+                key = f"{today}|{o.get('order_no')}"
+                if h and float(h.get("total_cntg_qty") or 0) > 0 and key not in s["notified"]:
+                    s["notified"].append(key)
+                    out.append(f"🔔 손절 체결: {o['name']} {int(float(h['total_cntg_qty']))}주 @ {float(h.get('cntg_unpr') or 0):,.0f}")
+        except Exception as exc:  # noqa: BLE001
+            logger.warning("스톱 체결 확인 실패: %s", type(exc).__name__)
+    _save(db, s)
+    out = [m for m in out if m]
+    if out and phase != "baseline":
+        head = {"morning": "🛑 오늘 손절 주문 (메리츠 스톱지정가)", "retry": "🛑 손절 주문 다시 걸기", "intraday": "🛑 손절 주문",
+                "close": "🛑 장 마감 · 내일 아침 손절 주문 걸 것", "late": "🛑 시간외 · 내일 아침 손절 주문 걸 것"}[phase]
+        _tell(db, head + "\n" + "\n".join(out) + ("" if s["on"] else "\n(지금 꺼져 있음 — /스톱켜기)"))
+    return " / ".join(out) or "변화 없음"
+
+
+def status(db: Session) -> str:
+    s = _st(db)
+    today = str(_now().date())
+    od = [o for o in s["orders"].get(today, []) if o["ok"] and not o.get("done")]
+    lines = [f"손절 자동 주문: {'켜짐' if s['on'] else '꺼짐'} · {s['start']}부터 새로 산 것만 · 지정가 = 손절가 −1%"]
+    for L in s["lots"].values():
+        lines.append(f"· {L['name']} {L['qty']}주 · 손절 {L['stop']:,} ({L['src']})" if L.get("stop") else f"· {L['name']} {L['qty']}주 · 손절가 없음")
+    if not s["lots"]:
+        lines.append("· 대상 없음 (새로 산 종목이 생기면 자동으로)")
+    lines.append(f"오늘 걸린 주문 {len(od)}건" + ("" if not od else ": " + ", ".join(f"{o['name']} {o['trigger']:,}" for o in od)))
+    lines.append("/스톱끄기 · /스톱켜기")
+    return "\n".join(lines)
+
+
+def set_on(db: Session, on: bool) -> str:
+    s = _st(db); s["on"] = on; _save(db, s)
+    if not on:
+        from backend.services import meritz as M  # noqa: PLC0415
+        today = _now().date(); n = 0
+        for o in s["orders"].get(str(today), []):
+            if o["ok"] and not o.get("done") and o.get("order_no"):
+                if M.cancel(o["code"], o["order_no"], o["qty"], o["trigger"], o["limit"])["ok"]:
+                    o["done"] = "취소"; n += 1
+        _save(db, s)
+        return f"손절 자동 주문을 껐습니다. 오늘 걸려 있던 주문 {n}건 취소. 다시 켜려면 /스톱켜기"
+    return "손절 자동 주문을 켰습니다. 다음 5분 확인 때부터 다시 겁니다."

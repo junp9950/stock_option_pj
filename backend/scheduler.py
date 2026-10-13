@@ -365,6 +365,28 @@ def start_scheduler() -> BackgroundScheduler:
             db.close()
     # 장중 5분마다 오늘 잠정치 (09:00~15:40, 확정치는 16:05에 덮어씀)
     scheduler.add_job(_market_flows_live_job, 'cron', day_of_week='mon-fri', hour='9-15', minute='*/5', id='market_flows_live', replace_existing=True, max_instances=1)
+    def _stop_orders_job(phase: str) -> None:
+        from datetime import datetime as _dt  # noqa: PLC0415
+        from zoneinfo import ZoneInfo as _Z  # noqa: PLC0415
+        if phase == "intraday":
+            hm = _dt.now(_Z("Asia/Seoul")).strftime("%H%M")
+            if not ("0903" <= hm <= "1518"):
+                return
+        from backend.services.stop_orders import run  # noqa: PLC0415
+        db = SessionLocal()
+        try:
+            logger.info("손절 주문(%s): %s", phase, run(db, phase))
+        except Exception as exc:  # noqa: BLE001
+            logger.error("손절 주문(%s) 실패: %s", phase, type(exc).__name__)
+        finally:
+            db.close()
+    # 메리츠 손절가 자동 주문 (2026-10-14부터 새로 산 것만, 스톱지정가 · 지정가 = 손절가 −1%) — 사용자 요청·승인 10/13
+    scheduler.add_job(lambda: _stop_orders_job("morning"), 'cron', day_of_week='mon-fri', hour=8, minute=50, id='stop_morning', replace_existing=True, max_instances=1)
+    scheduler.add_job(lambda: _stop_orders_job("retry"), 'cron', day_of_week='mon-fri', hour=9, minute=1, id='stop_retry', replace_existing=True, max_instances=1)
+    scheduler.add_job(lambda: _stop_orders_job("intraday"), 'cron', day_of_week='mon-fri', hour='9-15', minute='3-59/5', id='stop_intraday', replace_existing=True, max_instances=1)
+    scheduler.add_job(lambda: _stop_orders_job("close"), 'cron', day_of_week='mon-fri', hour=15, minute=40, id='stop_close', replace_existing=True, max_instances=1)
+    scheduler.add_job(lambda: _stop_orders_job("late"), 'cron', day_of_week='mon-fri', hour=20, minute=10, id='stop_late', replace_existing=True, max_instances=1)
+
     def _futures_flow_job() -> None:
         from backend.collector.futures_flow import snapshot  # noqa: PLC0415
         db = SessionLocal()
