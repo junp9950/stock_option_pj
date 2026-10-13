@@ -369,6 +369,7 @@ select{background:var(--c3);border:1px solid var(--ln);color:var(--bd);padding:6
 .hb-sig{display:flex;flex-wrap:wrap;gap:8px;align-items:center;font-size:13px;margin:6px 0 4px}.hb-sig:empty{display:none}
 .hb-chips{display:flex;flex-wrap:wrap;gap:6px;margin:4px 0 8px}.hb-chips span:empty{display:none}.hb-chips>span{display:contents}
 .hb-chip{font-size:12px;padding:2px 10px;border-radius:999px;border:1px solid var(--neu);white-space:nowrap}
+@media(max-width:760px){.hb-chip{white-space:normal;max-width:100%;box-sizing:border-box;line-height:1.45;padding:3px 10px}.ws-ctl{flex-direction:column;align-items:stretch;gap:6px}.ws-ctl .ws-per{flex:none!important;width:100%;min-width:0}}   /* 폰: 긴 모양 칸은 줄바꿈 · 봉 종류 줄과 기간 줄은 각각 한 줄 (2026-10-13 아이폰 칸 안 맞음) */
 .hb-chip.k-g{background:rgba(35,134,54,.18);border-color:#2ea043}.hb-chip.k-b{background:rgba(218,54,51,.18);border-color:#da3633}
 #panel-home .lwleg{background:var(--sunk);border-radius:10px;padding:6px 10px;height:auto;min-height:52px;font-family:'IBM Plex Mono',ui-monospace,monospace;font-size:12px}
 #panel-home .ws>.cm-panel{background:transparent;border:0;padding:0;columns:auto;display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:16px}
