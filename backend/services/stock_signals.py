@@ -1243,6 +1243,7 @@ def _crash_calc(db: Session, latest, live_on: bool, key) -> dict:
     out = {"active": kind is not None, "kind": kind, "date": asof, "at": at, "live": bool(at), "market": round(m_today * 100, 2),
            "prev_market": round(m_prev * 100, 2), "two": round(float(two.iloc[-1]) * 100, 2), "stats": CRASH_STATS.get(kind or "", ""),
            "tested": kind in ("첫날", "이틀째"), "items": [], "ref": []}
+    notes_ready = True
     if kind:
         rs_raw = 0.4 * (C / C.shift(63) - 1) + 0.2 * (C / C.shift(126) - 1) + 0.2 * (C / C.shift(189) - 1) + 0.2 * (C / C.shift(252) - 1)
         liq = tv20.iloc[-2] >= 3e9
@@ -1253,9 +1254,11 @@ def _crash_calc(db: Session, latest, live_on: bool, key) -> dict:
         # BW·CB·유상증자 같은 위험 공시(30일) 종목은 매수 5개에서 빼고 다음 순서로 채움 (2026-10-13 사용자 "그런 건 좀 빼 주라" — 과거 공시가 없어 검증은 못 함)
         try:
             from backend.services.stock_notes import notes_quick  # noqa: PLC0415
-            rk = {c: next(n_["label"] for n_ in v if n_["kind"] == "risk") for c, v in notes_quick().items() if any(n_["kind"] == "risk" for n_ in v)}
+            nq = notes_quick()
+            rk = {c: next(n_["label"] for n_ in v if n_["kind"] == "risk") for c, v in nq.items() if any(n_["kind"] == "risk" for n_ in v)}
+            notes_ready = bool(nq)
         except Exception:  # noqa: BLE001
-            rk = {}
+            rk, notes_ready = {}, False
         out["skipped"] = [names.get(c, c) + " " + rk[c] for c in cand[:12] if c in rk]
         cand = [c for c in cand if c not in rk] + [c for c in cand if c in rk]
         for k_, c in enumerate(cand[:12]):
@@ -1270,5 +1273,6 @@ def _crash_calc(db: Session, latest, live_on: bool, key) -> dict:
             if is_trading_day(d):
                 k += 1
         out["sell_on"] = str(d)
-    _CRASH.update(t=time.time(), v=out, key=key)
+    # 위험 공시 계산(재시작 뒤 30초쯤)이 아직이면 20초 뒤 다시 계산되게 (2026-10-13 배포 직후 BW·CB가 안 빠지던 것)
+    _CRASH.update(t=time.time() - (100 if kind and not notes_ready else 0), v=out, key=key)
     return out
