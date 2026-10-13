@@ -171,7 +171,8 @@ def signals(db: Session, code: str, days: int = 260, owner: str | None = None) -
             i += 1
             continue
         p0, stop = float(C.iloc[i]), float(L.iloc[i]) * 0.99
-        items.append({"date": str(d), "label": f"▲ 진입 {p0:,.0f}", "kind": "entry", "pos": "below", "price": float(L.iloc[i])})
+        legacy = []      # 예전 '▲ 진입 → 절반 팔기(14선) → 나머지(21선)' 규칙 — 2026-10-13부터 차트에 안 찍음 (매수 규칙과 둘이라 헷갈림)
+        legacy.append({"date": str(d), "label": f"▲ 진입 {p0:,.0f}", "kind": "entry", "pos": "below", "price": float(L.iloc[i])})
         half, out = False, None
         for k in range(i + 1, len(idx)):
             c = float(C.iloc[k])
@@ -180,12 +181,12 @@ def signals(db: Session, code: str, days: int = 260, owner: str | None = None) -
                 out = (k, f"손절 {(px/p0-1)*100:+.1f}%", "exit_bad"); break
             if not half and k - i > 1 and c < float(e14.iloc[k]):
                 half = True
-                items.append({"date": str(idx[k]), "label": f"절반 팔기 {(c/p0-1)*100:+.1f}%", "kind": "exit", "pos": "above", "price": float(H.iloc[k])})
+                legacy.append({"date": str(idx[k]), "label": f"절반 팔기 {(c/p0-1)*100:+.1f}%", "kind": "exit", "pos": "above", "price": float(H.iloc[k])})
             if k - i > 1 and c < float(e21.iloc[k]):
                 out = (k, f"나머지 팔기 {(c/p0-1)*100:+.1f}%", "exit"); break
         if out:
             k, lab, kind = out
-            items.append({"date": str(idx[k]), "label": lab, "kind": kind, "pos": "above", "price": float(H.iloc[k])})
+            legacy.append({"date": str(idx[k]), "label": lab, "kind": kind, "pos": "above", "price": float(H.iloc[k])})
             i = k + 1
         else:
             last_c = float(C.iloc[-1])
@@ -204,6 +205,7 @@ def signals(db: Session, code: str, days: int = 260, owner: str | None = None) -
     try:
         rh = rs_hist(db)
         rs_arr = rh.get("rs", {}).get(code)
+        score_active = None
         if rs_arr is not None:
             RS = pd.Series(rs_arr.astype(float), index=[pd.Timestamp(x).date() for x in rh["dates"]]).reindex(df.index)
             ehi_t = pd.concat([e5, e10, e20], axis=1).max(axis=1); elo_t = pd.concat([e5, e10, e20], axis=1).min(axis=1)
@@ -235,7 +237,15 @@ def signals(db: Session, code: str, days: int = 260, owner: str | None = None) -
             hold = None      # {"k": 산 날, "p": 산 값, "rk": 손절폭, "stop": 지금 손절가}
             for k, d in enumerate(df.index):
                 if hold and k > hold["k"]:
-                    if float(L.iloc[k]) < hold["stop"] or (k - hold["k"] > 1 and float(C.iloc[k]) < float(e21.iloc[k])):
+                    hit = float(L.iloc[k]) < hold["stop"]
+                    if hit or (k - hold["k"] > 1 and float(C.iloc[k]) < float(e21.iloc[k])):
+                        # 매수의 매도 자리를 차트에 (2026-10-13 — 예전 '▲ 진입·절반 팔기' 규칙 대신 지금 매수 규칙 하나로)
+                        if d >= start:
+                            if hit:
+                                px = min(float(O.iloc[k]) or hold["stop"], hold["stop"])
+                                items.append({"date": str(d), "label": f"손절 {(px / hold['p'] - 1) * 100:+.1f}%", "kind": "exit_bad", "pos": "above", "price": float(H.iloc[k])})
+                            else:
+                                items.append({"date": str(d), "label": f"21선 매도 {(float(C.iloc[k]) / hold['p'] - 1) * 100:+.1f}%", "kind": "exit", "pos": "above", "price": float(H.iloc[k])})
                         hold = None
                 on = bool(buy_ok.iloc[k])
                 if not on:
@@ -297,6 +307,9 @@ def signals(db: Session, code: str, days: int = 260, owner: str | None = None) -
                     items.append({"date": str(d), "label": f"매수 자리 유지 · {desc}", "kind": "score_keep", "pos": "below",
                                   "price": float(L[d]), "score": int(sc[d]), "why": why})
                 prev_on = True
+            if hold is not None:
+                score_active = {"date": str(df.index[hold["k"]]), "entry": hold["p"], "stop": hold["stop"], "days": len(df.index) - hold["k"],
+                                "gain": (float(C.iloc[-1]) / hold["p"] - 1) * 100, "half": False}
         # 🔥 주도주 매수 (2026-10-10 "주도주도 매수 표시를 넣는 게 맞나") — _close_scores 'lead'와 같은 규칙: 정배열 · RS 95↑ · 손절폭 8%↓ · 양봉 · 종가 범위 위 절반.
         # 기본 매수와 별도 · 거래당 위험 0.10%. 들고 있는 동안(스탑 = 산 날 저가 -1% · 21일선 아래 종가 정리) 또 뜨면 작은 점만.
         e8_, e55_ = C.ewm(span=8, adjust=False).mean(), C.ewm(span=55, adjust=False).mean()
@@ -379,6 +392,7 @@ def signals(db: Session, code: str, days: int = 260, owner: str | None = None) -
     except Exception:  # noqa: BLE001
         pass
     items.sort(key=lambda x: x["date"])
+    active = score_active      # 차트 '산 자리 손절'·보유 줄 = 지금 매수 규칙으로 들고 있는 것
     return {"code": code, "items": items, "active": active, "bull_today": bool(bull.iloc[-1]), "tt7": int(tt7.iloc[-1])}
 
 
