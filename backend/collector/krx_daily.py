@@ -105,6 +105,11 @@ def fix_recent(db: Session, days: int = 10) -> str:
             empty.append(str(d))
         total += r.get("spot_daily_prices", 0)
     if total:
+        try:      # 날짜만 보는 메모리 캐시 비우기 (같은 프로세스의 스케줄러에서 돎)
+            from backend.services.stock_signals import reset_price_caches  # noqa: PLC0415
+            reset_price_caches()
+        except Exception:  # noqa: BLE001
+            pass
         from backend.db.models import JobLog  # noqa: PLC0415
         db.add(JobLog(trading_date=date.today(), stage="spot_price_fix", status="completed", message=f"KRX 공식 시세로 {total}건 바로잡음"))
         db.commit()

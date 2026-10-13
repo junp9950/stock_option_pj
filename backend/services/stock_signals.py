@@ -778,6 +778,27 @@ def close_scores(db: Session) -> dict:
 
 
 _CF: dict = {"key": None, "v": None}
+
+
+def reset_price_caches() -> None:
+    """KRX 공식 시세로 지난 날짜를 바로잡은 뒤 부름 — 날짜만 보는 메모리 캐시들이 옛 시세로 계속 계산하지 않게 (2026-10-13 2차 검토)."""
+    import sys  # noqa: PLC0415
+    me = sys.modules[__name__]
+    for nm in ("_REG", "_MK", "_KRX", "_ENTRY", "_BR", "_CF", "_DIPH", "_RSH", "_CRASH", "_DIP"):
+        d = getattr(me, nm, None)
+        if isinstance(d, dict) and "key" in d:
+            d["key"] = None
+    for nm in ("_CSL",):
+        d = getattr(me, nm, None)
+        if isinstance(d, dict):
+            d["t"] = 0.0; d["v"] = None
+    try:
+        from backend.services import stock_panel as _sp  # noqa: PLC0415
+        _sp._RS["key"] = None
+        from backend.screener import rotation as _ro  # noqa: PLC0415
+        _ro._CD["key"] = None; _ro._MEM["key"] = None; _ro._FM["t"] = 0.0; _ro._FM["v"] = None
+    except Exception:  # noqa: BLE001
+        pass
 _CF_LOCK = threading.Lock()
 
 

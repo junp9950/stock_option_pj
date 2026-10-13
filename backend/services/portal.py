@@ -244,6 +244,44 @@ def _stop_for(db: Session, s: dict, code: str, buy: date, today: date) -> tuple[
     return int(tick_floor(float(low) * 0.99)), "산 날 저가 −1%", final
 
 
+def _drop(s: dict, lot: str) -> None:
+    """lot을 빼면서, 걸려 있던 주문(토스 조건주문 · 메리츠 오늘 스톱)을 '정리할 주문'에 남긴다 → run()이 증권사에서 취소 확인할 때까지 다시 시도 (2026-10-13 2차 검토)."""
+    L = s["lots"].pop(lot, None)
+    if not L:
+        return
+    cl = s.setdefault("cleanup", [])
+    if L.get("toss_order"):
+        cl.append({"kind": "toss", "id": L["toss_order"]["id"], "code": L["code"], "name": L["name"]})
+    for o in s["orders"].get(str(_now().date()), []):
+        if o.get("lot") == lot and o.get("ok") and not o.get("done") and not o.get("market"):
+            cl.append({"kind": "meritz", "code": o["code"], "name": o["name"], "order_no": o["order_no"], "qty": o["qty"], "trigger": o["trigger"], "limit": o["limit"]})
+            o["done"] = "정리 목록으로"
+
+
+def _cleanup(c, broker: str, s: dict) -> list[str]:
+    out, keep = [], []
+    for x in s.get("cleanup") or []:
+        try:
+            if x["kind"] == "toss" and broker == "toss":
+                ok = c.stop_cancel(x["id"]).get("ok")
+            elif x["kind"] == "meritz" and broker == "meritz":
+                ok = c.cancel(x["code"], x["order_no"], x["qty"], x["trigger"], x["limit"]).get("ok")
+            else:
+                ok = True
+        except Exception:  # noqa: BLE001
+            ok = False
+        if ok:
+            out.append(f"↺ {x['name']} 남아 있던 손절 주문 취소함")
+        else:
+            x["tries"] = x.get("tries", 0) + 1
+            if x["tries"] in (1, 5):
+                out.append(f"⚠ {x['name']} 남은 손절 주문 취소 실패 — 증권사 앱에서 직접 취소해 주세요")
+            if x["tries"] < 30:
+                keep.append(x)
+    s["cleanup"] = keep
+    return out
+
+
 def _sync(db: Session, s: dict, hs: list[dict], today: date) -> list[str]:
     from backend.services.stop_orders import _buy_date  # noqa: PLC0415
     msgs, now_q, meta = [], {}, {}
@@ -257,7 +295,7 @@ def _sync(db: Session, s: dict, hs: list[dict], today: date) -> list[str]:
         L = s["lots"].get(lot)
         if code in excl:
             if L:
-                s["lots"].pop(lot); msgs.append(f"✅ {L['name']}: 자동 손절에서 뺌")
+                _drop(s, lot); msgs.append(f"✅ {L['name']}: 자동 손절에서 뺌")
             continue
         if extra > 0 and not L:
             h = meta[lot]; buy = _buy_date(h, today)
@@ -267,14 +305,14 @@ def _sync(db: Session, s: dict, hs: list[dict], today: date) -> list[str]:
             msgs.append(f"🆕 자동 손절 대상: {h['name']} {extra}주 · 손절가 " + (f"{stop:,} ({src})" if stop else f"없음 — {src}"))
         elif L and extra != L["qty"]:
             if extra <= 0:
-                s["lots"].pop(lot); msgs.append(f"✅ {L['name']} 정리됨 — 자동 손절 대상에서 뺌")
+                _drop(s, lot); msgs.append(f"✅ {L['name']} 정리됨 — 자동 손절 대상에서 뺌")
             else:
                 L["qty"] = extra
         if q < s["baseline"].get(lot, 0):
             s["baseline"][lot] = q
     for lot in list(s["lots"]):
         if lot not in now_q:
-            msgs.append(f"✅ {s['lots'][lot]['name']} 잔고에서 사라짐 (매도·손절)"); s["lots"].pop(lot)
+            msgs.append(f"✅ {s['lots'][lot]['name']} 잔고에서 사라짐 (매도·손절)"); _drop(s, lot)
     return msgs
 
 
@@ -287,7 +325,7 @@ def _market_exit(c, broker: str, s: dict, lot: str, L: dict, today: date, phase:
             if not c.stop_cancel(o["id"]).get("ok"):
                 return f"⚠ {L['name']} {why} — 걸린 조건주문 취소 실패, 직접 팔아 주세요"
             L.pop("toss_order")
-        r = c.market_sell(L["code"], L["qty"], opening=(phase == "morning"), client_id=f"x21-{L['code']}-{today:%Y%m%d}-{phase}")
+        r = c.market_sell(L["code"], L["qty"], opening=(phase == "morning"), client_id=f"x21-{L['code']}-{today:%Y%m%d}")
     else:
         live = [x for x in day if x["lot"] == lot and x["ok"] and not x.get("done") and not x.get("market")]
         if live:
@@ -304,7 +342,22 @@ def _market_exit(c, broker: str, s: dict, lot: str, L: dict, today: date, phase:
     return f"⚠ {L['name']} {why} 시장가 매도 실패 — {r['warn'] or r['msg']} (직접 팔아 주세요)"
 
 
+_LOCKS: dict = {}
+
+
 def run(db: Session, name: str, phase: str) -> str:
+    """같은 사람 작업이 겹치면 뒤의 것은 건너뜀 (2026-10-13 2차 검토)."""
+    import threading  # noqa: PLC0415
+    lk = _LOCKS.setdefault(name, threading.Lock())
+    if not lk.acquire(blocking=False):
+        return "앞 작업이 도는 중이라 건너뜀"
+    try:
+        return _run_one(db, name, phase)
+    finally:
+        lk.release()
+
+
+def _run_one(db: Session, name: str, phase: str) -> str:
     """phase: morning · retry · intraday · close. 손절만."""
     from backend.utils.dates import is_trading_day  # noqa: PLC0415
     from backend.utils.ticks import tick_floor  # noqa: PLC0415
@@ -333,6 +386,7 @@ def run(db: Session, name: str, phase: str) -> str:
         s["fail_told"] = f"{today} 복구"
     s["fails"] = 0
     out = _sync(db, s, hs, today)
+    out += _cleanup(c, k["broker"], s)
     if s["on"] and phase in ("morning", "retry", "intraday"):
         day = s["orders"].setdefault(str(today), [])
         for lot, L in s["lots"].items():
@@ -354,6 +408,17 @@ def run(db: Session, name: str, phase: str) -> str:
                     L.update(stop=stop, src=src, final=final)
             if not L.get("stop"):
                 continue
+            from backend.services.stop_orders import _last_close  # noqa: PLC0415
+            fails_ = [x for x in day if x["lot"] == lot and not x["ok"] and not x.get("market")]
+            if len(fails_) >= 2 or (fails_ and phase == "intraday"):
+                continue                     # 하루 두 번(아침·09:01)까지만 — 실패가 5분마다 쌓이지 않게 (토스도 같이, 2차 검토)
+            if not L.get("toss_order") and not any(x["lot"] == lot and x["ok"] and not x.get("done") for x in day):
+                last = _last_close(L["code"])
+                if last and last <= L["stop"]:
+                    day.append({"lot": lot, "code": L["code"], "name": L["name"], "qty": L["qty"], "trigger": L["stop"], "limit": 0,
+                                "order_no": None, "ok": False, "at": _now().strftime("%H:%M")})
+                    out.append(f"⚠ {L['name']} 손절가 {L['stop']:,} ≥ 지금가 {last:,.0f} — 주문 안 냄, 직접 판단해 주세요")
+                    continue
             if k["broker"] == "toss":
                 o = L.get("toss_order")
                 if o and (o.get("trigger") != L["stop"] or o.get("qty") != L["qty"]):
@@ -368,6 +433,8 @@ def run(db: Session, name: str, phase: str) -> str:
                         L["toss_order"] = {"id": r["order_no"], "trigger": L["stop"], "qty": L["qty"]}
                         out.append(f"🛑 {L['name']} {L['qty']}주 · 감시가 {L['stop']:,} 닿으면 시장가 매도 (토스 조건주문, {expire[5:]}까지)")
                     else:
+                        day.append({"lot": lot, "code": L["code"], "name": L["name"], "qty": L["qty"], "trigger": L["stop"], "limit": 0,
+                                    "order_no": None, "ok": False, "at": _now().strftime("%H:%M")})
                         out.append(f"⚠ {L['name']} 조건주문 실패 — {r['msg']} (직접 걸어 주세요)")
                 continue
             # 메리츠: 당일 스톱지정가 — 매일 다시

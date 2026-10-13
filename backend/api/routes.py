@@ -2413,14 +2413,25 @@ def _journal_owner_opt(request: Request, db: Session) -> str | None:
     """매매 일지 로그인 헤더가 맞으면 이름, 없거나 틀리면 None (공개 화면은 None으로 — 금액·보유 정보 안 보냄)."""
     from urllib.parse import unquote  # noqa: PLC0415
     from backend.services.trade_journal import auth  # noqa: PLC0415
+    import time as _t  # noqa: PLC0415
     owner = unquote(request.headers.get("x-owner", "")).strip()[:20]
     pin = unquote(request.headers.get("x-pin", ""))
     if not owner or not pin:
         return None
+    # 틀린 비밀번호는 로그인과 같은 잠금(10분 10번)에 셈 — 예전엔 /me/* 등으로 무제한 시도 가능 (2026-10-13 2차 검토)
+    now = _t.time()
+    fails = [x for x in _journal_fails.get(owner, []) if now - x < 600]
+    if len(fails) >= 10:
+        return None
     try:
-        return owner if auth(db, owner, pin) == "ok" else None
+        r = auth(db, owner, pin)
     except Exception:  # noqa: BLE001
         return None
+    if r == "ok":
+        return owner
+    if r == "bad":
+        _journal_fails[owner] = fails + [now]
+    return None
 
 
 def _me(request: Request, db: Session) -> str:
@@ -2965,6 +2976,8 @@ def post_journal_login(body: JournalLoginIn, db: Session = Depends(get_db)):
     fails = [t for t in _journal_fails.get(owner, []) if now - t < 600]
     if len(fails) >= 10:
         raise HTTPException(status_code=429, detail="비밀번호를 여러 번 틀려서 10분간 잠겼습니다.")
+    if body.create and owner.lower() in ("junp", "admin", "관리자"):     # 관리자 이름은 새로 만들 수 없음 (2026-10-13 2차 검토)
+        raise HTTPException(status_code=400, detail="쓸 수 없는 이름입니다.")
     r = auth(db, owner, body.pin, create=body.create)
     if r == "bad":
         _journal_fails[owner] = fails + [now]

@@ -199,6 +199,13 @@ def sync(db: Session, s: dict, today: date) -> list[str]:
         if lot.split("|")[0] in excl:
             s["baseline"][lot] = now_q[lot]
             if lot in s["lots"]:
+                o = _open_order(s, lot, today)       # 오늘 걸린 손절이 있으면 취소 (빼기로 한 종목이 팔리지 않게, 2026-10-13 2차 검토)
+                if o:
+                    c_ = M.cancel(o["code"], o["order_no"], o["qty"], o["trigger"], o["limit"])
+                    if c_["ok"]:
+                        o["done"] = "취소(제외)"
+                    else:
+                        msgs.append(f"⚠ {s['lots'][lot]['name']} 오늘 손절 주문 취소 실패 — 증권사 앱에서 직접 취소해 주세요")
                 msgs.append(f"✅ {s['lots'][lot]['name']}: 장기 보유라 자동 매도에서 뺌")
                 s["lots"].pop(lot)
     for lot, q in now_q.items():
@@ -241,6 +248,19 @@ def _place(db: Session, s: dict, lot: str, L: dict, today: date) -> str:
     if not L.get("stop"):
         return f"⚠ {L['name']}: 손절가가 없어 안 걸었습니다 — 관리 탭에서 손절선을 넣어 주세요"
     trig = int(L["stop"]); lim = int(tick_floor(trig * 0.99))
+    # 손절가가 지금가(마지막 정규장 종가) 이상이면 내지 않음 — 즉시 발동·거절 위험, 갭 하락은 사람이 판단 (2026-10-13 2차 검토)
+    last = _last_close(L["code"])
+    if last and last <= trig:
+        day.append({"lot": lot, "code": L["code"], "name": L["name"], "qty": L["qty"], "trigger": trig, "limit": lim, "order_no": None,
+                    "ok": False, "at": _now().strftime("%H:%M"), "msg": "손절가 ≥ 지금가", "warn": ""})
+        return f"⚠ {L['name']} 손절가 {trig:,} ≥ 지금가 {last:,.0f} — 주문 안 냄, 직접 판단해 주세요"
+    # 앞서 실패로 기록됐는데 실제론 접수됐을 수 있음(응답 유실) → 오늘 주문 내역에 같은 종목·수량 미체결 매도가 있으면 그걸로 (2차 검토)
+    if any(o["lot"] == lot and not o["ok"] and not o.get("market") for o in day):
+        hit = _find_open_sell(L["code"], L["qty"], today)
+        if hit:
+            day.append({"lot": lot, "code": L["code"], "name": L["name"], "qty": L["qty"], "trigger": trig, "limit": lim, "order_no": hit,
+                        "ok": True, "at": _now().strftime("%H:%M"), "msg": "앞 주문이 접수돼 있었음", "warn": ""})
+            return f"🛑 {L['name']} {L['qty']}주 · 앞서 낸 손절 주문이 접수돼 있었음 (다시 안 냄)"
     r = M.stop_sell(L["code"], L["qty"], trig, lim, L["credit"], L.get("loan_date", ""))
     day.append({"lot": lot, "code": L["code"], "name": L["name"], "qty": L["qty"], "trigger": trig, "limit": lim, "order_no": r["order_no"],
                 "ok": r["ok"], "at": _now().strftime("%H:%M"), "msg": r["msg"] if not r["ok"] else "", "warn": r["warn"]})
@@ -249,12 +269,47 @@ def _place(db: Session, s: dict, lot: str, L: dict, today: date) -> str:
     return f"⚠ {L['name']} 주문 실패 — {r['warn'] or r['msg']} (직접 걸어 주세요)"
 
 
+def _last_close(code: str) -> float | None:
+    try:
+        from backend.services.naver_live import krx_day  # noqa: PLC0415
+        k = krx_day(code)
+        return float(k["close"]) if k else None
+    except Exception:  # noqa: BLE001
+        return None
+
+
+def _find_open_sell(code: str, qty: int, today: date) -> str | None:
+    """오늘 주문 내역에서 이 종목 미체결 매도(같은 수량) 주문번호."""
+    from backend.services import meritz as M  # noqa: PLC0415
+    try:
+        for x in M.orders_today(today.strftime("%Y%m%d"), "1"):
+            if str(x.get("iscd", "")).endswith(code) and int(float(x.get("ncnt_qty") or 0)) > 0 and int(float(x.get("odqt") or 0)) == int(qty) \
+                    and not str(x.get("rctf_cncl_cls_code") or "0").strip("0"):
+                return str(x.get("oder_no"))
+    except Exception:  # noqa: BLE001
+        return None
+    return None
+
+
 def _open_order(s: dict, lot: str, today: date) -> dict | None:
     xs = [o for o in s["orders"].get(str(today), []) if o["lot"] == lot and o["ok"] and not o.get("done")]
     return xs[-1] if xs else None
 
 
+_RUN_LOCK = __import__("threading").Lock()
+
+
 def run(db: Session, phase: str) -> str:
+    """같은 계좌 작업이 겹치면(아침이 길어져 09:01과 겹침 등) 뒤의 것은 건너뜀 (2026-10-13 2차 검토)."""
+    if not _RUN_LOCK.acquire(blocking=False):
+        return "앞 작업이 도는 중이라 건너뜀"
+    try:
+        return _run(db, phase)
+    finally:
+        _RUN_LOCK.release()
+
+
+def _run(db: Session, phase: str) -> str:
     """phase: morning(08:50) · retry(09:01) · intraday(5분) · preclose(15:21 반등 모드 5일째 종가 매도) · close(15:40 21일선 확인)
     · late(20:10 장 후 시간외에 산 것) · baseline(기준 잡기)."""
     from backend.services import meritz as M  # noqa: PLC0415

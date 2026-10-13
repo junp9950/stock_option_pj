@@ -99,9 +99,9 @@ def owner_chats(db: Session) -> list[str]:
     own = [str(c) for c in (_get(db, "telegram_owner", []) or [])]     # 번호로 저장 — /name 은 아무나 바꿀 수 있어서 이름으로 판단하지 않음
     if own:
         return own
-    names = _get(db, "telegram_authors", {}) or {}
-    chats = list((_get(db, "telegram_chats", {}) or {}).keys())
-    return [c for c in chats if names.get(c) == ME] or chats[:1]
+    # 저장된 번호가 없으면 아무 방도 사장님으로 보지 않음 (이름은 /name 으로 누구나 바꿀 수 있어서) — 2026-10-13 2차 검토
+    logger.error("telegram_owner 미설정 — 계좌 알림·명령을 보낼 사장님 방이 없음")
+    return []
 
 
 def notify_async(msg: str, author: str = "", ref: dict | None = None, only_me: bool = False) -> None:
