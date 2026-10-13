@@ -229,6 +229,8 @@ def signals(db: Session, code: str, days: int = 260, owner: str | None = None) -
             else:
                 semi_buy = pd.Series(False, index=df.index)
             buy_ok = normal_ok | semi_buy
+            brk_ok = entry_m.reindex(df.index).fillna(False).astype(bool) & ~buy_ok     # 예전 ▲진입(돌파) — 12년 거래당 성과가 매수와 비슷해서 차트에 '매수'로 같이 (2026-10-13 사용자)
+            buy_ok = buy_ok | brk_ok
             pos_ = {d: k for k, d in enumerate(df.index)}
             prev_on, run_best = False, None
             # 들고 있는 동안 또 뜬 매수 (2026-10-09 팬오션 "비쌀 때 사서 싸게 파는 정석" → "좋은 자리에서 피라미딩할 수도") — 12년(v12s/v12t.py):
@@ -266,7 +268,10 @@ def signals(db: Session, code: str, days: int = 260, owner: str | None = None) -
                 good = rk_[d] <= 0.03
                 # 매수 근거 (2026-10-09 "매수별로 매수 근거가 필요하다") — 봉에 올리면 한 줄에 하나씩
                 is_semi = bool(semi_buy[d])
+                is_brk = bool(brk_ok[d])
                 why = ["시장 상승·횡보장" + (" · 종가 > 20일선 > 60일선 (정배열)" if bool(base_ok[d]) else " · 정배열 아님")]
+                if is_brk:
+                    why.append("돌파 매수 (예전 ▲진입 규칙): " + ("박스 돌파 · 20일 박스 위로 +5%↑ · 거래 2배↑" if bool(box[d]) else "이평선 모였다 돌파 · 거래 1.5배↑") + f" · 추세 7조건 중 {int(tt7[d])}개")
                 if is_semi:
                     why.append(f"반도체·AI 슈퍼사이클 특별 · 이평선 모였다 돌파 (그날 {float(chg[d]) * 100:+.1f}% · 거래대금 {float(tvx[d]):.1f}배)")
                     why.append("이 묶음만 정배열·급등봉·손절폭 12%까지 풀어 줌 → 수량 절반")
@@ -281,9 +286,9 @@ def signals(db: Session, code: str, days: int = 260, owner: str | None = None) -
                 why.append(f"강도 RS {float(RS[d]):.0f} (시장보다 센 쪽 · 70~95)")
                 why.append(f"손절폭 {rk_[d] * 100:.1f}% · 스탑로스 {tick_floor(L[d] * 0.99):,.0f} (오늘 저가 -1%)"
                            + (" → ✅ 짧음" if good else ""))
-                desc = (("반도체·AI 특별 (슈퍼사이클) · " if is_semi else "") + ("이평선 모였다 돌파 · " if bool(ema_buy[d]) else "") + ("과열 매수 (이번 장 한정) · " if is_hot else "")
+                desc = (("돌파 매수 · " if is_brk else "") + ("반도체·AI 특별 (슈퍼사이클) · " if is_semi else "") + ("이평선 모였다 돌파 · " if bool(ema_buy[d]) else "") + ("과열 매수 (이번 장 한정) · " if is_hot else "")
                         + f"손절 {tick_floor(L[d] * 0.99):,.0f} (-{rk_[d] * 100:.1f}%)" + (" · 수량 절반" if is_hot or is_semi else "")
-                        + f" · 점수 {int(sc[d])}/7" + (f" (빠짐: {miss[0]})" if miss else ""))
+                        + ("" if is_brk else f" · 점수 {int(sc[d])}/7" + (f" (빠짐: {miss[0]})" if miss else "")))
                 # 연속으로 뜨는 날: 첫날만 '매수', 이어지는 날은 '자리 유지' 점 · 손절폭이 확 짧아지면 '더 좋은 자리' (2026-10-09 "매일 뜬 이유가 뭐야")
                 if not prev_on and add_r is not None:
                     if add_r >= 1:
@@ -296,7 +301,7 @@ def signals(db: Session, code: str, days: int = 260, owner: str | None = None) -
                                       "pos": "below", "price": float(L[d]), "score": int(sc[d]), "why": why})
                     run_best = rk_[d]
                 elif not prev_on:
-                    items.append({"date": str(d), "label": f"{'✅ ' if good and not is_hot and not is_semi else ''}종가 매수 · {desc}", "kind": "score", "pos": "below",
+                    items.append({"date": str(d), "label": f"{'✅ ' if good and not is_hot and not is_semi and not is_brk else ''}종가 매수 · {desc}", "kind": "score", "pos": "below",
                                   "price": float(L[d]), "score": int(sc[d]), "good": bool(good and not is_hot and not is_semi), "hot": is_hot, "semi": is_semi, "why": why})
                     run_best = rk_[d]
                 elif rk_[d] <= run_best * 0.75 or (good and run_best > 0.03):
