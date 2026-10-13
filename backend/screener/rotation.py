@@ -96,9 +96,9 @@ def corr_drops(db: Session, raw: dict[str, set[str]]) -> dict[str, list[str]]:
     """테마로 여러 섹터에 들어간 종목을, 실제 주가가 덜 따라 움직이는 섹터에서 뺀다 (2026-10-13 건의 #3 · 사용자 "자동 섹터 정리").
     지난 1년 하루 등락률(시장 중간값을 뺀 것)과 각 섹터 중간값의 상관을 비교 — 가장 가까운 섹터보다 0.10 이상 낮은 섹터는 뺌.
     예: 원익IPS 신재생 0.38 / 반도체 장비 0.69 → 신재생에서 뺌 · 기아 신재생 0.22 / 자동차 0.48 → 뺌 · 한화솔루션 신재생 0.47 / 우주항공 0.34 → 신재생만.
-    1년·최근 3개월 둘 다에서 멀어야 뺌(하나라도 가까우면 남김). 한 섹터에만 있는 종목·자료 120일 안 되는 종목은 안 건드림. DB 날짜마다 한 번 계산(settings에 저장해 재시작에도)."""
+    1년·최근 6개월 둘 다에서 멀어야 뺌(하나라도 가까우면 남김). 한 섹터에만 있는 종목·자료 120일 안 되는 종목은 안 건드림. DB 날짜마다 한 번 계산(settings에 저장해 재시작에도)."""
     latest = db.execute(text("select max(trading_date) from spot_daily_prices")).scalar()
-    key = f"{latest}|{CORR_GAP}|mkt|1y3m"
+    key = f"{latest}|{CORR_GAP}|mkt|1y6m"
     if _CD["key"] == key:
         return _CD["v"]
     try:
@@ -115,7 +115,8 @@ def corr_drops(db: Session, raw: dict[str, set[str]]) -> dict[str, list[str]]:
     R = px.pivot(index="d", columns="s", values="r").sort_index().astype(float).clip(-30, 30)
     R = R.sub(R.median(axis=1), axis=0)[[c for c in allc if c in R.columns]]   # 시장 = 전 종목 중간값     # 시장 전체가 같이 움직인 몫을 빼고 비교 — 안 빼면 섹터마다 0.5~0.7로 비슷해 구분이 안 됨(기아 신재생 0.58 vs 자동차 0.63 → 빼면 0.22 vs 0.48)
     ok = R.count() >= 120
-    # 1년과 최근 3개월(63거래일) 둘 다에서 멀어야 뺌 — 1년만 보면 새 재료를 늦게 따라감 (2026-10-13 사용자: 현대차가 요즘 로봇으로 움직이면 로봇에도)
+    # 1년과 최근 6개월(126거래일) 둘 다에서 멀어야 뺌 — 1년만 보면 새 재료를 늦게 따라감 (2026-10-13 사용자: 현대차가 요즘 로봇으로 움직이면 로봇에도)
+    # 3개월은 너무 짧음: 10월 급락·AI 인프라 장에서 전선·통신·신재생이 다 같이 움직여 LS마린솔루션이 통신에 남던 것 (통신 0.66 vs 전선 0.65 → 6개월 0.40 vs 0.60)
     def _cors(X):
         out = {}
         for f, mem in raw.items():
@@ -123,7 +124,7 @@ def corr_drops(db: Session, raw: dict[str, set[str]]) -> dict[str, list[str]]:
             if len(cols) >= 5:
                 out[f] = X.corrwith(X[cols].median(axis=1))
         return out
-    wins = [_cors(R), _cors(R.iloc[-63:])]
+    wins = [_cors(R), _cors(R.iloc[-126:])]
     drops: dict[str, list[str]] = {}
     for c in multi:
         if not ok.get(c, False):
