@@ -3198,7 +3198,7 @@ function chApply(r){ if(!r) return;
   (r.ema||[]).forEach(x=>{ try{ x.applyOptions({visible:CH.ema}); }catch(e){} });
   (r.txt||[]).forEach(([x,t])=>{ try{ x.applyOptions({title:CH.txt?t:'',lastValueVisible:CH.txt&&!!t}); }catch(e){} });
   if(r.pl) try{ r.pl.applyOptions({title:r.plt,lineVisible:CH.txt,axisLabelVisible:CH.txt}); }catch(e){}   // 글자 끄면 손절선(점선·가격 칸)도 같이 (10/13)
-  if(r.cs&&r.mk) try{ r.cs.setMarkers(!CH.txt?[]:CH.ref?r.mk:r.mkCore); }catch(e){}   // 끄면 신호 점·화살표도 없이 맨 차트 (10/13 "pure 차트")
+  if(r.cs&&r.mk) try{ const base=!CH.txt?[]:CH.ref?r.mk:r.mkCore; r.cs.setMarkers(r.relabel?r.relabel(base):base); }catch(e){}   // 끄면 신호 점·화살표도 없이 맨 차트 (10/13 "pure 차트")
   if(!CH.txt) try{ r.chart.chartElement().parentNode.parentNode.querySelectorAll('.lwwhy').forEach(x=>x.style.display='none'); }catch(e){}
   try{ r.chart.applyOptions({}); }catch(e){} }
 function chTog(k){ CH[k]=!CH[k]; try{ localStorage.setItem('chart-show',JSON.stringify(CH)); }catch(e){} chSync(); Object.values(_lw).forEach(chApply); }
@@ -3388,8 +3388,12 @@ function renderLwChart(cid, allCandles, signals, per, opts){
     return {time:sg.date,position:sg.pos==='below'?'belowBar':'aboveBar',color:col,shape,text:showTxt?sg.label:'',size:sg.kind==='entry'?1.6:dot?0.4:1}; })();
     if(MK_CORE.includes(sg.kind)) _core.add(_o); return _o; })
     .sort((a,b)=>a.time<b.time?-1:a.time>b.time?1:0);
-  { const ix={}; data.forEach((d,i)=>ix[d.time]=i); let last=-99; mk.forEach(m=>{ if(m.text==='매수'||m.text==='✅매수'){ const i=ix[m.time]; if(i-last<=5) m.text=''; last=i; } }); }   // 매수가 며칠 이어지면 첫 번째만 글자
-  reg.mk=mk; reg.mkCore=mk.filter(m=>_core.has(m)); cs.setMarkers(mk);
+  // 매수가 이어질 때 글자 겹침: 봉 간격(확대 정도)에 맞춰 — 넓으면 다 쓰고, 좁으면 앞 글자와 겹치는 것만 뺌 (2026-10-13 "왜 하루만 매수 글자")
+  { const ix={}; data.forEach((d,i)=>ix[d.time]=i);
+    reg.relabel=arr=>{ let bs=7; try{ bs=chart.timeScale().options().barSpacing||7; }catch(e){} const gap=Math.ceil(28/bs); let last=-99;
+      return arr.map(m=>{ if(m.text!=='매수'&&m.text!=='✅매수') return m; const i=ix[m.time]; if(i-last<gap) return {...m,text:''}; last=i; return m; }); };
+    let _bs=0; chart.timeScale().subscribeVisibleLogicalRangeChange(()=>{ let bs=0; try{ bs=chart.timeScale().options().barSpacing; }catch(e){} if(Math.abs(bs-_bs)<0.5) return; _bs=bs; chApply(_lw[cid]&&_lw[cid].chart===chart?_lw[cid]:null); }); }
+  reg.mk=mk; reg.mkCore=mk.filter(m=>_core.has(m)); cs.setMarkers(reg.relabel(mk));
   // 십자선 → 위에 그 봉 정보
   const leg=document.getElementById(cid+'-leg'), byT={}; data.forEach((d,i)=>byT[d.time]=i);
   const lbl=sg=>{ if(!/^score_(better|add|hold|keep)$/.test(sg.kind)) return sg.label; const m=String(sg.label).match(/손절 [\d,]+ \(-[\d.]+%\).*$/); return '종가 매수 · '+(m?m[0]:''); };
