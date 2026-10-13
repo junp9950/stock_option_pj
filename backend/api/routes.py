@@ -2450,9 +2450,17 @@ def auth_check(request: Request, db: Session = Depends(get_db)):
     pin = unquote(request.headers.get("x-auth-pin", ""))
     if name and pin:
         if name == "junp":
+            # 틀리면 10분에 10번까지 (매매 일지 로그인과 같은 잠금) — 2026-10-13 점검: 머리 줄 로그인엔 잠금이 없었음
+            import time as _t  # noqa: PLC0415
             from backend.services.trade_journal import auth as jauth  # noqa: PLC0415
+            now = _t.time()
+            fails = [x for x in _journal_fails.get(name, []) if now - x < 600]
+            if len(fails) >= 10:
+                raise HTTPException(429, "여러 번 틀려서 10분간 잠겼습니다.")
             if jauth(db, name, pin) == "ok":
+                _journal_fails.pop(name, None)
                 return {"role": "admin", "name": name}
+            _journal_fails[name] = fails + [now]
         else:
             from backend.services.portal import auth as pauth  # noqa: PLC0415
             if pauth(db, name, pin):
