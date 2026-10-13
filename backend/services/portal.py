@@ -291,8 +291,18 @@ def run(db: Session, name: str, phase: str) -> str:
     try:
         hs = c.holdings()
     except Exception as exc:  # noqa: BLE001
+        # 연결이 안 되면 손절 주문이 조용히 안 걸린 채 지나감 → 연속 2번 실패하면 하루 한 번 알림 (2026-10-13)
+        s["fails"] = s.get("fails", 0) + 1
+        if s["on"] and s["fails"] >= 2 and s.get("fail_told") != str(today):   # 자동 손절 켠 사람만
+            s["fail_told"] = str(today)
+            _tell(db, name, s, f"⚠ 증권사 연결이 안 됩니다 — 오늘 손절 주문이 안 걸려 있을 수 있습니다.\n"
+                               f"키 만료·허용 IP(20.196.212.146)를 확인하고, 사이트 '내 계좌'에서 키를 다시 넣어 주세요.\n({str(exc)[:80]})")
         _save(db, name, s)
         return f"잔고 실패 {str(exc)[:80]}"
+    if s.get("fail_told") == str(today):
+        _tell(db, name, s, "✅ 증권사 연결이 다시 됩니다 — 자동 손절 정상")
+        s["fail_told"] = f"{today} 복구"
+    s["fails"] = 0
     out = _sync(db, s, hs, today)
     if s["on"] and phase in ("morning", "retry", "intraday"):
         day = s["orders"].setdefault(str(today), [])
