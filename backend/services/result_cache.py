@@ -70,8 +70,12 @@ _CODE = _code_version()
 
 
 def data_version(db: Session) -> tuple:
+    # 마지막 날 행 수도 넣음: 15:41 수집은 230종목 → 2,400종목으로 10~15분 동안 늘어나는데, 날짜만 보면 중간 결과가 1시간 남았다
+    # (2026-10-13 롯데렌탈이 수집 끝난 뒤에도 목록에 안 돌아오던 것)
     row = db.execute(text(
-        "select (select max(trading_date) from spot_daily_prices), (select max(id) from job_logs)"
+        "select (select max(trading_date) from spot_daily_prices), "
+        "(select count(*) from spot_daily_prices where trading_date = (select max(trading_date) from spot_daily_prices)), "
+        "(select max(id) from job_logs)"
     )).one()
     return (*tuple(row), _CODE)
 
