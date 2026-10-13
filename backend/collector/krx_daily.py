@@ -75,9 +75,15 @@ def apply(db: Session, day: date, tables: tuple[str, ...] = ("spot_daily_prices"
                 continue
             # 수정주가(유상·무상증자·분할)는 시·고·저·종이 같은 비율로 다름 → 오염이 아니라 정상, 덮어쓰면 과거 차트가 끊긴다 → 건너뜀
             rat = [a / b for a, b in zip(old[:4], (o, h, l, c)) if a > 0 and b > 0]
-            if len(rat) == 4 and max(rat) - min(rat) < 0.002 and abs(rat[0] - 1) > 0.002:
-                res["adjusted_skip"] = res.get("adjusted_skip", 0) + 1
-                continue
+            if len(rat) == 4 and (max(rat) - min(rat)) / max(rat) < 0.01 and abs(sorted(rat)[1] - 1) > 0.002:
+                # 수정주가 위에 장 후 값이 섞인 경우(042940 9/15: 시·고·저 0.9626 · 종가 0.9609)도 있어서 그냥 넘기지 않고
+                # 'KRX 공식값 × 수정 비율(가운데 값)'로 맞춘다 — 비율은 시·고·저·종 중 가운데 두 개 평균 (2026-10-13 2차 검토)
+                rm = sum(sorted(rat)[1:3]) / 2
+                o, h, l, c = (round(x * rm, 2) for x in (o, h, l, c))
+                v = old[4]; tv = old[5] or tv
+                res["adjusted"] = res.get("adjusted", 0) + 1
+                if all(abs(a2 - b2) <= max(0.5, abs(b2) * 1e-5) for a2, b2 in zip(old[:4], (o, h, l, c))):
+                    continue
             if t == "spot_daily_prices":
                 db.execute(text(f"update {t} set open_price=:o, high_price=:h, low_price=:l, close_price=:c, volume=:v, trading_value=:tv, change_pct=:chg "
                                 "where stock_code=:s and trading_date=:d"), {"o": o, "h": h, "l": l, "c": c, "v": v, "tv": tv, "chg": chg, "s": r[0], "d": day})

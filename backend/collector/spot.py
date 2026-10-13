@@ -225,7 +225,9 @@ def collect_spot_data(db: Session, trading_date: date) -> None:
         from datetime import datetime as _dt  # noqa: PLC0415
         from zoneinfo import ZoneInfo as _Z  # noqa: PLC0415
         _now = _dt.now(_Z("Asia/Seoul"))
-        keep_prices = trading_date == _now.date() and _now.hour >= 16
+        # 있는 시세를 덮어쓰지 않는 경우: ① 지난 날짜(새벽 03:00 채우기가 수급 때문에 다시 돌 때 KRX로 고친 값을 FDR 장 후 값으로 되돌리던 것)
+        # ② 오늘이라도 16시 뒤(18:00 재수집). 덮어쓰는 건 오늘 15:41 첫 수집뿐 → 정규장 공식값은 다음 날 아침 KRX로 (2026-10-13)
+        keep_prices = trading_date < _now.date() or (trading_date == _now.date() and _now.hour >= 16)
 
         stocks = list(get_universe(db))
 
@@ -515,13 +517,17 @@ def collect_sector_supplement(db: Session, trading_date: date) -> int:
                         trading_value=float(pr.get("Volume", 0)) * close_val,
                         change_pct=change_val,
                     )
-                    db.execute(
-                        pg_insert(SpotDailyPrice).values(**price_vals)
-                        .on_conflict_do_update(
+                    from datetime import datetime as _dt2  # noqa: PLC0415
+                    from zoneinfo import ZoneInfo as _Z2  # noqa: PLC0415
+                    _n2 = _dt2.now(_Z2("Asia/Seoul"))
+                    _stmt = pg_insert(SpotDailyPrice).values(**price_vals)
+                    if trading_date < _n2.date() or _n2.hour >= 16:      # 지난 날짜·16시 뒤엔 있는 시세 안 덮음 (collect_spot_data와 같은 규칙, 2026-10-13)
+                        db.execute(_stmt.on_conflict_do_nothing(constraint="uq_spot_daily_prices"))
+                    else:
+                        db.execute(_stmt.on_conflict_do_update(
                             constraint="uq_spot_daily_prices",
                             set_={k: v for k, v in price_vals.items() if k not in ("trading_date", "stock_code")},
-                        )
-                    )
+                        ))
             except Exception:  # noqa: BLE001
                 pass
 
@@ -536,7 +542,20 @@ def collect_sector_supplement(db: Session, trading_date: date) -> int:
 
 
 def refresh_spot_prices(db: Session, start: date, end: date) -> dict:
-    """이미 저장된 start~end 시세(OHLCV)를 FDR 확정치로 다시 덮어쓴다. 수급은 건드리지 않는다.
+    """[2026-10-13 쓰지 않음] FDR '확정치'도 넥스트레이드·시간외가 섞인 값이라 오히려 오염시켰다 → KRX 공식값으로 돌림."""
+    from backend.collector.krx_daily import apply as _krx_apply  # noqa: PLC0415
+    from backend.utils.dates import is_trading_day as _itd  # noqa: PLC0415
+    from datetime import timedelta as _td  # noqa: PLC0415
+    out, d = {}, start
+    while d <= end:
+        if _itd(d):
+            out[str(d)] = _krx_apply(db, d).get("spot_daily_prices", 0)
+        d += _td(days=1)
+    return out
+
+
+def _refresh_spot_prices_fdr_old(db: Session, start: date, end: date) -> dict:
+    """(옛 방식 · 쓰지 말 것) 이미 저장된 start~end 시세(OHLCV)를 FDR 확정치로 다시 덮어쓴다. 수급은 건드리지 않는다.
 
     2026-09-14부터 15:41·18:00 수집분이 NXT 시간외(~20:00) 진행 중 값이라 종목의 약 40%가 공식 종가와
     어긋났다(대부분 0.2~2%, 큰 것은 6%). 다음 날 아침에 받으면 확정치가 나오므로 매일 아침 최근 며칠을 바로잡는다.
