@@ -473,6 +473,9 @@ route();
   new MutationObserver(ms=>ms.forEach(m=>m.addedNodes.forEach(n=>n.nodeType===1&&scan(n)))).observe(document.body,{childList:true,subtree:true});
 })();
 </script><script>/* 사이트 안에 끼워 보일 때 높이를 내용에 맞춤 (2026-10-11) */
-(function(){ function fit(){ try{ var f=window.frameElement; if(f) f.style.height=Math.max(500,document.documentElement.scrollHeight+8)+'px'; }catch(e){} }
+/* 10/13: documentElement.scrollHeight는 창 높이보다 작아지지 않아서 +8씩 1.5초마다 계속 늘어났음(사진이 혼자 내려감) → 실제 내용 끝으로 잼 */
+(function(){ function fit(){ try{ var f=window.frameElement; if(!f) return; var h=0, y=window.scrollY||0;
+    for(var i=0;i<document.body.children.length;i++){ var el=document.body.children[i], cs=getComputedStyle(el); if(cs.position==='fixed'||cs.display==='none') continue; h=Math.max(h, el.getBoundingClientRect().bottom+y); }
+    h=Math.max(500, Math.ceil(h)+24); if(Math.abs((parseFloat(f.style.height)||0)-h)>2) f.style.height=h+'px'; }catch(e){} }
   window.addEventListener('load',fit); if(window.ResizeObserver) new ResizeObserver(fit).observe(document.body); setInterval(fit,1500); })();</script>
 </body></html>

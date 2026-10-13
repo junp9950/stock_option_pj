@@ -80,7 +80,23 @@ async function addFiles(files){const list=[...files].filter(f=>f&&f.type&&f.type
 const picker=document.getElementById('file-picker');picker.onchange=e=>{addFiles(e.target.files);e.target.value=''};
 document.getElementById('paste-zone').onclick=()=>picker.click();
 document.getElementById('content').addEventListener('paste',e=>{const it=e.clipboardData&&e.clipboardData.items;if(!it)return;const fs=[...it].filter(x=>x.type&&x.type.startsWith('image/')).map(x=>x.getAsFile());if(fs.length){e.preventDefault();addFiles(fs)}});
-document.getElementById('list').addEventListener('click',e=>{if(e.target.matches('.shots img')){document.getElementById('lightbox-img').src=e.target.src;document.getElementById('lightbox').classList.add('show')}});
+// 확대 창은 메인 화면(같은 출처)에 띄워야 보고 있는 화면 가운데에 보임 — 긴 iframe 안 fixed는 iframe 가운데로 감 (토론 탭과 같게, 10/13)
+function openLightbox(src){
+  let top=null;
+  try{if(window.parent!==window&&window.parent.document)top=window.parent.document}catch(e){}
+  if(!top){document.getElementById('lightbox-img').src=src;document.getElementById('lightbox').classList.add('show');return}
+  let box=top.getElementById('disc-lightbox');
+  if(!box){
+    box=top.createElement('div');box.id='disc-lightbox';
+    box.style.cssText='position:fixed;inset:0;background:rgba(0,0,0,.85);z-index:9999;display:none;align-items:center;justify-content:center;cursor:zoom-out';
+    const img=top.createElement('img');img.style.cssText='max-width:92vw;max-height:92vh;border-radius:6px';
+    box.appendChild(img);box.onclick=()=>{box.style.display='none'};
+    top.addEventListener('keydown',e=>{if(e.key==='Escape')box.style.display='none'});
+    top.body.appendChild(box);
+  }
+  box.firstChild.src=src;box.style.display='flex';
+}
+document.getElementById('list').addEventListener('click',e=>{if(e.target.matches('.shots img'))openLightbox(e.target.src)});
 document.getElementById('lightbox').onclick=()=>document.getElementById('lightbox').classList.remove('show');
 document.getElementById('filter').onclick=e=>{const b=e.target.closest('button');if(!b)return;filter=b.dataset.v;document.querySelectorAll('#filter button').forEach(x=>x.classList.toggle('on',x===b));render()};
 document.getElementById('list').addEventListener('change',async e=>{if(e.target.dataset.act!=='status')return;const id=e.target.closest('.item').dataset.id;try{await call('PATCH',`${API}/${id}`,{status:e.target.value});await load()}catch(err){alert(err.message)}});
@@ -103,6 +119,9 @@ load();
 })();
 </script>
 <script>/* 사이트 안에 끼워 보일 때 높이를 내용에 맞춤 (2026-10-11) */
-(function(){ function fit(){ try{ var f=window.frameElement; if(f) f.style.height=Math.max(500,document.documentElement.scrollHeight+8)+'px'; }catch(e){} }
+/* 10/13: documentElement.scrollHeight는 창 높이보다 작아지지 않아서 +8씩 1.5초마다 계속 늘어났음(사진이 혼자 내려감) → 실제 내용 끝으로 잼 */
+(function(){ function fit(){ try{ var f=window.frameElement; if(!f) return; var h=0, y=window.scrollY||0;
+    for(var i=0;i<document.body.children.length;i++){ var el=document.body.children[i], cs=getComputedStyle(el); if(cs.position==='fixed'||cs.display==='none') continue; h=Math.max(h, el.getBoundingClientRect().bottom+y); }
+    h=Math.max(500, Math.ceil(h)+24); if(Math.abs((parseFloat(f.style.height)||0)-h)>2) f.style.height=h+'px'; }catch(e){} }
   window.addEventListener('load',fit); if(window.ResizeObserver) new ResizeObserver(fit).observe(document.body); setInterval(fit,1500); })();</script>
 </body></html>
