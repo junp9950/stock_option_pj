@@ -1,5 +1,8 @@
-"""종목 위험 표시: 투자주의·경고·위험, 단기과열, 관리종목, 신용 불가(증거금 100%). KIS 현재가 조회(FHKST01010100).
-후보 종목만 조회하고 파일에 캐시한다 (12시간). 증거금·신용 가능 여부는 한국투자증권 기준."""
+"""종목 위험 표시: 투자주의·경고·위험, 단기과열, 관리종목, 신용 불가(증거금 100%), 거래정지, 정리매매.
+후보 종목만 조회하고 파일에 캐시한다 (12시간).
+- 거래소가 정하는 것(투자주의·경고·위험·단기과열·관리종목) = 한국투자증권 현재가(FHKST01010100) — 메리츠 시세에는 이 항목이 없음
+- 증권사마다 다른 것(신용 가능·증거금률) + 거래정지·정리매매·투자유의 = 메리츠 현재가(/market/v1/prices) — 사용자 계좌가 메리츠 (2026-10-13)
+  예: 295310·020150 한국투자 신용불가(증거금 100%) / 메리츠 신용 가능(50%). 메리츠가 안 되면 한국투자 값."""
 from __future__ import annotations
 
 import json
@@ -13,10 +16,26 @@ import requests
 from backend.utils.logger import get_logger
 
 logger = get_logger(__name__)
-_FILE = Path.home() / ".stock_flags.json"
+_FILE = Path.home() / ".stock_flags_v2.json"     # v2 = 메리츠 기준 (예전 한국투자 캐시와 섞이지 않게)
 _TTL = 12 * 3600
 _lock = threading.Lock()
 _WARN = {"01": "투자주의", "02": "투자경고", "03": "투자위험"}
+
+
+def _meritz(code: str) -> dict | None:
+    """메리츠 현재가의 신용·증거금·정지 항목. 키가 없거나 실패하면 None (그때는 한국투자 값)."""
+    try:
+        from backend.services import meritz as M  # noqa: PLC0415
+        if not M.enabled():
+            return None
+        r = M.call("GET", "/market/v1/prices", params={"mrkt_div_code": "J", "iscd": code})
+        d = r["data"] if isinstance(r.get("data"), dict) else None
+        if not r["ok"] or not d or not d.get("crdt_able_yn"):
+            return None
+        return {k: d.get(k) for k in ("crdt_able_yn", "marg_rate", "tmpr_susp_yn", "sltr_yn", "invt_epmd_cntt")}
+    except Exception as exc:  # noqa: BLE001
+        logger.debug("메리츠 종목 상태 조회 실패 %s: %s", code, exc)
+        return None
 
 
 def _fetch(code: str, token: str) -> dict | None:
@@ -37,9 +56,19 @@ def _fetch(code: str, token: str) -> dict | None:
             flags.append("단기과열")
         if o.get("mang_issu_cls_code") == "Y":
             flags.append("관리종목")
-        if o.get("crdt_able_yn") == "N":
+        mz = _meritz(code)
+        credit_no = (mz["crdt_able_yn"] == "N") if mz else (o.get("crdt_able_yn") == "N")
+        margin = float((mz or {}).get("marg_rate") or o.get("marg_rate") or 0)
+        if mz:
+            if mz.get("tmpr_susp_yn") == "Y":
+                flags.insert(0, "거래정지")
+            if mz.get("sltr_yn") == "Y":
+                flags.insert(0, "정리매매")
+            if (mz.get("invt_epmd_cntt") or "").strip() and "투자유의" not in flags:
+                flags.append("투자유의")
+        if credit_no:
             flags.append("신용불가")
-        return {"flags": flags, "margin": float(o.get("marg_rate") or 0), "t": time.time()}
+        return {"flags": flags, "margin": margin, "src": "메리츠" if mz else "한국투자", "t": time.time()}
     except Exception as exc:  # noqa: BLE001
         logger.debug("종목 위험 표시 조회 실패 %s: %s", code, exc)
         return None
