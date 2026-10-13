@@ -2665,7 +2665,7 @@ async function wsDraw(){
     tfRetryLater(cd,()=>{ if(_ws.code===code&&_ws.tf===tf) wsDraw(); });
     return;
   }
-  const g=renderLwChart('ws-chart',c.cd.candles,c.sg?c.sg.items:[],_ws.per,{stop:_ws.stop||(c.sg&&c.sg.active&&c.sg.active.stop),stopWhy:_ws.stop?'오늘 사면 손절':'산 자리 손절',stopFrom:_ws.stop?null:(c.sg&&c.sg.active&&c.sg.active.date),code:_ws.code,tf:'1d'});
+  const g=renderLwChart('ws-chart',c.cd.candles,c.sg?c.sg.items:[],_ws.per,{...wsStopOpt(c),code:_ws.code,tf:'1d'});
   const a=c.sg&&c.sg.active;
   { const L=c.cd.candles, z=L[L.length-1], y=L[L.length-2]; if(z){ const cl=+z.closePrice, ch=y?(cl/+y.closePrice-1)*100:0;
       document.getElementById('ws-px').innerHTML=`${Math.round(cl).toLocaleString()}<span style="color:${ch>=0?'var(--up)':'var(--down)'}">${ch>=0?'+':''}${ch.toFixed(2)}%</span>`; }
@@ -2710,6 +2710,15 @@ async function wsFlagChips(code){
   const RED=/경고|위험|관리|정지|정리/;
   const h=(v.flags||[]).map(f=>`<span class="hb-chip hb-flag k-${RED.test(f)?'b':'n'}" title="${f==='신용불가'?'신용 매수 불가 (메리츠 기준)':'거래소 지정'}">${RED.test(f)?'⛔':'■'} ${f==='신용불가'?`신용불가 · 증거금 ${Math.round(v.margin||100)}% (메리츠)`:f}</span>`).join('');
   if(h){ el.insertAdjacentHTML('afterbegin',h); hbFitChart(); }
+}
+// 차트 손절선은 실제 ↑매수가 있을 때만 — 오늘 매수가 떴으면 '오늘 매수분', 전에 산 걸 들고 있으면 '9/21 매수분' (2026-10-13 "오늘 사면 손절도 뭔지 모르겠다")
+function wsStopOpt(c){
+  const sg=c&&c.sg, it=(sg&&sg.items)||[], L=c&&c.cd&&c.cd.candles, last=L&&L.length?(L[L.length-1].timestamp||'').slice(0,10):'';
+  const BUY=/^(score|score_better|score_add|score_hold|score_keep|lead|dip)$/;
+  const today=it.filter(x=>x.date===last&&BUY.test(x.kind)).pop();
+  if(today){ const m=String(today.label).match(/손절(?: 올리기)? ([\d,]+)/); const st=m?+m[1].replace(/,/g,''):(_ws.stop||0); if(st>0) return {stop:st,stopWhy:'오늘 매수분 손절',stopFrom:last}; }
+  const a=sg&&sg.active; if(a&&a.stop){ const d=a.date.slice(5).split('-').map(Number); return {stop:a.stop,stopWhy:`${d[0]}/${d[1]} 매수분 손절`,stopFrom:a.date}; }
+  return {};
 }
 function hbChip(k,t){ return `<span class="hb-chip k-${k}">${{g:'▲',n:'■',b:'▼'}[k]} ${t}</span>`; }
 function wsTab(t){ _ws.tab=t; try{ localStorage.setItem('ws-tab',t); }catch(e){} renderWsList(); }
@@ -3623,7 +3632,7 @@ async function svDraw(){
   }
   if(!c.cd||!c.cd.candles||!c.cd.candles.length){ note.textContent='차트를 못 불러왔습니다'; return; }
   const a=c.sg&&c.sg.active;
-  const g=renderLwChart('sv-chart',c.cd.candles,c.sg?c.sg.items:[],_sv.per,{stop:a&&a.stop,stopWhy:'산 자리 손절',stopFrom:a&&a.date,code:_sv.code,tf:'1d',us:_sv.us});
+  const g=renderLwChart('sv-chart',c.cd.candles,c.sg?c.sg.items:[],_sv.per,{...wsStopOpt(c),code:_sv.code,tf:'1d',us:_sv.us});
   note.textContent=`일봉 · 끌어서 과거 보기`+(g!=null?` · EMA 5·10·20 간격 ${g.toFixed(1)}%`:'')+_avwapNote+(_patNote?'  |  '+_patNote:'')+(a?` · 매수 신호로 보유 중 ${a.date.slice(5).replace('-','/')} · 손절 ${tk(a.stop).toLocaleString()}`:'');
 }
 function svMetric(k,v,sub,bar){ return `<div class="sv-m"><span class="k">${k}</span><span>${bar||''}${sub?`<span class="ts">${sub}</span>`:''}</span><span class="v">${v}</span></div>`; }
