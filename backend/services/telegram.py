@@ -665,6 +665,11 @@ def poll(db: Session) -> None:
                 _put(db, "telegram_board_chats", board)
                 send(db, "게시판 알림 전용을 해제했습니다." + ("" if board else " 게시판 알림은 다시 기본 대화방으로 갑니다."), cid)
             continue
+        if txt.startswith("/연결"):      # 초대 사용자 '내 계좌' 알림 받을 방 연결 (2026-10-13) — 시장 알림 대화방 등록과는 별개
+            from backend.services.portal import link_chat  # noqa: PLC0415
+            who_pt = link_chat(db, txt.split(maxsplit=1)[1] if " " in txt else "", cid)
+            send(db, f"✅ '{who_pt}' 계좌의 자동 손절 알림을 이 방으로 보냅니다." if who_pt else "연결 코드가 맞지 않습니다. '내 계좌' 화면의 코드를 확인해 주세요.", cid)
+            continue
         if txt.startswith("/start"):
             if cid not in chats and len(chats) >= MAX_CHATS:
                 send(db, "등록 인원이 꽉 찼습니다.", cid); continue

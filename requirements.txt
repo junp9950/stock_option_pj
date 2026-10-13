@@ -18,3 +18,4 @@ pyarrow>=19,<24
 scikit-learn>=1.7,<1.8
 git+https://github.com/junp9950/dart-analyzer.git@main
 holidays>=0.50
+cryptography>=42

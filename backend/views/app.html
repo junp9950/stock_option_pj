@@ -572,6 +572,7 @@ select{background:var(--c3);border:1px solid var(--ln);color:var(--bd);padding:6
   <div class="tab" data-t="calendar" data-m="kr" onclick="switchTab('calendar')">캘린더</div>
   <div class="tab" data-t="sector" data-m="kr" onclick="switchTab('sector')">섹터 흐름</div>
   <div class="tab" data-t="journal" data-m="kr" data-priv="1" onclick="switchTab('journal')" hidden>🔒 관리</div>
+  <div class="tab" data-t="account" onclick="switchTab('account')" hidden>🔒 내 계좌</div>
   <div class="tab" data-t="screener" data-m="kr" onclick="switchTab('screener')">거래대금</div>
   <div class="tab" data-t="heatmap" data-m="kr" onclick="switchTab('heatmap')">히트맵</div>
   <div class="tab" data-t="us" data-m="us" onclick="switchTab('us')" hidden>미장 오늘</div>
@@ -638,10 +639,11 @@ select{background:var(--c3);border:1px solid var(--ln);color:var(--bd);padding:6
         <button class="btn btn-sm" onclick="jrLogout()">잠그기</button>
       </div>
     </div>
-    <div id="me-nav" class="seg" style="margin-bottom:14px"><button data-k="jr" class="on" onclick="meShow('jr')">매매 일지</button><button data-k="fwd" onclick="meShow('fwd')">실전 기록</button><button data-k="watch" onclick="meShow('watch')">관심·보유</button><button data-k="status" onclick="meShow('status')">서버 상태</button></div>
+    <div id="me-nav" class="seg" style="margin-bottom:14px"><button data-k="jr" class="on" onclick="meShow('jr')">매매 일지</button><button data-k="fwd" onclick="meShow('fwd')">실전 기록</button><button data-k="watch" onclick="meShow('watch')">관심·보유</button><button data-k="status" onclick="meShow('status')">서버 상태</button><button data-k="invite" onclick="meShow('invite')">초대</button></div>
     <div id="me-fwd" data-me="fwd" hidden></div>
     <div id="me-watch" data-me="watch" hidden></div>
     <div id="me-status" data-me="status" hidden></div>
+    <div id="me-invite" data-me="invite" hidden></div>
 
     <div id="jr-input" class="bx" style="display:none;">
       <b style="color:var(--tx)">기록 넣기</b>
@@ -833,6 +835,8 @@ select{background:var(--c3);border:1px solid var(--ln);color:var(--bd);padding:6
   <div id="db-ref" style="display:grid;grid-template-columns:repeat(auto-fit,minmax(320px,1fr));gap:12px;align-items:start;margin-top:10px"></div></details>
   </details>
 </div>
+
+<div id="panel-account" class="panel content hbt"></div>
 
 <div id="panel-candidates" class="panel content hbt">
   <div id="pb-market" hidden style="border-radius:10px;padding:12px 16px;margin-bottom:14px;border:1px solid var(--ln)"></div>
@@ -1239,7 +1243,7 @@ async function loadHeader(){
 function switchTab(id) {
   // 실적 개선 탭은 2026-10-04 숨김 (데이터는 📈 실적 표시로 계속 쓴다, /earnings 주소는 그대로)
   // 2026-10-05 사용자 "당분간 차트 후보 보고 매매" → 차트 후보를 첫 탭으로, 종베는 검증 중으로 뒤로
-  const tabs = ['home','stock','candidates','calendar','sector','journal','screener','heatmap','discussion','suggest','us','usstock','usrank','usheat'];
+  const tabs = ['home','stock','candidates','calendar','sector','journal','account','screener','heatmap','discussion','suggest','us','usstock','usrank','usheat'];
   if(id==='jongbe') id='candidates';   // 종베 탭은 2026-10-11 차트 후보로 합침 (예전 주소 #jongbe도 여기로)
   if(!tabs.includes(id))return;
   _curTab=id; document.body.dataset.tab=id;
@@ -1251,7 +1255,8 @@ function switchTab(id) {
   document.getElementById('panel-'+(id==='usstock'?'stock':id)).classList.add('active');
   if(id==='screener')loadTopValue();
   if(id==='journal')loadJournal();
-  jrTabSync();
+  if(id==='account')loadAccount();
+  jrTabSync(); ptTabSync();
   if(id==='sector'){loadSector();loadLiveThemes();loadRotation();loadJongbeOnce();}
   if(id==='calendar')loadSectorCal();
   if(id==='heatmap')loadHeatmap();
@@ -2834,6 +2839,77 @@ function crashCard(c, d){
 }
 function sigToggle(){ let c=false; try{ c=localStorage.getItem('sig-closed')==='1'; localStorage.setItem('sig-closed',c?'0':'1'); }catch(e){} renderSigCard(); }
 function sigOpen(code,name){ wsOpen(code,name); const el=document.querySelector('#panel-home .ws-main'); if(el) el.scrollIntoView({behavior:'smooth',block:'start'}); }
+// ── 초대 사용자 '내 계좌' (2026-10-13) — 사장님이 초대한 사람만. 로그인 전엔 탭 자체가 안 보임(주소 #account로만 들어옴) ──
+function ptAuth(){ try{ return {n:localStorage.getItem('pt-name')||'', p:localStorage.getItem('pt-pin')||''}; }catch(e){ return {n:'',p:''}; } }
+function ptH(){ const a=ptAuth(); return {'X-Pt-Name':encodeURIComponent(a.n),'X-Pt-Pin':encodeURIComponent(a.p),'Content-Type':'application/json'}; }
+function ptTabSync(){ const t=document.querySelector('.tab[data-t="account"]'); if(t){ const a=ptAuth(); t.hidden=!((a.n&&a.p)||_curTab==='account'); } }
+async function loadAccount(){
+  const el=document.getElementById('panel-account'), a=ptAuth();
+  if(!(a.n&&a.p)){ el.innerHTML=ptLoginHTML(''); return; }
+  el.innerHTML='<span class="ts">불러오는 중…</span>';
+  const r=await fetch(`${API}/pt/me`,{headers:ptH()}).catch(()=>null);
+  if(!r||!r.ok){ try{ localStorage.removeItem('pt-pin'); }catch(e){} ptTabSync(); el.innerHTML=ptLoginHTML(r?'이름이나 비밀번호가 맞지 않습니다':'불러오지 못했습니다'); return; }
+  ptRender(await r.json());
+}
+function ptLoginHTML(msg){ const a=ptAuth();
+  return `<section class="bx" style="max-width:420px;margin:30px auto"><div class="bx-h"><b>🔒 로그인</b></div>
+    <div style="display:flex;flex-direction:column;gap:8px"><input id="pt-n" placeholder="이름" value="${a.n||''}"><input id="pt-p" type="password" placeholder="비밀번호" onkeydown="if(event.key==='Enter')ptLogin()">
+    <button class="btn" onclick="ptLogin()">들어가기</button><span class="ts" style="color:var(--r)">${msg||''}</span></div></section>`; }
+async function ptLogin(){
+  const n=document.getElementById('pt-n').value.trim(), p=document.getElementById('pt-p').value;
+  try{ localStorage.setItem('pt-name',n); localStorage.setItem('pt-pin',p); }catch(e){}
+  const r=await fetch(`${API}/pt/login`,{method:'POST',headers:ptH()}).catch(()=>null);
+  if(!r||!r.ok){ try{ localStorage.removeItem('pt-pin'); }catch(e){} document.getElementById('panel-account').innerHTML=ptLoginHTML('이름이나 비밀번호가 맞지 않습니다 (5번 틀리면 15분 잠김)'); return; }
+  ptTabSync(); loadAccount();
+}
+function ptLogout(){ try{ localStorage.removeItem('pt-pin'); }catch(e){} switchTab('home'); ptTabSync(); }
+async function ptPost(u,body,method){ const r=await fetch(`${API}${u}`,{method:method||'POST',headers:ptH(),body:body?JSON.stringify(body):undefined}).then(r=>r.json()).catch(()=>null);
+  showToast(r&&r.msg?r.msg:'실패',!(r&&r.ok)); loadAccount(); return r; }
+function ptRender(d){
+  const el=document.getElementById('panel-account'), won=v=>v!=null?Math.round(v).toLocaleString():'-';
+  const BR={meritz:'메리츠증권',toss:'토스증권'};
+  const keyBox=d.broker?`<div class="sv-m"><span class="k">연결된 증권사</span><span></span><span class="v">${BR[d.broker]} · 키 끝 ${d.key_tail}</span></div>
+      <div class="ts" style="margin:6px 0">${d.start?d.start+'에 연결 · ':''}연결할 때 들고 있던 종목은 아래에서 손절선을 넣어야 자동 손절 대상이 됩니다.</div>
+      <button class="btn btn-gray btn-sm" onclick="if(confirm('키를 지울까요? 걸려 있던 자동 손절 주문도 취소됩니다.'))ptPost('/pt/keys',null,'DELETE')">키 지우기</button>`
+    :`<div style="display:flex;flex-direction:column;gap:8px">
+        <select id="pt-br"><option value="meritz">메리츠증권</option><option value="toss">토스증권</option></select>
+        <input id="pt-k" placeholder="앱키 (App Key · Client ID)" autocomplete="off"><input id="pt-s" type="password" placeholder="시크릿 (App Secret · Client Secret)" autocomplete="off">
+        <button class="btn" onclick="ptPost('/pt/keys',{broker:document.getElementById('pt-br').value,app_key:document.getElementById('pt-k').value,app_secret:document.getElementById('pt-s').value})">연결 확인하고 저장</button>
+        <div class="ts" style="line-height:1.7">· 키는 <b>본인 증권사</b>에서 직접 발급합니다 (메리츠: openapi.imeritz.com · 토스: 앱 설정 &gt; Open API)<br>· 발급할 때 <b>허용 IP에 20.196.212.146</b>(이 서버)만 넣어 주세요 — 키가 새어 나가도 다른 곳에서 못 씁니다<br>· 저장 전에 잔고가 읽히는지만 확인합니다(주문 안 냄). 키는 암호화해 저장하고 다시 보여 주지 않습니다</div></div>`;
+  const tg=d.chat?'<span class="chipx g">✅ 연결됨</span> 자동 손절 알림이 본인 텔레그램으로 갑니다'
+    :`텔레그램${d.bot?` <b>@${d.bot}</b>`:' 봇'}에게 <b style="font-family:monospace">/연결 ${d.code}</b> 를 보내면 알림을 받습니다`;
+  const lots=d.lots.length?d.lots.map(x=>`<div class="sv-m" style="grid-template-columns:minmax(0,1fr) auto auto"><span><b>${x.name}</b> <span class="ts">${x.qty}주 · ${x.src||''}</span></span><span class="v">${x.stop?won(x.stop):'손절가 없음'}</span><span class="ts">${x.order?'🛑 걸림':'대기'}</span></div>`).join(''):'<span class="ts">아직 없음 — 연결한 뒤 새로 산 종목이 생기면 자동으로 들어옵니다</span>';
+  const lines=Object.entries(d.lines||{}).map(([c,v])=>`<div class="sv-m" style="grid-template-columns:minmax(0,1fr) auto auto"><span>${c}</span><span class="v">${won(v)}</span><button class="btn btn-gray btn-sm" onclick="ptPost('/pt/line',{code:'${c}',clear:true})">지우기</button></div>`).join('');
+  el.innerHTML=`<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:12px"><b style="font-size:16px;color:var(--tx)">🔒 ${d.name}님의 계좌</b><button class="btn btn-sm" onclick="ptLogout()">잠그기</button></div>
+   <p class="bx-s">사이트 신호로 직접 사신 종목에 <b>손절 주문을 자동으로 걸어 드립니다</b>. 자동으로 사는 기능은 없습니다. 손절가 기본값 = 산 날 저가 −1% · 메리츠는 매일 08:50에 당일 스톱 주문, 토스는 1년짜리 조건주문으로 겁니다.</p>
+   <div class="me-g2">
+    <section class="bx"><div class="bx-h"><b>1. 증권사 연결</b></div>${keyBox}</section>
+    <section class="bx"><div class="bx-h"><b>2. 자동 손절</b><span class="ts">${d.last?'마지막 확인 '+d.last:''}</span></div>
+      <div style="display:flex;gap:8px;align-items:center;margin-bottom:8px"><span class="chipx ${d.stop_on?'g':'r'}">${d.stop_on?'✅ 켜짐':'⛔ 꺼짐'}</span>
+        <button class="btn btn-sm" onclick="ptPost('/pt/stop?on=${d.stop_on?'false':'true'}')">${d.stop_on?'끄기 (걸린 주문도 취소)':'켜기'}</button></div>
+      <div class="ts" style="margin-bottom:8px">${tg}</div>
+      <div class="bx-h" style="margin-top:10px"><b>자동 손절 대상</b></div>${lots}</section>
+    <section class="bx"><div class="bx-h"><b>3. 손절선 직접 정하기</b><span class="ts">기본값(산 날 저가 −1%) 대신 · 연결 전부터 들고 있던 종목도 여기 넣으면 대상</span></div>
+      <div class="me-add"><input id="pt-lc" placeholder="종목코드 6자리"><input id="pt-lv" type="number" placeholder="손절가"><button class="btn btn-sm" onclick="ptPost('/pt/line',{code:document.getElementById('pt-lc').value,stop:+document.getElementById('pt-lv').value})">저장</button></div>
+      ${lines||'<span class="ts">없음</span>'}</section>
+    <section class="bx"><div class="bx-h"><b>최근 기록</b></div>${(d.log||[]).map(l=>`<div class="ts" style="padding:3px 0;border-bottom:1px solid var(--line2);white-space:pre-wrap">${l.replace(/</g,'&lt;')}</div>`).join('')||'<span class="ts">없음</span>'}</section>
+   </div>`;
+}
+// 관리 탭 '초대' — 사장님만
+async function meInvite(){
+  const el=document.getElementById('me-invite'); el.innerHTML='<span class="ts">불러오는 중…</span>';
+  const d=await meGet('/me/portal'); if(!d||d.err){ el.innerHTML=`<span class="ts">${d&&d.err||'불러오지 못했습니다'}</span>`; return; }
+  const BR={meritz:'메리츠',toss:'토스'};
+  el.innerHTML=`<p class="bx-s">초대한 사람만 <b>${location.origin}/#account</b> 로 들어와 로그인합니다. 다른 사람 화면에는 이 기능이 보이지 않습니다. 초대한 사람 계좌에는 <b>자동 손절(매도)만</b> 됩니다.</p>
+   <div class="me-g2"><section class="bx"><div class="bx-h"><b>새로 초대</b></div>
+     <div class="me-add"><input id="iv-n" placeholder="이름 (2~20자)"><input id="iv-p" placeholder="임시 비밀번호 6자↑"><button class="btn btn-sm" onclick="meInv('create',document.getElementById('iv-n').value,document.getElementById('iv-p').value)">초대</button></div>
+     <div class="ts">이름·임시 비밀번호·주소를 그 사람에게만 따로 알려 주세요.</div></section>
+    <section class="bx"><div class="bx-h"><b>초대한 사람 ${d.users.length}명</b></div>
+     ${d.users.map(u=>`<div class="me-row" style="grid-template-columns:minmax(0,1fr) auto"><div><b>${u.name}</b> <span class="ts">${u.created} · ${u.on?'사용 중':'꺼짐'} · ${u.broker?BR[u.broker]+' 연결':'키 없음'} · 자동 손절 ${u.stop_on?'켜짐':'꺼짐'} · 대상 ${u.lots} · 텔레그램 ${u.chat?'연결':'안 함'}${u.last?' · '+u.last:''}</span></div>
+       <div class="me-ed"><button class="btn btn-gray btn-sm" onclick="meInv('${u.on?'off':'on'}','${u.name}')">${u.on?'끄기':'켜기'}</button><button class="btn btn-gray btn-sm" onclick="const p=prompt('새 비밀번호 (6자 이상)');if(p)meInv('reset','${u.name}',p)">비번</button><button class="btn btn-gray btn-sm" onclick="if(confirm('${u.name} 지울까요? 키·기록도 지워지고 걸린 주문은 취소됩니다.'))meInv('delete','${u.name}')">지우기</button></div></div>`).join('')||'<span class="ts">없음</span>'}</section></div>`;
+}
+async function meInv(action,name,pin){ const r=await fetch(`${API}/me/portal`,{method:'POST',headers:jrH(),body:JSON.stringify({action,name,pin:pin||null})}).then(r=>r.json()).catch(()=>null);
+  showToast(r?r.msg:'실패',!(r&&r.ok)); meInvite(); }
 let _wsQT=null;
 function wsSearch(v){      // 종목 검색 (2026-10-09) — 이름·코드·초성, 고르면 오른쪽에 차트·패널
   clearTimeout(_wsQT); const box=document.getElementById('ws-sr');
@@ -3686,7 +3762,7 @@ function meShow(k){
   const who=document.getElementById('jr-who'); if(who) who.textContent=k==='jr'?`${jrAuth().o}의 매매 일지`:'관리';
   const asof=document.getElementById('jr-asof'); if(asof) asof.style.display=k==='jr'?'':'none';
   [...main.children].forEach(el=>{ if(el.id==='me-head'||el.id==='me-nav') return; if(el.dataset.me) el.hidden=el.dataset.me!==k; else el.style.display=(k==='jr'?'':'none'); });
-  if(k==='fwd') meFwd(); if(k==='watch') meWatch(); if(k==='status') meStatus();
+  if(k==='fwd') meFwd(); if(k==='watch') meWatch(); if(k==='status') meStatus(); if(k==='invite') meInvite();
 }
 const meWon=v=>v==null?'-':Math.round(v).toLocaleString();
 const meP=(v,d=1)=>v==null?'-':`<span style="color:${v>0?'var(--up)':v<0?'var(--down)':'var(--muted)'}">${v>0?'+':''}${(+v).toFixed(d)}%</span>`;

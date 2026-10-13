@@ -378,6 +378,12 @@ def start_scheduler() -> BackgroundScheduler:
             logger.info("손절 주문(%s): %s", phase, run(db, phase))
         except Exception as exc:  # noqa: BLE001
             logger.error("손절 주문(%s) 실패: %s", phase, type(exc).__name__)
+        try:      # 초대 사용자 계좌 — 손절만 (2026-10-13)
+            if phase in ("morning", "retry", "intraday", "close"):
+                from backend.services.portal import run_all  # noqa: PLC0415
+                run_all(db, phase)
+        except Exception as exc:  # noqa: BLE001
+            logger.error("초대 사용자 손절(%s) 실패: %s", phase, type(exc).__name__)
         finally:
             db.close()
     # 메리츠 손절가 자동 주문 (2026-10-14부터 새로 산 것만, 스톱지정가 · 지정가 = 손절가 −1%) — 사용자 요청·승인 10/13

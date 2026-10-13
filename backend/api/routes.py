@@ -2397,6 +2397,85 @@ class MeWatchIn(BaseModel):
     remove: bool = False
 
 
+# ── 초대 사용자 '내 계좌' (2026-10-13) — 로그인 안 하면 404 (기능이 있다는 것 자체를 드러내지 않음) ──
+def _pt(request: Request, db: Session) -> str:
+    from urllib.parse import unquote  # noqa: PLC0415
+    from backend.services.portal import auth  # noqa: PLC0415
+    name = unquote(request.headers.get("x-pt-name", "")).strip()[:20]
+    pin = unquote(request.headers.get("x-pt-pin", ""))
+    if not name or not pin or not auth(db, name, pin):
+        raise HTTPException(404, "Not Found")
+    return name
+
+
+class PtKeysIn(BaseModel):
+    broker: str
+    app_key: str = Field(..., max_length=400)
+    app_secret: str = Field(..., max_length=400)
+
+
+class PtLineIn(BaseModel):
+    code: str
+    stop: float | None = None
+    clear: bool = False
+    exclude: bool | None = None
+
+
+@router.post("/pt/login")
+def pt_login(request: Request, db: Session = Depends(get_db)):
+    return {"ok": True, "name": _pt(request, db)}
+
+
+@router.get("/pt/me")
+def pt_me(request: Request, db: Session = Depends(get_db)):
+    from backend.services.portal import me  # noqa: PLC0415
+    return me(db, _pt(request, db))
+
+
+@router.post("/pt/keys")
+def pt_keys(body: PtKeysIn, request: Request, db: Session = Depends(get_db)):
+    from backend.services.portal import save_keys  # noqa: PLC0415
+    return save_keys(db, _pt(request, db), body.broker, body.app_key, body.app_secret)
+
+
+@router.delete("/pt/keys")
+def pt_keys_del(request: Request, db: Session = Depends(get_db)):
+    from backend.services.portal import delete_keys  # noqa: PLC0415
+    return delete_keys(db, _pt(request, db))
+
+
+@router.post("/pt/stop")
+def pt_stop(request: Request, on: bool = True, db: Session = Depends(get_db)):
+    from backend.services.portal import set_stop_on  # noqa: PLC0415
+    return set_stop_on(db, _pt(request, db), on)
+
+
+@router.post("/pt/line")
+def pt_line(body: PtLineIn, request: Request, db: Session = Depends(get_db)):
+    from backend.services.portal import set_line  # noqa: PLC0415
+    return set_line(db, _pt(request, db), body.code, 0 if body.clear else body.stop, body.exclude)
+
+
+class PortalAdminIn(BaseModel):
+    action: str
+    name: str
+    pin: str | None = None
+
+
+@router.get("/me/portal")
+def get_me_portal(request: Request, db: Session = Depends(get_db)):
+    _me(request, db)
+    from backend.services.portal import admin_list  # noqa: PLC0415
+    return {"users": admin_list(db)}
+
+
+@router.post("/me/portal")
+def post_me_portal(body: PortalAdminIn, request: Request, db: Session = Depends(get_db)):
+    _me(request, db)
+    from backend.services.portal import admin  # noqa: PLC0415
+    return admin(db, body.action, body.name, body.pin)
+
+
 @router.get("/me/forward")
 def get_me_forward(request: Request, db: Session = Depends(get_db)):
     _me(request, db)
