@@ -2672,7 +2672,7 @@ async function wsDraw(){
     const ch=[]; if(g!=null) ch.push(hbChip(g<=4?'g':g>=7?'b':'n',`EMA 5·10·20 간격 ${g.toFixed(1)}%${g<=4?' · 모임':g>=7?' · 벌어짐':''}`));
     const vm=_avwapNote.match(/· (.+?) (\d\d-\d\d) VWAP ([\d,]+) (위|아래)/); if(vm) ch.push(hbChip(vm[4]==='위'?'g':'b',`${vm[1]} ${vm[2]} VWAP ${vm[3]} ${vm[4]}`));
     _patNotes.forEach(t=>ch.push(hbChip(/돌파/.test(t)?'g':/이탈/.test(t)?'b':'n',t)));
-    document.getElementById('ws-chips-a').innerHTML=ch.join(''); hbFitChart(); }
+    document.getElementById('ws-chips-a').innerHTML=ch.join(''); hbFitChart(); wsFlagChips(_ws.code); }
   document.getElementById('ws-note').innerHTML=(a?`<b style="color:var(--blue)">▲ 진입 신호 ${a.date.slice(5).replace('-','/')} ${Math.round(a.entry).toLocaleString()} · ${a.days}일째 · ${a.gain>0?'+':''}${a.gain.toFixed(1)}% · 손절 ${tk(a.stop).toLocaleString()}${a.half?' · 절반 익절함':''}</b> · `:'')
     +'';      // 기간·EMA 설명은 뺌(칩·범례에 있음), 손절 점선 설명은 신호 줄로 (2026-10-11 차트 잘림)
   document.getElementById('ws-note').style.display=document.getElementById('ws-note').innerHTML.trim()?'':'none';
@@ -2703,6 +2703,14 @@ function hbFitChart(){ const el=document.getElementById('ws-chart'); if(!el||win
     document.documentElement.style.setProperty('--hb-ch',h+'px'); }); }
 window.addEventListener('resize',()=>hbFitChart());
 if(document.fonts&&document.fonts.ready) document.fonts.ready.then(()=>hbFitChart());
+// 차트 위 칸에 신용불가(메리츠 기준)·투자경고·거래정지 (2026-10-13)
+async function wsFlagChips(code){
+  const d=await fetch(`${API}/stock/flags?codes=${code}`).then(r=>r.ok?r.json():null).catch(()=>null);
+  if(_ws.code!==code||!d||!d[code]) return; const v=d[code], el=document.getElementById('ws-chips-a'); if(!el||el.querySelector('.hb-flag')) return;
+  const RED=/경고|위험|관리|정지|정리/;
+  const h=(v.flags||[]).map(f=>`<span class="hb-chip hb-flag k-${RED.test(f)?'b':'n'}" title="${f==='신용불가'?'신용 매수 불가 (메리츠 기준)':'거래소 지정'}">${RED.test(f)?'⛔':'■'} ${f==='신용불가'?`신용불가 · 증거금 ${Math.round(v.margin||100)}% (메리츠)`:f}</span>`).join('');
+  if(h){ el.insertAdjacentHTML('afterbegin',h); hbFitChart(); }
+}
 function hbChip(k,t){ return `<span class="hb-chip k-${k}">${{g:'▲',n:'■',b:'▼'}[k]} ${t}</span>`; }
 function wsTab(t){ _ws.tab=t; try{ localStorage.setItem('ws-tab',t); }catch(e){} renderWsList(); }
 function renderWsList(){
@@ -2800,7 +2808,8 @@ async function renderSigCard(){
     <span class="sig-sum">${bear?'<span class="hb-b r">⛔ 쉬는 날</span>':liveRest?`<span class="hb-b r">⛔ 장중 쉬는 날</span><span class="hb-b n">매수 후보 ${B.length+Ld.length}</span>`:`<span class="hb-b w">▲ 매수 ${B.length+Ld.length}</span>`}<span class="hb-b ${S.length?'r':'n'}">▼ 매도 ${S.length}</span></span>
     <button class="btn btn-gray btn-sm" onclick="sigToggle()">${closed?'펼치기':'접기'}</button></div>`;
   if(closed){ el.innerHTML=head; return; }
-  const brow=x=>`<div class="sig-r" onclick="sigOpen('${x.code}','${x.name.replace(/'/g,'')}')"><span class="nm"><b>${x.name}</b>${x.lead?' <span class="ts">주도주 · 아주 적게</span>':half(x)?' <span class="ts">평소 절반</span>':''}</span>
+  const fchip=c=>(((_ws.data||{}).notes||{})[c]||[]).filter(n=>n.kind==='flag'||n.kind==='risk'&&/경고|위험|관리|정지|정리/.test(n.label)).map(n=>` <span class="chipx ${n.kind==='risk'?'r':'n'}" title="${(n.title||'').replace(/"/g,'')}">${n.label}</span>`).join('');   // 신용X(메리츠)·투자경고 (2026-10-13)
+  const brow=x=>`<div class="sig-r" onclick="sigOpen('${x.code}','${x.name.replace(/'/g,'')}')"><span class="nm"><b>${x.name}</b>${fchip(x.code)}${x.lead?' <span class="ts">주도주 · 아주 적게</span>':half(x)?' <span class="ts">평소 절반</span>':''}</span>
     <span class="v">${x.close?won(x.close):'-'}</span><span class="v sl">${x.stop?won(tk(x.stop)):'-'}</span><span class="v">${size(x)}</span></div>`;
   const srow=x=>`<div class="sig-r s" onclick="sigOpen('${x.code}','${x.name.replace(/'/g,'')}')"><span class="nm"><b>${x.name}</b> <span class="ts">${x.date.slice(5).replace('-','/')} 신호</span></span>
     <span class="v">${x.close?won(x.close):'-'}</span><span class="v" style="color:${x.gain>0?'var(--up)':x.gain<0?'var(--down)':'var(--muted)'}">${x.gain>0?'+':''}${x.gain}%</span><span class="v">다음 장 아침</span></div>`;

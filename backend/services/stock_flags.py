@@ -74,7 +74,7 @@ def _fetch(code: str, token: str) -> dict | None:
         return None
 
 
-def get(codes: list[str]) -> dict[str, dict]:
+def get(codes: list[str], fetch: bool = True) -> dict[str, dict]:
     """code → {"flags": [...], "margin": 증거금률}. 캐시에 없거나 12시간 지난 것만 조회 (초당 약 15건)."""
     with _lock:
         try:
@@ -83,7 +83,7 @@ def get(codes: list[str]) -> dict[str, dict]:
             cache = {}
         now = time.time()
         need = [c for c in dict.fromkeys(codes) if c not in cache or now - cache[c]["t"] > _TTL]
-        if need:
+        if need and fetch:
             from backend.collector.spot import _get_kis_token  # noqa: PLC0415
             token = _get_kis_token()
             if token:

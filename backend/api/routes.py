@@ -2308,6 +2308,14 @@ def _naver_tf_candles(code: str, tf: str) -> list[dict]:
     return out
 
 
+@router.get("/stock/flags")
+def get_stock_flags(codes: str = ""):
+    """종목 표시(신용불가는 메리츠 기준 · 투자경고 등) — 오늘 탭 매수 목록·차트 위 칸용 (2026-10-13)."""
+    from backend.services.stock_flags import get as flags_get  # noqa: PLC0415
+    cs = [c for c in dict.fromkeys(x.strip() for x in codes.split(",")) if c.isdigit() and len(c) == 6][:40]
+    return {c: {"flags": v.get("flags", []), "margin": v.get("margin")} for c, v in flags_get(cs).items()}
+
+
 @router.get("/stock/{code}/candles")
 def get_stock_candles(code: str, count: int = 330, tf: str = "1d", ext: int = 0, before: str | None = None, db: Session = Depends(get_db)):
     """긴 일봉 (토스는 200봉까지라 앞은 DB, 최근 며칠은 토스 실시간으로 덮음) — 첫 화면 1년 차트용 (2026-10-09).
@@ -2563,7 +2571,20 @@ def get_workspace_list(db: Session = Depends(get_db)):
     r = dict(workspace_list(db) or {})
     nq = notes_quick()      # 실적 D-n · ⚠ 위험 공시 꼬리표 (2026-10-11) — 계산해 둔 것만
     codes = {x.get("code") for k in ("candidates", "track", "track_done") if isinstance(r.get(k), list) for x in r[k] if isinstance(x, dict)}
-    r["notes"] = {c: nq[c] for c in codes if c in nq}
+    r["notes"] = {c: list(nq[c]) for c in codes if c in nq}
+    try:      # 신용불가(메리츠 기준)·투자경고·거래정지 등 (2026-10-13) — 오늘 후보는 없으면 받아 오고, 추적 목록은 받아 둔 것만
+        from backend.services.stock_flags import get as flags_get  # noqa: PLC0415
+        cand = [x.get("code") for x in r.get("candidates") or [] if isinstance(x, dict) and x.get("code")]
+        fl = {**flags_get(sorted(codes - set(cand)), fetch=False), **flags_get(cand)}
+        RED = {"투자경고", "투자위험", "관리종목", "거래정지", "정리매매"}
+        for c, v in fl.items():
+            for f in v.get("flags", []):
+                if f in ("투자유의", "투자주의"):      # 목록 줄이 길어져서 — 주의·유의는 차트 후보 표에만
+                    continue
+                r["notes"].setdefault(c, []).append({"label": "신용X" if f == "신용불가" else f, "kind": "risk" if f in RED else "flag",
+                                                     "title": f"신용 매수 불가 · 증거금 {int(v.get('margin') or 100)}% (메리츠 기준)" if f == "신용불가" else f"{f} (거래소 지정)"})
+    except Exception:  # noqa: BLE001
+        pass
     return r
 
 

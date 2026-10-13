@@ -12,11 +12,19 @@ from sqlalchemy.orm import Session
 
 def _tag(code: str) -> str:
     """실적 D-n · ⚠ 위험 공시 꼬리표 (2026-10-11) — 계산해 둔 것만, 실패하면 빈칸."""
+    out = ""
     try:
         from backend.services.stock_notes import notes_quick  # noqa: PLC0415
-        return "".join(f" · <b>{x['label']}</b>" for x in notes_quick().get(code) or [])
+        out = "".join(f" · <b>{x['label']}</b>" for x in notes_quick().get(code) or [])
     except Exception:  # noqa: BLE001
-        return ""
+        pass
+    try:      # 신용불가(메리츠 기준)·거래정지·투자경고 등 (2026-10-13 "신용불가는 어디에 표시할래")
+        from backend.services.stock_flags import get as flags_get  # noqa: PLC0415
+        for f in (flags_get([code]).get(code) or {}).get("flags", []):
+            out += f" · ⛔{f}(메리츠)" if f == "신용불가" else f" · ⚠{f}"
+    except Exception:  # noqa: BLE001
+        pass
+    return out
 
 
 def text_now(db: Session, k: int = 8) -> str | None:
