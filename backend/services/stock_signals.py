@@ -245,7 +245,8 @@ def signals(db: Session, code: str, days: int = 260, owner: str | None = None) -
                         if d >= start:
                             if hit:
                                 px = min(float(O.iloc[k]) or hold["stop"], hold["stop"])
-                                items.append({"date": str(d), "label": f"손절 {(px / hold['p'] - 1) * 100:+.1f}%", "kind": "exit_bad", "pos": "above", "price": float(H.iloc[k])})
+                                g_ = (px / hold['p'] - 1) * 100      # 더 사기로 올린 손절에 이익 보고 걸리면 '이익 보호 매도' (2026-10-13 "손절 +3.5는 뭐고")
+                                items.append({"date": str(d), "label": f"이익 보호 매도 {g_:+.1f}%" if g_ > 0 else f"손절 {g_:+.1f}%", "kind": "exit" if g_ > 0 else "exit_bad", "pos": "above", "price": float(H.iloc[k])})
                             else:
                                 items.append({"date": str(d), "label": f"21선 매도 {(float(C.iloc[k]) / hold['p'] - 1) * 100:+.1f}%", "kind": "exit", "pos": "above", "price": float(H.iloc[k])})
                         hold = None
