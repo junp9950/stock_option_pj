@@ -2852,9 +2852,11 @@ function crashCard(c, d){
 function sigToggle(){ let c=false; try{ c=localStorage.getItem('sig-closed')==='1'; localStorage.setItem('sig-closed',c?'0':'1'); }catch(e){} renderSigCard(); }
 function sigOpen(code,name){ wsOpen(code,name); const el=document.querySelector('#panel-home .ws-main'); if(el) el.scrollIntoView({behavior:'smooth',block:'start'}); }
 // ── 초대 사용자 '내 계좌' (2026-10-13) — 사장님이 초대한 사람만. 로그인 전엔 탭 자체가 안 보임(주소 #account로만 들어옴) ──
-function ptAuth(){ try{ return {n:localStorage.getItem('pt-name')||'', p:localStorage.getItem('pt-pin')||''}; }catch(e){ return {n:'',p:''}; } }
+// 한 번에 한 사람만: 관리자(junp)로 로그인돼 있으면 예전에 남은 초대 사용자 로그인은 지운다 (2026-10-13 junp인데 testuser 계좌가 뜸)
+function ptAuth(){ try{ if(localStorage.getItem('jr-owner')==='junp'&&localStorage.getItem('jr-pin')){ localStorage.removeItem('pt-name'); localStorage.removeItem('pt-pin'); return {n:'',p:''}; }
+  return {n:localStorage.getItem('pt-name')||'', p:localStorage.getItem('pt-pin')||''}; }catch(e){ return {n:'',p:''}; } }
 function ptH(){ const a=ptAuth(); return {'X-Pt-Name':encodeURIComponent(a.n),'X-Pt-Pin':encodeURIComponent(a.p),'Content-Type':'application/json'}; }
-function ptTabSync(){ const t=document.querySelector('.tab[data-t="account"]'); if(t){ const a=ptAuth(); t.hidden=!((a.n&&a.p)||_curTab==='account'); } authBtn(); }
+function ptTabSync(){ const t=document.querySelector('.tab[data-t="account"]'); if(t){ const a=ptAuth(); t.hidden=!(a.n&&a.p); } authBtn(); }
 async function loadAccount(){
   const el=document.getElementById('panel-account'), a=ptAuth();
   if(!(a.n&&a.p)){ el.innerHTML=ptLoginHTML(''); return; }
