@@ -72,6 +72,10 @@ def _market_chg(db: Session) -> dict:
     return _MK["v"]
 
 
+class _NoRS(Exception):
+    """차트 매수 계산을 건너뜀 (RS 없음) — KeyError 같은 진짜 오류와 구분하려고 따로 둠."""
+
+
 def signals(db: Session, code: str, days: int = 260, owner: str | None = None, us: bool = False) -> dict:
     """us = 미국 종목 (2026-10-14 "미장도 차트에 매수 표시"): 미국 일봉(us_daily_prices) · 미국 시장 국면 · 미국 RS로 같은 규칙.
     거래대금은 원화 환산(us_signals.KRW_PER_USD) · 반도체 특별·급락 줍기·종베·매매 일지 표시는 국장만 · 가격은 센트."""
@@ -215,6 +219,8 @@ def signals(db: Session, code: str, days: int = 260, owner: str | None = None, u
         rh = _us.rs_hist(db) if us else rs_hist(db)
         rs_arr = rh.get("rs", {}).get(code)
         score_active = None
+        if rs_arr is None:      # RS 없음(상장 1년 안 · 거래 적음) → 매수 계산 없음 (아래 주도주 칸에서 오류 나지 않게 여기서 끝냄)
+            raise _NoRS()
         if rs_arr is not None:
             RS = pd.Series(rs_arr.astype(float), index=[pd.Timestamp(x).date() for x in rh["dates"]]).reindex(df.index)
             ehi_t = pd.concat([e5, e10, e20], axis=1).max(axis=1); elo_t = pd.concat([e5, e10, e20], axis=1).min(axis=1)
@@ -238,7 +244,7 @@ def signals(db: Session, code: str, days: int = 260, owner: str | None = None, u
             else:
                 semi_buy = pd.Series(False, index=df.index)
             buy_ok = normal_ok | semi_buy
-            brk_ok = entry_m.reindex(df.index).fillna(False).astype(bool) & ~buy_ok     # 예전 ▲진입(돌파) — 12년 거래당 성과가 매수와 비슷해서 차트에 '매수'로 같이 (2026-10-13 사용자)
+            brk_ok = entry_m.reindex(df.index).fillna(False).astype(bool) & ~buy_ok & (TV.rolling(20).mean() >= 3e9).fillna(False)     # 거래대금 30억↑ — 실시간(_close_scores 돌파 매수)과 같게 (2026-10-14 미래 자료 대조에서 차트에만 뜬 23건)     # 예전 ▲진입(돌파) — 12년 거래당 성과가 매수와 비슷해서 차트에 '매수'로 같이 (2026-10-13 사용자)
             buy_ok = buy_ok | brk_ok
             pos_ = {d: k for k, d in enumerate(df.index)}
             prev_on, run_best = False, None
@@ -371,8 +377,12 @@ def signals(db: Session, code: str, days: int = 260, owner: str | None = None, u
                 it["label"] += f": {why_n}"
             keep.append(it)
         items[:] = keep
-    except Exception:  # noqa: BLE001
+    except _NoRS:
         pass
+    except Exception as exc:  # noqa: BLE001
+        # 여기서 오류가 나면 그 종목 차트에 매수가 통째로 안 찍힌다 — 조용히 넘기지 않고 남김 (2026-10-14 ETSY 검증 중 발견)
+        import logging  # noqa: PLC0415
+        logging.getLogger(__name__).warning("차트 매수 표시 계산 실패 %s: %s %s", code, type(exc).__name__, exc)
     for d, lab in near:
         if d >= start:
             items.append({"date": str(d), "label": lab, "kind": "near", "pos": "below", "price": float(L[d])})
