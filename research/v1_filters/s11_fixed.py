@@ -79,6 +79,7 @@ def sim(cc, S, E, pyramid=False, cap=False, g2=False, g3=False, budget=False, rp
     ban = {}
     eq = np.empty(E - S + 1); gross = np.empty(E - S + 1); ent = adds = forced = 0
     pnl = {True: 0.0, False: 0.0}
+    kept_early = [0]
 
     def settle(d):
         nonlocal cash
@@ -109,7 +110,12 @@ def sim(cc, S, E, pyramid=False, cap=False, g2=False, g3=False, budget=False, rp
                     if val > 0:
                         cash -= val * (1 + CB); p["sh"] += val / PX[r]; p["cost"] += val * (1 + CB); adds += 1; p["na"] = p.get("na", 0) + 1
                     if s_new >= p["stop"]:          # 손절 올리기: 더 높은 손절을 가진 쪽(새 신호)의 청산 경로로
-                        p["stop"] = s_new; p["xd"], p["xp"], p["ph"] = int(XD[r]), XP[r], PH[r]
+                        p["stop"] = s_new
+                        # 아스트라 4차: 기존 경로에 이미 정해진(더 이른) 청산이 있으면 취소하지 않음 → 둘 중 이른 쪽
+                        if int(XD[r]) <= p["xd"]:
+                            p["xd"], p["xp"], p["ph"] = int(XD[r]), XP[r], PH[r]
+                        else:
+                            kept_early[0] += 1
                 continue
             if free <= 0:
                 continue
@@ -133,13 +139,13 @@ def sim(cc, S, E, pyramid=False, cap=False, g2=False, g3=False, budget=False, rp
         pnl[p["ai"]] += p["sh"] * Cf[E, j] * (1 - CS) - p["cost"]
     mt = CM.metr(eq)
     tot = pnl[True] + pnl[False]
-    mt.update(ent=ent, adds=adds, g_avg=float(np.nanmean(gross)), g_max=float(np.nanmax(gross)), ai_share=pnl[True] / tot if tot else np.nan, forced=forced)
+    mt.update(ent=ent, adds=adds, g_avg=float(np.nanmean(gross)), g_max=float(np.nanmax(gross)), ai_share=pnl[True] / tot if tot else np.nan, forced=forced, kept=kept_early[0])
     return mt
 
 
 def line(lab, mt):
     return (f"  {lab:34s} 연 {mt['cagr']:+6.1f}% 낙폭 {mt['mdd']:5.0f}% MAR {mt['mar']:5.2f} · 진입 {mt['ent']} 불타기 {mt['adds']}"
-            f" · 총매수/순자산 평균 {mt['g_avg']*100:4.0f}% 최대 {mt['g_max']*100:4.0f}% · AI·반도체 손익 몫 {mt['ai_share']*100:4.0f}% · 폐지 강제정리 {mt['forced']}")
+            f" · 총매수/순자산 평균 {mt['g_avg']*100:4.0f}% 최대 {mt['g_max']*100:4.0f}% · AI·반도체 손익 몫 {mt['ai_share']*100:4.0f}% · 폐지 강제정리 {mt['forced']} · 이른 청산 유지 {mt.get('kept', 0)}")
 
 
 P = {"연습 2015.07~22": ("2015-07-01", "2022-12-31"), "시험 2023~": ("2023-01-01", "2026-12-31")}
