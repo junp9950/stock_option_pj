@@ -45,7 +45,7 @@ def test_calc_buy_streak_zero_for_negative():
     assert result == 0
 
 
-def test_calc_buy_streak_counts_consecutive(mocker):
+def test_calc_buy_streak_counts_consecutive():   # mocker(pytest-mock) 안 씀 — 서버에 없어 이 시험이 아예 안 돌던 것 (2026-10-13)
     """연속 양수 레코드를 올바르게 카운트하는지 확인."""
     from datetime import date
     from backend.db.models import SectorFlowDaily
