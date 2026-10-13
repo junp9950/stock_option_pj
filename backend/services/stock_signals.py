@@ -451,15 +451,15 @@ def _workspace_list(db: Session) -> dict:
         if family and not x["family"]:
             x["family"] = family
 
-    try:      # ▲ 진입 신호가 오늘 뜬 종목 — 맨 위
-        for x in entry_today(db):
-            add(x["code"], f"▲ 진입 ({x['kind']})")
-    except Exception:  # noqa: BLE001
-        pass
-    scores = {}
+    scores, brk = {}, {}
     try:      # 종가 진입 점수 6↑ (7개 조건 중) — 사용자 목표 "추세 매매 · 진입은 종가에 손익비 좋은 자리" (2026-10-09)
         # 3년(trend_exit.py, 21일선 아래 종가까지 보유): 6↑ 평균 +2.2%·R +0.60 · 그중 손절폭 3%↓ 평균 +3.9%·R +1.68·최악10% -7%
-        scores = close_scores_now(db).get("scores", {})      # 장중이면 실시간 가격으로 (15시대에 오늘 봉 기준 후보)
+        _csn = close_scores_now(db)
+        scores = _csn.get("scores", {})      # 장중이면 실시간 가격으로 (15시대에 오늘 봉 기준 후보)
+        brk = _csn.get("brk", {}) or {}
+        if _bull_days(db).get(_data_latest(db), False):        # 돌파 매수 — 상승·횡보장만, 지금 규칙 다음 칸 (2026-10-13)
+            for c_ in sorted(brk, key=lambda c_: -(brk[c_].get("rs") or 0)):
+                add(c_, f"▲ 돌파 매수 ({brk[c_]['kind']})")
         for c_, v_ in sorted(scores.items(), key=lambda kv: (-kv[1]["score"], kv[1]["risk"])):
             if v_.get("hot"):
                 add(c_, "과열 매수 · 수량 절반 (이번 장)")
@@ -568,7 +568,8 @@ def _workspace_list(db: Session) -> dict:
         if lane(x["tags"]) == "wait" and not x["tags"][0].startswith(("돌파 대기", "⏸")):
             x["tags"] = ["참고"] + x["tags"]
         y = price(x); y["lane"] = lane(x["tags"])
-        sc = scores.get(x["code"])
+        sc = scores.get(x["code"]) or brk.get(x["code"])
+        y["brk"] = bool(x["code"] in brk and not (scores.get(x["code"]) or {}).get("buy"))
         y["score"] = sc["score"] if sc else None
         y["risk"] = round(sc["risk"] * 100, 1) if sc else None
         y["stop"] = round(float(sc["stop"])) if sc else None      # 차트 손절선 (2026-10-11 시안 B)
@@ -589,14 +590,14 @@ def _workspace_list(db: Session) -> dict:
     # 무작위 순서 10,000번 중 100백분위(연 +24.7% vs 무작위 중앙 +4.0%), 예전 순서(섹터→손절폭 3%↓→점수→손절폭)는 41백분위 (ranking_lab.py).
     # 대기 칸은 예전 순서 그대로.
     for y in cands:
-        sc = scores.get(y["code"]) or {}
+        sc = scores.get(y["code"]) or brk.get(y["code"]) or {}
         y["rs"] = sc.get("rs")
         y["lead"] = bool(sc.get("lead") and not sc.get("buy"))
-    ent = sorted([y for y in cands if y["lane"] == "entry" and y["rs"] is not None and not y["lead"]], key=lambda y: -y["rs"])
+    ent = sorted([y for y in cands if y["lane"] == "entry" and y["rs"] is not None and not y["lead"]], key=lambda y: (y.get("brk", False), -y["rs"]))
     for k_, y in enumerate(ent, 1):
         y["rs_rank"] = k_
         y["tags"] = [f"강도 RS {y['rs']:.0f} · 후보 중 {k_}위"] + y["tags"]
-    cands.sort(key=lambda y: (y["lane"] != "entry", y.get("lead", False), -(y["rs"] if (y["lane"] == "entry" and y.get("rs") is not None) else -1),
+    cands.sort(key=lambda y: (y["lane"] != "entry", y.get("lead", False), y.get("brk", False), -(y["rs"] if (y["lane"] == "entry" and y.get("rs") is not None) else -1),
                               (y.get("sec_rank") or 99) > 8, not y["rr"], (y["risk"] or 0) > 5,
                               -(y["score"] if y["score"] is not None else -1), y["risk"] if y["risk"] is not None else 99))
     return {"as_of": str(latest), "live": live_at, "mode": mp.get("mode"),
@@ -772,7 +773,7 @@ def close_scores(db: Session) -> dict:
     점수 7 이김 46%·+1.5%. 기간을 반으로 나눠도 둘 다 점수 따라 이김 비율이 올라감(앞 26→47%, 뒤 31→46%). 디스크 캐시."""
     latest = _data_latest(db)
     from backend.services.result_cache import cached  # noqa: PLC0415
-    v = cached("close_scores_v9", (), db, lambda: _close_scores(db, latest)) or {}
+    v = cached("close_scores_v10", (), db, lambda: _close_scores(db, latest)) or {}
     return v
 
 
@@ -890,7 +891,34 @@ def _close_scores(db: Session, latest, live: dict | None = None, frac: float = 1
                      "semi": bool(code in semi_ok and not normal),
                      # 반도체·AI 특별(손절폭 12%까지)은 사용자 규칙이라 매수에 그대로 둠 — 계좌에선 수량 절반(size_multiplier) (2026-10-11 GPT 수정본은 실험으로 뺐으나 되돌림)
                      "buy": bool(normal or code in semi_ok), "price": float(c[code])}
-    return {"date": asof, "scores": out, "live": bool(live)}
+    # 돌파 매수 (예전 ▲진입 — 2026-10-13 사용자 "둘 다 매수로"): 지금 규칙(buy) 먼저 채우고 남는 칸에. 12년 계좌: 연습 +6.8%(기준 +6.9) · 시험 +66.5%(+62.1)
+    # 규칙은 signals()·_entry_today와 같음: (박스 돌파 | 이평선 모였다 돌파 & 정배열60) & 추세 7조건 6↑ & 그날 +8% 미만 & 20일선 +15% 안 & 거래대금 30억↑. 시장 국면은 쓰는 쪽에서.
+    brk = {}
+    try:
+        cnt = C.iloc[-250:].count()
+        ma200 = C.iloc[-200:].mean().where(C.iloc[-200:].count() >= 180); ma200p = C.iloc[-221:-21].mean().where(C.iloc[-221:-21].count() >= 180)
+        s50 = C.iloc[-50:].mean(); s150 = C.iloc[-150:].mean().where(C.iloc[-150:].count() >= 135)
+        hi52 = H.iloc[-250:].max().where(cnt >= 200); lo52 = L.iloc[-250:].min().where(cnt >= 200)
+        tt7 = (((c > s150) & (c > ma200)).astype(int) + (s150 > ma200).astype(int) + (ma200 > ma200p).astype(int)
+               + ((s50 > s150) & (s50 > ma200)).astype(int) + (c > s50).astype(int) + (c >= lo52 * 1.3).astype(int) + (c >= hi52 * 0.75).astype(int))
+        hi20p, lo20p, hi10p = H.iloc[-21:-1].max(), L.iloc[-21:-1].min(), H.iloc[-11:-1].max()
+        box_ = (hi20p / lo20p - 1 <= 0.20) & (c > hi20p) & (chg >= 0.05) & (tvx >= 2) & (c > ma200)
+        emab_ = (gap_prev <= 0.04) & (c > ehi) & (c > hi10p) & (chg >= 0.03) & (chg < 0.29) & (tvx >= 1.5)
+        up60_ = (c > e60.iloc[r]) & (e20.iloc[r] > e60.iloc[r])
+        hit_ = ((box_ | (emab_ & up60_)) & (tt7 >= 6) & (chg < 0.08) & (gap20 < 0.15) & liq.iloc[r]).fillna(False).astype(bool)
+        for code in hit_[hit_].index:
+            if code in out and out[code]["buy"]:
+                continue
+            rs_v = RS.get(code)
+            rk = float(1 - l[code] * 0.99 / c[code])
+            if not (rk > 0):
+                continue
+            brk[code] = {"score": int(sum(bool(x.get(code, False)) for x in flags)), "flags": [bool(x.get(code, False)) for x in flags], "stop": tick_floor(float(l[code]) * 0.99),
+                         "risk": rk, "ema": False, "lead": False, "lead_state": [], "hot": False, "semi": False, "buy": False, "price": float(c[code]),
+                         "rs": float(rs_v) if rs_v is not None and rs_v == rs_v else None, "kind": "박스 위로 돌파" if bool(box_.get(code, False)) else "이평선 모였다 돌파"}
+    except Exception:  # noqa: BLE001
+        pass
+    return {"date": asof, "scores": out, "live": bool(live), "brk": brk}
 
 
 _CSL: dict = {"t": 0.0, "v": None}

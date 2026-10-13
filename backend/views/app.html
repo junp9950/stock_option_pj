@@ -2818,7 +2818,7 @@ async function renderSigCard(){
     <button class="btn btn-gray btn-sm" onclick="sigToggle()">${closed?'펼치기':'접기'}</button></div>`;
   if(closed){ el.innerHTML=head; return; }
   const fchip=c=>(((_ws.data||{}).notes||{})[c]||[]).filter(n=>n.kind==='flag'||n.kind==='risk'&&/경고|위험|관리|정지|정리/.test(n.label)).map(n=>` <span class="chipx ${n.kind==='risk'?'r':'n'}" title="${(n.title||'').replace(/"/g,'')}">${n.label}</span>`).join('');   // 신용X(메리츠)·투자경고 (2026-10-13)
-  const brow=x=>`<div class="sig-r" onclick="sigOpen('${x.code}','${x.name.replace(/'/g,'')}')"><span class="nm"><b>${x.name}</b>${fchip(x.code)}${x.lead?' <span class="ts">주도주 · 아주 적게</span>':half(x)?' <span class="ts">평소 절반</span>':''}</span>
+  const brow=x=>`<div class="sig-r" onclick="sigOpen('${x.code}','${x.name.replace(/'/g,'')}')"><span class="nm"><b>${x.name}</b>${x.brk?' <span class="chipx n" title="돌파 매수 (박스·이평선 돌파) — 지금 규칙 종목 다음 남는 칸">돌파</span>':''}${fchip(x.code)}${x.lead?' <span class="ts">주도주 · 아주 적게</span>':half(x)?' <span class="ts">평소 절반</span>':''}</span>
     <span class="v">${x.close?won(x.close):'-'}</span><span class="v sl">${x.stop?won(tk(x.stop)):'-'}</span><span class="v">${size(x)}</span></div>`;
   const srow=x=>`<div class="sig-r s" onclick="sigOpen('${x.code}','${x.name.replace(/'/g,'')}')"><span class="nm"><b>${x.name}</b> <span class="ts">${x.date.slice(5).replace('-','/')} 신호</span></span>
     <span class="v">${x.close?won(x.close):'-'}</span><span class="v" style="color:${x.gain>0?'var(--up)':x.gain<0?'var(--down)':'var(--muted)'}">${x.gain>0?'+':''}${x.gain}%</span><span class="v">다음 장 아침</span></div>`;

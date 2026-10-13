@@ -27,6 +27,20 @@ def _tag(code: str) -> str:
     return out
 
 
+def _brk_lines(sc: dict, names: dict, room: int) -> list[str]:
+    """돌파 매수 (예전 ▲진입) — 지금 규칙으로 10칸을 채우고 남는 칸에 (2026-10-13 사용자 "둘 다 매수로").
+    12년 계좌: 지금 규칙만 연 +6.9%/+62.1% vs 지금 규칙 먼저 + 남는 칸 돌파 +6.8%/+66.5% (2015~22/2023~)."""
+    b = sorted((sc.get("brk") or {}).items(), key=lambda cv: -(cv[1].get("rs") or 0))
+    if not b:
+        return []
+    if room <= 0:
+        return [f"▲ 돌파 매수 {len(b)}개 — 칸이 다 차서 오늘은 안 삼"]
+    out = [f"▲ <b>돌파 매수</b> (남는 칸 {room}개까지 · 강도 순) — 박스·이평선 돌파 + 추세 6/7"]
+    for c, v in b[:room]:
+        out.append(f"· <b>{names.get(c, c)}</b> RS {v.get('rs') or 0:.0f} · {v.get('kind', '')} · 스탑로스 {v['stop']:,.0f} (-{v['risk'] * 100:.1f}%)" + _tag(c))
+    return out
+
+
 def text_now(db: Session, k: int = 8) -> str | None:
     from backend.services.stock_signals import close_scores_now, market_breadth  # noqa: PLC0415
     from backend.services.telegram import market_status  # noqa: PLC0415
@@ -85,8 +99,9 @@ def text_now(db: Session, k: int = 8) -> str | None:
     except Exception:  # noqa: BLE001
         pass
     if not rows:
-        out.append("매수 신호 (손절폭 8%↓) 종목 없음 → 쉬기" + (f" (손절폭 넓어서 뺀 것 {len(wide)}개)" if wide else ""))
-        return "\n".join(out + lead_lines)
+        bl = _brk_lines(sc, names, 10)
+        out.append("매수 신호 (손절폭 8%↓) 종목 없음" + (f" (손절폭 넓어서 뺀 것 {len(wide)}개)" if wide else "") + ("" if bl else " → 쉬기"))
+        return "\n".join(out + bl + lead_lines)
     good = [r for r in rows if r[1]["risk"] <= 0.03 and not r[1].get("hot") and not r[1].get("semi")]
     out.append(f"매수 신호 {len(rows)}개 · ✅ 손절폭 3%↓ {len(good)}개" + (f" · 8%↑라 뺀 것 {len(wide)}개" if wide else ""))
     try:
@@ -101,6 +116,7 @@ def text_now(db: Session, k: int = 8) -> str | None:
     for c, v in rows[:k]:
         out.append(f"{'✅' if v['risk'] <= 0.03 and not v.get('hot') and not v.get('semi') else '·'} <b>{names.get(c, c)}</b> RS {v.get('rs') or 0:.0f} · {'이평선 돌파 · ' if v.get('ema') else ''}{'과열 매수(이번 장) · 수량 절반 · ' if v.get('hot') else ''}{'반도체·AI 특별 · 수량 절반 · ' if v.get('semi') else ''}{v['score']}/7 · 스탑로스 {v['stop']:,.0f} (-{v['risk'] * 100:.1f}%)"
                    + (f" · {srk[c][1]} {srk[c][0]}위" if srk.get(c, (99,))[0] <= 8 else " · 섹터 밖") + _tag(c))
+    out += _brk_lines(sc, names, max(0, 10 - len(rows)))
     out += lead_lines
     out.append("파는 법: 사면 바로 스탑로스 예약 (정규장만) · 21일선 아래 종가면 다음 날 아침 정리")
     out.append("<i>3년(같은 위험 금액당): 손절폭 3%↓ 1.4배 · 3~5% 0.55배 · 5~8% 0.35배 · 8%↑ 0.1배 벎 → 수량은 손절폭에 맞춰</i>")
