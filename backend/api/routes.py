@@ -1513,6 +1513,29 @@ def get_heatmap(limit: int = 250, db: Session = Depends(get_db)):
     )
     for code, sector_name in rows:
         sector_map.setdefault(code, sector_name)
+    # 큐레이션에 없는 종목은 KIND 표준산업분류를 넓은 묶음으로 (2026-10-13 '기타' 칸이 화면 절반을 차지하던 것)
+    try:
+        from backend.services.industry_map import industries  # noqa: PLC0415
+        ind = industries()
+        BROAD = [("반도체", ["반도체"]), ("2차전지", ["전지"]), ("전력기기", ["전동기", "발전기", "전기 변환", "절연선", "전기장비"]),
+                 ("전자·IT기기", ["전자부품", "통신 및 방송 장비", "컴퓨터", "영상 및 음향", "측정, 시험"]),
+                 ("바이오", ["의약", "연구개발"]), ("의료기기", ["의료용 기기"]), ("자동차", ["자동차"]), ("조선", ["선박"]),
+                 ("은행/금융", ["금융", "보험", "은행", "신탁", "증권"]), ("화학", ["화학", "플라스틱", "고무"]), ("철강", ["철강", "금속"]),
+                 ("건설", ["건설", "건물", "토목"]), ("인터넷·SW", ["소프트웨어", "프로그래밍", "정보서비스", "자료처리", "포털"]),
+                 ("기계", ["기계"]), ("음식료", ["식품", "음료", "담배"]), ("미디어·엔터", ["영화", "방송", "오디오", "출판"]),
+                 ("통신", ["전기 통신"]), ("운송", ["항공", "운송", "해운", "창고"]), ("유통", ["도매", "소매"]), ("유틸리티", ["전기업", "가스"])]
+        for c in codes:      # 우선주(삼성전자우·현대차2우B 등)는 보통주와 같은 묶음
+            if c not in sector_map and c[-1] != "0" and (c[:5] + "0") in sector_map:
+                sector_map[c] = sector_map[c[:5] + "0"]
+        for c in codes:
+            if c in sector_map:
+                continue
+            nm = ind.get(c[:5] + "0" if c[-1] != "0" and not ind.get(c) else c) or ""
+            for g, kws in BROAD:
+                if any(k in nm for k in kws):
+                    sector_map[c] = g; break
+    except Exception:  # noqa: BLE001
+        pass
 
     # 장중에는 네이버 실시간 등락률로 (2026-10-13 사용자 "히트맵은 실시간이 안 되는 거제" — 어제 종가 기준으로만 보였다)
     live, live_at = {}, None
