@@ -2321,6 +2321,27 @@ def _naver_tf_candles(code: str, tf: str) -> list[dict]:
     return out
 
 
+@router.get("/dl/{token}")
+def get_one_time_download(token: str, db: Session = Depends(get_db)):
+    """한 번만 받는 파일 주소 (2026-10-13 검토용 코드 묶음 — SSH가 막혀 있어서). settings 'dl_tokens' = {토큰: {file, exp}}.
+    /home/junp/review 안 파일만, 1시간 · 한 번 받으면 지움. 없거나 지나면 404."""
+    import json as _json, os as _os, re as _re, time as _t  # noqa: PLC0415,E401
+    from fastapi.responses import FileResponse  # noqa: PLC0415
+    if not _re.fullmatch(r"[A-Za-z0-9_-]{20,64}", token or ""):
+        raise HTTPException(404, "Not Found")
+    row = db.query(Setting).filter(Setting.key == "dl_tokens").one_or_none()
+    toks = _json.loads(row.value) if row and row.value else {}
+    it = toks.pop(token, None)
+    if row is not None:
+        row.value = _json.dumps({k: v for k, v in toks.items() if v.get("exp", 0) > _t.time()}); db.commit()
+    if not it or it.get("exp", 0) < _t.time():
+        raise HTTPException(404, "Not Found")
+    path = _os.path.realpath(_os.path.join("/home/junp/review", it["file"]))
+    if not path.startswith("/home/junp/review/") or not _os.path.isfile(path):
+        raise HTTPException(404, "Not Found")
+    return FileResponse(path, filename=_os.path.basename(path), media_type="application/zip")
+
+
 @router.get("/stock/flags")
 def get_stock_flags(codes: str = ""):
     """종목 표시(신용불가는 메리츠 기준 · 투자경고 등) — 오늘 탭 매수 목록·차트 위 칸용 (2026-10-13)."""
