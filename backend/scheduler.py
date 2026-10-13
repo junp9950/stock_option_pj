@@ -365,6 +365,18 @@ def start_scheduler() -> BackgroundScheduler:
             db.close()
     # 장중 5분마다 오늘 잠정치 (09:00~15:40, 확정치는 16:05에 덮어씀)
     scheduler.add_job(_market_flows_live_job, 'cron', day_of_week='mon-fri', hour='9-15', minute='*/5', id='market_flows_live', replace_existing=True, max_instances=1)
+    def _futures_flow_job() -> None:
+        from backend.collector.futures_flow import snapshot  # noqa: PLC0415
+        db = SessionLocal()
+        try:
+            snapshot(db)
+        except Exception as exc:  # noqa: BLE001
+            logger.error("선물 수급 쌓기 실패: %s", type(exc).__name__)
+        finally:
+            db.close()
+    # 코스피200 선물 외국인·기관·개인 순매수 + 미결제약정 5분마다 (08:45~15:50) + 16:40 마감 확정치 — 지난 자료가 없어 오늘부터 쌓아 검증 (2026-10-13)
+    scheduler.add_job(_futures_flow_job, 'cron', day_of_week='mon-fri', hour='8-15', minute='*/5', id='futures_flow', replace_existing=True, max_instances=1)
+    scheduler.add_job(_futures_flow_job, 'cron', day_of_week='mon-fri', hour=16, minute=40, id='futures_flow_close', replace_existing=True, max_instances=1)
     # 16:05·18:05 코스피·코스닥 투자자별 순매수 (KIS, 최근 300거래일 덮어쓰기) — 시장 카드 '수급' (2026-10-11)
     scheduler.add_job(_market_flows_job, 'cron', day_of_week='mon-fri', hour='16,18', minute=5, id='market_flows', replace_existing=True, max_instances=1)
 

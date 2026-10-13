@@ -1863,6 +1863,13 @@ def get_index_intraday(symbol: str):
     return out
 
 
+@router.get("/futures/flow")
+def get_futures_flow(d: str | None = None, db: Session = Depends(get_db)):
+    """코스피200 선물 외국인·기관·개인 순매수(억원 누적)·미결제약정 장중 기록 (5분, 2026-10-13부터)."""
+    from backend.collector.futures_flow import day  # noqa: PLC0415
+    return day(db, d)
+
+
 @router.get("/crash/now")
 def get_crash_now(db: Session = Depends(get_db)):
     """과매도 반등 모드 (급락 날만): 시장 급락 판정 + RS 90↑ 중 더 빠진 종목 5 · 손절 그날 저가 -1% · 5거래일째 종가 매도 (2026-10-13)."""
