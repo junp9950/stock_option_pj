@@ -398,7 +398,8 @@ def run(db: Session, name: str, phase: str) -> str:
             elif L.get("armed") and not L.get("exit_next"):
                 L["exit_next"] = "21일선 아래 마감 → 다음 날 시초가"
                 out.append(f"▼ {L['name']} 종가 {cl:,.0f} < 21일선 {e:,.0f} → 내일 아침 시초가에 자동 매도\n"
-                           f"(계속 들고 싶으면 오늘 밤 사이트 '내 계좌'에서 21일선 매도를 꺼 주세요)")
+                           f"· 오늘 장 후(넥스트레이드 ~20:00 · 시간외 단일가 16:00~18:00)에 직접 정리해도 됩니다 — 팔면 내일 자동 매도는 안 나갑니다\n"
+                           f"· 계속 들고 싶으면 오늘 밤 사이트 '내 계좌'에서 21일선 매도를 꺼 주세요")
     if out:
         _tell(db, name, s, "\n".join(out))
     _save(db, name, s)

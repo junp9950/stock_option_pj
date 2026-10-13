@@ -306,7 +306,9 @@ def run(db: Session, phase: str) -> str:
                 L.pop("exit_next", None)
             elif L.get("armed") and not L.get("exit_next"):
                 L["exit_next"] = "21일선 아래 마감 → 다음 날 시초가"
-                out.append(f"▼ {L['name']} 종가 {c:,.0f} < 21일선 {e:,.0f} → 내일 아침 시초가에 자동 매도 (계속 들고 싶으면 오늘 /스톱끄기)")
+                out.append(f"▼ {L['name']} 종가 {c:,.0f} < 21일선 {e:,.0f} → 내일 아침 시초가에 자동 매도\n"
+                           f"· 오늘 장 후(넥스트레이드 ~20:00 · 시간외 단일가 16:00~18:00)에 직접 정리해도 됩니다 — 팔면 내일 자동 매도는 안 나갑니다\n"
+                           f"· 계속 들고 싶으면 오늘 /스톱끄기")
     # 체결 확인 (내 손절 주문이 체결됐으면 알림)
     if str(today) >= s["start"] and phase in ("intraday", "close", "retry") and s["orders"].get(str(today)):
         try:
