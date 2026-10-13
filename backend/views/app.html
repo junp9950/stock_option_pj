@@ -2659,7 +2659,12 @@ async function loadWorkspace(){
   renderWsList(); renderSigCard();
   if(!_ws.code){ const L=wsItems(_ws.tab); const f=L[0]||(d.candidates||[])[0]||(d.track||[])[0]; if(f) wsOpen(f.code,f.name); }
 }
-function wsItems(t){ const d=_ws.data||{}; return t==='track'?(d.track||[]):(d.candidates||[]).filter(x=>(x.lane||'entry')===t); }
+function wsItems(t){ const d=_ws.data||{}; if(t==='track') return d.track||[];
+  const L=(d.candidates||[]).filter(x=>(x.lane||'entry')===t);
+  // 급락 날: '오늘 진입' 칸 맨 위에 과매도 반등 종목 (2026-10-13 "아무것도 안 뜨는데" — 카드에만 있었다)
+  const cr=_ws.st&&_ws.st.crash; if(t!=='entry'||!cr||!cr.tested) return L;
+  const have=new Set(L.map(x=>x.code));
+  return cr.items.filter(x=>!have.has(x.code)).map(x=>({...x,lane:'entry',crash:true,tags:['⚡ 과매도 반등']})).concat(L); }
 const WS_LANE={entry:'장 마감(종가)에 사는 후보 · 숫자 = 강도(RS, 99가 최고) · ‘적게 매수’ = 평소 수량의 절반 · 사면 바로 손절 주문(그날 저가 −1%) · 21일선 아래로 마감하면 다음 날 아침 정리',
   wait:'아직 신호 전 · 돌파가 나오면 그때 · ⏸ = 손절폭이 8%보다 넓어서 좁아지는 날 기다리기 · 참고 = 다른 기준의 신호', track:'사이트 신호를 규칙대로 따라가 본 것 (내 매매 아님) · 기본 신호 20일 · 주도주 60일 · ▼ 내일 아침 정리 = 21일선 아래로 마감'};
 // 차트 높이 = 맨 위에서 봤을 때 차트 바닥(날짜 줄·설명 버튼 포함)이 화면 안에 들어오게 (2026-10-11 "밑에 차트 잘리는 거")
@@ -2682,6 +2687,7 @@ function renderWsList(){
   const hbState=x=>{ const t=(x.tags||[]).join(' '), o=[]; if(t.includes('📍')) o.push('눌림'); if(t.includes('🚀')) o.push('돌파'); const m=t.match(/과열 · 20일선 \+(\d+)%/); if(m) o.push('과열 +'+m[1]+'%'); return o.join(' · ')||'자리 표시 없음'; };
   const hbBadge=x=>{ const t=(x.tags||[]).join(' ');
     if(_ws.tab==='track') return x.sell_tmr?['▼ 내일 아침 정리','r','21일선 아래로 마감 · 규칙상 다음 날 아침 정리']:x.lead?['주도','w','주도주 신호']:x.dip?['줍기','o','급락 날 줍기']:null;
+    if(x.crash) return ['⚡ 반등 매수','r','급락 날 반등 · 손절 그날 저가 −1% 예약 · 5거래일째 종가 매도'];
     if(_ws.tab!=='entry'||(x.lane&&x.lane!=='entry')) return null;     // 다음 후보(대기)에 '매수' 배지 붙던 것 (2026-10-13 "이게 오늘의 매수!?")
     if(x.lead) return ['주도','w','강도 최상위 종목 · 기본 신호와 따로 아주 적게']; if(t.includes('과열 매수')) return ['적게 매수','o','이미 많이 오른(과열) 자리라 평소 수량의 절반만']; if(t.includes('반도체·AI 특별')) return ['적게 매수','o','반도체·AI 특별 조건(손절폭이 넓음)이라 평소 수량의 절반만']; if(t.includes('급락 날 줍기')) return ['적게 매수','o','시장 급락 날 줍기(시험 중) · 평소 수량의 절반만'];
     const st=_ws.st||{}, lab=st.bear?'참고':(_ws.data&&_ws.data.live)?'매수 후보':'매수';
@@ -2690,6 +2696,7 @@ function renderWsList(){
   const hbRow=x=>{ const bd=hbBadge(x), all=(x.tags||[]).join(' · ').replace(/"/g,'');
     let sub;
     if(_ws.tab==='track') sub=`${x.date.slice(5).replace('-','/')} ${Math.round(x.entry).toLocaleString()} · 스탑 ${tk(x.stop).toLocaleString()} · 21선 ${x.to21>0?'+':''}${x.to21}%`;
+    else if(x.crash){ const so=((_ws.st||{}).crash||{}).sell_on||''; sub=`오늘 ${x.chg}% · 손절 ${x.stop?tk(x.stop).toLocaleString():'-'} (−${x.risk}%) · ${so.slice(5).replace('-','/')} 종가 매도`; }
     else if(_ws.tab==='entry'&&x.lead) sub=`${hbState(x)} · 손절 −${x.risk}%`;
     else if(_ws.tab==='entry') sub=[x.risk!=null?`손절 −${x.risk}%`:'',x.score!=null?`${x.score}/7`:'',hbSect(x)].filter(Boolean).join(' · ');
     else sub=(x.risk!=null?`손절 −${x.risk}% · `:'')+(x.tags||[]).join(' · ');
@@ -2715,8 +2722,8 @@ function renderWsList(){
   else{
     let h;
     if(_ws.tab==='entry'){      // 기본 신호 칸과 주도주 칸을 따로 채운다 (2026-10-10 "이 종목 중에 좋은 순위가 뭐란 거고")
-      const B=L.filter(x=>!x.lead), Ld=L.filter(x=>x.lead);
-      h=(B.length&&Ld.length?`<div class="ws-sub" title="한 번에 최대 10종목까지 들고 갑니다. 이미 7종목을 들고 있으면 위에서 3개만 삽니다.">기본 신호 · 위일수록 강한 종목 · 최대 10종목, 빈 자리만큼 위에서부터</div>`:'')+B.map(row).join('')
+      const Cr=L.filter(x=>x.crash), B=L.filter(x=>!x.lead&&!x.crash), Ld=L.filter(x=>x.lead);
+      h=(Cr.length?`<div class="ws-sub">⚡ 과매도 반등 · 급락 날만 · 종가에 사서 5거래일째 종가에 팜</div>`+Cr.map(row).join('')+(B.length||Ld.length?`<div class="ws-sub">추세 신호 (시장 하락이면 참고만)</div>`:''):'')+(B.length&&Ld.length?`<div class="ws-sub" title="한 번에 최대 10종목까지 들고 갑니다. 이미 7종목을 들고 있으면 위에서 3개만 삽니다.">기본 신호 · 위일수록 강한 종목 · 최대 10종목, 빈 자리만큼 위에서부터</div>`:'')+B.map(row).join('')
         +(Ld.length?`<div class="ws-sub" title="손절에 걸려도 계좌의 0.1%만 잃는 크기">주도주 · 기본 신호와 따로 · 최대 2종목 · 아주 적게</div>`+Ld.map(row).join(''):'');
     } else h=L.map(row).join('');
     if(_ws.tab==='entry'&&L.length<6){      // 오늘 진입이 적은 날: 아래를 비워 두지 않고 다음 후보(대기)를 흐리게 이어서 (2026-10-09 "여기가 붕 뜬다")
@@ -2777,7 +2784,7 @@ function wsStatus(){
   const d=_ws.data||{}, st=_ws.st||{}, dd=(d.as_of||'').slice(5).replace('-','/');
   const n=(d.candidates||[]).filter(x=>(x.lane||'entry')==='entry').length;
   let k='n', t;
-  if(st.crash){ k='r'; t=`⚡ <b>과매도 반등 모드</b> · 급락 ${st.crash.kind} · 추세 매수는 쉬고 반등 매수는 맨 위 카드에${st.crash.live?' (15:20쯤 확정)':''}`; }
+  if(st.crash){ k='r'; t=`⚡ <b>과매도 반등 모드</b> · 급락 ${st.crash.kind} · 추세 매수는 쉬고 ${st.crash.tested?`반등 매수 ${st.crash.items.length}개만 (아래)`:'반등 목록도 검증 밖이라 참고만'}${st.crash.live?' · 15:20쯤 확정':''}`; }
   else if(st.bear){ k='r'; t='🔴 <b>오늘은 쉬는 날</b> · 시장이 하락 중이라 새로 사지 않습니다'; }
   else if(st.liveRest){ k='r'; t=`🔴 <b>장중 쉬는 날</b> · 시장이 크게 빠지는 중 · 이대로 마감하면 매수 없음${n?' (아래는 임시 후보)':''}`; }
   else if(d.live){ t=n?`⏱ <b>장중 임시 후보 ${n}개</b> · 15:20쯤 확정 · 그 전엔 사지 마세요`:'⏱ <b>지금은 매수 후보 없음</b> · 15:20쯤 다시 확인'; }
