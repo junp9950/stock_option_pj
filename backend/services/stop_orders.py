@@ -170,6 +170,16 @@ def sync(db: Session, s: dict, today: date) -> list[str]:
     if str(today) < s["start"]:
         s["baseline"] = now_q            # 시작 전: 지금 들고 있는 것 전부가 기준(주문 안 함)
         return msgs
+    # 장기 보유(관리 탭 '장기 보유(알림 제외)' = held_exclude) · 사용자가 뺀 종목은 더 사도 자동 매도 안 함 (2026-10-13 "하닉은 안 팔 거다")
+    from backend.services.telegram import _get  # noqa: PLC0415
+    from backend.services.watchlist import HELD_EXCLUDE  # noqa: PLC0415
+    excl = set(_get(db, "held_exclude", None) or HELD_EXCLUDE) | set(s.get("exclude", []))
+    for lot in list(now_q):
+        if lot.split("|")[0] in excl:
+            s["baseline"][lot] = now_q[lot]
+            if lot in s["lots"]:
+                msgs.append(f"✅ {s['lots'][lot]['name']}: 장기 보유라 자동 매도에서 뺌")
+                s["lots"].pop(lot)
     for lot, q in now_q.items():
         base = s["baseline"].get(lot, 0)
         extra = q - base
