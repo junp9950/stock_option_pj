@@ -129,7 +129,7 @@ select{background:var(--c3);border:1px solid var(--ln);color:var(--bd);padding:6
 .sig-sum{display:flex;gap:6px}.sig-g{display:grid;grid-template-columns:minmax(0,1.2fr) minmax(0,1fr);gap:22px;margin-top:12px}
 .sig-t{font-weight:700;color:var(--tx);margin-bottom:6px;font-size:14px}.sig-r{display:grid;grid-template-columns:minmax(0,1fr) 84px 84px 70px;gap:8px;align-items:center;padding:6px 4px;border-bottom:1px solid var(--line2);font-size:13px;cursor:pointer}
 .sig-r:hover{background:var(--sunk)}.sig-r.hd{cursor:default;font-size:11.5px;color:var(--mu);padding-top:0}.sig-r.hd:hover{background:none}.sig-r .v{text-align:right;font-variant-numeric:tabular-nums}.sig-r .sl{color:var(--b)}.sig-r.hd span:not(:first-child){text-align:right}
-.sig-r .nm{min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}.sig-warn{padding:8px 10px;margin:0 0 6px;border:1px solid var(--r);border-radius:8px;font-size:12.5px;color:var(--tx);line-height:1.6}.sig-empty{padding:10px 4px;font-size:13px;color:var(--tx)}.sig-how{margin-top:12px;padding-top:10px;border-top:1px solid var(--line2);font-size:12.5px;color:var(--tx);line-height:1.7}
+.sig-r .nm{min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}.sig-warn{padding:8px 10px;margin:0 0 6px;border:1px solid var(--r);border-radius:8px;font-size:12.5px;color:var(--tx);line-height:1.6}.ws-status{margin:0 4px 6px;padding:7px 10px;border-radius:8px;font-size:12.5px;line-height:1.5;color:var(--tx);border:1px solid var(--ln)}.ws-status.k-r{border-color:var(--r)}.sig-empty{padding:10px 4px;font-size:13px;color:var(--tx)}.sig-how{margin-top:12px;padding-top:10px;border-top:1px solid var(--line2);font-size:12.5px;color:var(--tx);line-height:1.7}
 @media(max-width:900px){#panel-home.active{display:flex;flex-direction:column}#panel-home>.sig-card{order:-1}.sig-g{grid-template-columns:1fr;gap:16px}.sig-r{grid-template-columns:minmax(0,1fr) 70px 70px 52px;font-size:12.5px}}
 .htop{display:grid;grid-template-columns:minmax(0,1.25fr) minmax(0,1fr);gap:14px;margin-bottom:14px}
 .hc-spark{position:relative;height:92px;margin:2px 0 8px}.hc-spark svg{width:100%;height:100%;display:block}
@@ -807,6 +807,7 @@ select{background:var(--c3);border:1px solid var(--ln);color:var(--bd);padding:6
       <div class="ws-tabs"><button data-t="entry" onclick="wsTab('entry')">오늘 진입</button><button data-t="wait" onclick="wsTab('wait')">대기</button><button data-t="track" onclick="wsTab('track')">신호 추적</button></div>
       <div class="ts" id="ws-lane-note" style="margin:0 4px 4px" title="눌러서 펼치기" onclick="this.classList.toggle('open')"></div>
       <div class="ts" id="ws-asof" style="margin:0 4px 4px"></div>
+      <div id="ws-status" class="ws-status" hidden></div>
       <div id="ws-items"><div class="ts" style="padding:10px">불러오는 중…</div></div>
     </div>
     <div class="ws-main">
@@ -2664,9 +2665,10 @@ function renderWsList(){
   const hbState=x=>{ const t=(x.tags||[]).join(' '), o=[]; if(t.includes('📍')) o.push('눌림'); if(t.includes('🚀')) o.push('돌파'); const m=t.match(/과열 · 20일선 \+(\d+)%/); if(m) o.push('과열 +'+m[1]+'%'); return o.join(' · ')||'자리 표시 없음'; };
   const hbBadge=x=>{ const t=(x.tags||[]).join(' ');
     if(_ws.tab==='track') return x.sell_tmr?['▼ 내일 아침 정리','r','21일선 아래로 마감 · 규칙상 다음 날 아침 정리']:x.lead?['주도','w','주도주 신호']:x.dip?['줍기','o','급락 날 줍기']:null;
-    if(_ws.tab!=='entry') return null;
+    if(_ws.tab!=='entry'||(x.lane&&x.lane!=='entry')) return null;     // 다음 후보(대기)에 '매수' 배지 붙던 것 (2026-10-13 "이게 오늘의 매수!?")
     if(x.lead) return ['주도','w','강도 최상위 종목 · 기본 신호와 따로 아주 적게']; if(t.includes('과열 매수')) return ['적게 매수','o','이미 많이 오른(과열) 자리라 평소 수량의 절반만']; if(t.includes('반도체·AI 특별')) return ['적게 매수','o','반도체·AI 특별 조건(손절폭이 넓음)이라 평소 수량의 절반만']; if(t.includes('급락 날 줍기')) return ['적게 매수','o','시장 급락 날 줍기(시험 중) · 평소 수량의 절반만'];
-    return [(x.rr?'✅ ':'')+'매수','w',x.rr?'손절폭 3% 이하 · 손익비 좋은 자리':'평소 수량']; };
+    const st=_ws.st||{}, lab=st.bear?'참고':(_ws.data&&_ws.data.live)?'매수 후보':'매수';
+    return [(x.rr?'✅ ':'')+lab,'w',(x.rr?'손절폭 3% 이하 · 손익비 좋은 자리':'평소 수량')+((_ws.data&&_ws.data.live)?' · 장중 임시, 15:20쯤 확정':'')]; };
   const noteChips=c=>(((_ws.data||{}).notes||{})[c]||[]).map(n=>`<span class="chipx ${n.kind==='risk'?'r':'n'}" title="${(n.title||'').replace(/"/g,'')}">${n.label}</span>`).join('');   // 실적 D-n · ⚠ 위험 공시 (2026-10-11)
   const hbRow=x=>{ const bd=hbBadge(x), all=(x.tags||[]).join(' · ').replace(/"/g,'');
     let sub;
@@ -2717,6 +2719,7 @@ async function renderSigCard(){
   // 장중에 시장이 크게 빠져 장중 판단이 '쉬는 날'이면 매수 칸 위에 경고 (2026-10-12 이틀 연속 급락 — 카드는 지난 장 판단이라 '매수'로 보였다)
   const lv=d.live?await fetch(`${API}/dashboard/dip-live`).then(r=>r.ok?r.json():null).catch(()=>null):null;
   const liveRest=!bear&&lv&&lv.mode&&lv.mode.mode==='쉬기';
+  _ws.st={bear,liveRest}; wsStatus(); renderWsList();
   const all=(d.candidates||[]).filter(x=>(x.lane||'entry')==='entry');
   const B=bear?[]:all.filter(x=>!x.lead).slice(0,10), Ld=bear?[]:all.filter(x=>x.lead).slice(0,2);
   const S=(d.track||[]).filter(x=>x.sell_tmr), keep=(d.track||[]).length-S.length;
@@ -2744,6 +2747,18 @@ async function renderSigCard(){
     <div><div class="sig-t">▼ 매도 <span class="ts">신호로 산 종목 중 팔 차례</span></div>${sellBox}</div></div>
     <div class="sig-how"><b>따라 하는 법</b> ① 장중(15:20쯤) 뜬 매수 종목을 장 마감 직전에 산다 ② 사자마자 <b>손절가에 매도 예약</b>을 걸어 둔다 ③ 매도 칸에 뜨면 다음 날 아침 장 시작에 판다 ④ 시장이 내리는 날은 아무것도 안 산다
     <br><span class="ts">‘투자금의 n%’ = 손절가에 걸려도 전체 투자금의 0.5%만 잃는 크기 (한 번에 최대 10종목) · 규칙을 기계적으로 따른 신호이고 수익을 보장하지 않습니다 · 손절은 꼭 지키세요</span></div>`;
+}
+// 목록 맨 위 한 줄: '오늘 사는 날인지 · 이 목록이 확정인지' (2026-10-13 친구들 "이게 오늘의 매수!?" "오늘은 뭐 안가는게" — 묻지 않아도 알게)
+function wsStatus(){
+  const el=document.getElementById('ws-status'); if(!el) return;
+  const d=_ws.data||{}, st=_ws.st||{}, dd=(d.as_of||'').slice(5).replace('-','/');
+  const n=(d.candidates||[]).filter(x=>(x.lane||'entry')==='entry').length;
+  let k='n', t;
+  if(st.bear){ k='r'; t='🔴 <b>오늘은 쉬는 날</b> · 시장이 하락 중이라 새로 사지 않습니다'; }
+  else if(st.liveRest){ k='r'; t=`🔴 <b>장중 쉬는 날</b> · 시장이 크게 빠지는 중 · 이대로 마감하면 매수 없음${n?' (아래는 임시 후보)':''}`; }
+  else if(d.live){ t=n?`⏱ <b>장중 임시 후보 ${n}개</b> · 15:20쯤 확정 · 그 전엔 사지 마세요`:'⏱ <b>지금은 매수 후보 없음</b> · 15:20쯤 다시 확인'; }
+  else { t=n?`📌 <b>${dd} 마감 신호 ${n}개</b> · 지난 신호라 지금 따라 사지 마세요 · 다음 신호는 다음 장 15:20쯤`:`📌 <b>${dd} 매수 신호 없음</b> · 다음 신호는 다음 장 15:20쯤`; }
+  el.className='ws-status k-'+k; el.innerHTML=t; el.hidden=false;
 }
 function sigToggle(){ let c=false; try{ c=localStorage.getItem('sig-closed')==='1'; localStorage.setItem('sig-closed',c?'0':'1'); }catch(e){} renderSigCard(); }
 function sigOpen(code,name){ wsOpen(code,name); const el=document.querySelector('#panel-home .ws-main'); if(el) el.scrollIntoView({behavior:'smooth',block:'start'}); }

@@ -36,6 +36,13 @@ def text_now(db: Session, k: int = 8) -> str | None:
         st = market_status(db) or {}
         if (st.get("전체") or {}).get("state") == "하락":
             out.append("<i>시장 하락 국면 — 원칙상 쉬는 날, 참고만</i>")
+        else:
+            # 지난 장 판단은 상승·횡보여도 오늘 장중에 크게 빠져 장중 판단이 '쉬기'면 같이 적는다
+            # (2026-10-12 코스닥 −4.8% 날 알림에 '쉬는 날'이 빠졌다 — 사이트 머리 줄·카드와 같은 판단)
+            from backend.screener.my_pattern import dip_live  # noqa: PLC0415
+            md = (dip_live(db) or {}).get("mode") or {}
+            if md.get("mode") == "쉬기":
+                out.append("<b>⛔ 장중 시장 하락 — 원칙상 쉬는 날, 참고만</b> (이대로 마감하면 시장 판단이 '하락'으로 바뀌어 매수 신호 없음)")
     except Exception:  # noqa: BLE001
         pass
     try:
