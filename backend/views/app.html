@@ -3737,9 +3737,9 @@ async function meStatus(){
     <div class="sv-m"><span class="k">서버 밖 · 05:00 ${ok(recent(bo.at))}</span><span></span><span class="v">${bo.at?bo.at+' · '+bo.mb+'MB':'없음'}</span></div>
     <div class="ts" style="margin-top:4px">${bo.repo||''}${bo.n?' · 보관 '+bo.n+'개':''}${bo.log?' · '+bo.log:''}</div>
     <div class="bx-h" style="margin-top:14px"><b>데이터</b></div>
-    <div class="sv-m"><span class="k">일봉 마지막</span><span></span><span class="v">${(d.data||{}).daily||'-'}</span></div>
-    <div class="sv-m"><span class="k">분봉 마지막</span><span></span><span class="v">${((d.data||{}).minute||'-').slice(0,16)}</span></div>
-    <div class="sv-m"><span class="k">시장 수급 마지막</span><span></span><span class="v">${(d.data||{}).flows||'-'}</span></div>
+    <div class="sv-m"><span class="k">일봉 저장 <span class="ts">(장 마감 뒤 15:41 · 장중 화면은 실시간)</span></span><span></span><span class="v">${(d.data||{}).daily||'-'}</span></div>
+    <div class="sv-m"><span class="k">분봉 저장 <span class="ts">(연 종목·16:20·20:15)</span></span><span></span><span class="v">${((d.data||{}).minute||'-').slice(0,16)}</span></div>
+    <div class="sv-m"><span class="k">시장 수급 <span class="ts">(장중 5분)</span></span><span></span><span class="v">${(d.data||{}).flows||'-'}</span></div>
     <div class="sv-m"><span class="k">디스크 남음 · 서버 부하</span><span></span><span class="v">${d.disk?d.disk.free_gb+' / '+d.disk.total_gb+'GB':'-'} · ${d.load??'-'}</span></div>
     ${d.stop_alert&&d.stop_alert.date?`<div class="sv-m"><span class="k">오늘 손절 알림</span><span></span><span class="v">근접 ${(d.stop_alert.near||[]).length} · 닿음 ${(d.stop_alert.out||[]).length} (${d.stop_alert.date})</span></div>`:''}
    </section>
