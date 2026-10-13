@@ -79,13 +79,13 @@ def admin(db: Session, action: str, name: str, pin: str | None = None) -> dict:
             return {"ok": False, "msg": "임시 비밀번호는 6자 이상"}
         salt = secrets.token_hex(8)
         us[name] = {"pin": f"{salt}${_hash(pin, salt)}", "on": True, "created": _now().strftime("%Y-%m-%d"), "chat": None,
-                    "code": f"{secrets.randbelow(900000) + 100000}"}
+                    "code": f"{secrets.randbelow(900000) + 100000}", "temp": True}
     elif name not in us:
         return {"ok": False, "msg": "없는 이름"}
     elif action == "reset":
         if not pin or len(pin) < 6:
             return {"ok": False, "msg": "새 비밀번호는 6자 이상"}
-        salt = secrets.token_hex(8); us[name]["pin"] = f"{salt}${_hash(pin, salt)}"
+        salt = secrets.token_hex(8); us[name]["pin"] = f"{salt}${_hash(pin, salt)}"; us[name]["temp"] = True
     elif action in ("on", "off"):
         us[name]["on"] = action == "on"
         if action == "off":
@@ -99,6 +99,20 @@ def admin(db: Session, action: str, name: str, pin: str | None = None) -> dict:
     _put(db, "portal_users", us)
     return {"ok": True, "msg": {"create": "만들었습니다", "reset": "비밀번호를 바꿨습니다", "on": "켰습니다", "off": "껐습니다(자동 주문도 멈춤)",
                                 "delete": "지웠습니다(키·기록도 삭제)"}[action]}
+
+
+def change_pin(db: Session, name: str, new_pin: str) -> dict:
+    """본인이 비밀번호 바꾸기 (2026-10-13 사용자: '임시 비번이니까 본인이 바꿀 수 있게'). 로그인한 상태에서만 부름."""
+    new_pin = (new_pin or "").strip()
+    if len(new_pin) < 8:
+        return {"ok": False, "msg": "새 비밀번호는 8자 이상으로 해 주세요"}
+    us = users(db)
+    if name not in us:
+        return {"ok": False, "msg": "없는 이름"}
+    salt = secrets.token_hex(8)
+    us[name]["pin"] = f"{salt}${_hash(new_pin, salt)}"; us[name]["temp"] = False
+    _put(db, "portal_users", us)
+    return {"ok": True, "msg": "비밀번호를 바꿨습니다"}
 
 
 def admin_list(db: Session) -> list[dict]:
@@ -376,7 +390,7 @@ def me(db: Session, name: str) -> dict:
     s = _state(db, name)
     today = str(_now().date())
     return {"name": name, "broker": k.get("broker") if k else None, "key_tail": (k["app_key"][-4:] if k else None),
-            "stop_on": s.get("on"), "start": s.get("start"), "chat": bool(u.get("chat")), "code": u.get("code"),
+            "stop_on": s.get("on"), "start": s.get("start"), "chat": bool(u.get("chat")), "code": u.get("code"), "temp": bool(u.get("temp")),
             "lots": [{"code": L["code"], "name": L["name"], "qty": L["qty"], "stop": L.get("stop"), "src": L.get("src"),
                       "order": bool(L.get("toss_order")) or any(o["lot"] == lot and o["ok"] and not o.get("done") for o in s["orders"].get(today, []))}
                      for lot, L in s["lots"].items()],

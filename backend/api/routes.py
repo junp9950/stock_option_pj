@@ -2456,6 +2456,16 @@ def pt_line(body: PtLineIn, request: Request, db: Session = Depends(get_db)):
     return set_line(db, _pt(request, db), body.code, 0 if body.clear else body.stop, body.exclude)
 
 
+class PtPinIn(BaseModel):
+    new_pin: str = Field(..., max_length=100)
+
+
+@router.post("/pt/password")
+def pt_password(body: PtPinIn, request: Request, db: Session = Depends(get_db)):
+    from backend.services.portal import change_pin  # noqa: PLC0415
+    return change_pin(db, _pt(request, db), body.new_pin)
+
+
 class PortalAdminIn(BaseModel):
     action: str
     name: str

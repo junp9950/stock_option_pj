@@ -2862,6 +2862,13 @@ async function ptLogin(){
   if(!r||!r.ok){ try{ localStorage.removeItem('pt-pin'); }catch(e){} document.getElementById('panel-account').innerHTML=ptLoginHTML('이름이나 비밀번호가 맞지 않습니다 (5번 틀리면 15분 잠김)'); return; }
   ptTabSync(); loadAccount();
 }
+async function ptChangePin(){
+  const a=document.getElementById('pt-np').value, b=document.getElementById('pt-np2').value;
+  if(a!==b){ showToast('두 칸이 다릅니다',true); return; }
+  const r=await fetch(`${API}/pt/password`,{method:'POST',headers:ptH(),body:JSON.stringify({new_pin:a})}).then(r=>r.json()).catch(()=>null);
+  showToast(r&&r.msg?r.msg:'실패',!(r&&r.ok));
+  if(r&&r.ok){ try{ localStorage.setItem('pt-pin',a); }catch(e){} loadAccount(); }
+}
 function ptLogout(){ try{ localStorage.removeItem('pt-pin'); }catch(e){} switchTab('home'); ptTabSync(); }
 async function ptPost(u,body,method){ const r=await fetch(`${API}${u}`,{method:method||'POST',headers:ptH(),body:body?JSON.stringify(body):undefined}).then(r=>r.json()).catch(()=>null);
   showToast(r&&r.msg?r.msg:'실패',!(r&&r.ok)); loadAccount(); return r; }
@@ -2880,7 +2887,9 @@ function ptRender(d){
     :`텔레그램${d.bot?` <b>@${d.bot}</b>`:' 봇'}에게 <b style="font-family:monospace">/연결 ${d.code}</b> 를 보내면 알림을 받습니다`;
   const lots=d.lots.length?d.lots.map(x=>`<div class="sv-m" style="grid-template-columns:minmax(0,1fr) auto auto"><span><b>${x.name}</b> <span class="ts">${x.qty}주 · ${x.src||''}</span></span><span class="v">${x.stop?won(x.stop):'손절가 없음'}</span><span class="ts">${x.order?'🛑 걸림':'대기'}</span></div>`).join(''):'<span class="ts">아직 없음 — 연결한 뒤 새로 산 종목이 생기면 자동으로 들어옵니다</span>';
   const lines=Object.entries(d.lines||{}).map(([c,v])=>`<div class="sv-m" style="grid-template-columns:minmax(0,1fr) auto auto"><span>${c}</span><span class="v">${won(v)}</span><button class="btn btn-gray btn-sm" onclick="ptPost('/pt/line',{code:'${c}',clear:true})">지우기</button></div>`).join('');
-  el.innerHTML=`<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:12px"><b style="font-size:16px;color:var(--tx)">🔒 ${d.name}님의 계좌</b><button class="btn btn-sm" onclick="ptLogout()">잠그기</button></div>
+  const pinBox=`<div class="me-add" style="margin:0"><input id="pt-np" type="password" placeholder="새 비밀번호 (8자 이상)" autocomplete="new-password"><input id="pt-np2" type="password" placeholder="한 번 더" autocomplete="new-password"><button class="btn btn-sm" onclick="ptChangePin()">비밀번호 바꾸기</button></div>`;
+  el.innerHTML=`<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:12px"><b style="font-size:16px;color:var(--tx)">🔒 ${d.name}님의 계좌</b><span style="display:flex;gap:6px"><button class="btn btn-gray btn-sm" onclick="document.getElementById('pt-pinbox').hidden=!document.getElementById('pt-pinbox').hidden">비밀번호 바꾸기</button><button class="btn btn-sm" onclick="ptLogout()">잠그기</button></span></div>
+   ${d.temp?`<div class="sig-warn" style="margin-bottom:12px">🔑 <b>임시 비밀번호로 들어오셨습니다.</b> 아래에서 본인만 아는 비밀번호로 바꿔 주세요.${pinBox}</div>`:`<div id="pt-pinbox" class="bx" style="margin-bottom:12px" hidden>${pinBox}</div>`}
    <p class="bx-s">사이트 신호로 직접 사신 종목에 <b>손절 주문을 자동으로 걸어 드립니다</b>. 자동으로 사는 기능은 없습니다. 손절가 기본값 = 산 날 저가 −1% · 메리츠는 매일 08:50에 당일 스톱 주문, 토스는 1년짜리 조건주문으로 겁니다.</p>
    <div class="me-g2">
     <section class="bx"><div class="bx-h"><b>1. 증권사 연결</b></div>${keyBox}</section>
