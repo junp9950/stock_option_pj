@@ -85,7 +85,7 @@ def send(db: Session, msg: str, chat_id: int | str | None = None, html: bool = F
 
 
 # 사이트 주소: IP로 https를 열면 인증서가 없어 안 열린다 (Caddy가 http→https로 돌림) — 인증서 있는 도메인으로 (2026-10-05)
-SITE = "https://stock.20-196-212-146.sslip.io"
+SITE = "https://bat-rader.pages.dev"   # 2026-10-13 새 주소 (옛 sslip.io는 여기로 넘어감)
 AUTHORS = ("우라늄", "감사하모니카")
 MSGMAP_MAX = 300
 

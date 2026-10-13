@@ -25,7 +25,25 @@ app.add_middleware(
     allow_headers=["*"],
 )
 from fastapi.middleware.gzip import GZipMiddleware  # noqa: E402
-app.add_middleware(GZipMiddleware, minimum_size=1000)   # 폰에서 느림 (2026-10-07) — 첫 화면 150KB·차트 24KB를 압축해서 보냄
+app.add_middleware(GZipMiddleware, minimum_size=1000)
+
+
+# 새 주소 (2026-10-13 사용자: 클라우드플레어 Pages 무료 주소). Pages가 요청을 이 서버로 넘길 때 X-Stockradar-Via 헤더를 붙인다.
+# 옛 주소(sslip.io)로 직접 들어온 '화면' 요청과 처음 만든 stockradar-pages 주소는 새 주소로 넘긴다.
+# /api 는 넘기지 않음 (열려 있는 화면·텔레그램·내 점검 명령이 끊기지 않게). 302(임시)로 — 주소를 또 바꿀 수 있어서.
+NEW_SITE = "https://bat-rader.pages.dev"
+
+
+@app.middleware("http")
+async def _to_new_site(request, call_next):
+    via = request.headers.get("x-stockradar-via", "")
+    if request.method == "GET" and not request.url.path.startswith("/api") and via != "bat-rader.pages.dev":
+        host = (request.headers.get("host") or "").split(":")[0]
+        if via or host.endswith("sslip.io"):
+            from starlette.responses import RedirectResponse  # noqa: PLC0415
+            q = ("?" + request.url.query) if request.url.query else ""
+            return RedirectResponse(NEW_SITE + request.url.path + q, status_code=302)
+    return await call_next(request)   # 폰에서 느림 (2026-10-07) — 첫 화면 150KB·차트 24KB를 압축해서 보냄
 app.include_router(router, prefix=config.api_prefix)
 
 
