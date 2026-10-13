@@ -2421,6 +2421,24 @@ class PtLineIn(BaseModel):
     exclude: bool | None = None
 
 
+@router.post("/auth/check")
+def auth_check(request: Request, db: Session = Depends(get_db)):
+    """머리 줄 로그인 하나로 (2026-10-13 사용자 '로그아웃이 안 되노, 그냥 로그인 기능'): junp = 관리, 초대 사용자 = 내 계좌. 틀리면 404."""
+    from urllib.parse import unquote  # noqa: PLC0415
+    name = unquote(request.headers.get("x-auth-name", "")).strip()[:20]
+    pin = unquote(request.headers.get("x-auth-pin", ""))
+    if name and pin:
+        if name == "junp":
+            from backend.services.trade_journal import auth as jauth  # noqa: PLC0415
+            if jauth(db, name, pin) == "ok":
+                return {"role": "admin", "name": name}
+        else:
+            from backend.services.portal import auth as pauth  # noqa: PLC0415
+            if pauth(db, name, pin):
+                return {"role": "user", "name": name}
+    raise HTTPException(404, "Not Found")
+
+
 @router.post("/pt/login")
 def pt_login(request: Request, db: Session = Depends(get_db)):
     return {"ok": True, "name": _pt(request, db)}

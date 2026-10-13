@@ -132,6 +132,8 @@ select{background:var(--c3);border:1px solid var(--ln);color:var(--bd);padding:6
 .sig-r .nm{min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}.sig-warn{padding:8px 10px;margin:0 0 6px;border:1px solid var(--r);border-radius:8px;font-size:12.5px;color:var(--tx);line-height:1.6}.ws-status{margin:0 4px 6px;padding:7px 10px;border-radius:8px;font-size:12.5px;line-height:1.5;color:var(--tx);border:1px solid var(--ln)}.ws-status.k-r{border-color:var(--r)}.sig-card.crash{border-color:var(--r)}.cr-lead{margin-top:8px;font-size:13px;color:var(--tx)}.cr-how{font-size:13px;line-height:1.9;color:var(--tx)}
 .cr-stat{margin-top:10px;padding:8px 10px;border-radius:8px;background:var(--sunk);font-size:12.5px;line-height:1.6;color:var(--tx)}.cr-ref{margin-top:8px}.cr-ref summary{cursor:pointer;padding:4px}
 .ffl{font-size:11.5px;color:var(--mu);margin-top:2px;line-height:1.45}.ffl b{font-weight:700}
+.hd-auth{border:1px solid var(--ln);background:var(--card);color:var(--mu);border-radius:999px;padding:6px 12px;font-size:12px;cursor:pointer;white-space:nowrap;margin-left:8px}.hd-auth.on{color:var(--tx)}
+@media(max-width:900px){.hd-auth{padding:5px 9px;font-size:11px;margin-left:4px}}
 .sig-empty{padding:10px 4px;font-size:13px;color:var(--tx)}.sig-how{margin-top:12px;padding-top:10px;border-top:1px solid var(--line2);font-size:12.5px;color:var(--tx);line-height:1.7}
 @media(max-width:900px){#panel-home.active{display:flex;flex-direction:column}#panel-home>.sig-card{order:-1}.sig-g{grid-template-columns:1fr;gap:16px}.sig-r{grid-template-columns:minmax(0,1fr) 70px 70px 52px;font-size:12.5px}}
 .htop{display:grid;grid-template-columns:minmax(0,1.25fr) minmax(0,1fr);gap:14px;margin-bottom:14px}
@@ -559,8 +561,13 @@ select{background:var(--c3);border:1px solid var(--ln);color:var(--bd);padding:6
   <div class="hd-theme" role="group" aria-label="화면 색">
     <button data-th="dark" onclick="setTheme('dark')" title="다크">🌙<span> 다크</span></button><button data-th="light" onclick="setTheme('light')" title="화이트">☀️<span> 화이트</span></button><button data-th="warm" onclick="setTheme('warm')" title="웜 (눈 편한 종이색)">☕<span> 웜</span></button>
   </div>
+  <button class="hd-auth" id="hd-auth" onclick="authClick()">로그인</button>
   <button class="btn" id="btn-run-pipeline" onclick="runPipeline()" hidden>▶ 파이프라인 실행</button>
 </header>
+<div class="modal-bg" id="auth-modal-bg" onclick="if(event.target===this)authClose()"><div class="modal" style="max-width:360px;padding:22px">
+  <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:12px"><b style="font-size:16px;color:var(--tx)">로그인</b><button class="btn btn-gray btn-sm" onclick="authClose()">닫기</button></div>
+  <div style="display:flex;flex-direction:column;gap:8px"><input id="au-n" style="background:var(--bg);border:1px solid var(--ln);color:var(--bd);padding:10px 12px;border-radius:8px;font-size:14px" placeholder="이름" autocomplete="username"><input id="au-p" style="background:var(--bg);border:1px solid var(--ln);color:var(--bd);padding:10px 12px;border-radius:8px;font-size:14px" type="password" placeholder="비밀번호" autocomplete="current-password" onkeydown="if(event.key==='Enter')authLogin()">
+  <button class="btn" onclick="authLogin()">로그인</button><span class="ts" id="au-msg" style="color:var(--r)"></span></div></div></div>
 
 <div class="err-bar" id="err-bar">백엔드 연결 실패 — 서버가 실행 중인지 확인하세요</div>
 
@@ -1785,7 +1792,7 @@ async function loadJongbePerf(){
 let _jr=null, _jrGroup='by_kind';
 // 매매 일지 탭은 이 브라우저에서 로그인한 적 있을 때만 보임 (2026-10-11 "사이트에 떠 있는 게 좀 그렇다") — 주소 #journal로는 언제나 들어감
 function jrShowTab(){ const a=jrAuth(); return !!(a.o&&a.p)||_curTab==='journal'; }
-function jrTabSync(){ const t=document.querySelector('.tab[data-t="journal"]'); if(t) t.hidden=_mk!=='kr'||!jrShowTab(); }
+function jrTabSync(){ const t=document.querySelector('.tab[data-t="journal"]'); if(t) t.hidden=_mk!=='kr'||!jrShowTab(); if(typeof authBtn==='function') authBtn(); }
 function jrAuth(){ try{ return {o:localStorage.getItem('jr-owner')||'', p:localStorage.getItem('jr-pin')||''}; }catch(e){ return {o:'',p:''}; } }
 function jrH(){ const a=jrAuth(); return {'X-Owner':encodeURIComponent(a.o),'X-Pin':encodeURIComponent(a.p),'Content-Type':'application/json'}; }
 function jrToggle(id){ const el=document.getElementById(id); el.style.display=el.style.display==='none'?'block':'none'; }
@@ -1834,7 +1841,7 @@ async function jrLogin(create){
   document.getElementById('jr-pin').value=''; msg.textContent='';
   loadJournal();
 }
-function jrLogout(){ try{ localStorage.removeItem('jr-pin'); }catch(e){} _jr=null; switchTab('home'); jrTabSync(); }
+function jrLogout(){ authLogout(); }
 // 오늘 신호 몇 주 살지 (2026-10-10 "수량은 매매 일지에서만") — 수량 = 계좌 × 거래당 위험 ÷ (매수가 − 스탑로스)
 // 거래당 위험: 기본 0.5% · 수량 절반 표시 0.25% · 🔥 주도주 0.10%. 가격은 지금 목록 가격(장중이면 실시간).
 async function jrSizeRender(){
@@ -2842,7 +2849,7 @@ function sigOpen(code,name){ wsOpen(code,name); const el=document.querySelector(
 // ── 초대 사용자 '내 계좌' (2026-10-13) — 사장님이 초대한 사람만. 로그인 전엔 탭 자체가 안 보임(주소 #account로만 들어옴) ──
 function ptAuth(){ try{ return {n:localStorage.getItem('pt-name')||'', p:localStorage.getItem('pt-pin')||''}; }catch(e){ return {n:'',p:''}; } }
 function ptH(){ const a=ptAuth(); return {'X-Pt-Name':encodeURIComponent(a.n),'X-Pt-Pin':encodeURIComponent(a.p),'Content-Type':'application/json'}; }
-function ptTabSync(){ const t=document.querySelector('.tab[data-t="account"]'); if(t){ const a=ptAuth(); t.hidden=!((a.n&&a.p)||_curTab==='account'); } }
+function ptTabSync(){ const t=document.querySelector('.tab[data-t="account"]'); if(t){ const a=ptAuth(); t.hidden=!((a.n&&a.p)||_curTab==='account'); } authBtn(); }
 async function loadAccount(){
   const el=document.getElementById('panel-account'), a=ptAuth();
   if(!(a.n&&a.p)){ el.innerHTML=ptLoginHTML(''); return; }
@@ -2869,7 +2876,25 @@ async function ptChangePin(){
   showToast(r&&r.msg?r.msg:'실패',!(r&&r.ok));
   if(r&&r.ok){ try{ localStorage.setItem('pt-pin',a); }catch(e){} loadAccount(); }
 }
-function ptLogout(){ try{ localStorage.removeItem('pt-pin'); }catch(e){} switchTab('home'); ptTabSync(); }
+// ── 머리 줄 로그인 하나 (2026-10-13): 한 번에 한 사람만 — junp = 관리 탭, 초대 사용자 = 내 계좌 탭 ──
+function authWho(){ const j=jrAuth(), p=ptAuth(); return (j.o&&j.p)?{role:'admin',name:j.o}:(p.n&&p.p)?{role:'user',name:p.n}:null; }
+function authBtn(){ const b=document.getElementById('hd-auth'); if(!b) return; const w=authWho();
+  b.textContent=w?`👤 ${w.name} · 로그아웃`:'로그인'; b.classList.toggle('on',!!w); }
+function authClick(){ if(authWho()){ if(confirm('로그아웃할까요?')) authLogout(); return; }
+  document.getElementById('au-msg').textContent=''; document.getElementById('auth-modal-bg').classList.add('show'); setTimeout(()=>document.getElementById('au-n').focus(),50); }
+function authClose(){ document.getElementById('auth-modal-bg').classList.remove('show'); }
+async function authLogin(){
+  const n=document.getElementById('au-n').value.trim(), p=document.getElementById('au-p').value;
+  const r=await fetch(`${API}/auth/check`,{method:'POST',headers:{'X-Auth-Name':encodeURIComponent(n),'X-Auth-Pin':encodeURIComponent(p)}}).catch(()=>null);
+  if(!r||!r.ok){ document.getElementById('au-msg').textContent='이름이나 비밀번호가 맞지 않습니다'; return; }
+  const d=await r.json();
+  try{ localStorage.removeItem('jr-pin'); localStorage.removeItem('pt-pin');      // 한 번에 한 사람만
+    if(d.role==='admin'){ localStorage.setItem('jr-owner',n); localStorage.setItem('jr-pin',p); } else { localStorage.setItem('pt-name',n); localStorage.setItem('pt-pin',p); } }catch(e){}
+  document.getElementById('au-p').value=''; authClose(); _jr=null;
+  switchTab(d.role==='admin'?'journal':'account'); jrTabSync(); ptTabSync();
+}
+function authLogout(){ try{ localStorage.removeItem('jr-pin'); localStorage.removeItem('pt-pin'); }catch(e){} _jr=null; switchTab('home'); jrTabSync(); ptTabSync(); }
+function ptLogout(){ authLogout(); }
 async function ptPost(u,body,method){ const r=await fetch(`${API}${u}`,{method:method||'POST',headers:ptH(),body:body?JSON.stringify(body):undefined}).then(r=>r.json()).catch(()=>null);
   showToast(r&&r.msg?r.msg:'실패',!(r&&r.ok)); loadAccount(); return r; }
 function ptRender(d){
