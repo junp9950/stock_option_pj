@@ -96,9 +96,9 @@ def corr_drops(db: Session, raw: dict[str, set[str]]) -> dict[str, list[str]]:
     """테마로 여러 섹터에 들어간 종목을, 실제 주가가 덜 따라 움직이는 섹터에서 뺀다 (2026-10-13 건의 #3 · 사용자 "자동 섹터 정리").
     지난 1년 하루 등락률(시장 중간값을 뺀 것)과 각 섹터 중간값의 상관을 비교 — 가장 가까운 섹터보다 0.10 이상 낮은 섹터는 뺌.
     예: 원익IPS 신재생 0.38 / 반도체 장비 0.69 → 신재생에서 뺌 · 기아 신재생 0.22 / 자동차 0.48 → 뺌 · 한화솔루션 신재생 0.47 / 우주항공 0.34 → 신재생만.
-    한 섹터에만 있는 종목·자료 120일 안 되는 종목은 안 건드림. DB 날짜마다 한 번 계산(settings에 저장해 재시작에도)."""
+    1년·최근 3개월 둘 다에서 멀어야 뺌(하나라도 가까우면 남김). 한 섹터에만 있는 종목·자료 120일 안 되는 종목은 안 건드림. DB 날짜마다 한 번 계산(settings에 저장해 재시작에도)."""
     latest = db.execute(text("select max(trading_date) from spot_daily_prices")).scalar()
-    key = f"{latest}|{CORR_GAP}|mkt"
+    key = f"{latest}|{CORR_GAP}|mkt|1y3m"
     if _CD["key"] == key:
         return _CD["v"]
     try:
@@ -111,25 +111,33 @@ def corr_drops(db: Session, raw: dict[str, set[str]]) -> dict[str, list[str]]:
     multi = {c for c in set().union(*raw.values()) if sum(c in m for m in raw.values()) >= 2}
     allc = sorted(set().union(*raw.values()))
     px = pd.read_sql(text("select stock_code s, trading_date d, change_pct r from spot_daily_prices "
-                          "where trading_date > cast(:d as date) - 370 and stock_code = any(:m)"), db.connection(), params={"d": latest, "m": allc})
+                          "where trading_date > cast(:d as date) - 370"), db.connection(), params={"d": latest})
     R = px.pivot(index="d", columns="s", values="r").sort_index().astype(float).clip(-30, 30)
-    R = R.sub(R.median(axis=1), axis=0)     # 시장 전체가 같이 움직인 몫을 빼고 비교 — 안 빼면 섹터마다 0.5~0.7로 비슷해 구분이 안 됨(기아 신재생 0.58 vs 자동차 0.63 → 빼면 0.22 vs 0.48)
+    R = R.sub(R.median(axis=1), axis=0)[[c for c in allc if c in R.columns]]   # 시장 = 전 종목 중간값     # 시장 전체가 같이 움직인 몫을 빼고 비교 — 안 빼면 섹터마다 0.5~0.7로 비슷해 구분이 안 됨(기아 신재생 0.58 vs 자동차 0.63 → 빼면 0.22 vs 0.48)
     ok = R.count() >= 120
-    cors = {}
-    for f, mem in raw.items():
-        cols = [c for c in mem if c in R.columns and ok.get(c, False)]
-        if len(cols) < 5:
-            continue
-        cors[f] = R.corrwith(R[cols].median(axis=1))
+    # 1년과 최근 3개월(63거래일) 둘 다에서 멀어야 뺌 — 1년만 보면 새 재료를 늦게 따라감 (2026-10-13 사용자: 현대차가 요즘 로봇으로 움직이면 로봇에도)
+    def _cors(X):
+        out = {}
+        for f, mem in raw.items():
+            cols = [c for c in mem if c in X.columns and ok.get(c, False)]
+            if len(cols) >= 5:
+                out[f] = X.corrwith(X[cols].median(axis=1))
+        return out
+    wins = [_cors(R), _cors(R.iloc[-63:])]
     drops: dict[str, list[str]] = {}
     for c in multi:
-        cc = {f: float(cors[f][c]) for f, m in raw.items() if c in m and f in cors and c in cors[f].index and pd.notna(cors[f][c])}
-        if len(cc) < 2 or not ok.get(c, False):
+        if not ok.get(c, False):
             continue
-        best = max(cc.values())
-        d = sorted(f for f, v in cc.items() if best - v >= CORR_GAP)
-        if d:
-            drops[c] = d
+        far = None
+        for cors in wins:
+            cc = {f: float(cors[f][c]) for f, m in raw.items() if c in m and f in cors and c in cors[f].index and pd.notna(cors[f][c])}
+            if len(cc) < 2:
+                far = set(); break
+            best = max(cc.values())
+            d = {f for f, v in cc.items() if best - v >= CORR_GAP}
+            far = d if far is None else far & d
+        if far:
+            drops[c] = sorted(far)
     _CD.update(key=key, v=drops)
     try:
         from backend.db.models import Setting  # noqa: PLC0415
