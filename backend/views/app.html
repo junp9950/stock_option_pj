@@ -3389,14 +3389,14 @@ function renderLwChart(cid, allCandles, signals, per, opts){
   if(small) mk=mk.filter(sg=>sg.kind!=='info');
   const DOT=['near','note','wait','shape'];     // 참고 점: 작게 점만 — 글자는 봉에 올리면 위 정보 줄에 (2026-10-09 "점 뜨는 거 뭐고", 글자 겹침)
   // 기본으로 보이는 것 = 사고파는 자리만 (매수·주도·줍기·진입·매도·손절·내 매매). 나머지(점·네모·조심)는 '참고 표시' 켤 때만 (2026-10-13)
-  const MK_CORE=['score','score_better','score_add','score_hold','score_keep','lead','dip','trade_buy','trade_sell'], _core=new Set();   // 매도 표시(손절·익절·21선)는 참고로 — 매일 손절선·자동 주문이 있어서 (2026-10-13 사용자)
+  const MK_CORE=['score','score_better','score_add','score_hold','score_keep','lead','lead_keep','dip','trade_buy','trade_sell'], _core=new Set();   // 매도 표시(손절·익절·21선)는 참고로 — 매일 손절선·자동 주문이 있어서 (2026-10-13 사용자)
   mk=mk.map(sg=>{ const _o=(()=>{ const [col,shape]=MC[sg.kind]||MC.info; const dot=DOT.includes(sg.kind);
     // 차트 위 글자는 사고파는 자리만 (2026-10-13 "조건들이 겹쳐서 보기 쉽지 않다") — 급등봉·눌림·더 사기 같은 참고는 표시만, 이름은 봉에 올리면 위 정보창에
     const showTxt=!dot&&(KEY.includes(sg.kind)||sg.label.startsWith('종가 매수'));
     if(sg.kind==='score') return {time:sg.date,position:'belowBar',color:col,shape:'arrowUp',text:sg.good?'✅매수':'매수',size:sg.good?1.2:1};   // 종가 매수 신호 (점수는 봉에 올리면)
     if(sg.kind==='score_better'||sg.kind==='score_add'||sg.kind==='score_hold'||sg.kind==='score_keep') return {time:sg.date,position:'belowBar',color:MC.score[0],shape:'arrowUp',text:'매수',size:1};   // 들고 있어도 매수 조건이 맞은 날은 똑같이 '매수' (2026-10-13 사용자 "매수 표시를 매번" — 더 사기·보유 판단은 신호 추적에서)
     if(sg.kind==='lead') return {time:sg.date,position:'belowBar',color:'#e8590c',shape:'arrowUp',text:'🔥주도',size:1};   // 주도주 매수 (소량 · 위험 0.10%)
-    if(sg.kind==='lead_keep') return {time:sg.date,position:'belowBar',color:'#e8590c',shape:'circle',text:'',size:0.4};   // 주도주 보유 중 또 뜸
+    if(sg.kind==='lead_keep') return {time:sg.date,position:'belowBar',color:'#e8590c',shape:'arrowUp',text:'🔥주도',size:1};   // 주도주 보유 중 또 뜸 — 보라 매수처럼 매번 (2026-10-14 사용자 "5월 상승 동안 왜 한 번도 안 나왔냐", 10/13 "매수 표시를 매번"을 주도주에 빠뜨렸던 것)
     if(sg.kind==='dip') return {time:sg.date,position:'belowBar',color:col,shape,text:'줍기',size:0.9};      // 급락 날 줍기   // 종가 점수 6·7 — 숫자만 (글자 겹침 방지)
     return {time:sg.date,position:sg.pos==='below'?'belowBar':'aboveBar',color:col,shape,text:showTxt?sg.label:'',size:sg.kind==='entry'?1.6:dot?0.4:1}; })();
     if(MK_CORE.includes(sg.kind)) _core.add(_o); return _o; })

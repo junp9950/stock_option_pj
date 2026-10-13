@@ -355,7 +355,8 @@ def signals(db: Session, code: str, days: int = 260, owner: str | None = None, u
                 items.append({"date": str(d), "label": f"🔥 주도주 매수 (소량) · 손절 {fp(L[d] * 0.99)} (-{rk_[d] * 100:.1f}%) · RS {float(RS[d]):.0f}"
                               + (" · " + " · ".join(st_) if st_ else ""), "kind": "lead", "pos": "below", "price": float(L[d]), "why": why})
             elif d >= start:
-                items.append({"date": str(d), "label": "🔥 주도주 보유 중 (또 뜸) · 더 사지 않기", "kind": "lead_keep", "pos": "below", "price": float(L[d])})
+                items.append({"date": str(d), "label": f"🔥 주도주 매수 자리 · 손절 {fp(L[d] * 0.99)} (-{rk_[d] * 100:.1f}%) · RS {float(RS[d]):.0f} · 첫 매수를 들고 있으면 더 사지 않기",
+                              "kind": "lead_keep", "pos": "below", "price": float(L[d])})
         # 돌파 모양인데 매수가 아닌 날 → 작은 회색 점 + 이유 (2026-10-09 "파란 화살표는 좀 애매한데") · 매수와 겹치면 지움
         # 12년: 이평선 돌파 전부 R -0.11/0.00/+0.16 · 정배열 아닌 바닥 돌파 -0.18/-0.03/+0.06 → 화살표로 띄울 만한 자리가 아님
         keep = []
