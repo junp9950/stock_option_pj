@@ -2665,7 +2665,7 @@ async function wsDraw(){
     tfRetryLater(cd,()=>{ if(_ws.code===code&&_ws.tf===tf) wsDraw(); });
     return;
   }
-  const g=renderLwChart('ws-chart',c.cd.candles,c.sg?c.sg.items:[],_ws.per,{stop:_ws.stop||(c.sg&&c.sg.active&&c.sg.active.stop),code:_ws.code,tf:'1d'});
+  const g=renderLwChart('ws-chart',c.cd.candles,c.sg?c.sg.items:[],_ws.per,{stop:_ws.stop||(c.sg&&c.sg.active&&c.sg.active.stop),stopWhy:_ws.stop?'오늘 사면 손절':'산 자리 손절',stopFrom:_ws.stop?null:(c.sg&&c.sg.active&&c.sg.active.date),code:_ws.code,tf:'1d'});
   const a=c.sg&&c.sg.active;
   { const L=c.cd.candles, z=L[L.length-1], y=L[L.length-2]; if(z){ const cl=+z.closePrice, ch=y?(cl/+y.closePrice-1)*100:0;
       document.getElementById('ws-px').innerHTML=`${Math.round(cl).toLocaleString()}<span style="color:${ch>=0?'var(--up)':'var(--down)'}">${ch>=0?'+':''}${ch.toFixed(2)}%</span>`; }
@@ -3197,7 +3197,7 @@ function chSync(){ document.body.classList.toggle('ch-noleg',!CH.leg); document.
 function chApply(r){ if(!r) return;
   (r.ema||[]).forEach(x=>{ try{ x.applyOptions({visible:CH.ema}); }catch(e){} });
   (r.txt||[]).forEach(([x,t])=>{ try{ x.applyOptions({title:CH.txt?t:'',lastValueVisible:CH.txt&&!!t}); }catch(e){} });
-  if(r.pl) try{ r.pl.applyOptions({title:r.plt,lineVisible:CH.txt,axisLabelVisible:CH.txt}); }catch(e){}   // 글자 끄면 손절선(점선·가격 칸)도 같이 (10/13)
+  if(r.plS) try{ r.plS.applyOptions({visible:CH.txt}); }catch(e){}   // 글자 끄면 손절선(점선·가격 칸)도 같이 (10/13)
   if(r.cs&&r.mk) try{ const base=!CH.txt?[]:CH.ref?r.mk:r.mkCore; r.cs.setMarkers(r.relabel?r.relabel(base):base); }catch(e){}   // 끄면 신호 점·화살표도 없이 맨 차트 (10/13 "pure 차트")
   if(!CH.txt) try{ r.chart.chartElement().parentNode.parentNode.querySelectorAll('.lwwhy').forEach(x=>x.style.display='none'); }catch(e){}
   try{ r.chart.applyOptions({}); }catch(e){} }
@@ -3349,7 +3349,11 @@ function renderLwChart(cid, allCandles, signals, per, opts){
   const cs=chart.addCandlestickSeries({upColor:'#f85149',downColor:'#3b82f6',borderVisible:false,wickUpColor:'#f85149',wickDownColor:'#3b82f6'});
   const reg={chart,cs,ema:[],txt:[],mk:null,pl:null,plt:''}; _chReg=reg;
   cs.setData(data.map(d=>({time:d.time,open:d.open,high:d.high,low:d.low,close:d.close})));
-  if(opts&&opts.stop>0){ reg.plt='손절 '+tk(opts.stop).toLocaleString(); reg.pl=cs.createPriceLine({price:tk(opts.stop),color:cv('--neu'),lineWidth:1,lineStyle:2,axisLabelVisible:true,title:reg.plt}); }   // 손절선 (2026-10-11 시안 B)
+  if(opts&&opts.stop>0){   // 손절선: 차트 전체 가로선 대신 그 매수 자리부터 오늘까지만 + 무엇의 손절인지 (2026-10-13 "이 손절선은 어케")
+    const sp=tk(opts.stop), n0=data.length; let i0=opts.stopFrom?data.findIndex(d=>d.time>=opts.stopFrom):-1; if(i0<0||n0-1-i0>120) i0=Math.max(0,n0-6);
+    reg.plt=opts.stopWhy||'손절';   // 가격은 오른쪽 칸에 따로 나옴
+    reg.plS=chart.addLineSeries({color:cv('--neu'),lineWidth:1,lineStyle:2,priceLineVisible:false,lastValueVisible:true,title:reg.plt,crosshairMarkerVisible:false});
+    reg.plS.setData(data.slice(i0).map(d=>({time:d.time,value:sp}))); }
   const vs=chart.addHistogramSeries({priceFormat:{type:'volume'},priceScaleId:'vol',lastValueVisible:false,priceLineVisible:false});
   chart.priceScale('vol').applyOptions({scaleMargins:{top:0.8,bottom:0}});
   vs.setData(data.map(d=>({time:d.time,value:d.vol,color:d.close>=d.open?'rgba(248,81,73,.5)':'rgba(59,130,246,.5)'})));
@@ -3618,7 +3622,7 @@ async function svDraw(){
   }
   if(!c.cd||!c.cd.candles||!c.cd.candles.length){ note.textContent='차트를 못 불러왔습니다'; return; }
   const a=c.sg&&c.sg.active;
-  const g=renderLwChart('sv-chart',c.cd.candles,c.sg?c.sg.items:[],_sv.per,{stop:a&&a.stop,code:_sv.code,tf:'1d',us:_sv.us});
+  const g=renderLwChart('sv-chart',c.cd.candles,c.sg?c.sg.items:[],_sv.per,{stop:a&&a.stop,stopWhy:'산 자리 손절',stopFrom:a&&a.date,code:_sv.code,tf:'1d',us:_sv.us});
   note.textContent=`일봉 · 끌어서 과거 보기`+(g!=null?` · EMA 5·10·20 간격 ${g.toFixed(1)}%`:'')+_avwapNote+(_patNote?'  |  '+_patNote:'')+(a?` · ▲ 진입 신호 ${a.date.slice(5).replace('-','/')} · 손절 ${tk(a.stop).toLocaleString()}`:'');
 }
 function svMetric(k,v,sub,bar){ return `<div class="sv-m"><span class="k">${k}</span><span>${bar||''}${sub?`<span class="ts">${sub}</span>`:''}</span><span class="v">${v}</span></div>`; }
