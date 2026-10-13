@@ -1368,8 +1368,23 @@ async function hcSpark(sym){
     <polyline points="${line}" fill="none" stroke="${c}" stroke-width="1.6" vector-effect="non-scaling-stroke"/></svg>`;
   const hm=t=>t.slice(0,2)+':'+t.slice(2);
   document.getElementById('hc-sx').innerHTML=`<span>${hm(d.t0||'0900')}</span><span>${d.date.slice(5).replace('-','/')} · 전일 종가 ${d.prev.toLocaleString()}</span><span>${hm(d.t1||'1530')}</span>`;
-  hbFut();
+  hbFut(); hcNums();
 }
+// 카드의 코스피·코스닥 숫자도 선과 같이 1분마다 (2026-10-13 폰에서 선은 −6%인데 숫자는 아침 −2.99%로 남아 있었다 — 숫자는 5분 장중 갱신 때만 바뀌었음)
+async function hcNums(){
+  for(const [k,sym] of [['코스피','KOSPI'],['코스닥','KOSDAQ']]){
+    const d=await fetch(`${API}/index/intraday/${sym}`).then(r=>r.ok?r.json():null).catch(()=>null);
+    const el=document.querySelector(`#hc-today .hb-num[onclick*="'${sym}'"]`); if(!d||d.close==null||!el) continue;
+    const v=el.querySelector('.v'), sx=el.querySelector('.s'), l=el.querySelector('.l');
+    if(v) v.textContent=(+d.close).toLocaleString(undefined,{minimumFractionDigits:2,maximumFractionDigits:2});
+    if(sx){ sx.textContent=`${d.pct>0?'+':''}${d.pct}%`; sx.style.color=d.pct>=0?'var(--up)':'var(--down)'; }
+    if(l) l.textContent=k+(d.status==='OPEN'?' · 장중':'');
+    if(window._dashD&&window._dashD.index_today&&window._dashD.index_today[k]) Object.assign(window._dashD.index_today[k],{close:(+d.close).toLocaleString(undefined,{minimumFractionDigits:2,maximumFractionDigits:2}),pct:d.pct,status:d.status});
+  }
+}
+// 폰에서 브라우저를 뒤로 보냈다가 다시 열면 바로 새 숫자 (타이머가 멈춰 있던 동안 낡은 값이 보이던 것)
+document.addEventListener('visibilitychange',()=>{ if(document.visibilityState!=='visible') return;
+  loadHeader(); const home=document.getElementById('panel-home'); if(home&&home.classList.contains('active')){ hcSpark(); if(window._dashD) loadLive(window._dashD); } });
 async function renderDashboard(d, stale, live){
   try{ renderHomeTop(d, live); hcSpark(); }catch(e){ console.error(e); }
   const v=document.getElementById('db-verdict');
