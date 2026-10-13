@@ -28,7 +28,7 @@ from sqlalchemy.orm import Session
 
 logger = logging.getLogger(__name__)
 KST = ZoneInfo("Asia/Seoul")
-MAX_ORDERS_DAY = 15
+MAX_ORDERS_DAY = 40      # 2026-10-13: 15였는데 아침에 이미 12건이라 새로 산 4번째부터 손절이 안 걸릴 뻔 — 폭주 방지용 상한은 남김
 _FAILS: dict = {}
 
 

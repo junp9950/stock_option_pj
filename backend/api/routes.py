@@ -2132,60 +2132,73 @@ def get_chart_candidates(min_cap: float = 0, db: Session = Depends(get_db)):
 
 
 def warm_caches(db: Session) -> None:
-    """화면 기본값으로 미리 계산해 둔다. 데이터가 그대로면 즉시 끝난다."""
-    # 맨 먼저: 머리 줄 시장 판단 · 첫 화면 '오늘' 카드 · 목록 — 배포 직후 첫 접속이 10초 넘게 걸리던 것 (2026-10-11)
-    for fn in (lambda: get_market_verdict(db=db), lambda: get_dashboard(db=db), lambda: get_workspace_list(db=db)):
+    """화면 기본값으로 미리 계산해 둔다. 데이터가 그대로면 즉시 끝난다.
+    2026-10-13: 단계마다 따로 보호 — 예전엔 한 단계가 실패하면(15:41 수집 중 NaN 등) 뒤의 화면 캐시가 전부 건너뛰어졌고,
+    어느 단계인지도 안 남았다. 실패하면 단계 이름과 마지막 줄을 기록한다."""
+    import logging, traceback  # noqa: PLC0415,E401
+    log = logging.getLogger("backend.warm")
+
+    def step(name, fn):
         try:
             fn()
-        except Exception:  # noqa: BLE001
-            pass
-    try:      # 과매도 반등 판정 — 장중엔 계산이 6~10초라 2분마다 미리 (사람이 들어올 땐 늘 저장된 값, 2026-10-13 PC에서 빈 카드)
+        except Exception as exc:  # noqa: BLE001
+            tb = traceback.extract_tb(exc.__traceback__)
+            at = f"{tb[-1].filename.rsplit('/', 1)[-1]}:{tb[-1].lineno}" if tb else "?"
+            log.warning("캐시 미리 계산 실패 [%s] %s: %s @ %s", name, type(exc).__name__, str(exc)[:120], at)
+            try:
+                db.rollback()
+            except Exception:  # noqa: BLE001
+                pass
+
+    def _crash():
         from backend.services.stock_signals import crash_now  # noqa: PLC0415
         crash_now(db, max_age=90)
-    except Exception:  # noqa: BLE001
-        pass
-    # 첫 화면(작업대)에 쓰는 것부터 — 재시작 직후 차트 창 패널이 늦던 것 (2026-10-09)
-    try:
-        get_my_pattern(db=db)
-        from backend.services.stock_panel import rs_table as _rs  # noqa: PLC0415
-        _rs(db)
-        get_workspace_list(db=db)
+
+    def _rs_tbl():
+        from backend.services.stock_panel import rs_table  # noqa: PLC0415
+        rs_table(db)
+
+    def _rs_hist():
         from backend.services.stock_signals import rs_hist  # noqa: PLC0415
-        rs_hist(db)                    # 차트의 지난 날짜 종가 점수용 RS (하루 한 번, 약 5초)
-        from backend.services.stock_signals import tracking, _dip_history  # noqa: PLC0415
-        _dip_history(db, block=True)   # 차트의 지난 급락 날 줍기 표시 (하루 한 번)
-        tracking(db)                   # 첫 화면 '신호 추적' (최근 20일 신호 따라가기, 하루 한 번 약 15초)
+        rs_hist(db)
+
+    def _dip_hist():
+        from backend.services.stock_signals import _dip_history  # noqa: PLC0415
+        _dip_history(db, block=True)
+
+    def _tracking():
+        from backend.services.stock_signals import tracking  # noqa: PLC0415
+        tracking(db)
+
+    def _index():
         from backend.services.telegram import index_today  # noqa: PLC0415
-        index_today()                  # '오늘' 탭 지수 (네이버) — 첫 사람이 기다리지 않게
+        index_today()
+
+    def _themes():
         from backend.services.live_themes import live_themes  # noqa: PLC0415
-        live_themes(db)                # 섹터 실시간 (토스)
-    except Exception:  # noqa: BLE001
-        pass
-    get_chart_candidates(min_cap=0, db=db)
-    get_volume_records(db=db)
-    get_sector_rotation(db=db)
-    get_sector_members_all(db=db)      # 섹터 누르면 바로 펼치게
-    from backend.services.stock_panel import rs_table  # noqa: PLC0415
-    rs_table(db)                       # 차트 창 RS (DB 날짜 바뀔 때 한 번)
-    get_workspace_list(db=db)          # 첫 화면 목록 (정규장 종가 캐시)
-    get_sector_calendar(db=db)
-    get_jongbe(db=db)
-    get_value_records(db=db)
-    get_bottom_box(db=db)
-    get_support_setups(db=db)
-    get_large_pullback(db=db)
-    try:
+        live_themes(db)
+
+    def _us():
         from backend.services.us_stocks import indices as _usi, overview as _uso  # noqa: PLC0415
-        _usi(); _uso(db)               # 미장 오늘 (5분·30분 캐시)
-    except Exception:  # noqa: BLE001
-        pass
-    try:
+        _usi(); _uso(db)
+
+    def _notes():
         from backend.services.stock_notes import notes  # noqa: PLC0415
-        notes(db)                      # 실적 D-n · 위험 공시 꼬리표 (30분마다)
-    except Exception:  # noqa: BLE001
-        pass
-    get_dashboard(db=db)        # 첫 화면 '오늘'
-    get_my_pattern(db=db)       # 종베 탭 — dashboard와 캐시 이름이 달라 따로 데워야 함 (2026-10-07 종베 탭이 하루 전 데이터로 남아 있었음)
+        notes(db)
+
+    # 맨 먼저: 머리 줄 시장 판단 · 첫 화면 '오늘' 카드 · 목록 — 배포 직후 첫 접속이 10초 넘게 걸리던 것 (2026-10-11)
+    steps = [("시장 판단", lambda: get_market_verdict(db=db)), ("오늘 대시보드", lambda: get_dashboard(db=db)), ("오늘 목록", lambda: get_workspace_list(db=db)),
+             ("과매도 반등", _crash),             # 장중 6~10초라 2분마다 미리 (2026-10-13)
+             ("종베 탭", lambda: get_my_pattern(db=db)), ("차트 창 RS", _rs_tbl), ("지난 날짜 RS", _rs_hist), ("지난 급락 줍기", _dip_hist),
+             ("신호 추적", _tracking), ("지수", _index), ("섹터 실시간", _themes),
+             ("차트 후보", lambda: get_chart_candidates(min_cap=0, db=db)), ("대량거래", lambda: get_volume_records(db=db)),
+             ("섹터 흐름", lambda: get_sector_rotation(db=db)), ("섹터 종목", lambda: get_sector_members_all(db=db)),
+             ("오늘 목록(종가)", lambda: get_workspace_list(db=db)), ("섹터 캘린더", lambda: get_sector_calendar(db=db)), ("종베", lambda: get_jongbe(db=db)),
+             ("거래대금 기록", lambda: get_value_records(db=db)), ("바닥 박스", lambda: get_bottom_box(db=db)), ("지지 자리", lambda: get_support_setups(db=db)),
+             ("큰 눌림", lambda: get_large_pullback(db=db)), ("미장", _us), ("실적·공시 꼬리표", _notes),
+             ("오늘 대시보드(끝)", lambda: get_dashboard(db=db)), ("종베 탭(끝)", lambda: get_my_pattern(db=db))]
+    for name, fn in steps:
+        step(name, fn)
 
 
 @router.get("/screener/picks/performance")
