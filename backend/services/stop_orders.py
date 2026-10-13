@@ -48,9 +48,10 @@ def _save(db: Session, s: dict) -> None:
 
 
 def _tell(db: Session, msg: str) -> None:
-    from backend.services.telegram import send  # noqa: PLC0415
+    from backend.services.telegram import owner_chats, send  # noqa: PLC0415
     try:
-        send(db, msg)            # 기본 = telegram_chats(사장님 대화방)만. 게시판 방에는 안 감
+        for c in owner_chats(db):      # 사장님 본인 방만 — 알림 목록엔 /start 한 다른 사람 방도 있음 (2026-10-13)
+            send(db, msg, c)
     except Exception as exc:  # noqa: BLE001
         logger.warning("스톱 알림 실패: %s", type(exc).__name__)
 

@@ -93,6 +93,17 @@ MSGMAP_MAX = 300
 ME = "감사하모니카"      # 사용자 본인 — 본인이 쓴 글·댓글은 알리지 않는다 (2026-10-05 "내꺼는 빼고 우라늄이 뭐 달았을 때만")
 
 
+def owner_chats(db: Session) -> list[str]:
+    """사장님 본인 대화방만 (/name 감사하모니카). 알림 목록(telegram_chats)에는 /start 한 다른 사람 방도 들어 있어서
+    계좌 알림·계좌 명령은 여기로만 (2026-10-13 초대 사용자 방이 /start로 알림 목록에 들어가 사장님 계좌 손절 알림을 받던 것)."""
+    own = [str(c) for c in (_get(db, "telegram_owner", []) or [])]     # 번호로 저장 — /name 은 아무나 바꿀 수 있어서 이름으로 판단하지 않음
+    if own:
+        return own
+    names = _get(db, "telegram_authors", {}) or {}
+    chats = list((_get(db, "telegram_chats", {}) or {}).keys())
+    return [c for c in chats if names.get(c) == ME] or chats[:1]
+
+
 def notify_async(msg: str, author: str = "", ref: dict | None = None, only_me: bool = False) -> None:
     """요청 처리를 늦추지 않게 별도 스레드로 보낸다 (종목토론·건의사항 새 글·댓글). 본인이 쓴 건 보내지 않는다.
     ref = {"post": 글 id, "comment": 댓글 id} 이면 그 알림에 텔레그램 '답장'으로 댓글을 달 수 있게 기억해 둔다."""
@@ -670,9 +681,35 @@ def poll(db: Session) -> None:
             who_pt = link_chat(db, txt.split(maxsplit=1)[1] if " " in txt else "", cid)
             send(db, f"✅ '{who_pt}' 계좌의 자동 손절 알림을 이 방으로 보냅니다." if who_pt else "연결 코드가 맞지 않습니다. '내 계좌' 화면의 코드를 확인해 주세요.", cid)
             continue
+        if txt.startswith("/허용") or txt.startswith("/빼기방"):   # 시장 알림 방 넣고 빼기 — 사장님 방에서만 (2026-10-13)
+            if cid not in owner_chats(db):
+                send(db, "사장님 대화방에서만 됩니다.", cid); continue
+            arg = txt.split(maxsplit=1)[1].strip() if " " in txt else ""
+            pend = _get(db, "telegram_pending", {}) or {}
+            if txt.startswith("/허용"):
+                if arg not in pend:
+                    send(db, "기다리는 방이 없습니다." + ("".join(f"\n· /허용 {k} ({v})" for k, v in pend.items()) if pend else ""), cid); continue
+                chats[arg] = pend.pop(arg); _put(db, "telegram_chats", chats); _put(db, "telegram_pending", pend)
+                send(db, f"✅ '{chats[arg]}' 방을 시장 알림에 넣었습니다.", cid)
+                send(db, "✅ 알림 등록 완료. 장 마감 뒤 종베 후보 요약을 보내 드립니다.\n\n" + HELP, arg)
+            else:
+                if arg in chats and arg not in owner_chats(db):
+                    nm = chats.pop(arg); _put(db, "telegram_chats", chats); send(db, f"'{nm}' 방을 시장 알림에서 뺐습니다.", cid)
+                else:
+                    rest = ", ".join(f"{v} ({k})" for k, v in chats.items() if k not in owner_chats(db))
+                    send(db, ("알림 방: " + rest + "\n빼려면 /빼기방 번호") if rest else "사장님 방 말고 없음", cid)
+            continue
         if txt.startswith("/start"):
             if cid not in chats and len(chats) >= MAX_CHATS:
                 send(db, "등록 인원이 꽉 찼습니다.", cid); continue
+            if cid not in chats and owner_chats(db):
+                # 새 방은 바로 넣지 않음 — 초대 사용자가 '시작'을 눌러 사장님 시장·계좌 알림 목록에 들어가던 것 (2026-10-13)
+                pend = _get(db, "telegram_pending", {}) or {}
+                pend[cid] = who; _put(db, "telegram_pending", pend)
+                send(db, "주식 레이더 봇입니다.\n· '내 계좌' 자동 손절 알림: 사이트 '내 계좌' 화면의 /연결 번호를 보내 주세요.\n· 시장 알림: 사장님이 허용하면 받습니다.", cid)
+                for o in owner_chats(db):
+                    send(db, f"ℹ️ 새 대화방이 /start 했습니다: {who}\n시장 알림에 넣으려면 /허용 {cid}", o)
+                continue
             new = cid not in chats
             chats[cid] = who
             _put(db, "telegram_chats", chats)
@@ -706,7 +743,9 @@ def poll(db: Session) -> None:
         elif txt.startswith("/주도주"):      # 주도주(L) 상태·수동 끄기/켜기 — 끄고 켠 때를 숫자와 함께 기록 (2026-10-10)
             from backend.services import forward_log as FL  # noqa: PLC0415
             arg = txt.split(maxsplit=2)
-            if len(arg) >= 2 and arg[1] in ("끄기", "켜기"):
+            if len(arg) >= 2 and arg[1] in ("끄기", "켜기") and str(cid) not in owner_chats(db):
+                send(db, "주도주 끄기·켜기는 사장님 대화방에서만 됩니다.", cid)
+            elif len(arg) >= 2 and arg[1] in ("끄기", "켜기"):
                 send(db, FL.set_lead_manual(db, arg[1] == "켜기", arg[2] if len(arg) > 2 else ""), cid)
             else:
                 ls = FL.lead_state(db)
@@ -714,8 +753,8 @@ def poll(db: Session) -> None:
                      + "\n/주도주 끄기 이유 · /주도주 켜기 이유 (끄고 켠 때를 기록합니다)", cid)
         elif txt.startswith("/스톱"):        # 메리츠 손절가 자동 주문 — 계좌 정보라 사장님 대화방(telegram_chats)에서만 (2026-10-13)
             from backend.services import stop_orders as SO  # noqa: PLC0415
-            if cid not in chats:
-                send(db, "이 명령은 알림 대화방에서만 됩니다.", cid); continue
+            if str(cid) not in owner_chats(db):
+                send(db, "이 명령은 사장님 대화방에서만 됩니다.", cid); continue
             if txt.startswith("/스톱끄기"):
                 send(db, SO.set_on(db, False), cid)
             elif txt.startswith("/스톱켜기"):
