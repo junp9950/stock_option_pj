@@ -2065,6 +2065,11 @@ def warm_caches(db: Session) -> None:
             fn()
         except Exception:  # noqa: BLE001
             pass
+    try:      # 과매도 반등 판정 — 장중엔 계산이 6~10초라 2분마다 미리 (사람이 들어올 땐 늘 저장된 값, 2026-10-13 PC에서 빈 카드)
+        from backend.services.stock_signals import crash_now  # noqa: PLC0415
+        crash_now(db, max_age=90)
+    except Exception:  # noqa: BLE001
+        pass
     # 첫 화면(작업대)에 쓰는 것부터 — 재시작 직후 차트 창 패널이 늦던 것 (2026-10-09)
     try:
         get_my_pattern(db=db)
