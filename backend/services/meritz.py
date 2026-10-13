@@ -133,3 +133,19 @@ def orders_today(yyyymmdd: str, side: str = "0") -> list[dict]:
             break
         params = {**params, "tr_cont": "1", "tr_cont_key": res["body"]["tr_cont_key"]}
     return out
+
+
+def market_sell(code: str, qty: int, credit: bool, loan_date: str = "") -> dict:
+    """시장가 매도. 장 시작 전(08:50)에 내면 시초가, 15:20~15:30 동시호가에 내면 종가에 체결된다.
+    21일선 이탈 다음 날 시초가 매도 · 반등 모드 5거래일째 종가 매도용 (2026-10-13 사용자 승인)."""
+    common = {"iscd": "A" + code, "oder_unpr": 0, "odqt": int(qty), "oder_cls_code": "05", "oder_cond_cls_code": "0",
+              "exch_kind_code": "01", "warn_cnfr_yn": "N"}
+    if credit:
+        res = call("POST", "/trading/v1/credit-orders/sell", body={**common, "loan_oder_cls_code": "01", "loan_date": loan_date, "loan_srno": "1", "whol_amt_rdmp_yn": "N"})
+    else:
+        res = call("POST", "/trading/v1/orders/sell", body={**common, "orgl_oder_no": 0, "whol_rctf_cncl_yn": "N"})
+    d = res["data"] if isinstance(res["data"], dict) else ((res["data"] or [{}])[0] if isinstance(res["data"], list) else {})
+    warn = str(d.get("warn_cls_code") or "0")
+    ok = res["ok"] and warn in ("0", "") and bool(d.get("oder_no"))
+    return {"ok": ok, "order_no": d.get("oder_no"), "warn": "" if warn in ("0", "") else f"{warn} {d.get('warn_msg') or ''}".strip(),
+            "msg": f"{res['rsp_cd']} {res['msg']} {res['sub']}".strip()}

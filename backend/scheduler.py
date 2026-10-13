@@ -384,6 +384,7 @@ def start_scheduler() -> BackgroundScheduler:
     scheduler.add_job(lambda: _stop_orders_job("morning"), 'cron', day_of_week='mon-fri', hour=8, minute=50, id='stop_morning', replace_existing=True, max_instances=1)
     scheduler.add_job(lambda: _stop_orders_job("retry"), 'cron', day_of_week='mon-fri', hour=9, minute=1, id='stop_retry', replace_existing=True, max_instances=1)
     scheduler.add_job(lambda: _stop_orders_job("intraday"), 'cron', day_of_week='mon-fri', hour='9-15', minute='3-59/5', id='stop_intraday', replace_existing=True, max_instances=1)
+    scheduler.add_job(lambda: _stop_orders_job("preclose"), 'cron', day_of_week='mon-fri', hour=15, minute=21, id='stop_preclose', replace_existing=True, max_instances=1)
     scheduler.add_job(lambda: _stop_orders_job("close"), 'cron', day_of_week='mon-fri', hour=15, minute=40, id='stop_close', replace_existing=True, max_instances=1)
     scheduler.add_job(lambda: _stop_orders_job("late"), 'cron', day_of_week='mon-fri', hour=20, minute=10, id='stop_late', replace_existing=True, max_instances=1)
 

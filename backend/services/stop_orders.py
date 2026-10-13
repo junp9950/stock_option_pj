@@ -6,6 +6,8 @@
   산 날 장중에는 저가가 확정 전이라 그때까지의 저가로 걸고, 다음 날 아침 확정 저가로 다시 건다.
 - 주문: 감시가 = 손절가, 지정가 = 손절가 −1%(호가 내림, 갭 하락에도 체결되게 — 사용자 승인). KRX 정규장만 · 당일 유효라 매일 아침 다시 건다.
 - 시각: 08:50 아침 걸기(안 되면 09:01 다시) · 장중 5분마다 새로 산 것·손절선 바뀐 것·체결 확인 · 15:40 마감 정리.
+- 나오는 기준(10/14부터 새로 산 것만, 사용자 승인 10/13): 반등 모드로 산 것 = 5거래일째 15:21 종가 시장가 매도(12년: 21선 따라가기보다 +1.3%p),
+  그 밖 = 21일선 위로 한 번 마감한 뒤부터 21일선 아래 마감이면 다음 날 08:50 시초가 시장가 매도.
 - 안전: 하루 주문 15건 상한, 수량은 실제 잔고를 넘지 않음, 브로커 경고가 오면 자동 확인하지 않고 알림만,
   텔레그램 /스톱끄기 · /스톱켜기 · /스톱 (상태). 알림은 사장님 대화방(telegram_chats)에만.
 상태: settings 'meritz_stop' = {on, start, baseline{lot: qty}, lots{lot: {...}}, orders{date: [...]}, notified[]}
@@ -99,6 +101,63 @@ def _stop_for(db: Session, code: str, buy: date, today: date) -> tuple[int | Non
     return int(tick_floor(float(low) * 0.99)), "산 날 저가 −1%", final
 
 
+def _mode_for(db: Session, code: str, buy: date) -> str:
+    """산 날 과매도 반등 목록(매수 5 + 참고)에 있던 종목이면 'crash'(5거래일째 종가 매도), 아니면 'trend'(21일선 이탈 매도)."""
+    try:
+        from backend.services.stock_signals import crash_now  # noqa: PLC0415
+        cr = crash_now(db)
+        if cr.get("active") and cr.get("date") == str(buy) and code in {x["code"] for x in cr.get("items", []) + cr.get("ref", [])}:
+            return "crash"
+    except Exception:  # noqa: BLE001
+        pass
+    return "trend"
+
+
+def _close_vs_ema21(code: str, today: date) -> tuple[float | None, float | None]:
+    """오늘 종가와 21일 지수이동평균(오늘 포함). 토스 일봉 100개."""
+    try:
+        from backend.services import toss_client as t  # noqa: PLC0415
+        cs = t._get("/candles", {"symbol": code, "interval": "1d", "count": 100}).json()["result"]["candles"]  # noqa: SLF001
+        cs = sorted(cs, key=lambda x: x["timestamp"])
+        if not cs or cs[-1]["timestamp"][:10] != str(today):
+            return None, None
+        ema = None
+        for x in cs:
+            c = float(x["closePrice"])
+            ema = c if ema is None else ema + (c - ema) * 2 / 22
+        return float(cs[-1]["closePrice"]), ema
+    except Exception:  # noqa: BLE001
+        return None, None
+
+
+def _nth_trading_day_after(d: date, n: int) -> date:
+    from backend.utils.dates import is_trading_day  # noqa: PLC0415
+    k = 0
+    while k < n:
+        d += timedelta(days=1)
+        if is_trading_day(d):
+            k += 1
+    return d
+
+
+def _market_exit(db: Session, s: dict, lot: str, L: dict, today: date, why: str) -> str:
+    """오늘 걸린 손절 주문을 취소하고 시장가 매도 (아침 = 시초가, 15:21 = 종가)."""
+    from backend.services import meritz as M  # noqa: PLC0415
+    o = _open_order(s, lot, today)
+    if o:
+        c = M.cancel(L["code"], o["order_no"], o["qty"], o["trigger"], o["limit"])
+        if not c["ok"]:
+            return f"⚠ {L['name']} {why} 매도 전 손절 주문 취소 실패 — {c['msg']} (직접 확인해 주세요)"
+        o["done"] = "취소"
+    r = M.market_sell(L["code"], L["qty"], L["credit"], L.get("loan_date", ""))
+    s["orders"].setdefault(str(today), []).append({"lot": lot, "code": L["code"], "name": L["name"], "qty": L["qty"], "trigger": 0, "limit": 0,
+                                                  "order_no": r["order_no"], "ok": r["ok"], "at": _now().strftime("%H:%M"), "msg": r["msg"], "warn": r["warn"], "market": why})
+    if r["ok"]:
+        L["sell_pending"] = str(today)
+        return f"▼ {L['name']} {L['qty']}주 {why} — 시장가 매도 주문 넣음"
+    return f"⚠ {L['name']} {why} 시장가 매도 실패 — {r['warn'] or r['msg']} (직접 팔아 주세요)"
+
+
 def sync(db: Session, s: dict, today: date) -> list[str]:
     """실제 잔고로 기준·대상 수량을 맞춘다. 알림 문장 목록을 돌려준다."""
     from backend.services import meritz as M  # noqa: PLC0415
@@ -120,7 +179,8 @@ def sync(db: Session, s: dict, today: date) -> list[str]:
             buy = _buy_date(h, today)
             stop, src, final = _stop_for(db, h["code"], buy, today)
             s["lots"][lot] = {"code": h["code"], "name": h["name"], "credit": h["credit"], "loan_date": h["loan_date"], "qty": extra,
-                              "buy": str(buy), "stop": stop, "src": src, "final": final, "avg": h["avg"]}
+                              "buy": str(buy), "stop": stop, "src": src, "final": final, "avg": h["avg"],
+                              "mode": _mode_for(db, h["code"], buy), "legacy": str(buy) < START, "armed": False}
             msgs.append(f"🆕 새로 산 것 감지: {h['name']} {extra}주 ({'신용' if h['credit'] else '현금'}) · 손절가 "
                         + (f"{stop:,} ({src})" if stop else f"없음 — {src}, 관리 탭에서 손절선을 넣어 주세요"))
         elif L and extra != L["qty"]:
@@ -164,7 +224,8 @@ def _open_order(s: dict, lot: str, today: date) -> dict | None:
 
 
 def run(db: Session, phase: str) -> str:
-    """phase: morning(08:50) · retry(09:01) · intraday(5분) · close(15:40) · late(20:10 장 후 시간외에 산 것) · baseline(기준 잡기)."""
+    """phase: morning(08:50) · retry(09:01) · intraday(5분) · preclose(15:21 반등 모드 5일째 종가 매도) · close(15:40 21일선 확인)
+    · late(20:10 장 후 시간외에 산 것) · baseline(기준 잡기)."""
     from backend.services import meritz as M  # noqa: PLC0415
     from backend.utils.dates import is_trading_day  # noqa: PLC0415
     if not M.enabled():
@@ -185,6 +246,13 @@ def run(db: Session, phase: str) -> str:
     if str(today) >= s["start"] and s["on"] and phase in ("morning", "retry", "intraday"):
         day = s["orders"].setdefault(str(today), [])
         for lot, L in s["lots"].items():
+            if L.get("sell_pending") == str(today):
+                continue
+            if L.get("exit_next") and phase in ("morning", "retry"):
+                tried = [x for x in day if x["lot"] == lot and x.get("market")]
+                if not any(x["ok"] for x in tried) and len(tried) < 2:      # 08:50 실패하면 09:01 한 번 더
+                    out.append(_market_exit(db, s, lot, L, today, L["exit_next"]))
+                continue
             # 아침: 확정 저가(전날까지 산 것)나 관리 탭 손절선으로 다시 계산. 장중: 관리 탭 손절선이 바뀐 것만
             # (산 날 장중 손절가는 그때까지 저가 −1%로 두고 따라 내리지 않는다 — 따라 내리면 영영 안 걸림)
             if phase in ("morning", "retry"):
@@ -210,8 +278,27 @@ def run(db: Session, phase: str) -> str:
             if len(fails) >= 2 or (fails and phase == "intraday"):
                 continue                  # 하루 두 번(아침·09:01)까지만 시도 — 실패 알림이 5분마다 쏟아지지 않게
             out.append(_place(db, s, lot, L, today))
+    if str(today) >= s["start"] and s["on"] and phase == "preclose":
+        for lot, L in s["lots"].items():
+            if L.get("mode") == "crash" and not L.get("legacy") and not L.get("sell_pending") \
+                    and str(_nth_trading_day_after(date.fromisoformat(L["buy"]), 5)) <= str(today):
+                out.append(_market_exit(db, s, lot, L, today, "반등 모드 5거래일째 종가"))
+    if str(today) >= s["start"] and phase == "close":
+        for lot, L in s["lots"].items():
+            if L.get("legacy") or L.get("mode") != "trend" or L.get("sell_pending"):
+                continue
+            c, e = _close_vs_ema21(L["code"], today)
+            if c is None:
+                continue
+            if c > e:
+                if not L.get("armed"):
+                    L["armed"] = True
+                L.pop("exit_next", None)
+            elif L.get("armed") and not L.get("exit_next"):
+                L["exit_next"] = "21일선 아래 마감 → 다음 날 시초가"
+                out.append(f"▼ {L['name']} 종가 {c:,.0f} < 21일선 {e:,.0f} → 내일 아침 시초가에 자동 매도 (계속 들고 싶으면 오늘 /스톱끄기)")
     # 체결 확인 (내 손절 주문이 체결됐으면 알림)
-    if str(today) >= s["start"] and phase in ("intraday", "close") and s["orders"].get(str(today)):
+    if str(today) >= s["start"] and phase in ("intraday", "close", "retry") and s["orders"].get(str(today)):
         try:
             hist = {str(x.get("oder_no")): x for x in M.orders_today(today.strftime("%Y%m%d"), "1")}
             for o in s["orders"].get(str(today), []):
@@ -219,14 +306,16 @@ def run(db: Session, phase: str) -> str:
                 key = f"{today}|{o.get('order_no')}"
                 if h and float(h.get("total_cntg_qty") or 0) > 0 and key not in s["notified"]:
                     s["notified"].append(key)
-                    out.append(f"🔔 손절 체결: {o['name']} {int(float(h['total_cntg_qty']))}주 @ {float(h.get('cntg_unpr') or 0):,.0f}")
+                    out.append(f"🔔 {'매도' if o.get('market') else '손절'} 체결: {o['name']} {int(float(h['total_cntg_qty']))}주 @ {float(h.get('cntg_unpr') or 0):,.0f}"
+                               + (f" ({o['market']})" if o.get("market") else ""))
         except Exception as exc:  # noqa: BLE001
             logger.warning("스톱 체결 확인 실패: %s", type(exc).__name__)
     _save(db, s)
     out = [m for m in out if m]
     if out and phase != "baseline":
         head = {"morning": "🛑 오늘 손절 주문 (메리츠 스톱지정가)", "retry": "🛑 손절 주문 다시 걸기", "intraday": "🛑 손절 주문",
-                "close": "🛑 장 마감 · 내일 아침 손절 주문 걸 것", "late": "🛑 시간외 · 내일 아침 손절 주문 걸 것"}[phase]
+                "close": "🛑 장 마감 · 내일 아침 손절 주문 걸 것", "late": "🛑 시간외 · 내일 아침 손절 주문 걸 것",
+                "preclose": "▼ 반등 모드 5거래일째 종가 매도"}[phase]
         _tell(db, head + "\n" + "\n".join(out) + ("" if s["on"] else "\n(지금 꺼져 있음 — /스톱켜기)"))
     return " / ".join(out) or "변화 없음"
 
@@ -237,7 +326,10 @@ def status(db: Session) -> str:
     od = [o for o in s["orders"].get(today, []) if o["ok"] and not o.get("done")]
     lines = [f"손절 자동 주문: {'켜짐' if s['on'] else '꺼짐'} · {s['start']}부터 새로 산 것만 · 지정가 = 손절가 −1%"]
     for L in s["lots"].values():
-        lines.append(f"· {L['name']} {L['qty']}주 · 손절 {L['stop']:,} ({L['src']})" if L.get("stop") else f"· {L['name']} {L['qty']}주 · 손절가 없음")
+        tail = "" if L.get("legacy") else (" · 5거래일째 종가 매도 " + str(_nth_trading_day_after(date.fromisoformat(L["buy"]), 5))[5:] if L.get("mode") == "crash"
+                                            else " · 21일선 이탈 매도 " + ("대기 중" if L.get("armed") else "(21일선 위 마감 뒤부터)"))
+        lines.append((f"· {L['name']} {L['qty']}주 · 손절 {L['stop']:,} ({L['src']})" if L.get("stop") else f"· {L['name']} {L['qty']}주 · 손절가 없음")
+                     + tail + (f" · ▼ {L['exit_next']}" if L.get("exit_next") else ""))
     if not s["lots"]:
         lines.append("· 대상 없음 (새로 산 종목이 생기면 자동으로)")
     lines.append(f"오늘 걸린 주문 {len(od)}건" + ("" if not od else ": " + ", ".join(f"{o['name']} {o['trigger']:,}" for o in od)))
