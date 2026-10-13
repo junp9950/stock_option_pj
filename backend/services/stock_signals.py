@@ -27,8 +27,26 @@ from sqlalchemy.orm import Session
 _REG: dict = {"key": None, "v": {}}
 
 
+
+_DL: dict = {"t": 0.0, "v": None}
+
+
+def _data_latest(db: Session):
+    """일봉이 '거의 다' 들어온 마지막 날. 15:41 수집은 유니버스 230종목을 먼저 넣고 나머지 2,100여 종목을 10~15분 뒤에 채워서,
+    그 사이 max(trading_date)를 쓰면 오늘 봉이 없는 종목(10/13 롯데렌탈)이 후보에서 사라졌다 (2026-10-13). 전 거래일 행 수의 80%↑일 때만 오늘로 본다. 30초 캐시."""
+    import time as _t  # noqa: PLC0415
+    if _DL["v"] is not None and _t.time() - _DL["t"] < 30:
+        return _DL["v"]
+    rows = db.execute(text("select trading_date, count(*) from spot_daily_prices where trading_date >= "
+                           "(select max(trading_date) from spot_daily_prices) - 10 group by 1 order by 1 desc limit 2")).all()
+    v = rows[0][0] if rows else None
+    if len(rows) == 2 and rows[0][1] < rows[1][1] * 0.8:
+        v = rows[1][0]
+    _DL.update(t=_t.time(), v=v)
+    return v
+
 def _bull_days(db: Session) -> dict:
-    latest = db.execute(text("select max(trading_date) from spot_daily_prices")).scalar()
+    latest = _data_latest(db)
     if _REG["key"] == latest:
         return _REG["v"]
     from backend.screener.market_regime import regime_series
@@ -44,7 +62,7 @@ _MK: dict = {"key": None, "v": {}}
 
 def _market_chg(db: Session) -> dict:
     """날짜별 시장 등락(%) — _dip_picks와 같은 정의(거래대금 20일 평균 10억↑ 종목 평균). 차트에 지난 급락 날 표시용."""
-    latest = db.execute(text("select max(trading_date) from spot_daily_prices")).scalar()
+    latest = _data_latest(db)
     if _MK["key"] == latest:
         return _MK["v"]
     P = _close_frames(db, latest)
@@ -497,7 +515,7 @@ def _workspace_list(db: Session) -> dict:
     except Exception:  # noqa: BLE001
         _trk = []
     codes = list({*cand, *_trk})
-    latest = db.execute(text("select max(trading_date) from spot_daily_prices")).scalar()
+    latest = _data_latest(db)
     px = {r[0]: (float(r[1]), float(r[2] or 0)) for r in db.execute(text(
         "select stock_code, close_price, change_pct from spot_daily_prices where trading_date = :d and stock_code = any(:c)"), {"d": latest, "c": codes}).all()}
     now = datetime.now(ZoneInfo("Asia/Seoul"))
@@ -576,7 +594,7 @@ def holdings(db: Session, owner: str) -> dict:
              "stop": float(wl[p["code"]]["level"]) if wl.get(p["code"], {}).get("kind") == "hold" and wl[p["code"]].get("level") else 0.0}
             for p in W._positions(db, owner)]
     codes = [h["code"] for h in held]
-    latest = db.execute(text("select max(trading_date) from spot_daily_prices")).scalar()
+    latest = _data_latest(db)
     px = {r[0]: (float(r[1]), float(r[2] or 0)) for r in db.execute(text(
         "select stock_code, close_price, change_pct from spot_daily_prices where trading_date = :d and stock_code = any(:c)"), {"d": latest, "c": codes}).all()}
     px.update(_krx_closes(codes, str(latest)))
@@ -606,7 +624,7 @@ def entry_today(db: Session, asof=None) -> list[dict]:
     """디스크 캐시 (재시작 직후에도 바로). asof를 주면 그 날짜로 바로 계산(검증용)."""
     if asof is not None:
         return _entry_today(db, asof)
-    latest = db.execute(text("select max(trading_date) from spot_daily_prices")).scalar()
+    latest = _data_latest(db)
     if _ENTRY["key"] == latest:
         return _ENTRY["v"]
     from backend.services.result_cache import cached  # noqa: PLC0415
@@ -619,7 +637,7 @@ def entry_today(db: Session, asof=None) -> list[dict]:
 def _entry_today(db: Session, asof=None) -> list[dict]:
     """전 종목에 ▲ 진입 규칙을 돌려 가장 최근 거래일에 신호가 뜬 종목 (DB 날짜가 바뀔 때만 계산, 약 2~4초).
     규칙은 signals()와 같다: (박스 돌파 또는 EMA 모임 돌파·정배열) + 상승·횡보장 + 추세 조건 6/7↑ + 그날 +8% 미만 · 20일선 +15% 안. 하루 거래대금 20일 평균 30억↑만."""
-    latest = asof or db.execute(text("select max(trading_date) from spot_daily_prices")).scalar()
+    latest = asof or _data_latest(db)
     if not _bull_days(db).get(latest, False):
         return []
     px = pd.read_sql(text("select stock_code s, trading_date d, open_price o, high_price h, low_price l, close_price c, trading_value tv "
@@ -660,7 +678,7 @@ def market_breadth(db: Session) -> dict:
     """시장 폭 = 하루 거래대금 30억↑ 종목 중 50일선 위 비율, 10일 변화, '속 약해짐'(지수 20일선 위인데 폭 10일 새 5%p↓).
     12년(v12c.py, 2026-10-09): 속 약해짐 뒤 20일 안 지수 20일선 이탈 88%(그 밖 76%)지만 최대 낙폭 -3.6%(그 밖 -3.5%) · 20일 뒤 시장 +2.4%(+1.3%)
     → '꺾임'이 아니라 '곧 흔들림' 신호. 진입 성적 깎는 근거는 12년엔 없음 → 화면 문구: 새로 쫓지 말고 빠지는 날 줍기 준비."""
-    latest = db.execute(text("select max(trading_date) from spot_daily_prices")).scalar()
+    latest = _data_latest(db)
     if _BR["key"] == latest:
         return _BR["v"]
     px = pd.read_sql(text("select stock_code s, trading_date d, close_price c, trading_value tv, change_pct ch from spot_daily_prices "
@@ -731,7 +749,7 @@ def close_scores(db: Session) -> dict:
     대상: 거래대금 20일 평균 30억↑ · 추세 기본(종가 > EMA20 > EMA60). 7개 조건 중 맞는 개수.
     3년(close_entry_study.py · 종가 진입 · 손절 그날 저가-1% · 최대 10일, 상승·횡보장): 점수 0 이김 20%·평균 -1.7% → 점수 6↑ 이김 43%·평균 +1.5%·최악10% -11%,
     점수 7 이김 46%·+1.5%. 기간을 반으로 나눠도 둘 다 점수 따라 이김 비율이 올라감(앞 26→47%, 뒤 31→46%). 디스크 캐시."""
-    latest = db.execute(text("select max(trading_date) from spot_daily_prices")).scalar()
+    latest = _data_latest(db)
     from backend.services.result_cache import cached  # noqa: PLC0415
     v = cached("close_scores_v9", (), db, lambda: _close_scores(db, latest)) or {}
     return v
@@ -865,7 +883,7 @@ def close_scores_now(db: Session, max_age: float = 120) -> dict:
     from zoneinfo import ZoneInfo  # noqa: PLC0415
     from backend.utils.dates import is_trading_day  # noqa: PLC0415
     now = datetime.now(ZoneInfo("Asia/Seoul"))
-    latest = db.execute(text("select max(trading_date) from spot_daily_prices")).scalar()
+    latest = _data_latest(db)
     if not (is_trading_day(now.date()) and 9 <= now.hour < 16 and latest < now.date()):
         return close_scores(db)
     hit = _CSL["v"]
@@ -979,7 +997,7 @@ _DIPH_LOCK = threading.Lock()
 def _dip_history(db: Session, block: bool = False) -> dict:
     """최근 400일 상승장 급락 날마다 _dip_picks 결과 {날짜: {종목: 손절가}} — 차트 표시용, DB 날짜가 바뀔 때만.
     계산 중이면 기다리지 않고 직전 결과(없으면 빈 것)를 준다 — 화면 요청이 줄줄이 DB 연결을 붙잡지 않게. 미리 계산은 warm_caches(block=True)."""
-    latest = db.execute(text("select max(trading_date) from spot_daily_prices")).scalar()
+    latest = _data_latest(db)
     if _DIPH["key"] == latest:
         return _DIPH["v"]
     if not _DIPH_LOCK.acquire(blocking=block):
@@ -1012,7 +1030,7 @@ def dip_now(db: Session, max_age: float = 120) -> dict:
     from zoneinfo import ZoneInfo  # noqa: PLC0415
     from backend.utils.dates import is_trading_day  # noqa: PLC0415
     now = datetime.now(ZoneInfo("Asia/Seoul"))
-    latest = db.execute(text("select max(trading_date) from spot_daily_prices")).scalar()
+    latest = _data_latest(db)
     if not _bull_days(db).get(latest, False):
         return {"date": str(latest), "items": [], "bear": True}
     live_on = is_trading_day(now.date()) and 9 <= now.hour < 16 and latest < now.date()
@@ -1043,7 +1061,7 @@ _RSH: dict = {"key": None, "v": None}
 def rs_hist(db: Session) -> dict:
     """날짜별 RS(1~99) — 차트에 지난 날짜의 종가 진입 점수를 찍으려면 그날의 전 종목 순위가 필요하다 (2026-10-09 SK이노베이션
     "진입 신호가 하나도 안 떴는데"). {"dates": [...최근 270거래일], "rs": {code: float16 배열}}. 하루 한 번 계산 · 디스크 캐시."""
-    latest = db.execute(text("select max(trading_date) from spot_daily_prices")).scalar()
+    latest = _data_latest(db)
     if _RSH["key"] == latest:
         return _RSH["v"]
     from backend.services.result_cache import cached  # noqa: PLC0415
@@ -1090,7 +1108,7 @@ def tracking(db: Session) -> dict:
     """최근 20거래일 종가 진입 신호(점수 6↑ · 손절폭 8%↓)를 우리 규칙대로 따라가 본 것 — 첫 화면 '진행 중' 탭 (2026-10-09 관심 탭 대신).
     규칙: 신호 날 종가 진입 · 스탑로스 = 그날 저가 -1% (장중 닿으면 끝) · 21일선 아래 종가면 다음 날 아침 정리.
     날짜마다 그날까지 데이터로 점수를 다시 계산한다 (signal_log가 쌓이기 전 날짜는 '다시 계산'). DB 날짜가 바뀔 때만 · 디스크 캐시."""
-    latest = db.execute(text("select max(trading_date) from spot_daily_prices")).scalar()
+    latest = _data_latest(db)
     from backend.services.result_cache import cached  # noqa: PLC0415
     return cached("tracking_v15", (), db, lambda: _tracking(db, latest)) or {}
 
@@ -1176,7 +1194,7 @@ def crash_now(db: Session, max_age: float = 120) -> dict:
     from zoneinfo import ZoneInfo  # noqa: PLC0415
     from backend.utils.dates import is_trading_day  # noqa: PLC0415
     now = datetime.now(ZoneInfo("Asia/Seoul"))
-    latest = db.execute(text("select max(trading_date) from spot_daily_prices")).scalar()
+    latest = _data_latest(db)
     live_on = is_trading_day(now.date()) and 9 <= now.hour < 16 and latest < now.date()
     key = (str(latest), live_on)
     v = _CRASH["v"]
