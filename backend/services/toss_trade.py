@@ -19,6 +19,13 @@ import requests
 BASE = "https://openapi.tossinvest.com"
 
 
+def _err(j) -> str:
+    e = (j or {}).get("error")
+    if isinstance(e, dict):
+        return " ".join(str(e.get(k)) for k in ("code", "message") if e.get(k))
+    return str(e or (j or {}).get("message") or "")
+
+
 class TossClient:
     def __init__(self, app_key: str, app_secret: str, tag: str, account_seq: str | int | None = None):
         self.key, self.secret, self.tag = (app_key or "").strip(), (app_secret or "").strip(), tag
@@ -91,7 +98,19 @@ class TossClient:
         res = (j or {}).get("result") or {}
         oid = res.get("conditionalOrderId") or res.get("id")
         ok = status in (200, 201) and bool(oid)
-        msg = "" if ok else f"HTTP {status} {(j or {}).get('error') or (j or {}).get('message') or ''}".strip()
+        msg = "" if ok else f"HTTP {status} {_err(j)}".strip()
+        return {"ok": ok, "order_no": oid, "warn": "", "msg": msg}
+
+    def market_sell(self, code: str, qty: int, opening: bool, client_id: str | None = None) -> dict:
+        """시장가 매도. opening=True면 OPG(국내 시가단일가 — 08:50에 내면 시초가), 아니면 DAY(장중 바로).
+        client_id = 멱등 키(10분) — 같은 날 같은 종목 두 번 나가지 않게."""
+        body = {"symbol": code, "side": "SELL", "orderType": "MARKET", "quantity": str(int(qty)), "timeInForce": "OPG" if opening else "DAY"}
+        if client_id:
+            body["clientOrderId"] = client_id[:36]
+        status, j = self._req("POST", "/api/v1/orders", body=body)
+        oid = ((j or {}).get("result") or {}).get("orderId")
+        ok = status in (200, 201) and bool(oid)
+        msg = "" if ok else f"HTTP {status} {_err(j)}".strip()
         return {"ok": ok, "order_no": oid, "warn": "", "msg": msg}
 
     def stop_cancel(self, order_id) -> dict:

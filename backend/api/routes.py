@@ -2468,6 +2468,12 @@ def pt_stop(request: Request, on: bool = True, db: Session = Depends(get_db)):
     return set_stop_on(db, _pt(request, db), on)
 
 
+@router.post("/pt/exit21")
+def pt_exit21(request: Request, on: bool = True, db: Session = Depends(get_db)):
+    from backend.services.portal import set_exit21  # noqa: PLC0415
+    return set_exit21(db, _pt(request, db), on)
+
+
 @router.post("/pt/line")
 def pt_line(body: PtLineIn, request: Request, db: Session = Depends(get_db)):
     from backend.services.portal import set_line  # noqa: PLC0415

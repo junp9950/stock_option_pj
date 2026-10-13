@@ -6,6 +6,9 @@
 - 자동 주문은 **손절(매도)만**. 다른 사람 계좌에 자동 매수는 절대 만들지 않는다(사용자 원칙 10/13).
   손절가 = 그 사람이 정한 선(종목별) 또는 산 날 저가 −1%. 연결한 날 이전부터 들고 있던 건 기준 잔고라 안 건드림(원하면 화면에서 손절선을 넣으면 대상).
   메리츠: 스톱지정가(당일) → 매일 08:50 다시 · 지정가 = 손절가 −1%. 토스: 조건주문(시장가 매도, 1년 만료) → 한 번 걸면 유지.
+- 21일선 매도(2026-10-13 사용자 "21일선 매도 넣어야지", 사장님 계좌와 같은 규칙, 화면에서 끌 수 있음 · 기본 켜짐):
+  연결한 뒤 산 종목이 21일선(지수이평) 위로 한 번 마감한 뒤부터, 21일선 아래로 마감하면(15:40 확인) 다음 날 08:50 시초가 시장가 매도.
+  메리츠 = 시장가 매도(08:50 → 시초가) · 토스 = 조건주문 취소 후 OPG 시장가. 09:01에 한 번 더(실패했을 때만).
 - 알림: 그 사람 텔레그램 방(/연결 코드)으로만. 사장님 방에는 안 보냄.
 """
 from __future__ import annotations
@@ -194,7 +197,7 @@ def delete_keys(db: Session, name: str) -> dict:
 # ── 상태 ──────────────────────────────────────────────────────
 def _state(db: Session, name: str) -> dict:
     s = _get(db, f"pt_state:{name}", None) or {}
-    for k, v in (("on", False), ("start", None), ("baseline", {}), ("lots", {}), ("orders", {}), ("lines", {}), ("exclude", []), ("log", []), ("notified", [])):
+    for k, v in (("on", False), ("start", None), ("baseline", {}), ("lots", {}), ("orders", {}), ("lines", {}), ("exclude", []), ("log", []), ("notified", []), ("exit21", True)):
         s.setdefault(k, v)
     return s
 
@@ -275,6 +278,32 @@ def _sync(db: Session, s: dict, hs: list[dict], today: date) -> list[str]:
     return msgs
 
 
+def _market_exit(c, broker: str, s: dict, lot: str, L: dict, today: date, phase: str, why: str) -> str:
+    """걸려 있는 손절 주문을 먼저 취소하고 시장가 매도 (08:50 = 시초가)."""
+    day = s["orders"].setdefault(str(today), [])
+    if broker == "toss":
+        o = L.get("toss_order")
+        if o:
+            if not c.stop_cancel(o["id"]).get("ok"):
+                return f"⚠ {L['name']} {why} — 걸린 조건주문 취소 실패, 직접 팔아 주세요"
+            L.pop("toss_order")
+        r = c.market_sell(L["code"], L["qty"], opening=(phase == "morning"), client_id=f"x21-{L['code']}-{today:%Y%m%d}-{phase}")
+    else:
+        live = [x for x in day if x["lot"] == lot and x["ok"] and not x.get("done") and not x.get("market")]
+        if live:
+            o = live[-1]
+            if not c.cancel(L["code"], o["order_no"], o["qty"], o["trigger"], o["limit"]).get("ok"):
+                return f"⚠ {L['name']} {why} — 걸린 손절 주문 취소 실패, 직접 팔아 주세요"
+            o["done"] = "취소"
+        r = c.market_sell(L["code"], L["qty"], L.get("credit", False), L.get("loan_date", ""))
+    day.append({"lot": lot, "code": L["code"], "name": L["name"], "qty": L["qty"], "trigger": 0, "limit": 0,
+                "order_no": r["order_no"], "ok": r["ok"], "at": _now().strftime("%H:%M"), "market": why})
+    if r["ok"]:
+        L["sell_pending"] = str(today)
+        return f"▼ {L['name']} {L['qty']}주 {why} — 시장가 매도 주문 넣음"
+    return f"⚠ {L['name']} {why} 시장가 매도 실패 — {r['warn'] or r['msg']} (직접 팔아 주세요)"
+
+
 def run(db: Session, name: str, phase: str) -> str:
     """phase: morning · retry · intraday · close. 손절만."""
     from backend.utils.dates import is_trading_day  # noqa: PLC0415
@@ -307,6 +336,18 @@ def run(db: Session, name: str, phase: str) -> str:
     if s["on"] and phase in ("morning", "retry", "intraday"):
         day = s["orders"].setdefault(str(today), [])
         for lot, L in s["lots"].items():
+            if L.get("sell_pending") == str(today):
+                continue
+            if L.get("exit_next"):
+                if not s.get("exit21", True):
+                    L.pop("exit_next")                      # 21일선 매도를 껐으면 손절만
+                elif phase in ("morning", "retry"):
+                    tried = [x for x in day if x["lot"] == lot and x.get("market")]
+                    if not any(x["ok"] for x in tried) and len(tried) < 2:     # 08:50 실패하면 09:01 한 번 더
+                        out.append(_market_exit(c, k["broker"], s, lot, L, today, phase, L["exit_next"]))
+                    continue
+                else:
+                    continue                                 # 장중: 아침 매도가 실패한 것 — 손절 주문도 안 겹치게 둔다(알림으로 직접)
             if phase in ("morning", "retry") or (s.get("lines") or {}).get(L["code"]):
                 stop, src, final = _stop_for(db, s, L["code"], date.fromisoformat(L["buy"]), today)
                 if stop:
@@ -330,7 +371,7 @@ def run(db: Session, name: str, phase: str) -> str:
                         out.append(f"⚠ {L['name']} 조건주문 실패 — {r['msg']} (직접 걸어 주세요)")
                 continue
             # 메리츠: 당일 스톱지정가 — 매일 다시
-            mine = [x for x in day if x["lot"] == lot]
+            mine = [x for x in day if x["lot"] == lot and not x.get("market")]
             live = [x for x in mine if x["ok"] and not x.get("done")]
             if live and (live[-1]["trigger"] != L["stop"] or live[-1]["qty"] != L["qty"]):
                 if c.cancel(L["code"], live[-1]["order_no"], live[-1]["qty"], live[-1]["trigger"], live[-1]["limit"]).get("ok"):
@@ -344,6 +385,20 @@ def run(db: Session, name: str, phase: str) -> str:
             day.append({"lot": lot, "code": L["code"], "name": L["name"], "qty": L["qty"], "trigger": L["stop"], "limit": lim,
                         "order_no": r["order_no"], "ok": r["ok"], "at": _now().strftime("%H:%M")})
             out.append(f"🛑 {L['name']} {L['qty']}주 · 감시 {L['stop']:,} → 지정가 {lim:,}" if r["ok"] else f"⚠ {L['name']} 손절 주문 실패 — {r['warn'] or r['msg']}")
+    if s["on"] and s.get("exit21", True) and phase == "close":
+        from backend.services.stop_orders import _close_vs_ema21  # noqa: PLC0415
+        for lot, L in s["lots"].items():
+            if L.get("sell_pending") or L["buy"] < (s.get("start") or ""):
+                continue                                     # 연결 전부터 들고 있던 것(손절선만 넣은 것)은 21일선 매도 안 함
+            cl, e = _close_vs_ema21(L["code"], today)
+            if cl is None:
+                continue
+            if cl > e:
+                L["armed"] = True; L.pop("exit_next", None)
+            elif L.get("armed") and not L.get("exit_next"):
+                L["exit_next"] = "21일선 아래 마감 → 다음 날 시초가"
+                out.append(f"▼ {L['name']} 종가 {cl:,.0f} < 21일선 {e:,.0f} → 내일 아침 시초가에 자동 매도\n"
+                           f"(계속 들고 싶으면 오늘 밤 사이트 '내 계좌'에서 21일선 매도를 꺼 주세요)")
     if out:
         _tell(db, name, s, "\n".join(out))
     _save(db, name, s)
@@ -400,8 +455,9 @@ def me(db: Session, name: str) -> dict:
     s = _state(db, name)
     today = str(_now().date())
     return {"name": name, "broker": k.get("broker") if k else None, "key_tail": (k["app_key"][-4:] if k else None),
-            "stop_on": s.get("on"), "start": s.get("start"), "chat": bool(u.get("chat")), "code": u.get("code"), "temp": bool(u.get("temp")),
+            "stop_on": s.get("on"), "exit21": s.get("exit21", True), "start": s.get("start"), "chat": bool(u.get("chat")), "code": u.get("code"), "temp": bool(u.get("temp")),
             "lots": [{"code": L["code"], "name": L["name"], "qty": L["qty"], "stop": L.get("stop"), "src": L.get("src"),
+                      "exit_next": L.get("exit_next"), "armed": L.get("armed"), "old": L["buy"] < (s.get("start") or ""),
                       "order": bool(L.get("toss_order")) or any(o["lot"] == lot and o["ok"] and not o.get("done") for o in s["orders"].get(today, []))}
                      for lot, L in s["lots"].items()],
             "lines": s.get("lines", {}), "exclude": s.get("exclude", []), "log": s.get("log", [])[-15:][::-1], "last": s.get("last_run"),
@@ -415,6 +471,16 @@ def set_stop_on(db: Session, name: str, on: bool) -> dict:
     s["on"] = on; _save(db, name, s)
     n = 0 if on else cancel_all(db, name)
     return {"ok": True, "msg": "자동 손절을 켰습니다 (다음 5분 확인부터)" if on else f"자동 손절을 껐습니다 · 걸려 있던 주문 {n}건 취소"}
+
+
+def set_exit21(db: Session, name: str, on: bool) -> dict:
+    s = _state(db, name)
+    s["exit21"] = on
+    if not on:
+        for L in s["lots"].values():
+            L.pop("exit_next", None)
+    _save(db, name, s)
+    return {"ok": True, "msg": "21일선 매도를 켰습니다 (오늘 15:40 마감 확인부터)" if on else "21일선 매도를 껐습니다 — 손절가 매도만 합니다"}
 
 
 def set_line(db: Session, name: str, code: str, stop: float | None, exclude: bool | None = None) -> dict:

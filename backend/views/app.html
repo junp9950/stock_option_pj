@@ -2939,17 +2939,20 @@ function ptRender(d){
   const tg=d.chat?`<span class="chipx g">✅ 텔레그램 연결됨</span> 자동 손절 알림이 본인 텔레그램으로 갑니다
       <details style="margin-top:6px"><summary class="ts" style="cursor:pointer">다른 방(새 폰 등)으로 바꾸려면</summary>${tgSteps}</details>`
     :`<div class="sig-warn" style="margin:0;border-color:var(--b)"><b>📩 텔레그램으로 알림 받기</b>${tgSteps}</div>`;
-  const lots=d.lots.length?d.lots.map(x=>`<div class="sv-m" style="grid-template-columns:minmax(0,1fr) auto auto"><span><b>${x.name}</b> <span class="ts">${x.qty}주 · ${x.src||''}</span></span><span class="v">${x.stop?won(x.stop):'손절가 없음'}</span><span class="ts">${x.order?'🛑 걸림':'대기'}</span></div>`).join(''):'<span class="ts">아직 없음 — 연결한 뒤 새로 산 종목이 생기면 자동으로 들어옵니다</span>';
+  const lots=d.lots.length?d.lots.map(x=>`<div class="sv-m" style="grid-template-columns:minmax(0,1fr) auto auto"><span><b>${x.name}</b> <span class="ts">${x.qty}주 · ${x.src||''}</span></span><span class="v">${x.stop?won(x.stop):'손절가 없음'}</span><span class="ts">${x.exit_next?'▼ 내일 아침 매도':x.order?'🛑 걸림':'대기'}</span></div>${d.exit21&&!x.old&&!x.exit_next?`<div class="ts" style="margin:-2px 0 4px">↳ 21일선 매도 ${x.armed?'대기 중 (21일선 아래 마감하면 다음 날 아침 매도)':'— 21일선 위로 한 번 마감한 뒤부터'}</div>`:''}`).join(''):'<span class="ts">아직 없음 — 연결한 뒤 새로 산 종목이 생기면 자동으로 들어옵니다</span>';
   const lines=Object.entries(d.lines||{}).map(([c,v])=>`<div class="sv-m" style="grid-template-columns:minmax(0,1fr) auto auto"><span>${c}</span><span class="v">${won(v)}</span><button class="btn btn-gray btn-sm" onclick="ptPost('/pt/line',{code:'${c}',clear:true})">지우기</button></div>`).join('');
   const pinBox=`<div class="me-add" style="margin:0"><input id="pt-np" type="password" placeholder="새 비밀번호 (8자 이상)" autocomplete="new-password"><input id="pt-np2" type="password" placeholder="한 번 더" autocomplete="new-password"><button class="btn btn-sm" onclick="ptChangePin()">비밀번호 바꾸기</button></div>`;
   el.innerHTML=`<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:12px"><b style="font-size:16px;color:var(--tx)">🔒 ${d.name}님의 계좌</b><span style="display:flex;gap:6px"><button class="btn btn-gray btn-sm" onclick="document.getElementById('pt-pinbox').hidden=!document.getElementById('pt-pinbox').hidden">비밀번호 바꾸기</button><button class="btn btn-sm" onclick="ptLogout()">잠그기</button></span></div>
    ${d.temp?`<div class="sig-warn" style="margin-bottom:12px">🔑 <b>임시 비밀번호로 들어오셨습니다.</b> 아래에서 본인만 아는 비밀번호로 바꿔 주세요.${pinBox}</div>`:`<div id="pt-pinbox" class="bx" style="margin-bottom:12px" hidden>${pinBox}</div>`}
-   <p class="bx-s">사이트 신호로 직접 사신 종목에 <b>손절 주문을 자동으로 걸어 드립니다</b>. 자동으로 사는 기능은 없습니다. 손절가 기본값 = 산 날 저가 −1% · 메리츠는 매일 08:50에 당일 스톱 주문, 토스는 1년짜리 조건주문으로 겁니다.</p>
+   <p class="bx-s">사이트 신호로 직접 사신 종목을 <b>자동으로 팔아 드립니다</b> — ① 손절가에 닿으면 ② 21일선 아래로 마감하면 다음 날 아침. 자동으로 사는 기능은 없습니다. 손절가 기본값 = 산 날 저가 −1% · 메리츠는 매일 08:50에 당일 스톱 주문, 토스는 1년짜리 조건주문으로 겁니다.</p>
    <div class="me-g2">
     <section class="bx"><div class="bx-h"><b>1. 증권사 연결</b></div>${keyBox}</section>
     <section class="bx"><div class="bx-h"><b>2. 자동 손절</b><span class="ts">${d.last?'마지막 확인 '+d.last:''}</span></div>
       <div style="display:flex;gap:8px;align-items:center;margin-bottom:8px"><span class="chipx ${d.stop_on?'g':'r'}">${d.stop_on?'✅ 켜짐':'⛔ 꺼짐'}</span>
         <button class="btn btn-sm" onclick="ptPost('/pt/stop?on=${d.stop_on?'false':'true'}')">${d.stop_on?'끄기 (걸린 주문도 취소)':'켜기'}</button></div>
+      <div style="display:flex;gap:8px;align-items:center;margin-bottom:6px;flex-wrap:wrap"><span class="chipx ${d.exit21?'g':'r'}">${d.exit21?'✅':'⛔'} 21일선 매도 ${d.exit21?'켜짐':'꺼짐'}</span>
+        <button class="btn btn-gray btn-sm" onclick="ptPost('/pt/exit21?on=${d.exit21?'false':'true'}')">${d.exit21?'끄기':'켜기'}</button></div>
+      <div class="ts" style="margin-bottom:10px;line-height:1.6">산 뒤 21일선 위로 한 번 마감한 종목이 <b>21일선 아래로 마감하면 다음 날 아침 시초가에 팝니다</b> — 오른 수익을 지키는 규칙 (사이트 신호와 같은 규칙). 끄면 손절가 매도만 합니다.</div>
       <div style="margin-bottom:8px;font-size:12.5px;color:var(--tx);line-height:1.6">${tg}</div>
       <div class="bx-h" style="margin-top:10px"><b>자동 손절 대상</b></div>${lots}</section>
     <section class="bx"><div class="bx-h"><b>3. 손절선 직접 정하기</b><span class="ts">기본값(산 날 저가 −1%) 대신 · 연결 전부터 들고 있던 종목도 여기 넣으면 대상</span></div>
