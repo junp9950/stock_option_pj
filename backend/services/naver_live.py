@@ -26,12 +26,16 @@ def _num(x) -> float | None:
         return None
 
 
+_multi: dict = {}
+
+
 def snapshot(codes: list[str], max_age: float = 60) -> dict[str, dict]:
     """{code: {c, o, h, l, v, chg}} — 오늘 체결분만. 같은 목록은 max_age초 캐시."""
     key = hash(tuple(codes))
-    with _lock:
-        if _cache["key"] == key and time.time() - _cache["t"] < max_age:
-            return _cache["v"]
+    with _lock:      # 목록마다 따로 캐시 (반등 판정 2,000종목 · 히트맵 250종목이 서로 밀어내지 않게, 2026-10-13)
+        hit = _multi.get(key)
+        if hit and time.time() - hit[0] < max_age:
+            return hit[1]
     today = datetime.now(_KST).strftime("%Y-%m-%d")
     out: dict[str, dict] = {}
     for i in range(0, len(codes), 300):
@@ -51,6 +55,9 @@ def snapshot(codes: list[str], max_age: float = 60) -> dict[str, dict]:
         time.sleep(0.05)
     with _lock:
         _cache.update(t=time.time(), key=key, v=out)
+        _multi[key] = (time.time(), out)
+        if len(_multi) > 6:
+            _multi.pop(min(_multi, key=lambda k: _multi[k][0]))
     return out
 
 

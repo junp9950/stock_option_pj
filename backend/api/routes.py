@@ -1514,21 +1514,38 @@ def get_heatmap(limit: int = 250, db: Session = Depends(get_db)):
     for code, sector_name in rows:
         sector_map.setdefault(code, sector_name)
 
+    # 장중에는 네이버 실시간 등락률로 (2026-10-13 사용자 "히트맵은 실시간이 안 되는 거제" — 어제 종가 기준으로만 보였다)
+    live, live_at = {}, None
+    try:
+        from datetime import datetime as _dt  # noqa: PLC0415
+        from zoneinfo import ZoneInfo as _Z  # noqa: PLC0415
+        from backend.utils.dates import is_trading_day  # noqa: PLC0415
+        _now = _dt.now(_Z("Asia/Seoul"))
+        if is_trading_day(_now.date()) and target_date < _now.date() and 900 <= _now.hour * 100 + _now.minute <= 1600:
+            from backend.services.naver_live import snapshot  # noqa: PLC0415
+            live = snapshot(codes, max_age=60)
+            live_at = _now.strftime("%H:%M") if len(live) >= len(codes) * 0.5 else None
+            if not live_at:
+                live = {}
+    except Exception:  # noqa: BLE001
+        live = {}
     items = []
     for s in stocks:
         price = prices.get(s.code)
-        if price is None:
+        lv = live.get(s.code)
+        if price is None and not lv:
             continue
+        chg = lv["chg"] if lv and lv.get("chg") is not None else float((price.change_pct if price else 0) or 0)
         items.append({
             "code": s.code,
             "name": s.name,
             "market": s.market,
             "sector": sector_map.get(s.code, "기타"),
             "market_cap": s.market_cap,
-            "change_pct": float(price.change_pct or 0),
+            "change_pct": float(chg),
         })
 
-    return {"trading_date": target_date.isoformat(), "items": items}
+    return {"trading_date": _now.date().isoformat() if live_at else target_date.isoformat(), "live": live_at, "items": items}
 
 
 @router.get("/screener/pullback")

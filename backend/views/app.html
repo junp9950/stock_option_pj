@@ -2354,7 +2354,7 @@ async function loadHeatmap(){
     }
     let items = data.items;
     if (market) items = items.filter(i=>i.market===market);
-    document.getElementById('hm-info').textContent = `기준일: ${data.trading_date} · ${items.length}개 종목`;
+    document.getElementById('hm-info').textContent = data.live ? `장중 ${data.live} 실시간 · ${items.length}개 종목` : `기준일: ${data.trading_date} · ${items.length}개 종목`;
     renderHeatmap(items, box);
     renderHeatmapLegend();
   }catch(e){
