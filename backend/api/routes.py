@@ -1504,8 +1504,35 @@ def get_heatmap(limit: int = 250, db: Session = Depends(get_db)):
         )
     }
 
-    # 섹터는 수동 큐레이션(custom)만 있고 커버리지가 낮아, 매핑 안 된 종목은 전부 "기타"로 묶임.
+    # 1순위: 섹터 흐름 탭과 같은 16개 섹터 (2026-10-13 사용자 "이 섹터 기준으로 마켓맵") — 여러 곳에 속하면 섹터 순서상 앞쪽
     sector_map: dict[str, str] = {}
+    try:      # 여러 섹터에 걸치면: 그 섹터 테마에 몇 번 들어 있나(많은 쪽) + 거래소 업종이 맞으면 가산 (현대차가 '신재생'으로 가던 것)
+        import re as _re  # noqa: PLC0415
+        from collections import defaultdict as _dd  # noqa: PLC0415
+        from backend.screener.rotation import FAMILIES  # noqa: PLC0415
+        from backend.services.industry_map import industries as _ind  # noqa: PLC0415
+        score = _dd(lambda: _dd(float))
+        cs = set(codes)
+        for code, theme in db.execute(text("select ss.stock_code, s.sector_name from sector_stocks ss join sectors s on s.id = ss.sector_id where s.is_active")):
+            if code in cs:
+                for fam, pat in FAMILIES.items():
+                    if _re.search(pat, theme or ""):
+                        score[code][fam] += 1
+        HINT = {"자동차": "자동차", "전지": "2차전지", "의약": "바이오", "의료": "바이오", "금융": "금융·지주", "보험": "금융·지주", "은행": "금융·지주",
+                "선박": "조선·해운", "해운": "조선·해운", "반도체": "AI메모리·기판", "전자부품": "AI메모리·기판", "소프트웨어": "AI SW·플랫폼",
+                "전동기": "전력·전선", "절연선": "전력·전선", "항공": "우주항공·방산", "무기": "우주항공·방산", "화장품": "화장품·소비", "통신": "통신",
+                "포털": "AI SW·플랫폼", "정보매개": "AI SW·플랫폼", "전기업": "원전·에너지"}
+        ind = _ind()
+        order = list(FAMILIES)
+        for code, sc in score.items():
+            nm = ind.get(code[:5] + "0" if code[-1] != "0" and not ind.get(code) else code) or ""
+            for k, fam in HINT.items():
+                if k in nm and fam in sc:
+                    sc[fam] += 3
+            sector_map[code] = max(sc, key=lambda f: (sc[f], -order.index(f)))
+    except Exception:  # noqa: BLE001
+        pass
+    # 2순위: 수동 큐레이션(custom) · 3순위: KIND 업종 넓은 묶음 (아래)
     rows = db.execute(
         select(SectorStock.stock_code, Sector.sector_name)
         .join(Sector, SectorStock.sector_id == Sector.id)

@@ -2385,7 +2385,7 @@ function renderHeatmap(items, box, clickFn){
       const big = st.w > 90 && st.h > 60;
       html += `<div title="${st.name} ${st.change_pct>=0?'+':''}${st.change_pct.toFixed(2)}%"
         style="position:absolute;left:${st.x}px;top:${st.y+headH}px;width:${st.w}px;height:${st.h}px;background:${hmColor(st.change_pct)};border:1px solid #000;box-sizing:border-box;display:flex;flex-direction:column;align-items:center;justify-content:center;overflow:hidden;cursor:pointer"
-        onclick="${clickFn||'showStockDetail'}('${st.code}','${String(st.name).replace(/'/g,'')}')">
+        onclick="${clickFn||'openChartModal'}('${st.code}','${String(st.name).replace(/'/g,'')}','')">
         ${showText ? `<div style="color:#fff;font-weight:${big?'800':'600'};font-size:${big?'15px':'11px'};text-shadow:0 1px 2px #000;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:95%">${st.name}</div>
         <div style="color:#fff;font-size:${big?'13px':'10px'};text-shadow:0 1px 2px #000">${st.change_pct>=0?'+':''}${st.change_pct.toFixed(2)}%</div>` : ''}
       </div>`;
