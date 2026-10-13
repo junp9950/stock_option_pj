@@ -114,7 +114,27 @@ def _mode_for(db: Session, code: str, buy: date) -> str:
 
 
 def _close_vs_ema21(code: str, today: date) -> tuple[float | None, float | None]:
-    """오늘 종가와 21일 지수이동평균(오늘 포함). 토스 일봉 100개."""
+    """오늘 정규장 종가와 21일 지수이동평균(오늘 포함).
+    토스 일봉 종가는 15:30 뒤 넥스트레이드 가격으로 바뀐다(2026-10-13 삼화콘덴서 정규장 142,800 → 18:40 토스 145,500) →
+    지난날 = DB 종가(사이트 신호와 같은 값), 오늘 = 네이버 분봉 15:30 종가(naver_live.krx_day). 안 되면 토스 일봉."""
+    try:
+        from backend.db.database import SessionLocal  # noqa: PLC0415
+        from backend.services.naver_live import krx_day  # noqa: PLC0415
+        k = krx_day(code)
+        if k and k["date"] == str(today):
+            db = SessionLocal()
+            try:
+                rows = db.execute(text("select close_price from spot_daily_prices where stock_code = :c and trading_date < :d "
+                                       "order by trading_date desc limit 120"), {"c": code, "d": today}).scalars().all()
+            finally:
+                db.close()
+            if len(rows) >= 60:
+                ema = None
+                for c in [float(x) for x in rows[::-1]] + [float(k["close"])]:
+                    ema = c if ema is None else ema + (c - ema) * 2 / 22
+                return float(k["close"]), ema
+    except Exception:  # noqa: BLE001
+        pass
     try:
         from backend.services import toss_client as t  # noqa: PLC0415
         cs = t._get("/candles", {"symbol": code, "interval": "1d", "count": 100}).json()["result"]["candles"]  # noqa: SLF001
