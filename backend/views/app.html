@@ -1283,7 +1283,9 @@ async function loadDashboard(){
 setInterval(()=>{ const k=new Date(new Date().toLocaleString('en-US',{timeZone:'Asia/Seoul'})), hm=k.getHours()*100+k.getMinutes(), wd=k.getDay();
   const home=document.getElementById('panel-home');
   if(document.visibilityState!=='visible'||!home||!home.classList.contains('active')||wd===0||wd===6||hm<900||hm>1540) return;
-  hcSpark(); if(k.getMinutes()%5===0&&window._dashD) loadLive(window._dashD); },60000);
+  hcSpark(); if(k.getMinutes()%5===0&&window._dashD) loadLive(window._dashD);
+  if(k.getMinutes()%3===0) loadWorkspace();      // 장중 목록·매매 신호 카드도 3분마다 (2026-10-13 새로고침해야만 바뀌던 것)
+  },60000);
 // 장중(평일 9:00~15:40)에는 지금 가격으로 장세를 다시 판단해 판단 문구·과매도·순환 카드·카드 순서를 바꾼다 (대시보드 본체는 장 마감 데이터) — 2026-10-07
 async function loadLive(d){
   const k=new Date(new Date().toLocaleString('en-US',{timeZone:'Asia/Seoul'})), hm=k.getHours()*100+k.getMinutes(), wd=k.getDay();
@@ -1396,7 +1398,7 @@ async function hcNums(){
 }
 // 폰에서 브라우저를 뒤로 보냈다가 다시 열면 바로 새 숫자 (타이머가 멈춰 있던 동안 낡은 값이 보이던 것)
 document.addEventListener('visibilitychange',()=>{ if(document.visibilityState!=='visible') return;
-  loadHeader(); const home=document.getElementById('panel-home'); if(home&&home.classList.contains('active')){ hcSpark(); if(window._dashD) loadLive(window._dashD); } });
+  loadHeader(); const home=document.getElementById('panel-home'); if(home&&home.classList.contains('active')){ hcSpark(); if(window._dashD) loadLive(window._dashD); loadWorkspace(); } });
 async function renderDashboard(d, stale, live){
   try{ renderHomeTop(d, live); hcSpark(); }catch(e){ console.error(e); }
   const v=document.getElementById('db-verdict');
@@ -2748,10 +2750,12 @@ function renderWsList(){
 // 사이트 규칙 그대로: 매수 = 오늘 진입(기본 10칸 RS 순 + 주도주 2) · 손절 = 산 날 저가 −1% 예약 · 매도 = 21일선 아래 마감 → 다음 날 아침
 async function renderSigCard(){
   const el=document.getElementById('hc-sig'); if(!el) return;
-  const d=_ws.data||{}, m=await fetch(`${API}/market/verdict`).then(r=>r.ok?r.json():null).catch(()=>null);
+  // 서버가 막 다시 켜졌을 때 판단 자료가 늦어도 카드가 '불러오는 중'에 멈추지 않게 최대 5초만 기다림 (2026-10-13 배포 직후 멈춤)
+  const fT=(u,ms)=>{ const ac=new AbortController(); const t=setTimeout(()=>ac.abort(),ms); return fetch(u,{signal:ac.signal}).then(r=>r.ok?r.json():null).catch(()=>null).finally(()=>clearTimeout(t)); };
+  const d=_ws.data||{}, m=await fT(`${API}/market/verdict`,5000);
   const bear=m&&m.state==='하락';
   // 장중에 시장이 크게 빠져 장중 판단이 '쉬는 날'이면 매수 칸 위에 경고 (2026-10-12 이틀 연속 급락 — 카드는 지난 장 판단이라 '매수'로 보였다)
-  const lv=d.live?await fetch(`${API}/dashboard/dip-live`).then(r=>r.ok?r.json():null).catch(()=>null):null;
+  const hd=loadHeader._d||{}, lv=d.live?(hd.dl||await fT(`${API}/dashboard/dip-live`,5000)):null;
   const liveRest=!bear&&lv&&lv.mode&&lv.mode.mode==='쉬기';
   // 반등 판정은 늦을 수 있어 기다리지 않는다 — 먼저 평소 카드를 그리고, 오면 다시 그림 (2026-10-13 PC 빈 카드)
   if(!renderSigCard._cr||Date.now()-renderSigCard._cr.t>60000){
