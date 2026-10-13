@@ -3761,12 +3761,16 @@ function usSide(){
     <div class="us-sec">${O.sectors.map(x=>`<div class="us-sr"><span class="n">${x.name}</span><span class="b"><i style="width:${Math.min(100,Math.abs(x.chg)*25)}%;background:${x.chg>=0?'var(--up)':'var(--down)'}"></i></span><b style="color:${usC(x.chg)}">${x.chg>0?'+':''}${x.chg}%</b><span class="ts">오른 ${x.up_pct}% · ${x.leaders.slice(0,3).map(l=>l.name).join(' · ')}</span></div>`).join('')}</div>
 `;
 }
+// 목록 위쪽 종목 일봉을 미리 받아 둠 — 처음 여는 미국 종목은 시세를 받아 오느라 2~3초 (2026-10-13)
+const _usPre={};
+async function usPrefetch(codes){ for(const c of codes){ if(_usPre[c]) continue; _usPre[c]=fetch(`${API}/stock/${c}/candles?tf=1d`).then(r=>r.ok?r.json():null).catch(()=>null); await _usPre[c]; if(!(await _usPre[c])) delete _usPre[c]; } }
 function usList(t){
   _us.list=t; document.querySelectorAll('#us-lt button').forEach(b=>b.classList.toggle('on',b.dataset.t===t));
   const L=((_usO||{})[t])||[], el=document.getElementById('us-items');
   el.innerHTML=L.length?L.map(x=>`<div class="ws-item hb-row${x.code===_us.code?' on':''}" data-c="${x.code}" onclick="usOpen('${x.code}','${String(x.name).replace(/'/g,'')}')">${wsAv(x.code,x.name)}
     <div class="hb-main"><div class="hb-nm"><span class="n">${x.name}</span></div><div class="hb-sub">${x.code} · 시총 ${usM(x.cap)} · 거래 ${usM(x.dv)}</div></div>
     <div class="ws-px">$${(+x.close).toFixed(2)}<div style="color:${usC(x.chg)}">${x.chg>0?'+':''}${(+x.chg).toFixed(2)}%</div></div></div>`).join(''):'<div class="ts" style="padding:10px">없음</div>';
+  usPrefetch(L.slice(0,12).map(x=>x.code));
 }
 let _usQT=null;
 function usSearch(v){
@@ -3787,7 +3791,8 @@ async function usOpen(code,name){
   document.querySelectorAll('#us-items .ws-item').forEach(e=>e.classList.toggle('on',e.dataset.c===code));
   document.getElementById('us-name').textContent=name; document.getElementById('us-sub').textContent=code; document.getElementById('us-px').innerHTML='';
   document.getElementById('us-note').textContent='불러오는 중…';
-  const cd=await fetch(`${API}/stock/${code}/candles?tf=1d`).then(r=>r.ok?r.json():null).catch(()=>null);
+  lwClear('us-chart'); document.getElementById('us-chart').innerHTML='<div class="ts" style="padding:40px;text-align:center">차트 불러오는 중…</div>';   // 앞 종목 차트가 새 이름 밑에 남아 있던 것 (2026-10-13 Sandisk 제목에 엔비디아 차트)
+  const cd=await (_usPre[code]||fetch(`${API}/stock/${code}/candles?tf=1d`).then(r=>r.ok?r.json():null).catch(()=>null));
   if(_us.code!==code) return;
   if(!cd||!cd.candles||!cd.candles.length){ document.getElementById('us-note').textContent='차트를 못 불러왔습니다'; return; }
   _us.cache.cd=cd; _us.tf='1d'; usDraw();
