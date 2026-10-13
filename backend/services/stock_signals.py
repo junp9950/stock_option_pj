@@ -1164,21 +1164,52 @@ def _track_rows(db: Session, px: dict) -> list[dict]:
 #   이틀째(첫날 다음 날 또 -2%↓) 10번: +8.1% — 단 2023~ 4번이 대부분, 표본 작음.
 #   사흘째 이상(10일 안 세 번째 급락 날)은 검증 밖 → 참고만.
 CRASH_STATS = {"첫날": "12년 56번 · 종목 평균 +1.5% · 최악 10% −6.7%", "이틀째": "12년 10번 · 종목 평균 +8.1% (최근 4번이 대부분 · 표본 작음)"}
-_CRASH: dict = {"t": 0, "v": None, "key": None}
+_CRASH: dict = {"t": 0, "v": None, "key": None, "busy": False}
+import threading as _threading  # noqa: E402
+_CRASH_LOCK = _threading.Lock()
 
 
 def crash_now(db: Session, max_age: float = 120) -> dict:
+    """장중엔 계산이 6~10초(동시에 여럿이면 30초) — 저장된 값이 있으면 바로 주고 뒤에서 하나만 새로 계산 (2026-10-13 PC 빈 카드)."""
+    import time  # noqa: PLC0415
+    from datetime import datetime  # noqa: PLC0415
+    from zoneinfo import ZoneInfo  # noqa: PLC0415
+    from backend.utils.dates import is_trading_day  # noqa: PLC0415
+    now = datetime.now(ZoneInfo("Asia/Seoul"))
+    latest = db.execute(text("select max(trading_date) from spot_daily_prices")).scalar()
+    live_on = is_trading_day(now.date()) and 9 <= now.hour < 16 and latest < now.date()
+    key = (str(latest), live_on)
+    v = _CRASH["v"]
+    if v is not None and _CRASH["key"] == key:
+        if not live_on or time.time() - _CRASH["t"] < max_age:
+            return v
+        if not _CRASH["busy"]:          # 낡음 → 뒤에서 새로, 지금은 지난 값
+            _CRASH["busy"] = True
+            def _bg():
+                from backend.db.database import SessionLocal  # noqa: PLC0415
+                d2 = SessionLocal()
+                try:
+                    with _CRASH_LOCK:
+                        _crash_calc(d2, latest, live_on, key)
+                except Exception:  # noqa: BLE001
+                    pass
+                finally:
+                    d2.close(); _CRASH["busy"] = False
+            _threading.Thread(target=_bg, daemon=True).start()
+        return v
+    with _CRASH_LOCK:                    # 처음(또는 날짜가 바뀜): 하나만 계산하고 나머지는 기다렸다 같은 값
+        if _CRASH["v"] is not None and _CRASH["key"] == key:
+            return _CRASH["v"]
+        return _crash_calc(db, latest, live_on, key)
+
+
+def _crash_calc(db: Session, latest, live_on: bool, key) -> dict:
     import time  # noqa: PLC0415
     from datetime import datetime, timedelta  # noqa: PLC0415
     from zoneinfo import ZoneInfo  # noqa: PLC0415
     from backend.utils.dates import is_trading_day  # noqa: PLC0415
     from backend.utils.ticks import tick_floor  # noqa: PLC0415
     now = datetime.now(ZoneInfo("Asia/Seoul"))
-    latest = db.execute(text("select max(trading_date) from spot_daily_prices")).scalar()
-    live_on = is_trading_day(now.date()) and 9 <= now.hour < 16 and latest < now.date()
-    key = (str(latest), live_on)
-    if _CRASH["v"] is not None and _CRASH["key"] == key and (not live_on or time.time() - _CRASH["t"] < max_age):
-        return _CRASH["v"]
     P = _close_frames(db, latest)
     L, C, TV = P["l"], P["c"], P["tv"]
     asof, at = str(latest), None
@@ -1187,7 +1218,7 @@ def crash_now(db: Session, max_age: float = 120) -> dict:
         from backend.screener.my_pattern import _day_frac  # noqa: PLC0415
         lv = snapshot(list(C.columns), max_age=60)
         if len(lv) < len(C.columns) * 0.5:
-            return {"active": False, "date": asof, "items": []}
+            return _CRASH["v"] or {"active": False, "date": asof, "items": []}
         frac = 1.0 if (now.hour, now.minute) >= (15, 30) else _day_frac(now)
         row = {k: pd.Series({c: x[k] for c, x in lv.items() if x.get(k)}, dtype="float32").reindex(C.columns) for k in ("l", "c")}
         vol = pd.Series({c: x["v"] / max(frac, 0.05) for c, x in lv.items()}, dtype="float32").reindex(C.columns)

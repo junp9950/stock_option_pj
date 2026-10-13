@@ -800,7 +800,7 @@ select{background:var(--c3);border:1px solid var(--ln);color:var(--bd);padding:6
 <div id="panel-home" class="panel active content">
   <!-- 첫 화면 위: '오늘' 카드 + '시장 상태' 카드 (2026-10-09 "깔끔한 대시보드처럼") — 예전 띠·판단 상자는 숨김(아래 코드가 아직 씀) -->
   <div class="htop"><section class="hcard" id="hc-today"><div class="ts">불러오는 중…</div></section><section class="hcard" id="hc-market"></section></div>
-  <section class="hcard sig-card" id="hc-sig"></section>
+  <section class="hcard sig-card" id="hc-sig"><span class="ts">📢 오늘의 매매 신호 불러오는 중… (몇 초)</span></section>
   <div id="db-strip" class="mstrip" style="display:none"></div>
   <div id="db-verdict" style="display:none"></div>
   <div class="ws">
@@ -2743,7 +2743,12 @@ async function renderSigCard(){
   // 장중에 시장이 크게 빠져 장중 판단이 '쉬는 날'이면 매수 칸 위에 경고 (2026-10-12 이틀 연속 급락 — 카드는 지난 장 판단이라 '매수'로 보였다)
   const lv=d.live?await fetch(`${API}/dashboard/dip-live`).then(r=>r.ok?r.json():null).catch(()=>null):null;
   const liveRest=!bear&&lv&&lv.mode&&lv.mode.mode==='쉬기';
-  const cr=await fetch(`${API}/crash/now`).then(r=>r.ok?r.json():null).catch(()=>null);
+  // 반등 판정은 늦을 수 있어 기다리지 않는다 — 먼저 평소 카드를 그리고, 오면 다시 그림 (2026-10-13 PC 빈 카드)
+  if(!renderSigCard._cr||Date.now()-renderSigCard._cr.t>60000){
+    const ac=new AbortController(); setTimeout(()=>ac.abort(),20000);
+    fetch(`${API}/crash/now`,{signal:ac.signal}).then(r=>r.ok?r.json():null).catch(()=>null).then(v=>{ if(v){ const was=renderSigCard._cr&&renderSigCard._cr.v&&renderSigCard._cr.v.active; renderSigCard._cr={t:Date.now(),v}; if(!!v.active!==!!was||v.active) renderSigCard(); } });
+  }
+  const cr=renderSigCard._cr&&renderSigCard._cr.v;
   _ws.st={bear,liveRest,crash:cr&&cr.active?cr:null}; wsStatus(); renderWsList();
   if(cr&&cr.active){ let cl=false; try{ cl=localStorage.getItem('sig-closed')==='1'; }catch(e){}
     el.classList.add('crash');
