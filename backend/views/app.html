@@ -133,7 +133,7 @@ select{background:var(--c3);border:1px solid var(--ln);color:var(--bd);padding:6
 .cr-stat{margin-top:10px;padding:8px 10px;border-radius:8px;background:var(--sunk);font-size:12.5px;line-height:1.6;color:var(--tx)}.cr-ref{margin-top:8px}.cr-ref summary{cursor:pointer;padding:4px}
 .ffl{font-size:11.5px;color:var(--mu);margin-top:2px;line-height:1.45}.ffl b{font-weight:700}
 .hd-auth{border:1px solid var(--ln);background:var(--card);color:var(--mu);border-radius:999px;padding:6px 12px;font-size:12px;cursor:pointer;white-space:nowrap;margin-left:8px}.hd-auth.on{color:var(--tx)}
-@media(max-width:900px){.hd-auth{padding:5px 9px;font-size:11px;margin-left:4px}}
+@media(max-width:900px){.hd-auth{padding:5px 9px;font-size:11px;margin-left:4px}.hd-nm{display:none}}
 .sig-empty{padding:10px 4px;font-size:13px;color:var(--tx)}.sig-how{margin-top:12px;padding-top:10px;border-top:1px solid var(--line2);font-size:12.5px;color:var(--tx);line-height:1.7}
 @media(max-width:900px){#panel-home.active{display:flex;flex-direction:column}#panel-home>.sig-card{order:-1}.sig-g{grid-template-columns:1fr;gap:16px}.sig-r{grid-template-columns:minmax(0,1fr) 70px 70px 52px;font-size:12.5px}}
 .htop{display:grid;grid-template-columns:minmax(0,1.25fr) minmax(0,1fr);gap:14px;margin-bottom:14px}
@@ -564,6 +564,11 @@ select{background:var(--c3);border:1px solid var(--ln);color:var(--bd);padding:6
   <button class="hd-auth" id="hd-auth" onclick="authClick()">로그인</button>
   <button class="btn" id="btn-run-pipeline" onclick="runPipeline()" hidden>▶ 파이프라인 실행</button>
 </header>
+<div class="modal-bg" id="ask-bg" style="z-index:300"><div class="modal" style="max-width:340px;padding:20px">
+  <div id="ask-msg" style="font-size:14px;line-height:1.55;color:var(--tx);margin-bottom:14px;white-space:pre-line"></div>
+  <input id="ask-in" hidden style="width:100%;box-sizing:border-box;background:var(--bg);border:1px solid var(--ln);color:var(--bd);padding:10px 12px;border-radius:8px;font-size:14px;margin-bottom:14px">
+  <div style="display:flex;gap:8px;justify-content:flex-end"><button class="btn btn-gray" id="ask-no">취소</button><button class="btn" id="ask-ok">확인</button></div>
+</div></div>
 <div class="modal-bg" id="auth-modal-bg" onclick="if(event.target===this)authClose()"><div class="modal" style="max-width:360px;padding:22px">
   <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:12px"><b style="font-size:16px;color:var(--tx)">로그인</b><button class="btn btn-gray btn-sm" onclick="authClose()">닫기</button></div>
   <div style="display:flex;flex-direction:column;gap:8px"><input id="au-n" style="background:var(--bg);border:1px solid var(--ln);color:var(--bd);padding:10px 12px;border-radius:8px;font-size:14px" placeholder="이름" autocomplete="username"><input id="au-p" style="background:var(--bg);border:1px solid var(--ln);color:var(--bd);padding:10px 12px;border-radius:8px;font-size:14px" type="password" placeholder="비밀번호" autocomplete="current-password" onkeydown="if(event.key==='Enter')authLogin()">
@@ -1930,7 +1935,7 @@ async function jrImport(preview){
   if(d.added){ document.getElementById('jr-text').value=''; loadJournal(); }
 }
 async function jrEdit(id,body){ await fetch(`${API}/journal/${id}`,{method:'PATCH',headers:jrH(),body:JSON.stringify(body)}).catch(()=>null); loadJournal(); }
-async function jrDel(id){ if(!confirm('이 체결을 지울까요?'))return; await fetch(`${API}/journal/${id}`,{method:'DELETE',headers:jrH()}).catch(()=>null); loadJournal(); }
+async function jrDel(id){ if(!await uiConfirm('이 체결을 지울까요?'))return; await fetch(`${API}/journal/${id}`,{method:'DELETE',headers:jrH()}).catch(()=>null); loadJournal(); }
 // 보유 물량: 종목별 비중(예수금 포함)·정렬 (2026-10-06)
 let _jrHSort='eval';
 function jrRenderHolding(){
@@ -2879,8 +2884,21 @@ async function ptChangePin(){
 // ── 머리 줄 로그인 하나 (2026-10-13): 한 번에 한 사람만 — junp = 관리 탭, 초대 사용자 = 내 계좌 탭 ──
 function authWho(){ const j=jrAuth(), p=ptAuth(); return (j.o&&j.p)?{role:'admin',name:j.o}:(p.n&&p.p)?{role:'user',name:p.n}:null; }
 function authBtn(){ const b=document.getElementById('hd-auth'); if(!b) return; const w=authWho();
-  b.textContent=w?`👤 ${w.name} · 로그아웃`:'로그인'; b.classList.toggle('on',!!w); }
-function authClick(){ if(authWho()){ if(confirm('로그아웃할까요?')) authLogout(); return; }
+  b.innerHTML=w?`<span class="hd-nm">👤 ${String(w.name).replace(/[&<>"']/g,'')} · </span>로그아웃`:'로그인'; b.classList.toggle('on',!!w); }
+// 브라우저 기본 확인 창은 맨 위에 주소(IP:포트)가 찍혀서 — 사이트 안 창으로 (2026-10-13)
+function uiAsk(msg, input){ return new Promise(res=>{
+  const bg=document.getElementById('ask-bg'), inp=document.getElementById('ask-in');
+  document.getElementById('ask-msg').textContent=msg; inp.hidden=!input; inp.value=''; if(input){ inp.type=input.type||'text'; inp.placeholder=input.ph||''; }
+  const done=v=>{ bg.classList.remove('show'); document.onkeydown=null; res(v); };
+  document.getElementById('ask-ok').onclick=()=>done(input?inp.value:true);
+  document.getElementById('ask-no').onclick=()=>done(input?null:false);
+  bg.onclick=e=>{ if(e.target===bg) done(input?null:false); };
+  document.onkeydown=e=>{ if(e.key==='Escape') done(input?null:false); else if(e.key==='Enter') document.getElementById('ask-ok').click(); };
+  bg.classList.add('show'); setTimeout(()=>(input?inp:document.getElementById('ask-ok')).focus(),30);
+}); }
+function uiConfirm(msg){ return uiAsk(msg); }
+function uiPrompt(msg, ph, type){ return uiAsk(msg, {ph, type}); }
+async function authClick(){ if(authWho()){ if(await uiConfirm('로그아웃할까요?')) authLogout(); return; }
   document.getElementById('au-msg').textContent=''; document.getElementById('auth-modal-bg').classList.add('show'); setTimeout(()=>document.getElementById('au-n').focus(),50); }
 function authClose(){ document.getElementById('auth-modal-bg').classList.remove('show'); }
 async function authLogin(){
@@ -2902,7 +2920,7 @@ function ptRender(d){
   const BR={meritz:'메리츠증권',toss:'토스증권'};
   const keyBox=d.broker?`<div class="sv-m"><span class="k">연결된 증권사</span><span></span><span class="v">${BR[d.broker]} · 키 끝 ${d.key_tail}</span></div>
       <div class="ts" style="margin:6px 0">${d.start?d.start+'에 연결 · ':''}연결할 때 들고 있던 종목은 아래에서 손절선을 넣어야 자동 손절 대상이 됩니다.</div>
-      <button class="btn btn-gray btn-sm" onclick="if(confirm('키를 지울까요? 걸려 있던 자동 손절 주문도 취소됩니다.'))ptPost('/pt/keys',null,'DELETE')">키 지우기</button>`
+      <button class="btn btn-gray btn-sm" onclick="uiConfirm('키를 지울까요?\n걸려 있던 자동 손절 주문도 취소됩니다.').then(y=>y&&ptPost('/pt/keys',null,'DELETE'))">키 지우기</button>`
     :`<div style="display:flex;flex-direction:column;gap:8px">
         <select id="pt-br"><option value="meritz">메리츠증권</option><option value="toss">토스증권</option></select>
         <input id="pt-k" placeholder="앱키 (App Key · Client ID)" autocomplete="off"><input id="pt-s" type="password" placeholder="시크릿 (App Secret · Client Secret)" autocomplete="off">
@@ -2940,7 +2958,7 @@ async function meInvite(){
      <div class="ts">이름·임시 비밀번호·주소를 그 사람에게만 따로 알려 주세요.</div></section>
     <section class="bx"><div class="bx-h"><b>초대한 사람 ${d.users.length}명</b></div>
      ${d.users.map(u=>`<div class="me-row" style="grid-template-columns:minmax(0,1fr) auto"><div><b>${u.name}</b> <span class="ts">${u.created} · ${u.on?'사용 중':'꺼짐'} · ${u.broker?BR[u.broker]+' 연결':'키 없음'} · 자동 손절 ${u.stop_on?'켜짐':'꺼짐'} · 대상 ${u.lots} · 텔레그램 ${u.chat?'연결':'안 함'}${u.last?' · '+u.last:''}</span></div>
-       <div class="me-ed"><button class="btn btn-gray btn-sm" onclick="meInv('${u.on?'off':'on'}','${u.name}')">${u.on?'끄기':'켜기'}</button><button class="btn btn-gray btn-sm" onclick="const p=prompt('새 비밀번호 (6자 이상)');if(p)meInv('reset','${u.name}',p)">비번</button><button class="btn btn-gray btn-sm" onclick="if(confirm('${u.name} 지울까요? 키·기록도 지워지고 걸린 주문은 취소됩니다.'))meInv('delete','${u.name}')">지우기</button></div></div>`).join('')||'<span class="ts">없음</span>'}</section></div>`;
+       <div class="me-ed"><button class="btn btn-gray btn-sm" onclick="meInv('${u.on?'off':'on'}','${u.name}')">${u.on?'끄기':'켜기'}</button><button class="btn btn-gray btn-sm" onclick="uiPrompt('${u.name} 새 임시 비밀번호 (6자 이상)').then(p=>p&&meInv('reset','${u.name}',p))">비번</button><button class="btn btn-gray btn-sm" onclick="uiConfirm('${u.name} 지울까요?\n키·기록도 지워지고 걸린 주문은 취소됩니다.').then(y=>y&&meInv('delete','${u.name}'))">지우기</button></div></div>`).join('')||'<span class="ts">없음</span>'}</section></div>`;
 }
 async function meInv(action,name,pin){ const r=await fetch(`${API}/me/portal`,{method:'POST',headers:jrH(),body:JSON.stringify({action,name,pin:pin||null})}).then(r=>r.json()).catch(()=>null);
   showToast(r?r.msg:'실패',!(r&&r.ok)); meInvite(); }

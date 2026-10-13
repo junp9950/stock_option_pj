@@ -39,7 +39,7 @@ async def _to_new_site(request, call_next):
     via = request.headers.get("x-stockradar-via", "")
     if request.method == "GET" and not request.url.path.startswith("/api") and via != "bat-rader.pages.dev":
         host = (request.headers.get("host") or "").split(":")[0]
-        if via or host.endswith("sslip.io"):
+        if via or host.endswith("sslip.io") or host == "20.196.212.146":   # 옛 주소(IP:8000)로 오는 사람도 새 주소로
             from starlette.responses import RedirectResponse  # noqa: PLC0415
             q = ("?" + request.url.query) if request.url.query else ""
             return RedirectResponse(NEW_SITE + request.url.path + q, status_code=302)
