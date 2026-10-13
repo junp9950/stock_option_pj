@@ -1250,12 +1250,20 @@ def _crash_calc(db: Session, latest, live_on: bool, key) -> dict:
         names = dict(db.execute(text("select code, name from stocks")).all())
         cand = [c for c in RS[RS >= 90].index if chg.iloc[-1].get(c) == chg.iloc[-1].get(c) and chg.iloc[-1][c] < m_today]
         cand.sort(key=lambda c: -RS[c])
+        # BW·CB·유상증자 같은 위험 공시(30일) 종목은 매수 5개에서 빼고 다음 순서로 채움 (2026-10-13 사용자 "그런 건 좀 빼 주라" — 과거 공시가 없어 검증은 못 함)
+        try:
+            from backend.services.stock_notes import notes_quick  # noqa: PLC0415
+            rk = {c: next(n_["label"] for n_ in v if n_["kind"] == "risk") for c, v in notes_quick().items() if any(n_["kind"] == "risk" for n_ in v)}
+        except Exception:  # noqa: BLE001
+            rk = {}
+        out["skipped"] = [names.get(c, c) + " " + rk[c] for c in cand[:12] if c in rk]
+        cand = [c for c in cand if c not in rk] + [c for c in cand if c in rk]
         for k_, c in enumerate(cand[:12]):
             close, low = float(C.iloc[-1][c]), float(L.iloc[-1][c])
             stop = tick_floor(low * 0.99) if low == low else None
             x = {"code": c, "name": names.get(c, c), "rs": round(float(RS[c])), "chg": round(float(chg.iloc[-1][c]) * 100, 1), "close": close,
-                 "stop": stop, "risk": round((1 - stop / close) * 100, 1) if stop else None, "tv": round(float(tv20.iloc[-2][c]) / 1e8)}
-            (out["items"] if k_ < 5 and out["tested"] else out["ref"]).append(x)
+                 "stop": stop, "risk": round((1 - stop / close) * 100, 1) if stop else None, "tv": round(float(tv20.iloc[-2][c]) / 1e8), "warn": rk.get(c)}
+            (out["items"] if k_ < 5 and out["tested"] and c not in rk else out["ref"]).append(x)
         d, k = datetime.strptime(asof, "%Y-%m-%d").date(), 0
         while k < 5:
             d += timedelta(days=1)

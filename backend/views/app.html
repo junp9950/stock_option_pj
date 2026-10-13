@@ -2806,7 +2806,7 @@ function crashCard(c, d){
   const hd=`<div class="sig-r hd"><span>종목</span><span>${c.live?'지금 가격':dd(c.date)+' 종가'}</span><span>손절가</span><span>손절폭</span></div>`;
   const buy=c.tested?(c.items.length?hd+c.items.map(row).join(''):'<div class="sig-empty">조건에 맞는 종목이 없습니다.</div>')
     :`<div class="sig-warn">⚠ <b>사흘째 이상 이어지는 급락은 12년 검증에 없는 경우</b>라 매수 목록을 내지 않습니다. 아래는 참고만.</div>`;
-  const ref=c.ref.length?`<details class="cr-ref"><summary class="ts">참고 · 같은 조건 다음 순서 ${c.ref.length}개</summary>${hd}${c.ref.map(row).join('')}</details>`:'';
+  const ref=(c.skipped&&c.skipped.length?`<div class="ts" style="margin-top:6px">⚠ 위험 공시라 뺀 종목: ${c.skipped.join(' · ')}</div>`:'')+(c.ref.length?`<details class="cr-ref"><summary class="ts">참고 · 같은 조건 다음 순서 ${c.ref.length}개</summary>${hd}${c.ref.map(row).join('')}</details>`:'');
   return `<div class="sig-h"><b>⚡ 과매도 반등 모드</b><span class="ts">${when}</span>
     <span class="sig-sum"><span class="hb-b r">${lab} · 시장 ${c.market}%${c.kind!=='첫날'?' (이틀 '+c.two+'%)':''}</span>${c.tested?`<span class="hb-b w">▲ 반등 매수 ${c.items.length}</span>`:''}</span>
     <button class="btn btn-gray btn-sm" onclick="sigToggle()">접기</button></div>

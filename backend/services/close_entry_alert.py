@@ -106,6 +106,8 @@ def text_now(db: Session, k: int = 8) -> str | None:
                 top.append(f"  종가에 · 손절 그날 저가 -1% 예약 · 안 걸리면 {cr['sell_on'][5:].replace('-', '/')}(5거래일째) 종가 매도 · 한 종목 10% 이내")
                 for x in cr["items"]:
                     top.append(f"  · <b>{x['name']}</b> 강도 {x['rs']} · 오늘 {x['chg']}% · 손절 {int(x['stop']):,} (-{x['risk']}%)" + _tag(x["code"]))
+                if cr.get("skipped"):
+                    top.append("  ⚠ 위험 공시라 뺌: " + " · ".join(cr["skipped"]))
                 top.append(f"  과거: {cr['stats']}")
             else:
                 top.append("  사흘째 이상 이어지는 급락 = 12년 검증에 없는 경우라 목록 안 냄")
