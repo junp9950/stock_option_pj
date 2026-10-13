@@ -72,9 +72,18 @@ def _market_chg(db: Session) -> dict:
     return _MK["v"]
 
 
-def signals(db: Session, code: str, days: int = 260, owner: str | None = None) -> dict:
-    q = db.execute(text("select trading_date, open_price, high_price, low_price, close_price, volume, trading_value from spot_daily_prices "
-                        "where stock_code = :c order by trading_date desc limit 520"), {"c": code}).all()
+def signals(db: Session, code: str, days: int = 260, owner: str | None = None, us: bool = False) -> dict:
+    """us = 미국 종목 (2026-10-14 "미장도 차트에 매수 표시"): 미국 일봉(us_daily_prices) · 미국 시장 국면 · 미국 RS로 같은 규칙.
+    거래대금은 원화 환산(us_signals.KRW_PER_USD) · 반도체 특별·급락 줍기·종베·매매 일지 표시는 국장만 · 가격은 센트."""
+    if us:
+        from backend.services import us_signals as _us  # noqa: PLC0415
+        q = db.execute(text("select trading_date, open_price, high_price, low_price, close_price, volume, close_price * volume * :fx from us_daily_prices "
+                            "where symbol = :c order by trading_date desc limit 520"), {"c": code, "fx": _us.KRW_PER_USD}).all()
+        fp = lambda x: f"{_us._cent(x):,.2f}"  # noqa: E731
+    else:
+        q = db.execute(text("select trading_date, open_price, high_price, low_price, close_price, volume, trading_value from spot_daily_prices "
+                            "where stock_code = :c order by trading_date desc limit 520"), {"c": code}).all()
+        fp = lambda x: f"{tick_floor(x):,.0f}"  # noqa: E731
     if len(q) < 60:
         return {"code": code, "items": []}
     df = pd.DataFrame(q[::-1], columns=["d", "o", "h", "l", "c", "v", "tv"]).set_index("d").astype(float)
@@ -157,7 +166,7 @@ def signals(db: Session, code: str, days: int = 260, owner: str | None = None) -
     tt7 = (((C > s150) & (C > ma200)).astype(int) + (s150 > ma200).astype(int) + (ma200 > ma200.shift(21)).astype(int)
            + ((s50 > s150) & (s50 > ma200)).astype(int) + (C > s50).astype(int) + (C >= lo52 * 1.3).astype(int) + (C >= hi52 * 0.75).astype(int))
     up60 = (C > e60) & (e20 > e60)
-    bulls = _bull_days(db)
+    bulls = _us.bull_days(db) if us else _bull_days(db)
     bull = pd.Series([bulls.get(d, False) for d in df.index], index=df.index)
     # 급등봉·과열 당일은 진입 안 냄 (2026-10-09 LG에너지솔루션 4/21 +11.4% 진입 → 손절): 그날 +8% 미만 · 20일선 +15% 안
     # 3년: 1,223건 평균 +3.4% · 이김 36% · 최악10% -10.9% (빠진 급등봉·과열 진입은 +2.1% · 최악10% -17%) — entry_sig2.py
@@ -194,7 +203,7 @@ def signals(db: Session, code: str, days: int = 260, owner: str | None = None) -
             break
     # 급락 날 줍기 자리 (_dip_picks와 같은 규칙) — 지난 급락 날에 어디서 떴을지 (2026-10-09 "지금은 못 보는 거제")
     try:
-        for d, picks in _dip_history(db).items():
+        for d, picks in ({} if us else _dip_history(db)).items():
             if d >= start and code in picks:
                 st_ = picks[code]
                 items.append({"date": str(d), "label": f"⬇ 급락 날 줍기 (손절 20일선 {st_:,.0f} · 수량 절반)", "kind": "dip", "pos": "below", "price": float(L[d]) if d in L.index else st_})
@@ -203,7 +212,7 @@ def signals(db: Session, code: str, days: int = 260, owner: str | None = None) -
     # 종가 진입 점수 6↑ 자리 (close_scores와 같은 7개 조건, 상승·횡보장만) — 사용자 목표 "종가에 안전하고 확률 높은 추세 종목".
     # ▲ 진입은 '거래 실린 돌파일'만 잡아서 거래 없이 계단식으로 오르는 종목(SK이노베이션 9~10월)은 비어 보였다 (2026-10-09).
     try:
-        rh = rs_hist(db)
+        rh = _us.rs_hist(db) if us else rs_hist(db)
         rs_arr = rh.get("rs", {}).get(code)
         score_active = None
         if rs_arr is not None:
@@ -224,7 +233,7 @@ def signals(db: Session, code: str, days: int = 260, owner: str | None = None) -
             hot_buy = ((sc == 5) & rs_ok & fl[0].fillna(False) & fl[2].fillna(False) & fl[3].fillna(False) & fl[4].fillna(False)
                        & ~fl[5].fillna(False) & ~fl[6].fillna(False) & ~ema_buy)      # 과열 매수 (이번 장 한정 · 수량 절반) — _close_scores 'hot'과 같음
             normal_ok = (((sc >= 6) & rs_ok) | ema_buy | hot_buy) & base_ok & (rk_ <= 0.08)
-            if code in semi_codes(db):        # 반도체·AI 슈퍼사이클 특별 — 정배열·급등봉·손절폭 12%까지 풀기
+            if not us and code in semi_codes(db):        # 반도체·AI 슈퍼사이클 특별 — 정배열·급등봉·손절폭 12%까지 풀기
                 semi_buy = (ema & rs_ok & (TV.rolling(20).mean() >= 3e9) & bull & (rk_ <= 0.12)).fillna(False) & ~normal_ok
             else:
                 semi_buy = pd.Series(False, index=df.index)
@@ -286,16 +295,16 @@ def signals(db: Session, code: str, days: int = 260, owner: str | None = None) -
                     why.append(f"과열 매수 · 점수 5/7, 빠진 건 과열 두 개뿐 (20일선 +{(float(C[d] / ma20[d]) - 1) * 100:.0f}% · 이평선 간격 {float((ehi_t[d] - elo_t[d]) / C[d]) * 100:.0f}%)")
                     why.append("급반등 장(2023년 이후)에서만 통한 자리 → 수량 절반")
                 why.append(f"강도 RS {float(RS[d]):.0f} (시장보다 센 쪽 · 70~95)")
-                why.append(f"손절폭 {rk_[d] * 100:.1f}% · 스탑로스 {tick_floor(L[d] * 0.99):,.0f} (오늘 저가 -1%)"
+                why.append(f"손절폭 {rk_[d] * 100:.1f}% · 스탑로스 {fp(L[d] * 0.99)} (오늘 저가 -1%)"
                            + (" → ✅ 짧음" if good else ""))
                 desc = (("돌파 매수 · " if is_brk else "") + ("반도체·AI 특별 (슈퍼사이클) · " if is_semi else "") + ("이평선 모였다 돌파 · " if bool(ema_buy[d]) else "") + ("과열 매수 (이번 장 한정) · " if is_hot else "")
-                        + f"손절 {tick_floor(L[d] * 0.99):,.0f} (-{rk_[d] * 100:.1f}%)" + (" · 수량 절반" if is_hot or is_semi else "")
+                        + f"손절 {fp(L[d] * 0.99)} (-{rk_[d] * 100:.1f}%)" + (" · 수량 절반" if is_hot or is_semi else "")
                         + ("" if is_brk else f" · 점수 {int(sc[d])}/7" + (f" (빠짐: {miss[0]})" if miss else "")))
                 # 연속으로 뜨는 날: 첫날만 '매수', 이어지는 날은 '자리 유지' 점 · 손절폭이 확 짧아지면 '더 좋은 자리' (2026-10-09 "매일 뜬 이유가 뭐야")
                 if not prev_on and add_r is not None:
                     if add_r >= 1:
-                        why.append(f"들고 있는 첫 매수 {add_r:+.1f}R → 같은 크기까지 더 사도 됨 · 전체 손절을 {tick_floor(L[d] * 0.99):,.0f}로 올리기")
-                        items.append({"date": str(d), "label": f"더 사기 가능 (첫 매수 {add_r:+.1f}R) · 손절 올리기 {tick_floor(L[d] * 0.99):,.0f} · {desc}", "kind": "score_add",
+                        why.append(f"들고 있는 첫 매수 {add_r:+.1f}R → 같은 크기까지 더 사도 됨 · 전체 손절을 {fp(L[d] * 0.99)}로 올리기")
+                        items.append({"date": str(d), "label": f"더 사기 가능 (첫 매수 {add_r:+.1f}R) · 손절 올리기 {fp(L[d] * 0.99)} · {desc}", "kind": "score_add",
                                       "pos": "below", "price": float(L[d]), "score": int(sc[d]), "why": why})
                     else:
                         why.append(f"들고 있는 첫 매수 {add_r:+.1f}R (+1R 안 됨) → 더 사지 않기 · 안 들고 있으면 새로 사도 되는 자리")
@@ -341,9 +350,9 @@ def signals(db: Session, code: str, days: int = 260, owner: str | None = None) -
                     st_.append(f"⚠️ 과열 · 20일선 +{(C[d] / ma20[d] - 1) * 100:.0f}%")
                 why = ["시장 상승·횡보장 · 종가 > 20일선 > 60일선 (정배열)", f"강도 RS {float(RS[d]):.0f} (최상위 95↑)",
                        f"양봉 · 종가가 그날 범위 위쪽 ({float((C[d] - L[d]) / rng[d]) * 100:.0f}%)",
-                       f"손절폭 {rk_[d] * 100:.1f}% · 스탑로스 {tick_floor(L[d] * 0.99):,.0f} (오늘 저가 -1%)",
+                       f"손절폭 {rk_[d] * 100:.1f}% · 스탑로스 {fp(L[d] * 0.99)} (오늘 저가 -1%)",
                        "기본 신호와 별도로 소량 (거래당 위험 0.10%) · 21일선 아래 종가면 다음 날 아침 정리"] + st_
-                items.append({"date": str(d), "label": f"🔥 주도주 매수 (소량) · 손절 {tick_floor(L[d] * 0.99):,.0f} (-{rk_[d] * 100:.1f}%) · RS {float(RS[d]):.0f}"
+                items.append({"date": str(d), "label": f"🔥 주도주 매수 (소량) · 손절 {fp(L[d] * 0.99)} (-{rk_[d] * 100:.1f}%) · RS {float(RS[d]):.0f}"
                               + (" · " + " · ".join(st_) if st_ else ""), "kind": "lead", "pos": "below", "price": float(L[d]), "why": why})
             elif d >= start:
                 items.append({"date": str(d), "label": "🔥 주도주 보유 중 (또 뜸) · 더 사지 않기", "kind": "lead_keep", "pos": "below", "price": float(L[d])})
@@ -372,7 +381,7 @@ def signals(db: Session, code: str, days: int = 260, owner: str | None = None) -
     try:
         from backend.services.result_cache import cached  # noqa: PLC0415
         from backend.screener.my_pattern import scan as mp_scan  # noqa: PLC0415
-        mp = cached("my_pattern_v6", (), db, lambda: mp_scan(db)) or {}
+        mp = {} if us else (cached("my_pattern_v6", (), db, lambda: mp_scan(db)) or {})
         last_d = df.index[-1]
         for key, lab in (("ema_wait", "돌파 대기 · 이평선 모임"), ("box_near", "돌파 대기 · 박스 꼭대기")):
             if any(x.get("code") == code for x in mp.get(key) or []):
@@ -382,7 +391,7 @@ def signals(db: Session, code: str, days: int = 260, owner: str | None = None) -
     # 매일 고른 종베 3 (settings top3_log) — 그날 우리가 실제로 꼽은 자리
     try:
         from backend.services.telegram import _get  # noqa: PLC0415
-        for d, cs_ in (_get(db, "top3_log", {}) or {}).items():
+        for d, cs_ in ({} if us else (_get(db, "top3_log", {}) or {})).items():
             dd = pd.Timestamp(d).date()
             if code in cs_ and dd in df.index and dd >= start:
                 items.append({"date": d, "label": "버틴 종목 · 시장 빠진 날 버팀 (참고)", "kind": "note", "pos": "below", "price": float(L[dd])})
@@ -392,7 +401,7 @@ def signals(db: Session, code: str, days: int = 260, owner: str | None = None) -
     try:
         for d, side, qty, amt in (db.execute(text(
                 "select trade_date, side, sum(qty), sum(amount) from trade_executions where owner = :o and code = :c and trade_date >= :s "
-                "group by 1, 2 order by 1"), {"o": owner, "c": code, "s": start}).all() if owner else []):     # 매매 일지 로그인했을 때만
+                "group by 1, 2 order by 1"), {"o": owner, "c": code, "s": start}).all() if owner and not us else []):     # 매매 일지 로그인했을 때만
             if qty:
                 items.append({"date": str(d), "label": f"{'매수' if side == '매수' else '매도'} {amt / qty:,.0f}", "kind": "trade_buy" if side == "매수" else "trade_sell",
                               "pos": "below" if side == "매수" else "above", "price": float(amt / qty)})

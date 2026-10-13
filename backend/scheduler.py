@@ -232,6 +232,11 @@ def start_scheduler() -> BackgroundScheduler:
                 warm_caches(db)
         except Exception as exc:  # noqa: BLE001
             logger.error("Scheduler cache warm error: %s", exc)
+        try:      # 미장 차트 매수 표시용 RS·국면 (재시작 뒤 첫 미국 차트가 8초 걸리던 것 — 날짜가 같으면 바로 끝남)
+            from backend.services.us_signals import rs_hist as _us_rsh  # noqa: PLC0415
+            _us_rsh(db)
+        except Exception as exc:  # noqa: BLE001
+            logger.warning("미장 RS 미리 계산 실패: %s", type(exc).__name__)
         finally:
             db.close()
 

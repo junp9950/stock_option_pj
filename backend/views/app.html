@@ -2716,7 +2716,7 @@ function wsStopOpt(c){
   const sg=c&&c.sg, it=(sg&&sg.items)||[], L=c&&c.cd&&c.cd.candles, last=L&&L.length?(L[L.length-1].timestamp||'').slice(0,10):'';
   const BUY=/^(score|score_better|score_add|score_hold|score_keep|lead|dip)$/;
   const today=it.filter(x=>x.date===last&&BUY.test(x.kind)).pop();
-  if(today){ const m=String(today.label).match(/손절(?: 올리기)? ([\d,]+)/); const st=m?+m[1].replace(/,/g,''):(_ws.stop||0); if(st>0) return {stop:st,stopWhy:'오늘 매수분 손절',stopFrom:last}; }
+  if(today){ const m=String(today.label).match(/손절(?: 올리기)? ([\d,]+(?:\.\d+)?)/); const st=m?+m[1].replace(/,/g,''):(_ws.stop||0); if(st>0) return {stop:st,stopWhy:'오늘 매수분 손절',stopFrom:last}; }
   const a=sg&&sg.active; if(a&&a.stop){ const d=a.date.slice(5).split('-').map(Number); return {stop:a.stop,stopWhy:`${d[0]}/${d[1]} 매수분 손절`,stopFrom:a.date}; }
   return {};
 }
@@ -3359,7 +3359,7 @@ function renderLwChart(cid, allCandles, signals, per, opts){
   const reg={chart,cs,ema:[],txt:[],mk:null,pl:null,plt:''}; _chReg=reg;
   cs.setData(data.map(d=>({time:d.time,open:d.open,high:d.high,low:d.low,close:d.close})));
   if(opts&&opts.stop>0){   // 손절선: 차트 전체 가로선 대신 그 매수 자리부터 오늘까지만 + 무엇의 손절인지 (2026-10-13 "이 손절선은 어케")
-    const sp=tk(opts.stop), n0=data.length; let i0=opts.stopFrom?data.findIndex(d=>d.time>=opts.stopFrom):-1; if(i0<0||n0-1-i0>120) i0=Math.max(0,n0-6);
+    const sp=opts.us?Math.floor(opts.stop*100+1e-9)/100:tk(opts.stop), n0=data.length; let i0=opts.stopFrom?data.findIndex(d=>d.time>=opts.stopFrom):-1; if(i0<0||n0-1-i0>120) i0=Math.max(0,n0-6);
     reg.plt=opts.stopWhy||'손절';   // 가격은 오른쪽 칸에 따로 나옴
     reg.plS=chart.addLineSeries({color:cv('--neu'),lineWidth:1,lineStyle:2,priceLineVisible:false,lastValueVisible:true,title:reg.plt,crosshairMarkerVisible:false});
     reg.plS.setData(data.slice(i0).map(d=>({time:d.time,value:sp}))); }
@@ -3633,7 +3633,7 @@ async function svDraw(){
   if(!c.cd||!c.cd.candles||!c.cd.candles.length){ note.textContent='차트를 못 불러왔습니다'; return; }
   const a=c.sg&&c.sg.active;
   const g=renderLwChart('sv-chart',c.cd.candles,c.sg?c.sg.items:[],_sv.per,{...wsStopOpt(c),code:_sv.code,tf:'1d',us:_sv.us});
-  note.textContent=`일봉 · 끌어서 과거 보기`+(g!=null?` · EMA 5·10·20 간격 ${g.toFixed(1)}%`:'')+_avwapNote+(_patNote?'  |  '+_patNote:'')+(a?` · 매수 신호로 보유 중 ${a.date.slice(5).replace('-','/')} · 손절 ${tk(a.stop).toLocaleString()}`:'');
+  note.textContent=`일봉 · 끌어서 과거 보기`+(g!=null?` · EMA 5·10·20 간격 ${g.toFixed(1)}%`:'')+_avwapNote+(_patNote?'  |  '+_patNote:'')+(a?` · 매수 신호로 보유 중 ${a.date.slice(5).replace('-','/')} · 손절 ${_sv.us?'$'+(Math.floor(a.stop*100+1e-9)/100).toFixed(2):tk(a.stop).toLocaleString()}`:'');
 }
 function svMetric(k,v,sub,bar){ return `<div class="sv-m"><span class="k">${k}</span><span>${bar||''}${sub?`<span class="ts">${sub}</span>`:''}</span><span class="v">${v}</span></div>`; }
 function svProfileUS(){
@@ -3844,10 +3844,12 @@ async function usOpen(code,name){
   document.getElementById('us-name').textContent=name; document.getElementById('us-sub').textContent=code; document.getElementById('us-px').innerHTML='';
   document.getElementById('us-note').textContent='불러오는 중…';
   lwClear('us-chart'); document.getElementById('us-chart').innerHTML='<div class="ts" style="padding:40px;text-align:center">차트 불러오는 중…</div>';   // 앞 종목 차트가 새 이름 밑에 남아 있던 것 (2026-10-13 Sandisk 제목에 엔비디아 차트)
+  const sgP=fetch(`${API}/stock/${code}/chart-signals`).then(r=>r.ok?r.json():null).catch(()=>null);     // 매수 표시 (2026-10-14 국장과 같은 규칙)
   const cd=await (_usPre[code]||fetch(`${API}/stock/${code}/candles?tf=1d`).then(r=>r.ok?r.json():null).catch(()=>null));
   if(_us.code!==code) return;
   if(!cd||!cd.candles||!cd.candles.length){ document.getElementById('us-note').textContent='차트를 못 불러왔습니다'; return; }
   _us.cache.cd=cd; _us.tf='1d'; usDraw();
+  sgP.then(sg=>{ if(_us.code===code&&sg){ _us.cache.sg=sg; if(_us.tf==='1d') usDraw(); } });
   const L=cd.candles, z=L[L.length-1], y=L[L.length-2], cl=+z.closePrice, ch=y?(cl/+y.closePrice-1)*100:0;
   document.getElementById('us-px').innerHTML=`$${cl.toFixed(2)}<span style="color:${usC(ch)}">${ch>=0?'+':''}${ch.toFixed(2)}%</span>`;
 }
@@ -3866,8 +3868,9 @@ async function usDraw(){
     renderLwChart('us-chart',cd.candles,[],tf==='1w'?80:120,{code,tf,us:true}); note.textContent=tfNote(cd,tf); return;
   }
   if(!c.cd) return;
-  const g=renderLwChart('us-chart',c.cd.candles,[],_us.per,{code,tf:'1d',us:true});
-  note.textContent=`일봉 약 3년 · 지연 시세`+(g!=null?` · EMA 5·10·20 간격 ${g.toFixed(1)}%`:'')+(_patNote?'  |  '+_patNote:'');
+  const a=c.sg&&c.sg.active;
+  const g=renderLwChart('us-chart',c.cd.candles,c.sg?c.sg.items:[],_us.per,{...wsStopOpt(c),code,tf:'1d',us:true});
+  note.textContent=`일봉 약 3년 · 지연 시세`+(g!=null?` · EMA 5·10·20 간격 ${g.toFixed(1)}%`:'')+(_patNote?'  |  '+_patNote:'')+(a?` · 매수 신호로 보유 중 ${a.date.slice(5).replace('-','/')} · 손절 $${(Math.floor(a.stop*100+1e-9)/100).toFixed(2)}`:'')+(c.sg?' · 매수 표시는 국장과 같은 규칙(미국 종가 기준, 기록만)':'');
 }
 // 미국 순위 · 히트맵
 async function usRankLoad(sort){

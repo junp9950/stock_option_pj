@@ -65,7 +65,7 @@ def _frames(db: Session, latest) -> dict:
     from backend.screener.market_regime import regime_series  # noqa: PLC0415
     from backend.services.trading_rules import market_returns  # noqa: PLC0415
     reg = regime_series((market_returns(piv["c"], piv["tv"]) * 100).to_dict())
-    _C.update(key=latest, frames=piv, reg=reg, bull={d: r["state"] in ("상승", "횡보") for d, r in reg.items()}, scores={})
+    _C.update(key=latest, frames=piv, reg=reg, bull={d: r["state"] in ("상승", "횡보") for d, r in reg.items()}, scores={}, rsh=None)
     return piv
 
 
@@ -95,6 +95,31 @@ def regime(db: Session, day=None) -> dict | None:
     with _LOCK:
         _frames(db, latest)
         return (_C["reg"] or {}).get(day or latest)
+
+
+def bull_days(db: Session) -> dict:
+    """날짜별 상승·횡보 여부 (차트 신호용 — stock_signals._bull_days와 같은 모양)."""
+    latest = data_latest(db)
+    if latest is None:
+        return {}
+    with _LOCK:
+        _frames(db, latest)
+        return _C["bull"] or {}
+
+
+def rs_hist(db: Session) -> dict:
+    """날짜별 RS (stock_signals.rs_hist와 같은 모양: {"dates": [...], "rs": {code: 배열}}) — 차트에 지난 날짜 매수를 찍으려면 그날의 전 종목 순위가 필요."""
+    from backend.services.trading_rules import relative_strength  # noqa: PLC0415
+    latest = data_latest(db)
+    if latest is None:
+        return {}
+    with _LOCK:
+        P = _frames(db, latest)
+        if _C.get("rsh") is None:
+            RS = relative_strength(P["c"], P["tv"]).iloc[-270:]
+            _C["rsh"] = {"date": str(latest), "dates": [str(d) for d in RS.index],
+                         "rs": {c: RS[c].to_numpy(dtype="float32") for c in RS.columns if RS[c].notna().any()}}
+        return _C["rsh"]
 
 
 def _names(db: Session) -> dict:

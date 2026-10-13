@@ -2618,9 +2618,12 @@ def get_me_status(request: Request, db: Session = Depends(get_db)):
 def get_stock_chart_signals(code: str, request: Request, db: Session = Depends(get_db)):
     """차트에 찍을 신호 (우리 규칙을 그 종목 일봉에 거슬러 적용). 매매 일지 로그인 헤더가 있으면 내 매수·매도도."""
     from backend.services.us_stocks import is_us  # noqa: PLC0415
-    if is_us(code):
-        return {"items": [], "active": None}
     from backend.services.stock_signals import signals  # noqa: PLC0415
+    if is_us(code):      # 미장도 같은 규칙으로 매수 표시 (2026-10-14) — 미국 일봉을 받아 둔 종목만(시총 10억 달러↑)
+        try:
+            return signals(db, code.upper(), us=True)
+        except Exception:  # noqa: BLE001
+            return {"items": [], "active": None}
     return signals(db, code, owner=_journal_owner_opt(request, db))
 
 
