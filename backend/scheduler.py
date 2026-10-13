@@ -281,6 +281,21 @@ def start_scheduler() -> BackgroundScheduler:
     for _h, _m in ((7, 30), (8, 20), (11, 30), (17, 0)):
         scheduler.add_job(_price_fix_job, 'cron', day_of_week='mon-sat', hour=_h, minute=_m,
                           id=f'spot_price_fix_{_h}{_m:02d}', replace_existing=True, max_instances=1, coalesce=True)
+
+    def _data_check_job(kind: str) -> None:
+        # 데이터 점검 — 이상 있을 때만 알림 (2026-10-13)
+        from backend.services import data_check as DC  # noqa: PLC0415
+        db = SessionLocal()
+        try:
+            r = DC.check_collection(db) if kind == "collect" else DC.check_prices(db, final=(kind == "final"))
+            logger.info("데이터 점검(%s): %s", kind, r)
+        except Exception as exc:  # noqa: BLE001
+            logger.error("데이터 점검(%s) 실패: %s", kind, exc)
+        finally:
+            db.close()
+    scheduler.add_job(lambda: _data_check_job("price"), 'cron', day_of_week='tue-sat', hour=8, minute=30, id='data_check_price', replace_existing=True, max_instances=1)
+    scheduler.add_job(lambda: _data_check_job("final"), 'cron', day_of_week='tue-sat', hour=17, minute=5, id='data_check_final', replace_existing=True, max_instances=1)
+    scheduler.add_job(lambda: _data_check_job("collect"), 'cron', day_of_week='mon-fri', hour=16, minute=15, id='data_check_collect', replace_existing=True, max_instances=1)
     from backend.services.marcap_caps import refresh as refresh_marcap
     scheduler.add_job(refresh_marcap, 'cron', hour=7, minute=0, id='marcap_caps_daily', replace_existing=True, max_instances=1)
 

@@ -27,6 +27,15 @@ def _tag(code: str) -> str:
     return out
 
 
+def _sz(code: str, v: dict, rp: float = 0.005) -> str:
+    """사장님 계좌(메리츠 순자산) 기준 살 수량 — 거래당 위험 rp(기본 0.5%, 주도주 0.10%), 과열·반도체 특별은 절반 (2026-10-13 사용자)."""
+    try:
+        from backend.services.account_equity import size_text  # noqa: PLC0415
+        return size_text(code, float(v.get("price") or 0), float(v.get("risk") or 0), rp, 0.5 if (v.get("hot") or v.get("semi")) else 1.0)
+    except Exception:  # noqa: BLE001
+        return ""
+
+
 def _brk_lines(sc: dict, names: dict, room: int) -> list[str]:
     """돌파 매수 (예전 ▲진입) — 지금 규칙으로 10칸을 채우고 남는 칸에 (2026-10-13 사용자 "둘 다 매수로").
     12년 계좌: 지금 규칙만 연 +6.9%/+62.1% vs 지금 규칙 먼저 + 남는 칸 돌파 +6.8%/+66.5% (2015~22/2023~)."""
@@ -37,7 +46,7 @@ def _brk_lines(sc: dict, names: dict, room: int) -> list[str]:
         return [f"▲ 돌파 매수 {len(b)}개 — 칸이 다 차서 오늘은 안 삼"]
     out = [f"▲ <b>돌파 매수</b> (남는 칸 {room}개까지 · 강도 순) — 박스·이평선 돌파 + 추세 6/7"]
     for c, v in b[:room]:
-        out.append(f"· <b>{names.get(c, c)}</b> RS {v.get('rs') or 0:.0f} · {v.get('kind', '')} · 스탑로스 {v['stop']:,.0f} (-{v['risk'] * 100:.1f}%)" + _tag(c))
+        out.append(f"· <b>{names.get(c, c)}</b> RS {v.get('rs') or 0:.0f} · {v.get('kind', '')} · 스탑로스 {v['stop']:,.0f} (-{v['risk'] * 100:.1f}%)" + _sz(c, v) + _tag(c))
     return out
 
 
@@ -95,7 +104,7 @@ def text_now(db: Session, k: int = 8) -> str | None:
                               + (f" · ⚠️ 경고: {ls['warn']}" if ls.get("warn") else ""))
             for c, v in leads[:5]:
                 lead_lines.append(f"  · <b>{names.get(c, c)}</b> RS {v.get('rs') or 0:.0f} · " + (" · ".join(v.get("lead_state") or []) or "자리 표시 없음(오르는 날)")
-                                  + f" · 스탑로스 {v['stop']:,.0f} (-{v['risk'] * 100:.1f}%)" + _tag(c))
+                                  + f" · 스탑로스 {v['stop']:,.0f} (-{v['risk'] * 100:.1f}%)" + _sz(c, v, 0.001) + _tag(c))
     except Exception:  # noqa: BLE001
         pass
     if not rows:
@@ -115,10 +124,11 @@ def text_now(db: Session, k: int = 8) -> str | None:
     out.append("순서: 강도(RS) 높은 순 — 칸이 모자라면 위에서부터 (12년 검증)")
     for c, v in rows[:k]:
         out.append(f"{'✅' if v['risk'] <= 0.03 and not v.get('hot') and not v.get('semi') else '·'} <b>{names.get(c, c)}</b> RS {v.get('rs') or 0:.0f} · {'이평선 돌파 · ' if v.get('ema') else ''}{'과열 매수(이번 장) · 수량 절반 · ' if v.get('hot') else ''}{'반도체·AI 특별 · 수량 절반 · ' if v.get('semi') else ''}{v['score']}/7 · 스탑로스 {v['stop']:,.0f} (-{v['risk'] * 100:.1f}%)"
-                   + (f" · {srk[c][1]} {srk[c][0]}위" if srk.get(c, (99,))[0] <= 8 else " · 섹터 밖") + _tag(c))
+                   + (f" · {srk[c][1]} {srk[c][0]}위" if srk.get(c, (99,))[0] <= 8 else " · 섹터 밖") + _sz(c, v) + _tag(c))
     out += _brk_lines(sc, names, max(0, 10 - len(rows)))
     out += lead_lines
     out.append("파는 법: 사면 바로 스탑로스 예약 (정규장만) · 21일선 아래 종가면 다음 날 아침 정리")
+    out.append("<i>수량 = 메리츠 순자산(주식−대출+현금) × 0.5% ÷ (가격 × 손절폭) — 손절 맞으면 계좌 0.5% · 신용이어도 같음</i>")
     out.append("<i>3년(같은 위험 금액당): 손절폭 3%↓ 1.4배 · 3~5% 0.55배 · 5~8% 0.35배 · 8%↑ 0.1배 벎 → 수량은 손절폭에 맞춰</i>")
     try:      # ⚡ 과매도 반등 모드 (급락 날만, 2026-10-13) — 사이트 오늘 탭 카드와 같은 목록
         from backend.services.stock_signals import crash_now  # noqa: PLC0415
