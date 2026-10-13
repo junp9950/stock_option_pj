@@ -1238,8 +1238,8 @@ def _crash_calc(db: Session, latest, live_on: bool, key) -> dict:
         kind = "첫날"
     elif first(n - 2) and m_today <= -0.02:
         kind = "이틀째"
-    elif q[n - 1] or (any(q[n - 11:n - 1]) and m_today <= -0.02):
-        kind = "이어지는 급락"          # 검증 밖
+    elif any(q[n - 11:n - 1]) and m_today <= -0.03:
+        kind = "이어지는 급락"          # 검증 밖 — 오늘 또 -3%↓ 빠진 날만 (10/13 오후 시장이 -1.7%로 회복했는데도 여기로 와서 카드가 '검증 밖'으로 남던 것)
     out = {"active": kind is not None, "kind": kind, "date": asof, "at": at, "live": bool(at), "market": round(m_today * 100, 2),
            "prev_market": round(m_prev * 100, 2), "two": round(float(two.iloc[-1]) * 100, 2), "stats": CRASH_STATS.get(kind or "", ""),
            "tested": kind in ("첫날", "이틀째"), "items": [], "ref": []}
