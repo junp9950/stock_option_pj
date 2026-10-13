@@ -232,10 +232,10 @@ def _stop_for(db: Session, s: dict, code: str, buy: date, today: date) -> tuple[
         low = db.execute(text("select low_price from spot_daily_prices where stock_code = :c and trading_date = :d"), {"c": code, "d": buy}).scalar()
         final = True
     else:
-        try:
-            from backend.services import toss_client as t  # noqa: PLC0415
-            x = t._get("/candles", {"symbol": code, "interval": "1d", "count": 1}).json()["result"]["candles"][0]  # noqa: SLF001
-            low = float(x["lowPrice"]) if x["timestamp"][:10] == str(today) else None
+        try:      # 산 날: 정규장 저가 (토스 일봉은 장 후 넥스트레이드 저가가 섞임, 2026-10-13)
+            from backend.services.naver_live import krx_day  # noqa: PLC0415
+            k = krx_day(code)
+            low = float(k["low"]) if k and k["date"] == str(today) else None
         except Exception:  # noqa: BLE001
             low = None
         final = _now().hour * 100 + _now().minute >= 1530

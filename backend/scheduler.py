@@ -268,18 +268,19 @@ def start_scheduler() -> BackgroundScheduler:
                       id='jongbe_record', replace_existing=True, max_instances=1, coalesce=True)
 
     def _price_fix_job() -> None:
-        # 07:30: 전날 15:41·18:00 수집 시세는 NXT 시간외 진행 중 값이라 확정 종가로 다시 덮어쓴다 (최근 5거래일)
-        from datetime import date as _date  # noqa: PLC0415
-        from backend.collector.spot import refresh_spot_prices  # noqa: PLC0415
+        # 전날 시세를 KRX 공식 정규장 값으로 바로잡기 (최근 10거래일). 2026-10-13: 예전 FDR '확정치'도 넥스트레이드·시간외가
+        # 섞인 값이라 오히려 오염시켰음 → KRX OpenAPI로. 공개 시각을 몰라 07:30·08:20(08:50 손절 주문 전)·11:30·17:00 여러 번 (바뀐 게 없으면 바로 끝)
+        from backend.collector.krx_daily import fix_recent  # noqa: PLC0415
         db = SessionLocal()
         try:
-            refresh_spot_prices(db, _date.today() - timedelta(days=9), _date.today())
+            fix_recent(db, 10)
         except Exception as exc:  # noqa: BLE001
             logger.error("Scheduler price fix error: %s", exc)
         finally:
             db.close()
-    scheduler.add_job(_price_fix_job, 'cron', day_of_week='tue-sat', hour=7, minute=30,
-                      id='spot_price_fix', replace_existing=True, max_instances=1, coalesce=True)
+    for _h, _m in ((7, 30), (8, 20), (11, 30), (17, 0)):
+        scheduler.add_job(_price_fix_job, 'cron', day_of_week='mon-sat', hour=_h, minute=_m,
+                          id=f'spot_price_fix_{_h}{_m:02d}', replace_existing=True, max_instances=1, coalesce=True)
     from backend.services.marcap_caps import refresh as refresh_marcap
     scheduler.add_job(refresh_marcap, 'cron', hour=7, minute=0, id='marcap_caps_daily', replace_existing=True, max_instances=1)
 

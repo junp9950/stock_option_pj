@@ -222,6 +222,10 @@ def collect_spot_data(db: Session, trading_date: date) -> None:
             return
 
         # FDR 정상 확인 (기존 데이터는 upsert로 덮어씀, DELETE 불필요)
+        from datetime import datetime as _dt  # noqa: PLC0415
+        from zoneinfo import ZoneInfo as _Z  # noqa: PLC0415
+        _now = _dt.now(_Z("Asia/Seoul"))
+        keep_prices = trading_date == _now.date() and _now.hour >= 16
 
         stocks = list(get_universe(db))
 
@@ -309,13 +313,16 @@ def collect_spot_data(db: Session, trading_date: date) -> None:
                 trading_value=float(row["Volume"]) * float(row["Close"]),
                 change_pct=change_check,
             )
-            db.execute(
-                pg_insert(SpotDailyPrice).values(**price_vals)
-                .on_conflict_do_update(
+            stmt = pg_insert(SpotDailyPrice).values(**price_vals)
+            if keep_prices:
+                # 16시 뒤(18:00 재수집): 이미 있는 오늘 시세는 그대로 — FDR 값은 넥스트레이드·시간외 단일가가 섞여 점점 더 어긋남 (2026-10-13).
+                # 정규장 공식값은 다음 날 아침 KRX OpenAPI로 바로잡음(krx_daily.fix_recent). 없던 종목만 새로 넣음.
+                db.execute(stmt.on_conflict_do_nothing(constraint="uq_spot_daily_prices"))
+            else:
+                db.execute(stmt.on_conflict_do_update(
                     constraint="uq_spot_daily_prices",
                     set_={k: v for k, v in price_vals.items() if k not in ("trading_date", "stock_code")},
-                )
-            )
+                ))
 
             # 수급: KIS API → 실패 시 0
             if batch_ok and stock.code in batch_flows:
