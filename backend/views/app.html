@@ -1098,8 +1098,8 @@ select{background:var(--c3);border:1px solid var(--ln);color:var(--bd);padding:6
   <div class="ws us-ws">
     <div class="ws-list">
       <div class="ws-search"><input id="us-q" placeholder="🔍 미국 종목 검색 (티커·영문·한글)" autocomplete="off" oninput="usSearch(this.value)" onkeydown="srKey(event,'us-sr',usSearch)"><div id="us-sr"></div></div>
-      <div class="ws-tabs" id="us-lt"><button data-t="gainers" onclick="usList('gainers')">많이 오른</button><button data-t="active" onclick="usList('active')">거래대금</button><button data-t="losers" onclick="usList('losers')">많이 내린</button></div>
-      <div class="ts" style="margin:0 4px 4px">시총 100억 달러↑ 대형주 · 지연 시세 · 누르면 오른쪽 차트</div>
+      <div class="ws-tabs" id="us-lt"><button data-t="sig" onclick="usList('sig')" title="국장과 같은 매수 규칙을 미국 종가에 돌린 결과 · 기록만, 주문 없음">매수 신호</button><button data-t="gainers" onclick="usList('gainers')">많이 오른</button><button data-t="active" onclick="usList('active')">거래대금</button><button data-t="losers" onclick="usList('losers')">많이 내린</button></div>
+      <div class="ts" id="us-lnote" style="margin:0 4px 4px">시총 100억 달러↑ 대형주 · 지연 시세 · 누르면 오른쪽 차트</div>
       <div id="us-items"><div class="ts" style="padding:10px">불러오는 중…</div></div>
     </div>
     <div class="ws-main">
@@ -3747,7 +3747,7 @@ function svShort(){
 }
 
 // ── 미장 (2026-10-11) ─────────────────────────────────────────
-let _usO=null, _usI=null, _usAt=0, _usSym=0, _us={code:null,name:null,tf:'1d',per:130,cache:{},list:'gainers'};
+let _usO=null, _usI=null, _usAt=0, _usSym=0, _us={code:null,name:null,tf:'1d',per:130,cache:{},list:'sig'};
 const usM=v=>v>=1e12?(v/1e12).toFixed(2)+'T':v>=1e9?(v/1e9).toFixed(1)+'B':v>=1e6?(v/1e6).toFixed(0)+'M':Math.round(v).toLocaleString();
 const usC=n=>n>0?'var(--up)':n<0?'var(--down)':'var(--muted)';
 const usP=n=>`<span style="color:${usC(n)}">${n>0?'+':''}${(+n).toFixed(2)}%</span>`;
@@ -3793,8 +3793,31 @@ function usSide(){
 // 목록 위쪽 종목 일봉을 미리 받아 둠 — 처음 여는 미국 종목은 시세를 받아 오느라 2~3초 (2026-10-13)
 const _usPre={};
 async function usPrefetch(codes){ for(const c of codes){ if(_usPre[c]) continue; _usPre[c]=fetch(`${API}/stock/${c}/candles?tf=1d`).then(r=>r.ok?r.json():null).catch(()=>null); await _usPre[c]; if(!(await _usPre[c])) delete _usPre[c]; } }
+// 미장 매수 신호 (2026-10-14 1단계): 국장 규칙 그대로 · 미국 종가 기준 · 기록만(주문 없음) · 가상 계좌 요약
+let _usS=null, _usSAt=0;
+async function usSig(){
+  const el=document.getElementById('us-items'), nt=document.getElementById('us-lnote');
+  if(!_usS||Date.now()-_usSAt>600000){ el.innerHTML='<div class="ts" style="padding:10px">불러오는 중…</div>'; const S=await fetch(`${API}/us/signals`).then(r=>r.ok?r.json():null).catch(()=>null); if(S){ _usS=S; _usSAt=Date.now(); } }
+  if(_us.list!=='sig') return;
+  const S=_usS||{}; if(!S.date){ el.innerHTML='<div class="ts" style="padding:10px">아직 미국 일봉을 모으는 중입니다</div>'; nt.textContent=''; return; }
+  const d=new Date(S.date+'T00:00:00'), g={'상승':['w','▲ 미국 상승 · 매매 가능'],'횡보':['o','■ 미국 횡보 · 매매 가능'],'하락':['r','▼ 미국 하락 · 쉬기']}[S.regime]||['o','-'];
+  nt.innerHTML=`${d.getMonth()+1}/${d.getDate()} 미국 종가 기준 · 국장과 같은 규칙 · <b>기록만, 주문 없음</b>`;
+  const room=Math.max(0,10-S.items.length);
+  const row=x=>`<div class="ws-item hb-row${x.code===_us.code?' on':''}" data-c="${x.code}" onclick="usOpen('${x.code}','${String(x.name).replace(/'/g,'')}')"><div class="hb-rs${x.kind==='주도주'?' lead':''}" title="강도(RS) 1~99">${x.rs!=null?Math.round(x.rs):'-'}</div>
+    <div class="hb-main"><div class="hb-nm"><span class="n">${x.name}</span><span class="hb-b ${x.kind==='매수'?'w':'o'}">${x.kind==='주도주'?'🔥 주도':x.kind}${x.half?' · 절반':''}</span></div><div class="hb-sub">${x.code} · 손절 $${x.stop.toFixed(2)} (−${x.risk}%)${x.sector?' · '+x.sector:''}</div></div>
+    <div class="ws-px">$${(+x.price).toFixed(2)}${x.score!=null?`<div class="ts">${x.score}/7</div>`:''}</div></div>`;
+  const F=S.fwd||{}, uc=(F.accounts||[]).find(a=>a.acct==='UC');
+  el.innerHTML=`<div class="ws-sub" title="국장과 같은 계산: 시총 10억 달러↑ 미국 종목을 같은 무게로 평균한 지수의 20일선·기울기 — 위 카드(S&P500 기준)와 다를 수 있습니다"><span class="hb-b ${g[0]}">${g[1]}</span>${S.vs_ma20!=null?` <span class="ts">20일선 ${S.vs_ma20>0?'+':''}${S.vs_ma20}% · 종목 같은 무게</span>`:''}</div>`
+    +(S.items.length?`<div class="ws-sub">매수 ${S.items.length} · 위일수록 강한 종목 · 최대 10종목</div>`+S.items.map(row).join(''):'<div class="ws-sub">매수 신호 없음</div>')
+    +(S.brk.length&&room?`<div class="ws-sub">돌파 매수 · 남는 칸 ${room}</div>`+S.brk.slice(0,room).map(row).join(''):'')
+    +(S.leads.length?`<div class="ws-sub">주도주 · 따로 · 최대 2종목 · 아주 적게</div>`+S.leads.map(row).join(''):'')
+    +(uc?`<div class="ws-sub" title="${uc.start||''}부터 · 종가 진입 · 거래당 위험 0.5% · 손절 신호 날 저가 −1% · 21일선 아래 마감 → 다음 날 시가 정리 · 수수료 어림 0.1%씩, 환전 비용 뺌">가상 계좌(종가 진입) ${uc.ret>0?'+':''}${uc.ret}% · 보유 ${uc.pos.length}${uc.pos.length?' · '+uc.pos.map(p=>p.code+(p.exit_next?' ⚠정리':'')).join(', '):''}</div>`:'');
+  usPrefetch(S.items.slice(0,8).map(x=>x.code));
+}
 function usList(t){
   _us.list=t; document.querySelectorAll('#us-lt button').forEach(b=>b.classList.toggle('on',b.dataset.t===t));
+  if(t==='sig'){ usSig(); return; }
+  const nt=document.getElementById('us-lnote'); if(nt) nt.textContent='시총 100억 달러↑ 대형주 · 지연 시세 · 누르면 오른쪽 차트';
   const L=((_usO||{})[t])||[], el=document.getElementById('us-items');
   el.innerHTML=L.length?L.map(x=>`<div class="ws-item hb-row${x.code===_us.code?' on':''}" data-c="${x.code}" onclick="usOpen('${x.code}','${String(x.name).replace(/'/g,'')}')">${wsAv(x.code,x.name)}
     <div class="hb-main"><div class="hb-nm"><span class="n">${x.name}</span></div><div class="hb-sub">${x.code} · 시총 ${usM(x.cap)} · 거래 ${usM(x.dv)}</div></div>

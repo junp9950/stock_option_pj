@@ -312,6 +312,38 @@ def start_scheduler() -> BackgroundScheduler:
     # 08:30 어젯밤 미국 반도체 장비 → 소부장 시초 대응 알림 (2026-10-06)
     scheduler.add_job(lambda: _tg("send_us_overnight"), 'cron', day_of_week='mon-fri', hour=7, minute=50, id='us_overnight',   # 넥장 프리마켓(08:00) 전에 (2026-10-08, 원래 08:30)
                       replace_existing=True, max_instances=1)
+
+    def _us_daily_job() -> None:
+        """미장 1단계 (2026-10-14): 미국 일봉 받기(메리츠, 최근 40개) → 국장 규칙 신호 → 가상 계좌 하루 진행 → 사장님 방 텔레그램. 주문 없음."""
+        from backend.collector.us_daily import collect  # noqa: PLC0415
+        from backend.services import us_signals  # noqa: PLC0415
+        from backend.services.telegram import owner_chats, send as tg_send  # noqa: PLC0415
+        db = SessionLocal()
+        try:
+            logger.info("미장 일봉: %s", collect(db))
+            rec = us_signals.record(db)
+            logger.info("미장 가상 계좌: %s", rec.get("msg"))
+            msg = us_signals.morning_text(db, rec)
+            if msg:
+                for c in owner_chats(db):
+                    tg_send(db, msg, c, html=True)
+        except Exception as exc:  # noqa: BLE001
+            logger.error("미장 신호 작업 실패: %s", exc)
+        finally:
+            db.close()
+    # 07:15 화~토 — 미국 장 마감(서머타임 05:00 · 아니면 06:00) 뒤. 08:50 손절 주문 전에 끝남(메리츠 호출 간격 같이 씀)
+    scheduler.add_job(_us_daily_job, 'cron', day_of_week='tue-sat', hour=7, minute=15, id='us_daily', replace_existing=True, max_instances=1)
+
+    def _us_symbols_job() -> None:
+        from backend.collector.us_daily import refresh_symbols  # noqa: PLC0415
+        db = SessionLocal()
+        try:
+            logger.info("미국 종목 목록: %s", refresh_symbols(db))
+        except Exception as exc:  # noqa: BLE001
+            logger.warning("미국 종목 목록 실패: %s", exc)
+        finally:
+            db.close()
+    scheduler.add_job(_us_symbols_job, 'cron', day_of_week='sun', hour=6, minute=30, id='us_symbols', replace_existing=True, max_instances=1)
     # 19:00 오늘 소부장·기판 종베가 있으면 미국 장비주 프리마켓 → 20:00 넥스트레이드 애프터마켓 전 정리 판단
     # 장중 4분마다 과매도 줍기 미리 계산 — 오늘 탭 카드가 바로 뜨게 (계산 12초, 토스 9번)
     def _warm_dip() -> None:

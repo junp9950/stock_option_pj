@@ -1815,6 +1815,21 @@ def get_us_indices():
     return indices()
 
 
+@router.get("/us/signals")
+def get_us_signals(db: Session = Depends(get_db)):
+    """미장 매수 신호 (2026-10-14 1단계): 국장 규칙 그대로 미국 종가 기준 · 가상 계좌 요약. 주문 없음."""
+    from backend.services import us_signals  # noqa: PLC0415
+    try:
+        out = us_signals.signal_list(db)
+    except Exception as exc:  # noqa: BLE001
+        return {"date": None, "items": [], "brk": [], "leads": [], "error": type(exc).__name__}
+    try:
+        out["fwd"] = us_signals.state(db)
+    except Exception:  # noqa: BLE001
+        out["fwd"] = None
+    return out
+
+
 @router.get("/us/heatmap")
 def get_us_heatmap(limit: int = 300):
     from backend.services.us_stocks import heat_items  # noqa: PLC0415

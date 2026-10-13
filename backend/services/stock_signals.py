@@ -832,9 +832,12 @@ def _close_frames_load(db: Session, latest) -> dict:
     return v
 
 
-def _close_scores(db: Session, latest, live: dict | None = None, frac: float = 1.0, frames: dict | None = None) -> dict:
+def _close_scores(db: Session, latest, live: dict | None = None, frac: float = 1.0, frames: dict | None = None,
+                  semi: frozenset | None = None, stop_round=None) -> dict:
     """live = 네이버 실시간 {code: {o,h,l,c,v}} 이면 오늘 줄을 붙여 장중 점수 (거래량은 frac로 나눠 마감 환산).
-    frames = 앞에서 잘라 낸 프레임이면 그 마지막 날 기준 점수 (지난 날짜 다시 계산용)."""
+    frames = 앞에서 잘라 낸 프레임이면 그 마지막 날 기준 점수 (지난 날짜 다시 계산용).
+    semi·stop_round = 미장(us_signals)용: 반도체 특별 묶음(미장은 없음) · 손절가 자르기(미장은 센트) — 안 주면 국장 그대로."""
+    stop_round = stop_round or tick_floor
     P = frames or _close_frames(db, latest)
     H, L, C, V, TV = P["h"], P["l"], P["c"], P["v"], P["tv"]
     O = P.get("o")
@@ -877,7 +880,7 @@ def _close_scores(db: Session, latest, live: dict | None = None, frac: float = 1
     al_ = (e8_ > e14_) & (e14_ > e21_) & (e21_ > e55_)
     hi20_ = H.iloc[-21:-1].max()
     out = {}
-    semi = semi_codes(db)
+    semi = semi_codes(db) if semi is None else semi
     brk_all = (gap_prev <= 0.04) & (c > ehi) & (c > H.iloc[-11:-1].max()) & (chg >= 0.03) & (chg < 0.29) & (tvx >= 1.5) & liq.iloc[r]
     semi_ok = {cd for cd in brk_all[brk_all.fillna(False).astype(bool)].index
                if cd in semi and bool(flags[1].get(cd, False)) and float(1 - l[cd] * 0.99 / c[cd]) <= 0.12}
@@ -906,7 +909,7 @@ def _close_scores(db: Session, latest, live: dict | None = None, frac: float = 1
             g_ = gap20.get(code)
             if g_ == g_ and g_ is not None and g_ >= 0.15:
                 lst.append(f"⚠️ 과열 · 20일선 +{g_ * 100:.0f}%")
-        out[code] = {"score": sum(f), "flags": f, "stop": tick_floor(float(l[code]) * 0.99), "risk": rk, "ema": e_, "lead": lead, "lead_state": lst,
+        out[code] = {"score": sum(f), "flags": f, "stop": stop_round(float(l[code]) * 0.99), "risk": rk, "ema": e_, "lead": lead, "lead_state": lst,
                      "rs": float(rs_v) if rs_v is not None and rs_v == rs_v else None,     # 후보 순서용 (2026-10-10: RS 높은 순이 12년 무작위 순서 10,000번 중 100백분위)
                      "hot": bool(hot_mask.get(code, False)),
                      "semi": bool(code in semi_ok and not normal),
@@ -934,7 +937,7 @@ def _close_scores(db: Session, latest, live: dict | None = None, frac: float = 1
             rk = float(1 - l[code] * 0.99 / c[code])
             if not (rk > 0):
                 continue
-            brk[code] = {"score": int(sum(bool(x.get(code, False)) for x in flags)), "flags": [bool(x.get(code, False)) for x in flags], "stop": tick_floor(float(l[code]) * 0.99),
+            brk[code] = {"score": int(sum(bool(x.get(code, False)) for x in flags)), "flags": [bool(x.get(code, False)) for x in flags], "stop": stop_round(float(l[code]) * 0.99),
                          "risk": rk, "ema": False, "lead": False, "lead_state": [], "hot": False, "semi": False, "buy": False, "price": float(c[code]),
                          "rs": float(rs_v) if rs_v is not None and rs_v == rs_v else None, "kind": "박스 위로 돌파" if bool(box_.get(code, False)) else "이평선 모였다 돌파"}
     except Exception:  # noqa: BLE001
