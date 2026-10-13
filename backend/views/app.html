@@ -129,7 +129,9 @@ select{background:var(--c3);border:1px solid var(--ln);color:var(--bd);padding:6
 .sig-sum{display:flex;gap:6px}.sig-g{display:grid;grid-template-columns:minmax(0,1.2fr) minmax(0,1fr);gap:22px;margin-top:12px}
 .sig-t{font-weight:700;color:var(--tx);margin-bottom:6px;font-size:14px}.sig-r{display:grid;grid-template-columns:minmax(0,1fr) 84px 84px 70px;gap:8px;align-items:center;padding:6px 4px;border-bottom:1px solid var(--line2);font-size:13px;cursor:pointer}
 .sig-r:hover{background:var(--sunk)}.sig-r.hd{cursor:default;font-size:11.5px;color:var(--mu);padding-top:0}.sig-r.hd:hover{background:none}.sig-r .v{text-align:right;font-variant-numeric:tabular-nums}.sig-r .sl{color:var(--b)}.sig-r.hd span:not(:first-child){text-align:right}
-.sig-r .nm{min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}.sig-warn{padding:8px 10px;margin:0 0 6px;border:1px solid var(--r);border-radius:8px;font-size:12.5px;color:var(--tx);line-height:1.6}.ws-status{margin:0 4px 6px;padding:7px 10px;border-radius:8px;font-size:12.5px;line-height:1.5;color:var(--tx);border:1px solid var(--ln)}.ws-status.k-r{border-color:var(--r)}.sig-empty{padding:10px 4px;font-size:13px;color:var(--tx)}.sig-how{margin-top:12px;padding-top:10px;border-top:1px solid var(--line2);font-size:12.5px;color:var(--tx);line-height:1.7}
+.sig-r .nm{min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}.sig-warn{padding:8px 10px;margin:0 0 6px;border:1px solid var(--r);border-radius:8px;font-size:12.5px;color:var(--tx);line-height:1.6}.ws-status{margin:0 4px 6px;padding:7px 10px;border-radius:8px;font-size:12.5px;line-height:1.5;color:var(--tx);border:1px solid var(--ln)}.ws-status.k-r{border-color:var(--r)}.sig-card.crash{border-color:var(--r)}.cr-lead{margin-top:8px;font-size:13px;color:var(--tx)}.cr-how{font-size:13px;line-height:1.9;color:var(--tx)}
+.cr-stat{margin-top:10px;padding:8px 10px;border-radius:8px;background:var(--sunk);font-size:12.5px;line-height:1.6;color:var(--tx)}.cr-ref{margin-top:8px}.cr-ref summary{cursor:pointer;padding:4px}
+.sig-empty{padding:10px 4px;font-size:13px;color:var(--tx)}.sig-how{margin-top:12px;padding-top:10px;border-top:1px solid var(--line2);font-size:12.5px;color:var(--tx);line-height:1.7}
 @media(max-width:900px){#panel-home.active{display:flex;flex-direction:column}#panel-home>.sig-card{order:-1}.sig-g{grid-template-columns:1fr;gap:16px}.sig-r{grid-template-columns:minmax(0,1fr) 70px 70px 52px;font-size:12.5px}}
 .htop{display:grid;grid-template-columns:minmax(0,1.25fr) minmax(0,1fr);gap:14px;margin-bottom:14px}
 .hc-spark{position:relative;height:92px;margin:2px 0 8px}.hc-spark svg{width:100%;height:100%;display:block}
@@ -2734,7 +2736,13 @@ async function renderSigCard(){
   // 장중에 시장이 크게 빠져 장중 판단이 '쉬는 날'이면 매수 칸 위에 경고 (2026-10-12 이틀 연속 급락 — 카드는 지난 장 판단이라 '매수'로 보였다)
   const lv=d.live?await fetch(`${API}/dashboard/dip-live`).then(r=>r.ok?r.json():null).catch(()=>null):null;
   const liveRest=!bear&&lv&&lv.mode&&lv.mode.mode==='쉬기';
-  _ws.st={bear,liveRest}; wsStatus(); renderWsList();
+  const cr=await fetch(`${API}/crash/now`).then(r=>r.ok?r.json():null).catch(()=>null);
+  _ws.st={bear,liveRest,crash:cr&&cr.active?cr:null}; wsStatus(); renderWsList();
+  if(cr&&cr.active){ let cl=false; try{ cl=localStorage.getItem('sig-closed')==='1'; }catch(e){}
+    el.classList.add('crash');
+    el.innerHTML=cl?`<div class="sig-h"><b>⚡ 과매도 반등 모드</b><span class="sig-sum"><span class="hb-b r">급락 ${cr.kind}</span>${cr.tested?`<span class="hb-b w">▲ 반등 매수 ${cr.items.length}</span>`:''}</span><button class="btn btn-gray btn-sm" onclick="sigToggle()">펼치기</button></div>`:crashCard(cr,d);
+    return; }
+  el.classList.remove('crash');
   const all=(d.candidates||[]).filter(x=>(x.lane||'entry')==='entry');
   const B=bear?[]:all.filter(x=>!x.lead).slice(0,10), Ld=bear?[]:all.filter(x=>x.lead).slice(0,2);
   const S=(d.track||[]).filter(x=>x.sell_tmr), keep=(d.track||[]).length-S.length;
@@ -2769,11 +2777,34 @@ function wsStatus(){
   const d=_ws.data||{}, st=_ws.st||{}, dd=(d.as_of||'').slice(5).replace('-','/');
   const n=(d.candidates||[]).filter(x=>(x.lane||'entry')==='entry').length;
   let k='n', t;
-  if(st.bear){ k='r'; t='🔴 <b>오늘은 쉬는 날</b> · 시장이 하락 중이라 새로 사지 않습니다'; }
+  if(st.crash){ k='r'; t=`⚡ <b>과매도 반등 모드</b> · 급락 ${st.crash.kind} · 추세 매수는 쉬고 반등 매수는 맨 위 카드에${st.crash.live?' (15:20쯤 확정)':''}`; }
+  else if(st.bear){ k='r'; t='🔴 <b>오늘은 쉬는 날</b> · 시장이 하락 중이라 새로 사지 않습니다'; }
   else if(st.liveRest){ k='r'; t=`🔴 <b>장중 쉬는 날</b> · 시장이 크게 빠지는 중 · 이대로 마감하면 매수 없음${n?' (아래는 임시 후보)':''}`; }
   else if(d.live){ t=n?`⏱ <b>장중 임시 후보 ${n}개</b> · 15:20쯤 확정 · 그 전엔 사지 마세요`:'⏱ <b>지금은 매수 후보 없음</b> · 15:20쯤 다시 확인'; }
   else { t=n?`📌 <b>${dd} 마감 신호 ${n}개</b> · 지난 신호라 지금 따라 사지 마세요 · 다음 신호는 다음 장 15:20쯤`:`📌 <b>${dd} 매수 신호 없음</b> · 다음 신호는 다음 장 15:20쯤`; }
   el.className='ws-status k-'+k; el.innerHTML=t; el.hidden=false;
+}
+// ⚡ 과매도 반등 모드 (2026-10-13 사용자 "과매도인 날만 오늘 탭 다 갈아엎고 매수 목록") — 급락 날에만 '오늘의 매매 신호' 카드를 이걸로 바꾼다
+function crashCard(c, d){
+  const won=v=>Math.round(v).toLocaleString(), dd=s=>(s||'').slice(5).replace('-','/');
+  const lab={첫날:'급락 첫날',이틀째:'급락 이틀째','이어지는 급락':'급락이 이어지는 중'}[c.kind]||'급락';
+  const when=c.live?`장중 ${c.at} 기준 · 15:20쯤 확정`:`${dd(c.date)} 장 마감 기준`;
+  const row=x=>`<div class="sig-r" onclick="sigOpen('${x.code}','${x.name.replace(/'/g,'')}')"><span class="nm"><b>${x.name}</b> <span class="ts">강도 ${x.rs} · 오늘 ${x.chg}%</span></span>
+    <span class="v">${won(x.close)}</span><span class="v sl">${x.stop?won(x.stop):'-'}</span><span class="v">${x.risk!=null?'−'+x.risk+'%':'-'}</span></div>`;
+  const hd=`<div class="sig-r hd"><span>종목</span><span>${c.live?'지금 가격':dd(c.date)+' 종가'}</span><span>손절가</span><span>손절폭</span></div>`;
+  const buy=c.tested?(c.items.length?hd+c.items.map(row).join(''):'<div class="sig-empty">조건에 맞는 종목이 없습니다.</div>')
+    :`<div class="sig-warn">⚠ <b>사흘째 이상 이어지는 급락은 12년 검증에 없는 경우</b>라 매수 목록을 내지 않습니다. 아래는 참고만.</div>`;
+  const ref=c.ref.length?`<details class="cr-ref"><summary class="ts">참고 · 같은 조건 다음 순서 ${c.ref.length}개</summary>${hd}${c.ref.map(row).join('')}</details>`:'';
+  return `<div class="sig-h"><b>⚡ 과매도 반등 모드</b><span class="ts">${when}</span>
+    <span class="sig-sum"><span class="hb-b r">${lab} · 시장 ${c.market}%${c.kind!=='첫날'?' (이틀 '+c.two+'%)':''}</span>${c.tested?`<span class="hb-b w">▲ 반등 매수 ${c.items.length}</span>`:''}</span>
+    <button class="btn btn-gray btn-sm" onclick="sigToggle()">접기</button></div>
+    <div class="cr-lead">시장이 크게 빠진 날에만 켜지는 칸입니다. <b>추세 매수는 쉬고</b>, 강하던 종목이 같이 많이 빠졌을 때 <b>짧게 반등만</b> 노립니다.</div>
+    <div class="sig-g">
+      <div><div class="sig-t">▲ 반등 매수 <span class="ts">${c.live?'오늘 장 마감 직전(15:20~15:30)에':'그날 종가에'} · 강하던 종목 중 시장보다 더 빠진 순서 5개</span></div>${buy}${ref}</div>
+      <div><div class="sig-t">▼ 파는 법</div>
+        <div class="cr-how"><div>① 사자마자 <b>손절가에 매도 예약</b> (그날 저가 −1%)</div><div>② 손절에 안 걸리면 <b>${dd(c.sell_on)}(5거래일째) 종가에 매도</b> — 오르든 내리든</div><div>③ 한 종목에 투자금 <b>10% 이내</b>, 평소보다 적게</div></div>
+        <div class="cr-stat"><b>과거 성적</b> · ${c.stats||'검증 밖'}<br><span class="ts">급락 날 = 시장(거래 많은 종목 평균) 하루 −3%↓ 또는 이틀 −5%↓ · 손절 걸면 평균은 조금 줄지만 크게 잃는 경우가 −17% → −7%로 · 급락이 더 이어지면 손절됩니다 · 수익 보장 아님</span></div>
+      </div></div>`;
 }
 function sigToggle(){ let c=false; try{ c=localStorage.getItem('sig-closed')==='1'; localStorage.setItem('sig-closed',c?'0':'1'); }catch(e){} renderSigCard(); }
 function sigOpen(code,name){ wsOpen(code,name); const el=document.querySelector('#panel-home .ws-main'); if(el) el.scrollIntoView({behavior:'smooth',block:'start'}); }

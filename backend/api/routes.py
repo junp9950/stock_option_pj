@@ -1863,6 +1863,13 @@ def get_index_intraday(symbol: str):
     return out
 
 
+@router.get("/crash/now")
+def get_crash_now(db: Session = Depends(get_db)):
+    """과매도 반등 모드 (급락 날만): 시장 급락 판정 + RS 90↑ 중 더 빠진 종목 5 · 손절 그날 저가 -1% · 5거래일째 종가 매도 (2026-10-13)."""
+    from backend.services.stock_signals import crash_now  # noqa: PLC0415
+    return crash_now(db)
+
+
 @router.get("/dashboard/dip-live")
 def get_dip_live(db: Session = Depends(get_db)):
     """장중 과매도 줍기 (토스 실시간, 5분 캐시) — 오늘 탭 카드가 장중에 부른다 (2026-10-07)."""

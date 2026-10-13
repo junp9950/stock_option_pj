@@ -1155,3 +1155,81 @@ def _track_rows(db: Session, px: dict) -> list[dict]:
         c, ch = px.get(a["code"], (0.0, 0.0))
         out.append({**a, "close": c or a["entry"], "chg": round(ch, 2), "tags": []})
     return out
+
+
+# ── 과매도 반등 (2026-10-13 사용자 "과매도인 날만 오늘 탭 다 바꿔서 매수 목록") ──────────────────────
+# 12년(tmp_claude/crash_cap/rules2.py, 시가 갭 체결 포함): 급락 날 = 시장(거래 10억↑ 평균) 하루 -3%↓ 또는 이틀 -5%↓(10일 안은 한 사건),
+# 그날 종가에 전날 RS 90↑ · 거래 30억↑ · 그날 시장보다 더 빠진 종목 RS 순 5개 → 손절 = 그날 저가 -1% 예약 · 5거래일째 종가 매도.
+#   첫날 56번: 종목 평균 +1.5% (2014~22 +1.5 / 2023~ +1.4) · 최악 10% -6.7% (손절 없으면 +2.0%지만 최악 10% -17%)
+#   이틀째(첫날 다음 날 또 -2%↓) 10번: +8.1% — 단 2023~ 4번이 대부분, 표본 작음.
+#   사흘째 이상(10일 안 세 번째 급락 날)은 검증 밖 → 참고만.
+CRASH_STATS = {"첫날": "12년 56번 · 종목 평균 +1.5% · 최악 10% −6.7%", "이틀째": "12년 10번 · 종목 평균 +8.1% (최근 4번이 대부분 · 표본 작음)"}
+_CRASH: dict = {"t": 0, "v": None, "key": None}
+
+
+def crash_now(db: Session, max_age: float = 120) -> dict:
+    import time  # noqa: PLC0415
+    from datetime import datetime, timedelta  # noqa: PLC0415
+    from zoneinfo import ZoneInfo  # noqa: PLC0415
+    from backend.utils.dates import is_trading_day  # noqa: PLC0415
+    from backend.utils.ticks import tick_floor  # noqa: PLC0415
+    now = datetime.now(ZoneInfo("Asia/Seoul"))
+    latest = db.execute(text("select max(trading_date) from spot_daily_prices")).scalar()
+    live_on = is_trading_day(now.date()) and 9 <= now.hour < 16 and latest < now.date()
+    key = (str(latest), live_on)
+    if _CRASH["v"] is not None and _CRASH["key"] == key and (not live_on or time.time() - _CRASH["t"] < max_age):
+        return _CRASH["v"]
+    P = _close_frames(db, latest)
+    L, C, TV = P["l"], P["c"], P["tv"]
+    asof, at = str(latest), None
+    if live_on:
+        from backend.services.naver_live import snapshot  # noqa: PLC0415
+        from backend.screener.my_pattern import _day_frac  # noqa: PLC0415
+        lv = snapshot(list(C.columns), max_age=60)
+        if len(lv) < len(C.columns) * 0.5:
+            return {"active": False, "date": asof, "items": []}
+        frac = 1.0 if (now.hour, now.minute) >= (15, 30) else _day_frac(now)
+        row = {k: pd.Series({c: x[k] for c, x in lv.items() if x.get(k)}, dtype="float32").reindex(C.columns) for k in ("l", "c")}
+        vol = pd.Series({c: x["v"] / max(frac, 0.05) for c, x in lv.items()}, dtype="float32").reindex(C.columns)
+        add = lambda F, ser: pd.concat([F, ser.to_frame(now.date()).T])  # noqa: E731
+        L, C, TV = add(L, row["l"]), add(C, row["c"]), add(TV, row["c"] * vol)
+        asof, at = str(now.date()), now.strftime("%H:%M")
+    chg = C / C.shift(1) - 1
+    tv20 = TV.rolling(20, min_periods=10).mean()
+    mkt = chg.where(tv20.shift(1) >= 1e9).clip(-0.3, 0.3).mean(axis=1)
+    two = (1 + mkt) * (1 + mkt.shift(1)) - 1
+    q = ((mkt <= -0.03) | (two <= -0.05)).fillna(False).tolist()
+    n = len(q)
+    m_today, m_prev = float(mkt.iloc[-1]), float(mkt.iloc[-2])
+    first = lambda i: q[i] and not any(q[max(0, i - 10):i])  # noqa: E731   10일 안 첫 급락 = 사건 시작
+    kind = None
+    if first(n - 1):
+        kind = "첫날"
+    elif first(n - 2) and m_today <= -0.02:
+        kind = "이틀째"
+    elif q[n - 1] or (any(q[n - 11:n - 1]) and m_today <= -0.02):
+        kind = "이어지는 급락"          # 검증 밖
+    out = {"active": kind is not None, "kind": kind, "date": asof, "at": at, "live": bool(at), "market": round(m_today * 100, 2),
+           "prev_market": round(m_prev * 100, 2), "two": round(float(two.iloc[-1]) * 100, 2), "stats": CRASH_STATS.get(kind or "", ""),
+           "tested": kind in ("첫날", "이틀째"), "items": [], "ref": []}
+    if kind:
+        rs_raw = 0.4 * (C / C.shift(63) - 1) + 0.2 * (C / C.shift(126) - 1) + 0.2 * (C / C.shift(189) - 1) + 0.2 * (C / C.shift(252) - 1)
+        liq = tv20.iloc[-2] >= 3e9
+        RS = rs_raw.iloc[-2].where(liq).rank(pct=True) * 98 + 1          # 전날 마감 기준 강도
+        names = dict(db.execute(text("select code, name from stocks")).all())
+        cand = [c for c in RS[RS >= 90].index if chg.iloc[-1].get(c) == chg.iloc[-1].get(c) and chg.iloc[-1][c] < m_today]
+        cand.sort(key=lambda c: -RS[c])
+        for k_, c in enumerate(cand[:12]):
+            close, low = float(C.iloc[-1][c]), float(L.iloc[-1][c])
+            stop = tick_floor(low * 0.99) if low == low else None
+            x = {"code": c, "name": names.get(c, c), "rs": round(float(RS[c])), "chg": round(float(chg.iloc[-1][c]) * 100, 1), "close": close,
+                 "stop": stop, "risk": round((1 - stop / close) * 100, 1) if stop else None, "tv": round(float(tv20.iloc[-2][c]) / 1e8)}
+            (out["items"] if k_ < 5 and out["tested"] else out["ref"]).append(x)
+        d, k = datetime.strptime(asof, "%Y-%m-%d").date(), 0
+        while k < 5:
+            d += timedelta(days=1)
+            if is_trading_day(d):
+                k += 1
+        out["sell_on"] = str(d)
+    _CRASH.update(t=time.time(), v=out, key=key)
+    return out

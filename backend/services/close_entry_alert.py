@@ -96,6 +96,22 @@ def text_now(db: Session, k: int = 8) -> str | None:
     out += lead_lines
     out.append("파는 법: 사면 바로 스탑로스 예약 (정규장만) · 21일선 아래 종가면 다음 날 아침 정리")
     out.append("<i>3년(같은 위험 금액당): 손절폭 3%↓ 1.4배 · 3~5% 0.55배 · 5~8% 0.35배 · 8%↑ 0.1배 벎 → 수량은 손절폭에 맞춰</i>")
+    try:      # ⚡ 과매도 반등 모드 (급락 날만, 2026-10-13) — 사이트 오늘 탭 카드와 같은 목록
+        from backend.services.stock_signals import crash_now  # noqa: PLC0415
+        cr = crash_now(db)
+        if cr.get("active"):
+            top = []
+            top.append(f"⚡ <b>과매도 반등 모드</b> · 급락 {cr['kind']} · 시장 {cr['market']}% (이틀 {cr['two']}%)")
+            if cr.get("tested"):
+                top.append(f"  종가에 · 손절 그날 저가 -1% 예약 · 안 걸리면 {cr['sell_on'][5:].replace('-', '/')}(5거래일째) 종가 매도 · 한 종목 10% 이내")
+                for x in cr["items"]:
+                    top.append(f"  · <b>{x['name']}</b> 강도 {x['rs']} · 오늘 {x['chg']}% · 손절 {int(x['stop']):,} (-{x['risk']}%)" + _tag(x["code"]))
+                top.append(f"  과거: {cr['stats']}")
+            else:
+                top.append("  사흘째 이상 이어지는 급락 = 12년 검증에 없는 경우라 목록 안 냄")
+            out[1:1] = top + [""]          # 제목 바로 아래 (급락 날엔 이게 먼저)
+    except Exception:  # noqa: BLE001
+        pass
     return "\n".join(out)
 
 
