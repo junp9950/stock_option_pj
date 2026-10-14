@@ -154,7 +154,11 @@ def _panel(db: Session, code: str, owner: str | None = None) -> dict:
         from backend.services.stock_signals import _bull_days, close_scores_now, dip_now, sector_rank_of  # noqa: PLC0415
         latest_ = db.execute(text("select max(trading_date) from spot_daily_prices")).scalar()
         if _bull_days(db).get(latest_, False):
-            sc_ = close_scores_now(db).get("scores", {}).get(code)
+            _cs = close_scores_now(db)
+            sc_ = _cs.get("scores", {}).get(code)
+            bk_ = (_cs.get("brk") or {}).get(code)
+            if bk_ and not (sc_ and sc_.get("buy")):        # 돌파 매수·넓은 돌파 (2026-10-15 전수 검증 — 목록·차트와 같게)
+                tags.insert(0, f"▲ 돌파 매수 ({bk_.get('kind', '')})")
             if sc_ and sc_.get("buy"):
                 rk_ = sc_["risk"]
                 tags.insert(0, "반도체·AI 특별 · 수량 절반 (슈퍼사이클)" if sc_.get("semi") else "과열 매수 · 수량 절반 (이번 장)" if sc_.get("hot") else ("✅ 손익비 좋음" if rk_ <= 0.03 else "종가 점수 6↑" if rk_ <= 0.05 and sc_["score"] >= 6
@@ -243,15 +247,18 @@ def _panel(db: Session, code: str, owner: str | None = None) -> dict:
                  {"label": "저항 (20일 고가)", "value": f"{resist:,.0f}", "sub": f"{(resist/c-1)*100:+.1f}%"},
                  {"label": "52주 고가", "value": f"{hi52:,.0f}", "sub": f"{(hi52/c-1)*100:+.1f}%"}]
 
-    csc = None
+    csc = cbk = None
     try:
         from backend.services.stock_signals import CLOSE_FLAGS, close_scores_now  # noqa: PLC0415
-        csc = close_scores_now(db).get("scores", {}).get(code)      # 장중이면 실시간 가격 기준
+        _cs2 = close_scores_now(db)
+        csc = _cs2.get("scores", {}).get(code)      # 장중이면 실시간 가격 기준
+        cbk = (_cs2.get("brk") or {}).get(code)
     except Exception:  # noqa: BLE001
         pass
     rows = [
         ({"k": "종가 진입 점수", "v": f"{'✅ ' if csc['score'] >= 6 and csc['risk'] <= 0.03 else ''}{csc['score']}/7 · 손절폭 {csc['risk'] * 100:.1f}%", "tip": " · ".join(f"{'✓' if f else '✗'} {n}" for n, f in zip(CLOSE_FLAGS, csc["flags"]))}
-         if csc else {"k": "종가 진입 점수", "v": "추세 아님 (종가 > 20일선 > 60일선 아님)"}),
+         if csc else {"k": "종가 진입 점수", "v": f"▲ {cbk.get('kind', '돌파 매수')} · 손절폭 {cbk['risk'] * 100:.1f}% (정배열 전)"} if cbk
+         else {"k": "종가 진입 점수", "v": "추세 아님 (종가 > 20일선 > 60일선 아님)"}),
         {"k": "추세 조건", "v": f"{tt}/8", "tip": " · ".join(f"{'✓' if v else '✗'} {n}" for n, v in tt_list)},
         {"k": "RS Rating", "v": f"{rs:.0f}" if rs is not None else "-"},
         {"k": "이평선 (5·10·20·60)", "v": align},

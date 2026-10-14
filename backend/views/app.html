@@ -2777,7 +2777,7 @@ function renderWsList(){
   const hbSect=x=>{ const t=(x.tags||[]).find(t=>/^(뜨는 섹터|올라오는 섹터) /.test(t)); if(t) return t.replace(/^(뜨는 섹터|올라오는 섹터) /,'')+(x.sec_rank&&x.sec_rank<=8?` ${x.sec_rank}위`:''); return (x.tags||[]).some(t=>t.startsWith('섹터 밖'))?'섹터 밖':(x.family||''); };
   const hbState=x=>{ const t=(x.tags||[]).join(' '), o=[]; if(t.includes('📍')) o.push('눌림'); if(t.includes('🚀')) o.push('돌파'); const m=t.match(/과열 · 20일선 \+(\d+)%/); if(m) o.push('과열 +'+m[1]+'%'); return o.join(' · ')||'자리 표시 없음'; };
   const hbBadge=x=>{ const t=(x.tags||[]).join(' ');
-    if(_ws.tab==='track') return x.sell_tmr?['▼ 내일 아침 정리','r','21일선 아래로 마감 · 규칙상 다음 날 아침 정리']:x.lead?['주도','w','주도주 신호']:x.dip?['줍기','o','급락 날 줍기']:null;
+    if(_ws.tab==='track') return x.sell_tmr?['▼ 내일 아침 정리','r','21일선 아래로 마감 · 규칙상 다음 날 아침 정리']:x.lead?['주도','w','주도주 신호']:x.dip?['줍기','o','급락 날 줍기']:x.wide?['넓은 돌파','o','넓은 돌파 (이번 장 한정) 신호']:x.brk?['돌파','o','돌파 매수 신호']:null;
     if(x.crash) return ['⚡ 반등 매수','r','급락 날 반등 · 손절 그날 저가 −1% 예약 · 5거래일째 종가 매도'];
     if(x.bottom) return ['🟣 모으기 '+x.bottom+'차','p','바닥 모으기 · 손절 산 값 −25% · 정해진 날 종가에 정리'];
     if(_ws.tab!=='entry'||(x.lane&&x.lane!=='entry')) return null;     // 다음 후보(대기)에 '매수' 배지 붙던 것 (2026-10-13 "이게 오늘의 매수!?")
@@ -2801,7 +2801,7 @@ function renderWsList(){
   const row=x=>{
     if(['entry','wait','track'].includes(_ws.tab)) return hbRow(x);
     let tg='';
-    if(_ws.tab==='track') tg=(x.sell_tmr?'⚠ 내일 아침 정리 · ':'')+(x.dip?'⬇ 줍기 · ':'')+(x.lead?'🔥 주도주 · ':'')+`${x.date.slice(5).replace('-','/')} ${Math.round(x.entry).toLocaleString()} · 스탑 ${tk(x.stop).toLocaleString()} · 21선 ${x.to21>0?'+':''}${x.to21}%`;
+    if(_ws.tab==='track') tg=(x.sell_tmr?'⚠ 내일 아침 정리 · ':'')+(x.dip?'⬇ 줍기 · ':'')+(x.lead?'🔥 주도주 · ':'')+(x.wide?'넓은 돌파 · ':x.brk?'돌파 · ':'')+`${x.date.slice(5).replace('-','/')} ${Math.round(x.entry).toLocaleString()} · 스탑 ${tk(x.stop).toLocaleString()} · 21선 ${x.to21>0?'+':''}${x.to21}%`;
     else if(_ws.tab!=='watch') tg=(x.risk!=null?`손절 ${x.risk}% · `:'')+x.tags.filter(t=>t!=='종가 점수 6↑'||x.tags.length===1).join(' · ')+(x.family?` · ${x.family}`:'');   // 손절폭 = 종가에서 그날 저가 -1%까지
     else if(_ws.tab==='held') tg=(x.stop?`손절 ${tk(x.stop).toLocaleString()}${x.room!=null?` · ${x.room<0?'⛔ 이탈':x.room<=2?'⚠ '+x.room+'% 남음':x.room+'% 남음'}`:''}`:'손절선 없음')+(x.long?' · 장기':'');
     else tg=`${KIND[x.kind]||''}${x.level?' '+Math.round(x.level).toLocaleString():''}${x.note?' · '+x.note:''}`;

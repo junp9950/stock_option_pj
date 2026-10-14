@@ -252,7 +252,7 @@ def signals(db: Session, code: str, days: int = 260, owner: str | None = None, u
                 from backend.services.wide_breakout import state as _wst  # noqa: PLC0415
                 _ws = _wst(db)
                 wsw = pd.Series([bool(_ws["on"]) if _ws.get("manual") else bool(_ws["hist"].get(str(d), True)) for d in df.index], index=df.index)
-                wide_ok = ((C > e5) & (C > e10) & (C > e20) & (C > hi10p) & (chg >= 0.03) & (chg < 0.30) & (tvx >= 1.5) & (TV.rolling(20).mean() >= 3e9)
+                wide_ok = ((C > e5) & (C > e10) & (C > e20) & (C > hi10p) & (chg >= 0.03) & (chg < 0.29) & (tvx >= 1.5) & (TV.rolling(20).mean() >= 3e9)
                            & (RS >= 70) & (e20 >= e60 * 0.98) & (rk_ > 0) & (rk_ <= 0.15) & bull & wsw).fillna(False) & ~buy_ok
                 buy_ok = buy_ok | wide_ok
             pos_ = {d: k for k, d in enumerate(df.index)}
@@ -461,7 +461,7 @@ def workspace_list(db: Session) -> dict:
     from backend.services.result_cache import cached  # noqa: PLC0415
     now = datetime.now(ZoneInfo("Asia/Seoul"))
     if not (is_trading_day(now.date()) and 9 <= now.hour < 16):
-        return cached("workspace_list_v17", (), db, lambda: _workspace_list(db))
+        return cached("workspace_list_v18", (), db, lambda: _workspace_list(db))
     return _workspace_list(db)
 
 
@@ -813,7 +813,7 @@ def close_scores(db: Session) -> dict:
     점수 7 이김 46%·+1.5%. 기간을 반으로 나눠도 둘 다 점수 따라 이김 비율이 올라감(앞 26→47%, 뒤 31→46%). 디스크 캐시."""
     latest = _data_latest(db)
     from backend.services.result_cache import cached  # noqa: PLC0415
-    v = cached("close_scores_v10", (), db, lambda: _close_scores(db, latest)) or {}
+    v = cached("close_scores_v11", (), db, lambda: _close_scores(db, latest)) or {}
     return v
 
 
@@ -983,11 +983,12 @@ def _close_scores(db: Session, latest, live: dict | None = None, frac: float = 1
                          "rs": float(rs_v) if rs_v is not None and rs_v == rs_v else None, "kind": "박스 위로 돌파" if bool(box_.get(code, False)) else "이평선 모였다 돌파"}
         # 넓은 돌파 (이번 장 한정 · 2026-10-15 사용자 "넣고 디폴트로 켜 놔라, AI장 끝나면 니가 꺼라") — 정배열 직전·하루 +30%·손절폭 15%까지.
         # 자동 스위치(wide_breakout.state): 최근 120거래일 끝난 넓은 돌파 평균 R > 0이면 켬. 돌파 매수 다음 칸 · 수량은 손절폭 기준이라 저절로 작음.
-        if _kr and not frames:
-            from backend.services.wide_breakout import state as _wst  # noqa: PLC0415
-            if _wst(db)["on"]:
+        if _kr:
+            from backend.services.wide_breakout import on_for as _won, state as _wst  # noqa: PLC0415
+            # 지난 날짜 다시 계산(frames)이면 그날 스위치 — 차트·미래 자료 대조와 같게 (10/15 전수 검증)
+            if (_won(db, C.index[-1]) if frames else _wst(db)["on"]):
                 rk_all = 1 - l * 0.99 / c
-                wide_ = ((c > e5.iloc[r]) & (c > e10.iloc[r]) & (c > e20.iloc[r]) & (c > hi10p) & (chg >= 0.03) & (chg < 0.30) & (tvx >= 1.5)
+                wide_ = ((c > e5.iloc[r]) & (c > e10.iloc[r]) & (c > e20.iloc[r]) & (c > hi10p) & (chg >= 0.03) & (chg < 0.29) & (tvx >= 1.5)
                          & liq.iloc[r] & (RS >= 70) & (e20.iloc[r] >= e60.iloc[r] * 0.98) & (rk_all > 0) & (rk_all <= 0.15)).fillna(False).astype(bool)
                 for code in wide_[wide_].index:
                     if (code in out and out[code]["buy"]) or code in brk:
@@ -1239,7 +1240,7 @@ def tracking(db: Session) -> dict:
     날짜마다 그날까지 데이터로 점수를 다시 계산한다 (signal_log가 쌓이기 전 날짜는 '다시 계산'). DB 날짜가 바뀔 때만 · 디스크 캐시."""
     latest = _data_latest(db)
     from backend.services.result_cache import cached  # noqa: PLC0415
-    return cached("tracking_v15", (), db, lambda: _tracking(db, latest)) or {}
+    return cached("tracking_v16", (), db, lambda: _tracking(db, latest)) or {}
 
 
 def _tracking(db: Session, latest, days: int = 20, lead_days: int = 60) -> dict:
@@ -1261,11 +1262,16 @@ def _tracking(db: Session, latest, days: int = 20, lead_days: int = 60) -> dict:
         candidates = []
         if bulls.get(day, False):
             fr = {k:v.iloc[:r+1] for k,v in P.items()}
-            scores = _close_scores(db, day, frames=fr).get("scores", {})
+            full_ = _close_scores(db, day, frames=fr)
+            scores = full_.get("scores", {})
             for code,v in scores.items():
                 tag = v["score"] if v.get("buy") and n-1-r < days else "lead" if v.get("lead") and not v.get("buy") else None
                 if tag is not None:
                     candidates.append({"code":code,"stop":v["stop"],"risk":v["risk"],"rs":v.get("rs"),"tag":tag,"hot":v.get("hot")})
+            # 돌파 매수·넓은 돌파도 따라감 (2026-10-15 전수 검증: 차트·목록엔 '매수'인데 신호 추적·매도 칸엔 없던 것)
+            if n-1-r < days:
+                for code,v in sorted((full_.get("brk") or {}).items(), key=lambda cv: -(cv[1].get("rs") or 0)):
+                    candidates.append({"code":code,"stop":v["stop"],"risk":v["risk"],"rs":v.get("rs"),"tag":"wide" if v.get("wide") else "brk"})
             if n-1-r < days:
                 for x in _dip_picks(db, day, frames=fr).get("items", []):
                     candidates.append({"code":x["code"],"stop":float(x["stop"]),"tag":"dip"})
@@ -1285,7 +1291,7 @@ def _tracking(db: Session, latest, days: int = 20, lead_days: int = 60) -> dict:
         line = ctx["ema"].get(code)
         tag = p.get("tag")
         alive.append({"code":code,"name":names.get(code,code),"date":p["d0"],"entry":p["px0"],"stop":round(tick_floor(p["stop"])),
-          "score":tag if isinstance(tag,(int,float)) else None,"lead":tag=="lead","dip":tag=="dip",
+          "score":tag if isinstance(tag,(int,float)) else None,"lead":tag=="lead","dip":tag=="dip","brk":tag in ("brk","wide"),"wide":tag=="wide",
           "gain":round((current/p["px0"]-1)*100,1),"to21":round((current/line-1)*100,1) if line else None,
           "sell_tmr":p["exit_next"],"days":sum(str(d)>p["d0"] for d in C.index)})
     alive.sort(key=lambda x:(not x["sell_tmr"],-x["gain"]))

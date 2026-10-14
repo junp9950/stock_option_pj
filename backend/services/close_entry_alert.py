@@ -44,7 +44,8 @@ def _brk_lines(sc: dict, names: dict, room: int) -> list[str]:
         return []
     if room <= 0:
         return [f"▲ 돌파 매수 {len(b)}개 — 칸이 다 차서 오늘은 안 삼"]
-    out = [f"▲ <b>돌파 매수</b> (남는 칸 {room}개까지 · 강도 순) — 박스·이평선 돌파 + 추세 6/7"]
+    nw = sum(1 for _, v in b if v.get("wide"))
+    out = [f"▲ <b>돌파 매수</b> (남는 칸 {room}개까지 · 강도 순) — 박스·이평선 돌파 + 추세 6/7" + (f" · 넓은 돌파(이번 장 한정) {nw}개 포함 — 손절폭 넓으면 수량 작게" if nw else "")]
     for c, v in b[:room]:
         out.append(f"· <b>{names.get(c, c)}</b> RS {v.get('rs') or 0:.0f} · {v.get('kind', '')} · 스탑로스 {v['stop']:,.0f} (-{v['risk'] * 100:.1f}%)" + _sz(c, v) + _tag(c))
     return out

@@ -31,12 +31,14 @@ def log_signals(db: Session) -> str:
         return "오늘 시세 없음"
     log = _get(db, LOG_KEY, {}) or {}
     entries = _entry_today(db, latest)          # 캐시를 거치지 않고 지금 DB로 바로 계산
-    sc = _close_scores(db, latest).get("scores", {})
+    _full = _close_scores(db, latest)
+    sc = _full.get("scores", {})
     names = dict(db.execute(text("select code, name from stocks")).all())
     log[str(latest)] = {
         "at": datetime.now().strftime("%H:%M"), "bull": bool(_bull_days(db).get(latest, False)),
         "entry": [{"code": x["code"], "name": x["name"], "kind": x["kind"], "close": x["close"], "stop": round(x["stop"])} for x in entries],
         "score": [{"code": c, "name": names.get(c, c), "score": v["score"], "ema": v.get("ema", False), "hot": v.get("hot", False), "semi": v.get("semi", False), "stop": round(v["stop"])} for c, v in sc.items() if v.get("buy")],
+        "brk": [{"code": c, "name": names.get(c, c), "kind": v.get("kind"), "wide": bool(v.get("wide")), "stop": round(v["stop"])} for c, v in (_full.get("brk") or {}).items()],
     }
     try:      # 급락 날 줍기 실제 기록 (시장 -2%↓ 날만 생김)
         from backend.services.stock_signals import _dip_picks  # noqa: PLC0415
