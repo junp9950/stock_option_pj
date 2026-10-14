@@ -2625,6 +2625,64 @@ def get_me_forward(request: Request, db: Session = Depends(get_db)):
     return forward(db)
 
 
+class MeReviewIn(BaseModel):
+    date: str
+    content: str = ""
+    images: list[str] | None = None
+    id: int | None = None
+    items: list[dict] | None = None
+
+
+@router.get("/me/reviews/trades")
+def get_me_review_trades(date: str, request: Request, db: Session = Depends(get_db)):
+    """그날 매매를 종목별로 (복기 칸에 자동으로)."""
+    o = _me(request, db)
+    from datetime import date as _d  # noqa: PLC0415
+    from backend.services.trade_review import day_trades  # noqa: PLC0415
+    return {"items": day_trades(db, o, _d.fromisoformat(date))}
+
+
+@router.get("/me/reviews")
+def get_me_reviews(request: Request, db: Session = Depends(get_db)):
+    """매매 복기 (2026-10-14) — 사장님 글 + Claude 피드백."""
+    o = _me(request, db)
+    from backend.services.trade_review import list_reviews  # noqa: PLC0415
+    return {"items": list_reviews(db, o)}
+
+
+@router.post("/me/reviews")
+def post_me_review(body: MeReviewIn, request: Request, db: Session = Depends(get_db)):
+    o = _me(request, db)
+    from datetime import date as _d  # noqa: PLC0415
+    from backend.services.trade_review import save  # noqa: PLC0415
+    items = [{"code": str(x.get("code", ""))[:12], "name": str(x.get("name", ""))[:40], "trades": x.get("trades") or [], "reason": str(x.get("reason") or "")[:2000]}
+             for x in (body.items or [])][:30]
+    if not body.content.strip() and not any(x["reason"].strip() for x in items):
+        raise HTTPException(status_code=400, detail="근거나 소감을 하나 이상 써 주세요")
+    images = _check_images(body.images or [], 3)
+    try:
+        return save(db, o, _d.fromisoformat(body.date), body.content.strip()[:8000], _encode_images(images) if images else None, body.id, items)
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+
+
+@router.post("/me/reviews/{rid}/feedback")
+def post_me_review_feedback(rid: int, request: Request, db: Session = Depends(get_db)):
+    """피드백 다시 받기."""
+    _me(request, db)
+    from backend.services.trade_review import start_feedback  # noqa: PLC0415
+    db.execute(text("update trade_reviews set feedback_status = 'waiting' where id = :id"), {"id": rid}); db.commit()
+    return {"ok": start_feedback(rid)}
+
+
+@router.delete("/me/reviews/{rid}")
+def delete_me_review(rid: int, request: Request, db: Session = Depends(get_db)):
+    o = _me(request, db)
+    from backend.services.trade_review import delete  # noqa: PLC0415
+    delete(db, o, rid)
+    return {"ok": True}
+
+
 @router.get("/me/watch")
 def get_me_watch(request: Request, db: Session = Depends(get_db)):
     _me(request, db)
