@@ -756,6 +756,13 @@ def market_breadth(db: Session) -> dict:
     v = {"date": str(latest), "pct": round(now * 100), "chg10": round(d10 * 100, 1), "index_up": idx_up,
          "weak": bool(idx_up and d10 <= -0.05), "narrow": bool(now < 0.40), "hi60": hi60, "lo60": lo60, "adv_pct": round(adv * 100),
          "br20": round(br20 * 100), "hot20": round(hot20 * 100), "c3": round(c3 * 100, 1), "temp": temp[0], "temp_k": temp[1], "temp_say": temp[2]}
+    try:       # 시장 사이클 위치 (2026-10-15) — 200일선 위 비율은 바닥 모으기와 같은 계산
+        from backend.screener.market_regime import cycle_stage  # noqa: PLC0415
+        from backend.services.bottom_mode import _series  # noqa: PLC0415
+        b200 = _series(db)[0]
+        v["cycle"] = cycle_stage(lvl, float(b200.iloc[-1]) if len(b200) and str(b200.index[-1]) == str(latest) else None)
+    except Exception as exc:  # noqa: BLE001
+        __import__("logging").getLogger(__name__).warning("사이클 위치 실패: %s", exc)
     _BR.update(key=latest, v=v)
     return v
 

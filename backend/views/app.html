@@ -1346,6 +1346,8 @@ function renderHomeTop(d, live){
   const rows=[];
   const add=(t,sub,v,k,click,bt)=>rows.push({t,sub,v,k,click,bt});
   add('시장 국면','종목 평균 지수 · 20일선 '+(all.vs_ma20_pct!=null?sg(all.vs_ma20_pct)+'%':'-'),all.state||'-',all.state==='상승'?'g':all.state==='하락'?'b':'n');
+  // 사이클 위치 (2026-10-15 올리버 켈 가격 사이클) — 단계 + 12년 그 단계 뒤 지수 20일 (감으로 읽지 않게 숫자 같이)
+  if(br.cycle){ const c=br.cycle; add('사이클 위치',c.say+' · 12년 뒤 20일 '+sg(c.r20)+'% (평소 '+sg(c.base_r20)+'%)',c.name,c.r20>=2.5?'g':'n',null,c.r20>=2.5?'▲ 뒤가 좋던 자리':'■ 뒤는 평범'); }
   if(br.pct!=null) add('시장 폭','50일선 위 비율 · 10일 '+sg(br.chg10)+'%p'+(br.weak?' · 곧 흔들릴 수 있음':''),br.pct+'%',br.narrow?'b':br.weak?'n':br.pct>=55?'g':'n');
   // 과매수·과매도 — 판단은 사용자, 사이트는 온도만 (2026-10-09) · 색 대신 모양·글자로 (색약)
   if(br.temp) add('과매수 · 과매도','20일선 위 '+br.br20+'% · 20일선 +20% 넘은 종목 '+br.hot20+'% · 3일 '+sg(br.c3)+'%'+(br.temp_say?' · '+br.temp_say:''),br.temp,'n',null,br.temp_k==='up'?'⚠ 과매수':br.temp_k?'⬇ 과매도':'■ 보통');
