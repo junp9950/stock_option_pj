@@ -246,6 +246,15 @@ def signals(db: Session, code: str, days: int = 260, owner: str | None = None, u
             buy_ok = normal_ok | semi_buy
             brk_ok = entry_m.reindex(df.index).fillna(False).astype(bool) & ~buy_ok & (TV.rolling(20).mean() >= 3e9).fillna(False)     # 거래대금 30억↑ — 실시간(_close_scores 돌파 매수)과 같게 (2026-10-14 미래 자료 대조에서 차트에만 뜬 23건)     # 예전 ▲진입(돌파) — 12년 거래당 성과가 매수와 비슷해서 차트에 '매수'로 같이 (2026-10-13 사용자)
             buy_ok = buy_ok | brk_ok
+            # 넓은 돌파 (이번 장 한정 · 10/15) — _close_scores와 같은 조건, 그날 자동 스위치가 켜져 있던 날만 (wide_breakout)
+            wide_ok = pd.Series(False, index=df.index)
+            if not us:
+                from backend.services.wide_breakout import state as _wst  # noqa: PLC0415
+                _ws = _wst(db)
+                wsw = pd.Series([bool(_ws["on"]) if _ws.get("manual") else bool(_ws["hist"].get(str(d), True)) for d in df.index], index=df.index)
+                wide_ok = ((C > e5) & (C > e10) & (C > e20) & (C > hi10p) & (chg >= 0.03) & (chg < 0.30) & (tvx >= 1.5) & (TV.rolling(20).mean() >= 3e9)
+                           & (RS >= 70) & (e20 >= e60 * 0.98) & (rk_ > 0) & (rk_ <= 0.15) & bull & wsw).fillna(False) & ~buy_ok
+                buy_ok = buy_ok | wide_ok
             pos_ = {d: k for k, d in enumerate(df.index)}
             prev_on, run_best = False, None
             # 들고 있는 동안 또 뜬 매수 (2026-10-09 팬오션 "비쌀 때 사서 싸게 파는 정석" → "좋은 자리에서 피라미딩할 수도") — 12년(v12s/v12t.py):
@@ -286,9 +295,13 @@ def signals(db: Session, code: str, days: int = 260, owner: str | None = None, u
                 # 매수 근거 (2026-10-09 "매수별로 매수 근거가 필요하다") — 봉에 올리면 한 줄에 하나씩
                 is_semi = bool(semi_buy[d])
                 is_brk = bool(brk_ok[d])
+                is_wide = bool(wide_ok[d])
                 why = ["시장 상승·횡보장" + (" · 종가 > 20일선 > 60일선 (정배열)" if bool(base_ok[d]) else " · 정배열 아님")]
                 if is_brk:
                     why.append("돌파 매수 (예전 ▲진입 규칙): " + ("박스 돌파 · 20일 박스 위로 +5%↑ · 거래 2배↑" if bool(box[d]) else "이평선 모였다 돌파 · 거래 1.5배↑") + f" · 추세 7조건 중 {int(tt7[d])}개")
+                if is_wide:
+                    why.append(f"넓은 돌파 (이번 장 한정): 5·10·20일선 위 · 10일 고가 돌파 · 그날 {float(chg[d]) * 100:+.1f}% · 거래대금 {float(tvx[d]):.1f}배 · 20일선 ≥ 60일선 −2%")
+                    why.append("손절폭 15%까지 허용 → 손절폭이 넓은 만큼 수량은 작게 (위험 0.5% 기준)")
                 if is_semi:
                     why.append(f"반도체·AI 슈퍼사이클 특별 · 이평선 모였다 돌파 (그날 {float(chg[d]) * 100:+.1f}% · 거래대금 {float(tvx[d]):.1f}배)")
                     why.append("이 묶음만 정배열·급등봉·손절폭 12%까지 풀어 줌 → 수량 절반")
@@ -303,9 +316,9 @@ def signals(db: Session, code: str, days: int = 260, owner: str | None = None, u
                 why.append(f"강도 RS {float(RS[d]):.0f} (시장보다 센 쪽 · 70~95)")
                 why.append(f"손절폭 {rk_[d] * 100:.1f}% · 스탑로스 {fp(L[d] * 0.99)} (오늘 저가 -1%)"
                            + (" → ✅ 짧음" if good else ""))
-                desc = (("돌파 매수 · " if is_brk else "") + ("반도체·AI 특별 (슈퍼사이클) · " if is_semi else "") + ("이평선 모였다 돌파 · " if bool(ema_buy[d]) else "") + ("과열 매수 (이번 장 한정) · " if is_hot else "")
+                desc = (("넓은 돌파 (이번 장) · " if is_wide else "") + ("돌파 매수 · " if is_brk else "") + ("반도체·AI 특별 (슈퍼사이클) · " if is_semi else "") + ("이평선 모였다 돌파 · " if bool(ema_buy[d]) else "") + ("과열 매수 (이번 장 한정) · " if is_hot else "")
                         + f"손절 {fp(L[d] * 0.99)} (-{rk_[d] * 100:.1f}%)" + (" · 수량 절반" if is_hot or is_semi else "")
-                        + ("" if is_brk else f" · 점수 {int(sc[d])}/7" + (f" (빠짐: {miss[0]})" if miss else "")))
+                        + ("" if is_brk or is_wide else f" · 점수 {int(sc[d])}/7" + (f" (빠짐: {miss[0]})" if miss else "")))
                 # 연속으로 뜨는 날: 첫날만 '매수', 이어지는 날은 '자리 유지' 점 · 손절폭이 확 짧아지면 '더 좋은 자리' (2026-10-09 "매일 뜬 이유가 뭐야")
                 if not prev_on and add_r is not None:
                     if add_r >= 1:
@@ -318,7 +331,7 @@ def signals(db: Session, code: str, days: int = 260, owner: str | None = None, u
                                       "pos": "below", "price": float(L[d]), "score": int(sc[d]), "why": why})
                     run_best = rk_[d]
                 elif not prev_on:
-                    items.append({"date": str(d), "label": f"{'✅ ' if good and not is_hot and not is_semi and not is_brk else ''}종가 매수 · {desc}", "kind": "score", "pos": "below",
+                    items.append({"date": str(d), "label": f"{'✅ ' if good and not is_hot and not is_semi and not is_brk and not is_wide else ''}종가 매수 · {desc}", "kind": "score", "pos": "below",
                                   "price": float(L[d]), "score": int(sc[d]), "good": bool(good and not is_hot and not is_semi), "hot": is_hot, "semi": is_semi, "why": why})
                     run_best = rk_[d]
                 elif rk_[d] <= run_best * 0.75 or (good and run_best > 0.03):
@@ -865,6 +878,7 @@ def _close_scores(db: Session, latest, live: dict | None = None, frac: float = 1
     frames = 앞에서 잘라 낸 프레임이면 그 마지막 날 기준 점수 (지난 날짜 다시 계산용).
     semi·stop_round = 미장(us_signals)용: 반도체 특별 묶음(미장은 없음) · 손절가 자르기(미장은 센트) — 안 주면 국장 그대로."""
     stop_round = stop_round or tick_floor
+    _kr = semi is None          # 국장만 (미장 us_signals는 semi=frozenset() 으로 부름)
     P = frames or _close_frames(db, latest)
     H, L, C, V, TV = P["h"], P["l"], P["c"], P["v"], P["tv"]
     O = P.get("o")
@@ -967,8 +981,23 @@ def _close_scores(db: Session, latest, live: dict | None = None, frac: float = 1
             brk[code] = {"score": int(sum(bool(x.get(code, False)) for x in flags)), "flags": [bool(x.get(code, False)) for x in flags], "stop": stop_round(float(l[code]) * 0.99),
                          "risk": rk, "ema": False, "lead": False, "lead_state": [], "hot": False, "semi": False, "buy": False, "price": float(c[code]),
                          "rs": float(rs_v) if rs_v is not None and rs_v == rs_v else None, "kind": "박스 위로 돌파" if bool(box_.get(code, False)) else "이평선 모였다 돌파"}
-    except Exception:  # noqa: BLE001
-        pass
+        # 넓은 돌파 (이번 장 한정 · 2026-10-15 사용자 "넣고 디폴트로 켜 놔라, AI장 끝나면 니가 꺼라") — 정배열 직전·하루 +30%·손절폭 15%까지.
+        # 자동 스위치(wide_breakout.state): 최근 120거래일 끝난 넓은 돌파 평균 R > 0이면 켬. 돌파 매수 다음 칸 · 수량은 손절폭 기준이라 저절로 작음.
+        if _kr and not frames:
+            from backend.services.wide_breakout import state as _wst  # noqa: PLC0415
+            if _wst(db)["on"]:
+                rk_all = 1 - l * 0.99 / c
+                wide_ = ((c > e5.iloc[r]) & (c > e10.iloc[r]) & (c > e20.iloc[r]) & (c > hi10p) & (chg >= 0.03) & (chg < 0.30) & (tvx >= 1.5)
+                         & liq.iloc[r] & (RS >= 70) & (e20.iloc[r] >= e60.iloc[r] * 0.98) & (rk_all > 0) & (rk_all <= 0.15)).fillna(False).astype(bool)
+                for code in wide_[wide_].index:
+                    if (code in out and out[code]["buy"]) or code in brk:
+                        continue
+                    rs_v = RS.get(code); rk = float(rk_all[code])
+                    brk[code] = {"score": int(sum(bool(x.get(code, False)) for x in flags)), "flags": [bool(x.get(code, False)) for x in flags], "stop": stop_round(float(l[code]) * 0.99),
+                                 "risk": rk, "ema": False, "lead": False, "lead_state": [], "hot": False, "semi": False, "buy": False, "price": float(c[code]), "wide": True,
+                                 "rs": float(rs_v) if rs_v is not None and rs_v == rs_v else None, "kind": "넓은 돌파 · 이번 장"}
+    except Exception as exc:  # noqa: BLE001
+        __import__("logging").getLogger(__name__).warning("돌파 매수 계산 실패: %s", exc)
     return {"date": asof, "scores": out, "live": bool(live), "brk": brk}
 
 

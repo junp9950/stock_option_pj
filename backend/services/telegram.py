@@ -32,6 +32,7 @@ HELP = ("주식 레이더 봇 명령\n"
         "종목토론 알림에 '답장' — 그 글에 댓글(댓글 알림이면 답글)로 달림 · /이름 우라늄 — 댓글 이름 정하기\n"
         "/board — (그룹에서) 이 방을 종목토론·건의사항 알림 전용으로 · /board_off — 해제\n"
         "/주도주 — 주도주(RS 95↑) 상태 · /주도주 끄기 이유 · /주도주 켜기 이유\n"
+        "/넓은돌파 — 넓은 돌파(이번 장 한정) 상태 · 끄기 · 켜기 · 자동\n"
         "/바닥 — 바닥 모으기 모드 상태 (200일선 위 종목 비율)\n"
         "/스톱 — 손절가 자동 주문 상태 · /스톱끄기 (오늘 걸린 것도 취소) · /스톱켜기\n"
         "/stop — 알림 끄기")
@@ -817,6 +818,16 @@ def poll(db: Session) -> None:
                 send(db, SO.set_on(db, True), cid)
             else:
                 send(db, SO.status(db), cid)
+        elif txt.startswith("/넓은돌파"):     # 넓은 돌파(이번 장 한정) 켜기·끄기 — 사장님 방만 바꿈 (2026-10-15)
+            from backend.services import wide_breakout as WB  # noqa: PLC0415
+            arg = txt.split(maxsplit=2)
+            if len(arg) >= 2 and arg[1] in ("끄기", "켜기", "자동"):
+                if str(cid) not in owner_chats(db):
+                    send(db, "이 명령은 사장님 대화방에서만 됩니다.", cid); continue
+                send(db, WB.set_manual(db, {"끄기": False, "켜기": True, "자동": None}[arg[1]], arg[2] if len(arg) > 2 else ""), cid)
+            else:
+                st_ = WB.state(db)
+                send(db, f"넓은 돌파 (이번 장 한정): {'켜짐' if st_['on'] else '꺼짐'} — {st_['why']}\n/넓은돌파 끄기 · /넓은돌파 켜기 · /넓은돌파 자동", cid)
         elif txt.startswith("/바닥"):        # 바닥 모으기 모드 상태 (2026-10-15)
             from backend.services import bottom_mode as BM  # noqa: PLC0415
             send(db, BM.status(db), cid)
