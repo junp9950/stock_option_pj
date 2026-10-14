@@ -53,10 +53,10 @@ class Client:
     def enabled(self) -> bool:
         return bool(self.key and self.secret)
 
-    def _token(self) -> str:
+    def _token(self, force: bool = False) -> str:
         try:
             d = json.loads(self.token_file.read_text())
-            if d.get("exp", 0) > time.time() + 300 and d.get("key") == self.key[-6:]:
+            if not force and d.get("exp", 0) > time.time() + 300 and d.get("key") == self.key[-6:]:
                 return d["token"]
         except (OSError, ValueError, KeyError):
             pass
@@ -75,7 +75,20 @@ class Client:
         return tok
 
     def call(self, method: str, path: str, params: dict | None = None, body: dict | None = None) -> dict:
-        """{'ok', 'rsp_cd', 'msg', 'sub', 'data', 'body'} — ok는 rsp_cd가 성공 코드일 때 (주문은 warn까지 따로 봐야 함)."""
+        """{'ok', 'rsp_cd', 'msg', 'sub', 'data', 'body'} — ok는 rsp_cd가 성공 코드일 때 (주문은 warn까지 따로 봐야 함).
+        '유효하지 않은 token'(EGW00121)이면 토큰을 새로 받아 한 번 더 (2026-10-14 12:4x 파일 속 토큰이 만료 전인데 거부돼 장중 손절 점검이 멈췄던 것)."""
+        res = self._call(method, path, params, body)
+        if res["rsp_cd"] in ("EGW00121", "EGW00123"):
+            logger.warning("메리츠 토큰 거부(%s) — 새로 받아 다시 시도", res["rsp_cd"])
+            try:
+                self._token(force=True)
+            except Exception as exc:  # noqa: BLE001
+                logger.error("메리츠 토큰 새로 받기 실패: %s", exc)
+                return res
+            res = self._call(method, path, params, body)
+        return res
+
+    def _call(self, method: str, path: str, params: dict | None = None, body: dict | None = None) -> dict:
         with self._lock:
             wait = 0.12 - (time.time() - self._last)
             if wait > 0:
