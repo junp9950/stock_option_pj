@@ -1755,6 +1755,11 @@ def _chosung(s: str) -> str:
     return "".join(_CHO[(ord(ch) - 0xAC00) // 588] if "가" <= ch <= "힣" else ch for ch in s)
 
 
+def _subseq(q: str, s: str) -> bool:
+    it = iter(s)
+    return all(ch in it for ch in q)
+
+
 @router.get("/stocks/search")
 def search_stocks(q: str = "", m: str = "", db: Session = Depends(get_db)):
     """종목 검색 — 이름·코드·초성(ㅅㅇㄴ → SK이노베이션) (2026-10-09 사용자 "종목 검색을 할 수 있게"). 최근 시세 있는 종목만, 12개."""
@@ -1767,9 +1772,10 @@ def search_stocks(q: str = "", m: str = "", db: Session = Depends(get_db)):
     if not q:
         return {"items": []}
     if _t.time() - _SEARCH["t"] > 600:
-        latest = db.execute(text("select max(trading_date) from spot_daily_prices")).scalar()
-        rows = db.execute(text("select s.code, s.name, p.close_price, p.change_pct, p.trading_value from stocks s join spot_daily_prices p "
-                               "on p.stock_code = s.code and p.trading_date = :d"), {"d": latest}).all()
+        # 종목마다 가장 최근 시세 (2026-10-14: 마지막 날짜 하나로만 묶어서 15:41 수집 중엔 아직 안 들어온 종목 — 코리아써키트 — 이 검색에서 빠졌다)
+        rows = db.execute(text("select distinct on (s.code) s.code, s.name, p.close_price, p.change_pct, p.trading_value from stocks s join spot_daily_prices p "
+                               "on p.stock_code = s.code and p.trading_date >= (select max(trading_date) from spot_daily_prices) - 14 "
+                               "order by s.code, p.trading_date desc")).all()
         _SEARCH.update(t=_t.time(), rows=[(c, n, n.upper().replace(" ", ""), _chosung(n.upper().replace(" ", "")), float(px or 0), float(ch or 0), float(tv or 0))
                                           for c, n, px, ch, tv in rows if n])
     hits = []
@@ -1784,6 +1790,8 @@ def search_stocks(q: str = "", m: str = "", db: Session = Depends(get_db)):
             rank = 3
         elif q in cho:
             rank = 4
+        elif len(q) >= 2 and not q.isascii() and _subseq(q, nu):
+            rank = 5          # 줄임말: 글자가 이름 안에 순서대로 (코써 → 코리아써키트, 에스텍 → 에스앤에스텍 · 2026-10-14)
         else:
             continue
         hits.append((rank, -tv, c, n, px, ch))
