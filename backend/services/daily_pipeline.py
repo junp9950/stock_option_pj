@@ -51,6 +51,11 @@ def run_daily_pipeline(db: Session, trading_date: date | None = None, skip_colle
             collect_sector_supplement(db, target_date)
         except Exception as exc:  # noqa: BLE001
             logger.error("Pipeline: sector supplement collection failed (continuing): %s", exc)
+        try:      # 오늘 봉을 정규장(KRX) 값으로 — FDR 값엔 장 후 넥스트레이드 가격이 섞임 (2026-10-14)
+            from backend.collector.spot import override_regular_close  # noqa: PLC0415
+            override_regular_close(db, target_date)
+        except Exception as exc:  # noqa: BLE001
+            logger.error("Pipeline: 정규장 값 덮기 실패 (continuing): %s", exc)
     warnings = validate_daily_data(db, target_date)
     market_signal = calculate_market_signal(db, target_date)
     stock_signals = calculate_stock_signals(db, target_date)

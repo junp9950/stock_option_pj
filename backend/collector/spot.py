@@ -6,7 +6,7 @@ from typing import Optional
 
 import FinanceDataReader as fdr
 import pandas as pd
-from sqlalchemy import delete, select
+from sqlalchemy import delete, select, text
 from sqlalchemy.orm import Session
 
 from backend.collector.universe import get_universe
@@ -350,6 +350,43 @@ def collect_spot_data(db: Session, trading_date: date) -> None:
         logger.warning("FDR spot collection failed, falling back to demo data: %s", exc)
         _fallback_spot_row(db, trading_date)
     db.commit()
+
+
+def override_regular_close(db: Session, trading_date: date) -> str:
+    """오늘 봉을 정규장(KRX) 값으로 덮음 — 15:41·18:00 수집 뒤 (2026-10-14).
+    FDR(네이버 기반) 오늘 값에는 장 후 넥스트레이드 가격이 섞인다: 10/13 거래대금 30억↑ 530종목 중 201종목 종가가 KRX 공식값과 달랐고
+    (태성 63,000 vs 62,400 → 손절폭 8.7%로 후보에서 빠졌다가 다음 날 아침 공식값으로 다시 나타남), 매수 후보 4개 중 3개가 바뀜.
+    네이버 실시간의 맨 위 값(closePriceRaw·open/high/low·거래량)은 정규장 값이고 넥스트레이드는 overMarketPriceInfo로 따로 온다 — 15:12 알림이 쓰는 값과 같다.
+    다음 날 아침 KRX 공식값(krx_daily.fix_recent)이 최종. 지난 날짜는 건드리지 않음."""
+    from datetime import datetime as _dt  # noqa: PLC0415
+    from zoneinfo import ZoneInfo as _Z  # noqa: PLC0415
+    from backend.services.naver_live import snapshot  # noqa: PLC0415
+    if trading_date != _dt.now(_Z("Asia/Seoul")).date():
+        return "지난 날짜 — 건너뜀"
+    codes = [r[0] for r in db.execute(text("select stock_code from spot_daily_prices where trading_date = :d"), {"d": trading_date}).all()]
+    if not codes:
+        return "오늘 시세 없음"
+    prev = dict(db.execute(text("""select stock_code, close_price from spot_daily_prices where trading_date =
+        (select max(trading_date) from spot_daily_prices where trading_date < :d) and stock_code = any(:c)"""), {"d": trading_date, "c": codes}).all())
+    q = snapshot(codes, max_age=0)
+    n = 0
+    for c, x in q.items():
+        o_, h_, l_, c_, v_ = x.get("o"), x.get("h"), x.get("l"), x.get("c"), x.get("v")
+        if not (o_ and h_ and l_ and c_ and v_) or not (l_ <= min(o_, c_) <= max(o_, c_) <= h_):
+            continue
+        pc = prev.get(c)
+        chg = round((c_ / pc - 1) * 100, 4) if pc else 0.0
+        if abs(chg) > 31:            # 상·하한가 ±30% 밖이면 이상한 값 — 안 덮음
+            continue
+        r = db.execute(text("""update spot_daily_prices set open_price = :o, high_price = :h, low_price = :l, close_price = :c, volume = :v,
+            trading_value = :v * :c, change_pct = :chg where trading_date = :d and stock_code = :code
+            and (close_price is distinct from :c or high_price is distinct from :h or low_price is distinct from :l or volume is distinct from :v)"""),
+                       {"o": o_, "h": h_, "l": l_, "c": c_, "v": v_, "chg": chg, "d": trading_date, "code": c})
+        n += r.rowcount or 0
+    db.commit()
+    msg = f"정규장 값으로 오늘 봉 덮음: {n} / {len(codes)}종목 (네이버 {len(q)})"
+    logger.info(msg)
+    return msg
 
 
 def collect_sector_supplement(db: Session, trading_date: date) -> int:

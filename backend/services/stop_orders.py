@@ -296,6 +296,24 @@ def _open_order(s: dict, lot: str, today: date) -> dict | None:
     return xs[-1] if xs else None
 
 
+def _check_refused(s: dict, today: date) -> list[str]:
+    """접수 뒤 증권사 거부 확인 (2026-10-14 첫날: 삼성SDI 현금 2주가 0307 거부 — 매도 가능 0 — 인데 '걸었음'으로 알림).
+    거부면 실패로 돌려 09:01에 한 번 더 걸고 바로 알린다. 그래도 거부면 하루 두 번 실패라 더 안 낸다."""
+    from backend.services import meritz as M  # noqa: PLC0415
+    out = []
+    try:
+        hist = {str(x.get("oder_no")): x for x in M.orders_today(today.strftime("%Y%m%d"), "1")}
+        for o in s["orders"].get(str(today), []):
+            h = hist.get(str(o.get("order_no")))
+            if o.get("ok") and not o.get("done") and h and str(h.get("oder_pros_stat_cls_code")) == "3":
+                o.update(ok=False, done="거부", msg=f"증권사 거부 {h.get('oder_rfus_reas_code')}")
+                out.append(f"⚠ {o['name']} {o['qty']}주 손절 주문이 증권사에서 거부됨 (코드 {h.get('oder_rfus_reas_code')} · 매도 가능 {h.get('oder_able_qty')}주)"
+                           " — 이 수량은 지금 손절이 안 걸려 있습니다. 앱에서 확인해 주세요")
+    except Exception as exc:  # noqa: BLE001
+        logger.warning("스톱 거부 확인 실패: %s", type(exc).__name__)
+    return out
+
+
 _RUN_LOCK = __import__("threading").Lock()
 
 
@@ -329,6 +347,8 @@ def _run(db: Session, phase: str) -> str:
             _tell(db, f"⚠ 손절 주문: 메리츠 잔고를 못 읽어 오늘 아침 주문을 못 걸었습니다 ({exc}). 직접 걸어 주세요.")
         return f"잔고 확인 실패: {exc}"
     out = list(msgs)
+    if str(today) >= s["start"] and phase in ("retry", "intraday", "close") and s["orders"].get(str(today)):
+        out += _check_refused(s, today)
     if str(today) >= s["start"] and s["on"] and phase in ("morning", "retry", "intraday"):
         day = s["orders"].setdefault(str(today), [])
         for lot, L in s["lots"].items():
@@ -364,6 +384,10 @@ def _run(db: Session, phase: str) -> str:
             if len(fails) >= 2 or (fails and phase == "intraday"):
                 continue                  # 하루 두 번(아침·09:01)까지만 시도 — 실패 알림이 5분마다 쏟아지지 않게
             out.append(_place(db, s, lot, L, today))
+        if phase == "morning" and day:      # 아침에 낸 주문이 접수 직후 거부됐는지 (거부는 몇 초 안에 옴)
+            import time as _t  # noqa: PLC0415
+            _t.sleep(5)
+            out += _check_refused(s, today)
     if str(today) >= s["start"] and s["on"] and phase == "preclose":
         for lot, L in s["lots"].items():
             if L.get("mode") == "crash" and not L.get("legacy") and not L.get("sell_pending") \

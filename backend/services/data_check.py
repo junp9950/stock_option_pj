@@ -56,12 +56,15 @@ def check_prices(db: Session, final: bool = False) -> str:
         if len(rat) == 4 and (max(rat) - min(rat)) / max(rat) < 1e-4:
             continue      # 수정주가 (같은 비율) — 정상
         bad.append(s)
-    missing = len(k) - cover
+    # 빠진 종목 = 그 전 거래일 DB에 있던 종목 중 이날 없는 것 (2026-10-14: KRX 전체와 비교하니 원래 안 모으는 우선주·스팩·대상 밖 276종목을 '빠짐'으로 셈)
+    before = {r[0] for r in db.execute(text("select stock_code from spot_daily_prices where trading_date = :d"), {"d": _prev_trading_day(day)}).all()}
+    have = {r[0] for r in rows}
+    missing = len((before & set(k)) - have)
     problems = []
     if len(bad) > 3:
         problems.append(f"KRX 공식값과 다른 종목 {len(bad)}개 (예: {', '.join(bad[:5])})")
-    if missing > max(50, len(k) * 0.05):
-        problems.append(f"KRX엔 있는데 DB에 없는 종목 {missing}개 (KRX {len(k)} · DB {cover})")
+    if missing > max(20, len(before) * 0.01):
+        problems.append(f"전날 있던 종목 중 DB에 없는 것 {missing}개 (전날 {len(before)} · 이날 {len(have)})")
     if problems:
         _tell(db, f"⚠ 데이터 점검 ({day}): " + " · ".join(problems) + "\n자동 바로잡기(07:30·08:20·11:30·17:00)가 다시 돌고, 그래도 남으면 확인이 필요합니다.")
         return "이상: " + " · ".join(problems)
