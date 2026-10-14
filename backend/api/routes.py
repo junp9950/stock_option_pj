@@ -2633,6 +2633,14 @@ class MeReviewIn(BaseModel):
     items: list[dict] | None = None
 
 
+@router.get("/me/calendar")
+def get_me_calendar(month: str, request: Request, db: Session = Depends(get_db)):
+    """달력·복기: 날짜별 실현손익 · 체결 수 · 복기 여부."""
+    o = _me(request, db)
+    from backend.services.trade_review import calendar  # noqa: PLC0415
+    return calendar(db, o, month)
+
+
 @router.get("/me/reviews/trades")
 def get_me_review_trades(date: str, request: Request, db: Session = Depends(get_db)):
     """그날 매매를 종목별로 (복기 칸에 자동으로)."""

@@ -519,7 +519,13 @@ select{background:var(--c3);border:1px solid var(--ln);color:var(--bd);padding:6
 .me-g .bx,.me-g2 .bx{margin:0}.me-g{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:16px}.me-g2{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:16px;align-items:start}
 .me-row{display:grid;grid-template-columns:minmax(0,1fr) auto auto;gap:10px;align-items:center;padding:8px 2px;border-bottom:1px solid var(--line2);font-size:13px}
 .me-ed{display:flex;gap:6px}.me-ed input{width:110px}.me-add{display:flex;flex-wrap:wrap;gap:6px;margin:4px 0 10px}.me-add input,.me-add select{flex:1;min-width:90px}
-#me-status .sv-m .k{white-space:nowrap}#me-status .sv-m .v{white-space:normal;overflow-wrap:anywhere}
+#me-status .sv-m .k{white-space:nowrap}
+.rv-wrap{display:grid;grid-template-columns:minmax(0,1fr) 460px;gap:12px;align-items:start}@media(max-width:1000px){.rv-wrap{grid-template-columns:1fr}}
+.rv-g{display:grid;grid-template-columns:repeat(7,minmax(0,1fr));gap:4px}.rv-wd{font-size:12px;color:var(--muted);text-align:center;padding:2px 0}
+.rv-c{min-height:78px;border:1px solid var(--line);border-radius:8px;padding:6px 7px;cursor:pointer;background:var(--card);display:flex;flex-direction:column;gap:2px;min-width:0}
+.rv-c:hover{border-color:var(--muted)}.rv-c.on{outline:2px solid var(--b);outline-offset:-1px}.rv-c.off{opacity:.35;cursor:default}
+.rv-c .dn{font-size:12.5px;color:var(--tx);display:flex;justify-content:space-between}
+@media(max-width:600px){.rv-g{gap:2px}.rv-c{min-height:56px;padding:4px 3px;border-radius:6px}.rv-c .pl{font-size:10px;letter-spacing:-.6px;text-overflow:clip;overflow:visible}.rv-c .ct{display:none}.rv-c .dn{font-size:11.5px}.rv-c .dn span:last-child{font-size:9px}}.rv-c .pl{font-family:'IBM Plex Mono',monospace;font-size:13px;font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}.rv-c .ct{font-size:11px;color:var(--muted);white-space:nowrap;overflow:hidden}#me-status .sv-m .v{white-space:normal;overflow-wrap:anywhere}
 .me-jobs{display:grid;grid-template-columns:repeat(auto-fill,minmax(260px,1fr));gap:2px 16px;font-size:12.5px}
 @media(max-width:900px){.me-g,.me-g2{grid-template-columns:1fr}.me-ed input{width:84px}}
 #sv-rep .sv-rl{display:grid;grid-template-columns:1fr;column-gap:24px}
@@ -652,7 +658,7 @@ select{background:var(--c3);border:1px solid var(--ln);color:var(--bd);padding:6
         <button class="btn btn-sm" onclick="jrLogout()">잠그기</button>
       </div>
     </div>
-    <div id="me-nav" class="seg" style="margin-bottom:14px"><button data-k="jr" class="on" onclick="meShow('jr')">매매 일지</button><button data-k="fwd" onclick="meShow('fwd')">실전 기록</button><button data-k="watch" onclick="meShow('watch')">관심·보유</button><button data-k="review" onclick="meShow('review')">매매 복기</button><button data-k="status" onclick="meShow('status')">서버 상태</button><button data-k="invite" onclick="meShow('invite')">초대</button></div>
+    <div id="me-nav" class="seg" style="margin-bottom:14px"><button data-k="jr" class="on" onclick="meShow('jr')">매매 일지</button><button data-k="review" onclick="meShow('review')">달력·복기</button><button data-k="fwd" onclick="meShow('fwd')">실전 기록</button><button data-k="watch" onclick="meShow('watch')">관심·보유</button><button data-k="status" onclick="meShow('status')">서버 상태</button><button data-k="invite" onclick="meShow('invite')">초대</button></div>
     <div id="me-fwd" data-me="fwd" hidden></div>
     <div id="me-watch" data-me="watch" hidden></div>
     <div id="me-review" data-me="review" hidden></div>
@@ -3937,7 +3943,7 @@ async function meFwd(){
   el.innerHTML=`<p class="bx-s">규칙 ${d.version} 그대로 따라가는 가상 계좌 · 10칸 · 거래당 위험 ${(d.risk*100).toFixed(1)}% · 마지막 기록 ${d.last||'아직 없음'} · 판정은 6개월 뒤부터 (12개월·100건이 1차)</p><div class="me-g">${d.accounts.map(card).join('')}</div>`;
 }
 // ── 매매 복기 (2026-10-14): 날짜 고르면 그날 매매가 종목별로 → 종목마다 매수·매도 근거 → Claude가 모아서 피드백 (1분 안, 텔레그램 알림) ──
-let _rv={items:[],edit:null,imgs:[],timer:null,day:null,trades:[]};
+let _rv={items:[],edit:null,imgs:[],timer:null,day:null,trades:[],month:null,cal:null};
 const rvEsc=t=>String(t||'').replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'})[c]);
 function rvToday(){ return new Date(new Date().toLocaleString('en-US',{timeZone:'Asia/Seoul'})).toLocaleDateString('sv-SE'); }
 function rvImgs(v){ if(!v) return []; if(v[0]==='[') { try{ return JSON.parse(v); }catch(e){ return []; } } return [v]; }
@@ -3961,44 +3967,54 @@ function rvForm(){
       <textarea data-c="${x.code}" rows="3" placeholder="${x.trades.some(t=>t.side==='매수')?'왜 샀는지 (시장·섹터·차트 자리·손절선)':''}${x.trades.some(t=>t.side==='매수')&&x.trades.some(t=>t.side==='매도')?' / ':''}${x.trades.some(t=>t.side==='매도')?'왜 팔았는지 (손절·익절·현금 확보·원칙 위반?)':''}" style="width:100%;box-sizing:border-box;background:var(--card2);color:var(--tx);border:1px solid var(--line);border-radius:8px;padding:8px;font-size:14px;line-height:1.5">${rvEsc(x.reason)}</textarea></div>`).join('')
     :'<div class="ts" style="padding:6px 2px">이 날 매매 일지에 체결이 없습니다 (아래 소감만 써도 됩니다)</div>';
 }
+
+const rvWon=v=>{ const a=Math.abs(v), s=v>0?'+':v<0?'−':''; return a>=1e8?s+(a/1e8).toFixed(2)+'억':a>=1e4?s+(a/1e4).toFixed(a>=1e6?0:1)+'만':s+Math.round(a).toLocaleString(); };
 async function meReview(){
-  const el=document.getElementById('me-review'); if(!_rv.items.length) el.innerHTML='<span class="ts">불러오는 중…</span>';
-  const d=await meGet('/me/reviews'); if(!d||d.err){ el.innerHTML=`<span class="ts">${d&&d.err||'불러오지 못했습니다'}</span>`; return; }
-  _rv.items=d.items||[];
-  if(!document.getElementById('rv-stocks')){ rvDraw(); rvLoadTrades(_rv.day||rvToday()); } else rvList();
+  const el=document.getElementById('me-review'); _rv.month=_rv.month||rvToday().slice(0,7); _rv.day=_rv.day||rvToday();
+  if(!document.getElementById('rv-side')) el.innerHTML=`<div class="rv-wrap"><section class="bx" id="rv-calbox"><span class="ts">불러오는 중…</span></section><div id="rv-side"></div></div>`;
+  const [d,c]=await Promise.all([meGet('/me/reviews'),meGet(`/me/calendar?month=${_rv.month}`)]);
+  if(!d||d.err||!c||c.err){ el.innerHTML=`<span class="ts">${(d&&d.err)||(c&&c.err)||'불러오지 못했습니다'}</span>`; return; }
+  _rv.items=d.items||[]; _rv.cal=c; rvCal(); rvSide();
   clearTimeout(_rv.timer); if(_rv.items.some(x=>x.status==='waiting'||x.status==='running')) _rv.timer=setTimeout(()=>{ if(_meK==='review') meReview(); },8000);
 }
-function rvDraw(){
-  const el=document.getElementById('me-review'), e=_rv.edit?_rv.items.find(x=>x.id===_rv.edit):null;
-  el.innerHTML=`<section class="bx"><div class="bx-h"><b>${e?'복기 고치기':'매매 복기'}</b><span class="ts">날짜를 고르면 그날 매매가 종목별로 나옵니다 · 종목마다 근거를 쓰고 올리면 1분 안에 Claude 피드백 (텔레그램으로도)</span></div>
-    <div style="display:flex;gap:8px;flex-wrap:wrap;align-items:center;margin-bottom:8px"><input type="date" id="rv-date" value="${e?e.date:(_rv.day||rvToday())}" onchange="rvLoadTrades(this.value)" style="background:var(--card2);color:var(--tx);border:1px solid var(--line);border-radius:8px;padding:5px 8px">
-      <label class="btn btn-gray btn-sm" style="cursor:pointer">📷 사진 (최대 3장)<input type="file" accept="image/*" multiple hidden onchange="rvPick(this)"></label><span class="ts" id="rv-imgn"></span></div>
-    <div id="rv-stocks"><span class="ts">불러오는 중…</span></div>
-    <textarea id="rv-text" rows="3" placeholder="전체 소감 (선택) — 오늘 장, 심리, 원칙 지켰는지" style="width:100%;box-sizing:border-box;background:var(--card2);color:var(--tx);border:1px solid var(--line);border-radius:10px;padding:10px;font-size:14px;line-height:1.5">${e?rvEsc(e.content):''}</textarea>
-    <div style="display:flex;gap:6px;margin-top:6px"><button class="btn btn-sm" onclick="rvSave()">${e?'고쳐서 다시 피드백 받기':'올리고 피드백 받기'}</button>${e?'<button class="btn btn-gray btn-sm" onclick="_rv.edit=null;rvDraw();rvLoadTrades(rvToday())">취소</button>':''}</div></section><div id="rv-list"></div>`;
-  rvList();
+function rvMonth(k){ const [y,m]=_rv.month.split('-').map(Number), t=new Date(y,m-1+k,1); _rv.month=`${t.getFullYear()}-${String(t.getMonth()+1).padStart(2,'0')}`; meReview(); }
+function rvCal(){
+  const c=_rv.cal, [y,m]=c.month.split('-').map(Number), first=new Date(y,m-1,1), nd=new Date(y,m,0).getDate(), today=rvToday();
+  const cells=[]; for(let i=0;i<first.getDay();i++) cells.push('<div></div>');
+  for(let d=1;d<=nd;d++){ const ds=`${c.month}-${String(d).padStart(2,'0')}`, x=c.days[ds]||{}, wd=(first.getDay()+d-1)%7, fut=ds>today;
+    const sh=v=>{ const a=Math.abs(v), s_=v>0?'+':'−'; return a>=1e8?s_+(a/1e8).toFixed(1)+'억':a>=1e4?s_+Math.round(a/1e4)+'만':s_+Math.round(a/1e3)+'천'; };     // 폰은 칸이 좁아 정수 만 단위
+    const pl=x.pnl?`<div class="pl" style="color:${x.pnl>0?'var(--up)':'var(--down)'}">${window.innerWidth<600?sh(x.pnl):rvWon(x.pnl)}</div>`:'<div class="pl"> </div>';
+    const ct=(x.buy||x.sell)?`<div class="ct">매수 ${x.buy||0} · 매도 ${x.sell||0}</div>`:'';
+    const mk=x.review?(x.status==='done'?'✍🤖':x.status==='failed'?'✍⚠️':'✍⏳'):'';
+    cells.push(`<div class="rv-c${ds===_rv.day?' on':''}${fut?' off':''}" ${fut?'':`onclick="rvSelect('${ds}')"`}><div class="dn"><span style="color:${wd===0?'var(--r)':wd===6?'var(--b)':'var(--tx)'}">${d}</span><span>${mk}</span></div>${pl}${ct}</div>`); }
+  document.getElementById('rv-calbox').innerHTML=`<div class="bx-h" style="align-items:center"><button class="btn btn-gray btn-sm" onclick="rvMonth(-1)">◀</button><b style="font-size:17px">${y}년 ${m}월</b><button class="btn btn-gray btn-sm" onclick="rvMonth(1)">▶</button>
+      <span class="ts">이달 실현손익 <b style="color:${c.total>0?'var(--up)':c.total<0?'var(--down)':'var(--muted)'}">${rvWon(c.total)}</b> · 수수료·세금 전 · ✍ 복기 🤖 피드백 · 날짜를 누르면 오른쪽에</span></div>
+    <div class="rv-g">${['일','월','화','수','목','금','토'].map((w,i)=>`<div class="rv-wd" style="color:${i===0?'var(--r)':i===6?'var(--b)':''}">${w}</div>`).join('')}${cells.join('')}</div>`;
 }
-function rvList(){
+function rvSelect(ds){ _rv.day=ds; const r=_rv.items.find(x=>x.date===ds); _rv.edit=r?r.id:null; _rv.imgs=[]; rvCal(); rvSide(); if(window.innerWidth<1000) document.getElementById('rv-side').scrollIntoView({behavior:'smooth'}); }
+function rvSide(){
+  const ds=_rv.day, r=_rv.items.find(x=>x.date===ds); _rv.edit=r?r.id:null; const x=(_rv.cal&&_rv.cal.days[ds])||{};
   const st={waiting:'⏳ 피드백 기다리는 중…',running:'✍️ Claude가 피드백 쓰는 중…',failed:'⚠️ 피드백 실패'};
-  const el=document.getElementById('rv-list'); if(!el) return;
-  el.innerHTML=_rv.items.map(x=>`<section class="bx"><div class="bx-h"><b>${x.date}</b><span class="ts">${x.created_at||''}</span>
-      <span style="margin-left:auto;display:flex;gap:6px"><button class="btn btn-gray btn-sm" onclick="rvEdit(${x.id})">수정</button><button class="btn btn-gray btn-sm" onclick="rvAgain(${x.id})">피드백 다시</button><button class="btn btn-gray btn-sm" onclick="rvDel(${x.id})">지우기</button></span></div>
-    ${(x.items||[]).map(it=>`<div style="padding:8px 0;border-bottom:1px solid var(--line)"><b style="color:var(--tx)">${rvEsc(it.name)}</b> <span style="font-size:12.5px">${(it.trades||[]).map(rvTr).join(' · ')}</span>
-      <div style="white-space:pre-wrap;line-height:1.55;color:var(--tx);margin-top:3px">${it.reason?rvEsc(it.reason):'<span class="ts">근거 안 적음</span>'}</div></div>`).join('')}
-    ${x.content?`<div style="white-space:pre-wrap;line-height:1.55;color:var(--tx);margin-top:8px">${rvEsc(x.content)}</div>`:''}
-    ${rvImgs(x.images).length?`<div style="display:flex;gap:6px;flex-wrap:wrap;margin-top:8px">${rvImgs(x.images).map(u=>`<a href="${u}" target="_blank"><img src="${u}" style="max-height:120px;border-radius:8px;border:1px solid var(--line)"></a>`).join('')}</div>`:''}
-    <div style="margin-top:10px;padding:10px 12px;border-radius:10px;background:var(--card2);border:1px solid var(--line)"><div class="ts" style="margin-bottom:4px">🤖 Claude 피드백${x.feedback_at&&x.status==='done'?' · '+x.feedback_at:''}</div>
-      <div style="white-space:pre-wrap;line-height:1.55;color:var(--tx)">${x.status==='done'?rvEsc(x.feedback):(st[x.status]||'')+(x.status==='failed'?' — '+rvEsc(x.feedback||''):'')}</div></div></section>`).join('')||'<span class="ts">아직 복기가 없습니다</span>';
+  document.getElementById('rv-side').innerHTML=`<section class="bx"><div class="bx-h" style="align-items:center"><b style="font-size:16px">${+ds.slice(5,7)}월 ${+ds.slice(8)}일</b>
+      ${x.pnl?`<span style="color:${x.pnl>0?'var(--up)':'var(--down)'};font-weight:600">실현 ${rvWon(x.pnl)}</span>`:''}${r?`<span style="margin-left:auto;display:flex;gap:6px"><button class="btn btn-gray btn-sm" onclick="rvAgain(${r.id})">피드백 다시</button><button class="btn btn-gray btn-sm" onclick="rvDel(${r.id})">지우기</button></span>`:''}</div>
+    <div class="ts" style="margin-bottom:6px">종목마다 매수·매도 근거를 쓰고 올리면 1분 안에 아래에 피드백 (텔레그램으로도)</div>
+    <div id="rv-stocks"><span class="ts">불러오는 중…</span></div>
+    <textarea id="rv-text" rows="3" placeholder="전체 소감 (선택) — 오늘 장, 심리, 원칙 지켰는지" style="width:100%;box-sizing:border-box;background:var(--card2);color:var(--tx);border:1px solid var(--line);border-radius:10px;padding:10px;font-size:14px;line-height:1.5">${r?rvEsc(r.content):''}</textarea>
+    <div style="display:flex;gap:6px;align-items:center;margin-top:6px;flex-wrap:wrap"><button class="btn btn-sm" onclick="rvSave()">${r?'고쳐서 다시 피드백 받기':'올리고 피드백 받기'}</button>
+      <label class="btn btn-gray btn-sm" style="cursor:pointer">📷 사진<input type="file" accept="image/*" multiple hidden onchange="rvPick(this)"></label><span class="ts" id="rv-imgn"></span><input type="hidden" id="rv-date" value="${ds}"></div>
+    ${r&&rvImgs(r.images).length?`<div style="display:flex;gap:6px;flex-wrap:wrap;margin-top:8px">${rvImgs(r.images).map(u=>`<a href="${u}" target="_blank"><img src="${u}" style="max-height:110px;border-radius:8px;border:1px solid var(--line)"></a>`).join('')}</div>`:''}
+    ${r?`<div style="margin-top:12px;padding:10px 12px;border-radius:10px;background:var(--card2);border:1px solid var(--line)"><div class="ts" style="margin-bottom:4px">🤖 Claude 피드백${r.feedback_at&&r.status==='done'?' · '+r.feedback_at:''}</div>
+      <div style="white-space:pre-wrap;line-height:1.55;color:var(--tx)">${r.status==='done'?rvEsc(r.feedback):(st[r.status]||'')+(r.status==='failed'?' — '+rvEsc(r.feedback||''):'')}</div></div>`:''}</section>`;
+  rvLoadTrades(ds);
 }
-function rvEdit(id){ _rv.edit=id; const e=_rv.items.find(x=>x.id===id); rvDraw(); rvLoadTrades(e.date); window.scrollTo({top:document.getElementById('me-review').offsetTop-80,behavior:'smooth'}); }
 async function rvSave(){
-  const t=document.getElementById('rv-text').value.trim(), d=document.getElementById('rv-date').value;
+  const t=document.getElementById('rv-text').value.trim(), d=_rv.day;
   const items=_rv.trades.map(x=>({code:x.code,name:x.name,trades:x.trades,reason:(document.querySelector(`#rv-stocks textarea[data-c="${x.code}"]`)||{}).value||''}));
   if(!t&&!items.some(x=>x.reason.trim())){ uiConfirm('근거나 소감을 하나 이상 써 주세요'); return; }
   const r=await fetch(`${API}/me/reviews`,{method:'POST',headers:jrH(),body:JSON.stringify({date:d,content:t,items,images:_rv.imgs.length?_rv.imgs:null,id:_rv.edit})}).then(r=>r.ok?r.json():r.json().then(j=>({err:j.detail}))).catch(()=>({err:'저장 실패'}));
-  if(r.err){ uiConfirm(r.err); return; } _rv.edit=null; _rv.imgs=[]; rvDraw(); rvLoadTrades(rvToday()); meReview(); }
+  if(r.err){ uiConfirm(r.err); return; } _rv.imgs=[]; meReview(); }
 async function rvAgain(id){ await fetch(`${API}/me/reviews/${id}/feedback`,{method:'POST',headers:jrH()}).catch(()=>null); meReview(); }
-async function rvDel(id){ if(!(await uiConfirm('이 복기를 지울까요?'))) return; await fetch(`${API}/me/reviews/${id}`,{method:'DELETE',headers:jrH()}).catch(()=>null); meReview(); }
+async function rvDel(id){ if(!(await uiConfirm('이 날 복기를 지울까요?'))) return; await fetch(`${API}/me/reviews/${id}`,{method:'DELETE',headers:jrH()}).catch(()=>null); _rv.edit=null; meReview(); }
 async function meWatch(){
   const el=document.getElementById('me-watch'); el.innerHTML='<span class="ts">불러오는 중…</span>';
   const d=await meGet('/me/watch'); if(!d||d.err){ el.innerHTML=`<span class="ts">${d&&d.err||'불러오지 못했습니다'}</span>`; return; }

@@ -191,3 +191,31 @@ def start_feedback(rid: int) -> bool:
     _busy.add(rid)
     threading.Thread(target=_feedback, args=(rid,), daemon=True).start()
     return True
+
+
+def calendar(db: Session, owner: str, month: str) -> dict:
+    """달력·복기 (2026-10-14 "매매 일지 달력식으로 그날 실현손익, 누르면 종목별 근거·피드백"): 날짜별 실현손익(매매 일지 거래별 손익을 판 날로) · 체결 수 · 복기 여부."""
+    from backend.services.trade_journal import analyze  # noqa: PLC0415
+    _ensure(db)
+    y, m = (int(x) for x in month.split("-"))
+    first = date(y, m, 1)
+    nxt = date(y + (m == 12), m % 12 + 1, 1)
+    days: dict = {}
+    try:
+        for t in analyze(db, owner).get("trips") or []:
+            d = t.get("sell_date")
+            if d and str(first) <= d < str(nxt) and t.get("pnl") is not None:
+                x = days.setdefault(d, {"pnl": 0.0, "buy": 0, "sell": 0})
+                x["pnl"] += float(t["pnl"])
+    except Exception as exc:  # noqa: BLE001
+        logger.warning("달력 손익 계산 실패: %s", exc)
+    for d, side, n in db.execute(text("""select trade_date, side, count(*) from trade_executions where owner = :o and trade_date >= :a and trade_date < :b
+            group by 1, 2"""), {"o": owner, "a": first, "b": nxt}).all():
+        x = days.setdefault(str(d), {"pnl": 0.0, "buy": 0, "sell": 0})
+        x["buy" if side == "매수" else "sell"] += int(n)
+    for rid, d, st in db.execute(text("select id, review_date, feedback_status from trade_reviews where owner = :o and review_date >= :a and review_date < :b order by id"),
+                                 {"o": owner, "a": first, "b": nxt}).all():
+        x = days.setdefault(str(d), {"pnl": 0.0, "buy": 0, "sell": 0})
+        x.update(review=rid, status=st)
+    total = sum(x["pnl"] for x in days.values())
+    return {"month": month, "days": days, "total": round(total)}
