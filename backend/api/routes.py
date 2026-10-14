@@ -1978,6 +1978,15 @@ def get_futures_flow(d: str | None = None, db: Session = Depends(get_db)):
     return out
 
 
+@router.get("/bottom/now")
+def get_bottom_now(demo: str | None = None, db: Session = Depends(get_db)):
+    """바닥 모으기 모드 상태 (2026-10-15 "하따 모드가 켜지면 오늘 탭이 그 내용만") — demo=YYYY-MM-DD 화면 시험용."""
+    from backend.services.bottom_mode import now  # noqa: PLC0415
+    if demo and not __import__("re").fullmatch(r"\d{4}-\d{2}-\d{2}", demo):
+        demo = None
+    return now(db, demo)
+
+
 @router.get("/crash/now")
 def get_crash_now(db: Session = Depends(get_db)):
     """과매도 반등 모드 (급락 날만): 시장 급락 판정 + RS 90↑ 중 더 빠진 종목 5 · 손절 그날 저가 -1% · 5거래일째 종가 매도 (2026-10-13)."""

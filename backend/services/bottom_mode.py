@@ -99,6 +99,22 @@ def check(db: Session, send: bool = True, need_today: bool = True) -> str:
     if s.get("last") == today:
         return f"{today} 이미 확인 · 폭 {b.iloc[-1]:.0f}%"
     s["last"] = today
+    msgs = _step(db, s, b, idx, C, tv20)
+    cyc = s["cycle"]
+    _put(db, s)
+    if send and msgs:
+        from backend.services.telegram import owner_chats  # noqa: PLC0415
+        from backend.services.telegram import send as tg  # noqa: PLC0415
+        for c in owner_chats(db):
+            for m in msgs:
+                tg(db, m, c, html=True)
+    return f"{today} 폭 {b.iloc[-1]:.0f}% · " + (f"켜짐({cyc['on']}~{cyc['exit']}, 매수 {len(cyc['tranches'])}번)" if cyc else "꺼짐") + (f" · 알림 {len(msgs)}" if msgs else "")
+
+
+def _step(db: Session, s: dict, b, idx, C, tv20) -> list[str]:
+    """마지막 날 기준 한 걸음 (켜짐·2차·3차·정리 전날). s를 바꾸고 알림 문장을 돌려준다."""
+    d = b.index[-1]
+    today = str(d)
     msgs = []
     cyc = s["cycle"]
     if cyc and today > cyc["exit"]:
@@ -125,14 +141,61 @@ def check(db: Session, send: bool = True, need_today: bool = True) -> str:
                 cyc["tranches"].append(t); msgs.append("🟣 바닥 모으기\n" + _tranche_text(t, cyc))
         if str(_nth_after(d, 1)) == cyc["exit"]:
             msgs.append(f"🟣 바닥 모으기: 내일({cyc['exit'][5:]}) 15:21 종가에 이 모드로 산 종목 자동 매도 (20거래일 정리)")
-    _put(db, s)
-    if send and msgs:
-        from backend.services.telegram import owner_chats  # noqa: PLC0415
-        from backend.services.telegram import send as tg  # noqa: PLC0415
-        for c in owner_chats(db):
-            for m in msgs:
-                tg(db, m, c, html=True)
-    return f"{today} 폭 {b.iloc[-1]:.0f}% · " + (f"켜짐({cyc['on']}~{cyc['exit']}, 매수 {len(cyc['tranches'])}번)" if cyc else "꺼짐") + (f" · 알림 {len(msgs)}" if msgs else "")
+    return msgs
+
+
+_NOW: dict = {"key": None, "v": None}
+STATS = {"n": 10, "avg": 7.3, "win": 8, "worst": -17.8, "best_idx60": 12.5}
+
+
+def _trading_count(a: str, b: str) -> int:
+    from backend.utils.dates import is_trading_day  # noqa: PLC0415
+    d, e, k = date.fromisoformat(a), date.fromisoformat(b), 0
+    while d < e:
+        d += timedelta(days=1)
+        k += is_trading_day(d)
+    return k
+
+
+def now(db: Session, demo: str | None = None) -> dict:
+    """오늘 탭 '바닥 모으기' 화면용 (공개 — 계좌 정보 없음). demo='YYYY-MM-DD' = 그날까지 다시 돌려 본 상태(화면 시험용, 저장 안 함)."""
+    from backend.services.stock_signals import _data_latest  # noqa: PLC0415
+    latest = str(_data_latest(db))
+    key = (latest, demo)
+    if _NOW["key"] == key:
+        return _NOW["v"]
+    b, idx, C, tv20 = _series(db)
+    if demo:
+        end = date.fromisoformat(demo)
+        st = {"cycle": None, "history": []}
+        days = [d for d in b.index if d <= end][-45:]
+        for d in days:
+            _step(db, st, b[:d], idx[:d], C[:d], tv20[:d])
+        b, idx = b[:end], idx[:end]
+    else:
+        st = _get(db)
+    cyc = st["cycle"]
+    if cyc and str(b.index[-1]) > cyc["exit"]:
+        cyc = None
+    bn = float(b.iloc[-1])
+    v = {"date": str(b.index[-1]), "b200": round(bn, 1), "on_below": ON_BELOW, "hold": HOLD_DAYS, "stop_pct": int(STOP_PCT * 100),
+         "recent": [{"d": str(d), "v": round(float(x), 1)} for d, x in b.iloc[-10:].items()], "stats": STATS, "demo": demo, "active": bool(cyc)}
+    if cyc:
+        done = {t["n"] for t in cyc["tranches"]}
+        chg = (float(idx.iloc[-1]) / cyc["idx0"] - 1) * 100
+        last = C.loc[b.index[-1]]
+        trs = [{**t, "items": [{**x, "now": float(last[x["code"]]) if x["code"] in last and last[x["code"]] == last[x["code"]] else None} for x in t["items"]]}
+               for t in cyc["tranches"]]
+        for t in trs:
+            for x in t["items"]:
+                x["pnl"] = round((x["now"] / x["close"] - 1) * 100, 1) if x["now"] else None
+        v.update(on=cyc["on"], exit=cyc["exit"], day=_trading_count(cyc["on"], str(b.index[-1])), tranches=trs,
+                 next2={"done": 2 in done, "chg": round(chg, 1), "need": -5.0},
+                 next3={"done": 3 in done, "low": round(cyc["low_b"], 1), "now": round(bn, 1), "need": round(cyc["low_b"] + 5, 1)})
+    elif st["history"]:
+        v["last"] = st["history"][-1]
+    _NOW.update(key=key, v=v)
+    return v
 
 
 def lot_exit(db: Session, code: str, buy: date) -> str | None:
