@@ -106,11 +106,24 @@ def _context(db: Session, owner: str, day: date) -> str:
             out.append(f"[{day} 사이트 시장 판단] {'상승·횡보 (매매 가능)' if b else '하락 (쉬는 날)'}" + (f" · 종목 같은 무게 평균 {m:+.2f}%" if m is not None else ""))
     except Exception:  # noqa: BLE001
         pass
+    out.append("""[지금 매도 규칙 — 자동 (이게 최신, 아래 원칙 목록의 옛 매도 규칙보다 우선)]
+- 10/14부터 산 종목: 메리츠 자동 스톱 손절 = 관리 탭 손절선이 있으면 그 값, 없으면 산 날 저가 −1%. 매일 08:50에 다시 걸림.
+- 추세 종목: 21일선 위로 한 번 마감한 뒤 21일선 아래로 마감하면 다음 날 08:50 시초가 자동 매도. 과매도 반등 모드로 산 것은 5거래일째 종가 매도.
+- 10/13 이전 보유분: 종가 −7% 넓은 바닥 손절만 자동(21선 자동 매도 없음). 현금 주식은 자동 손절이 안 걸림.
+- '종베 다음 날 +2% 미만 전부 정리 · 30% 덜기' 규칙은 10/9에 폐기됨 — 쓰지 말 것.""")
+    try:
+        from backend.services.telegram import _get  # noqa: PLC0415
+        hold = [x for x in (_get(db, "user_watchlist", []) or []) if x.get("kind") == "hold"]
+        if hold:
+            out.append("[지금 걸려 있는 손절선 (관리 탭 · 자동 주문)]\n" + "\n".join(f"- {x['name']} {int(x.get('level') or 0):,}" for x in hold))
+    except Exception:  # noqa: BLE001
+        pass
+    out.append("[사장님 매매 원칙 — 날짜순 기록. 뒤에 적힌 것이 앞의 것을 대신한다. 취소선(~~)은 폐기된 것]")
     for f in ("user_trading_process.md", "user_jongbe_conditions.md"):
         p = MEMORY / f
         if p.exists():
             body = p.read_text(encoding="utf-8").split("---", 2)[-1].strip()
-            out.append(f"[사장님 매매 원칙 — {f.split('.')[0]}]\n{body[:3000]}")
+            out.append(f"({f.split('.')[0]})\n{body[:15000]}")
     return "\n".join(out)
 
 
@@ -121,6 +134,7 @@ PROMPT = """너는 사장님(한국 주식 개인 투자자, 추세추종·종�
 - ⚠️ 오늘 아쉬운 점 (1~2개, 실제 체결과 근거를 대어 구체적으로)
 - ▶ 다음에 할 것 (1~2개, 바로 실행할 수 있게)
 근거를 안 적은 종목은 '근거 없음'이라고만 짚는다. 자동 손절로 나간 건 사장님 판단이 아니라 규칙대로 나간 것이다.
+매도 조언은 위 '지금 매도 규칙'과 '지금 걸려 있는 손절선'에 맞춘다(이미 자동 손절이 걸린 종목에 '감시를 걸라'고 하지 않는다).
 신용·레버리지·이자·담보 비율 이야기는 하지 않는다. 계좌 금액·계좌번호는 적지 않는다. 확인 안 된 숫자를 지어내지 않는다.
 사장님 글과 체결 내역이 다르면 그 점을 짚는다. 사장님 원칙을 그대로 되풀이하지 말고 이번 매매에 대어 본다.
 
