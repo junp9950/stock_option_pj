@@ -1798,7 +1798,16 @@ def search_stocks(q: str = "", m: str = "", db: Session = Depends(get_db)):
     except Exception:  # noqa: BLE001
         pass
     hits.sort()
-    return {"items": [{"code": c, "name": n, "close": px, "chg": round(ch, 2)} for _, _, c, n, px, ch in hits[:12]]}
+    hits = hits[:12]
+    try:      # 오늘 거래가 있으면 정규장 실시간 값으로 (2026-10-14 "검색에 뜨는 퍼센트도" — 어제 종가가 그대로 보였다). 장 전·휴장일엔 빈 값 → 어제 종가 그대로
+        from backend.services.naver_live import snapshot  # noqa: PLC0415
+        kr = [h[2] for h in hits if h[2][:1].isdigit()]
+        live = snapshot(kr, max_age=30) if kr else {}
+        hits = [(r, t, c, n, live[c]["c"], live[c]["chg"]) if c in live and live[c].get("c") and live[c].get("chg") is not None else (r, t, c, n, px, ch)
+                for r, t, c, n, px, ch in hits]
+    except Exception:  # noqa: BLE001
+        pass
+    return {"items": [{"code": c, "name": n, "close": px, "chg": round(ch, 2)} for _, _, c, n, px, ch in hits]}
 
 
 @router.get("/us/overview")
