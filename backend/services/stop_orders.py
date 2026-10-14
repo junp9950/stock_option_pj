@@ -7,6 +7,7 @@
 - 주문: 감시가 = 손절가, 지정가 = 손절가 −1%(호가 내림, 갭 하락에도 체결되게 — 사용자 승인). KRX 정규장만 · 당일 유효라 매일 아침 다시 건다.
 - 시각: 08:50 아침 걸기(안 되면 09:01 다시) · 장중 5분마다 새로 산 것·손절선 바뀐 것·체결 확인 · 15:40 마감 정리.
 - 나오는 기준(10/14부터 새로 산 것만, 사용자 승인 10/13): 반등 모드로 산 것 = 5거래일째 15:21 종가 시장가 매도(12년: 21선 따라가기보다 +1.3%p),
+  바닥 모으기 후보로 산 것(bottom_mode, 10/15) = 손절 산 값 −25% · 켜진 날부터 20거래일째 15:21 종가 시장가 매도 (21일선 매도 없음),
   그 밖 = 21일선 위로 한 번 마감한 뒤부터 21일선 아래 마감이면 다음 날 08:50 시초가 시장가 매도.
 - 안전: 하루 주문 40건 상한(10/13 15→40), 수량은 실제 잔고를 넘지 않음, 브로커 경고가 오면 자동 확인하지 않고 알림만,
   텔레그램 /스톱끄기 · /스톱켜기 · /스톱 (상태). 알림은 사장님 대화방(telegram_chats)에만.
@@ -102,8 +103,27 @@ def _stop_for(db: Session, code: str, buy: date, today: date) -> tuple[int | Non
     return int(tick_floor(float(low) * 0.99)), "산 날 저가 −1%", final
 
 
+def _stop_lot(db: Session, L: dict, today: date) -> tuple[int | None, str, bool]:
+    """바닥 모으기로 산 것은 산 값(평균) −25% — 관리 탭 손절선이 있으면 그게 먼저. 나머지는 _stop_for."""
+    if L.get("mode") == "bottom":
+        from backend.services.bottom_mode import STOP_PCT  # noqa: PLC0415
+        from backend.services.telegram import _get  # noqa: PLC0415
+        from backend.utils.ticks import tick_floor  # noqa: PLC0415
+        for x in _get(db, "user_watchlist", []) or []:
+            if x.get("code") == L["code"] and x.get("kind") == "hold" and (x.get("level") or 0) > 0:
+                return int(x["level"]), "관리 탭 손절선", True
+        return int(tick_floor(float(L["avg"]) * (1 - STOP_PCT))), "바닥 모으기 산 값 −25%", True
+    return _stop_for(db, L["code"], date.fromisoformat(L["buy"]), today)
+
+
 def _mode_for(db: Session, code: str, buy: date) -> str:
     """산 날 과매도 반등 목록(매수 5 + 참고)에 있던 종목이면 'crash'(5거래일째 종가 매도), 아니면 'trend'(21일선 이탈 매도)."""
+    try:
+        from backend.services.bottom_mode import lot_exit  # noqa: PLC0415
+        if lot_exit(db, code, buy):
+            return "bottom"
+    except Exception:  # noqa: BLE001
+        pass
     try:
         from backend.services.stock_signals import crash_now  # noqa: PLC0415
         cr = crash_now(db)
@@ -215,10 +235,15 @@ def sync(db: Session, s: dict, today: date) -> list[str]:
         if extra > 0 and not L:
             h = meta[lot]
             buy = _buy_date(h, today)
-            stop, src, final = _stop_for(db, h["code"], buy, today)
-            s["lots"][lot] = {"code": h["code"], "name": h["name"], "credit": h["credit"], "loan_date": h["loan_date"], "qty": extra,
-                              "buy": str(buy), "stop": stop, "src": src, "final": final, "avg": h["avg"],
-                              "mode": _mode_for(db, h["code"], buy), "legacy": str(buy) < START, "armed": False}
+            mode = _mode_for(db, h["code"], buy)
+            L = {"code": h["code"], "name": h["name"], "credit": h["credit"], "loan_date": h["loan_date"], "qty": extra,
+                 "buy": str(buy), "avg": h["avg"], "mode": mode, "legacy": str(buy) < START, "armed": False}
+            if mode == "bottom":
+                from backend.services.bottom_mode import lot_exit  # noqa: PLC0415
+                L["exit"] = lot_exit(db, h["code"], buy)
+            stop, src, final = _stop_lot(db, L, today)
+            L.update(stop=stop, src=src, final=final)
+            s["lots"][lot] = L
             msgs.append(f"🆕 새로 산 것 감지: {h['name']} {extra}주 ({'신용' if h['credit'] else '현금'}) · 손절가 "
                         + (f"{stop:,} ({src})" if stop else f"없음 — {src}, 관리 탭에서 손절선을 넣어 주세요"))
         elif L and extra != L["qty"]:
@@ -227,6 +252,9 @@ def sync(db: Session, s: dict, today: date) -> list[str]:
                 s["lots"].pop(lot, None)
             else:
                 L["qty"] = extra
+                if L.get("mode") == "bottom":          # 바닥 모으기 2·3차로 더 사면 평균이 바뀜 → 손절가도
+                    L["avg"] = meta[lot]["avg"]
+                    L["stop"], L["src"], L["final"] = _stop_lot(db, L, today)
         if q < base:                     # 기준 잔고를 판 경우 기준도 줄인다(다음에 다시 사면 새 것으로 보게)
             s["baseline"][lot] = q
     for lot in list(s["lots"]):
@@ -362,11 +390,11 @@ def _run(db: Session, phase: str) -> str:
             # 아침: 확정 저가(전날까지 산 것)나 관리 탭 손절선으로 다시 계산. 장중: 관리 탭 손절선이 바뀐 것만
             # (산 날 장중 손절가는 그때까지 저가 −1%로 두고 따라 내리지 않는다 — 따라 내리면 영영 안 걸림)
             if phase in ("morning", "retry"):
-                stop, src, final = _stop_for(db, L["code"], date.fromisoformat(L["buy"]), today)
+                stop, src, final = _stop_lot(db, L, today)
                 if stop:
                     L.update(stop=stop, src=src, final=final)
             else:
-                stop, src, final = _stop_for(db, L["code"], date.fromisoformat(L["buy"]), today)
+                stop, src, final = _stop_lot(db, L, today)
                 if stop and src == "관리 탭 손절선":
                     L.update(stop=stop, src=src, final=True)
             o = _open_order(s, lot, today)
@@ -393,6 +421,8 @@ def _run(db: Session, phase: str) -> str:
             if L.get("mode") == "crash" and not L.get("legacy") and not L.get("sell_pending") \
                     and str(_nth_trading_day_after(date.fromisoformat(L["buy"]), 5)) <= str(today):
                 out.append(_market_exit(db, s, lot, L, today, "반등 모드 5거래일째 종가"))
+            elif L.get("mode") == "bottom" and not L.get("sell_pending") and L.get("exit") and L["exit"] <= str(today):
+                out.append(_market_exit(db, s, lot, L, today, "바닥 모으기 20거래일째 종가"))
     if str(today) >= s["start"] and phase == "close":
         for lot, L in s["lots"].items():
             if L.get("legacy") or L.get("mode") != "trend" or L.get("sell_pending"):
@@ -427,7 +457,7 @@ def _run(db: Session, phase: str) -> str:
     if out and phase != "baseline":
         head = {"morning": "🛑 오늘 손절 주문 (메리츠 스톱지정가)", "retry": "🛑 손절 주문 다시 걸기", "intraday": "🛑 손절 주문",
                 "close": "🛑 장 마감 · 내일 아침 손절 주문 걸 것", "late": "🛑 시간외 · 내일 아침 손절 주문 걸 것",
-                "preclose": "▼ 반등 모드 5거래일째 종가 매도"}[phase]
+                "preclose": "▼ 정해진 날 종가 매도 (반등 모드·바닥 모으기)"}[phase]
         _tell(db, head + "\n" + "\n".join(out) + ("" if s["on"] else "\n(지금 꺼져 있음 — /스톱켜기)"))
     return " / ".join(out) or "변화 없음"
 
@@ -438,7 +468,8 @@ def status(db: Session) -> str:
     od = [o for o in s["orders"].get(today, []) if o["ok"] and not o.get("done")]
     lines = [f"손절 자동 주문: {'켜짐' if s['on'] else '꺼짐'} · {s['start']}부터 새로 산 것만 · 지정가 = 손절가 −1%"]
     for L in s["lots"].values():
-        tail = "" if L.get("legacy") else (" · 5거래일째 종가 매도 " + str(_nth_trading_day_after(date.fromisoformat(L["buy"]), 5))[5:] if L.get("mode") == "crash"
+        tail = "" if L.get("legacy") else (f" · 바닥 모으기 · {str(L.get('exit'))[5:]} 종가 매도" if L.get("mode") == "bottom"
+                                            else " · 5거래일째 종가 매도 " + str(_nth_trading_day_after(date.fromisoformat(L["buy"]), 5))[5:] if L.get("mode") == "crash"
                                             else " · 21일선 이탈 매도 " + ("대기 중" if L.get("armed") else "(21일선 위 마감 뒤부터)"))
         lines.append((f"· {L['name']} {L['qty']}주 · 손절 {L['stop']:,} ({L['src']})" if L.get("stop") else f"· {L['name']} {L['qty']}주 · 손절가 없음")
                      + tail + (f" · ▼ {L['exit_next']}" if L.get("exit_next") else ""))

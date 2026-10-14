@@ -471,6 +471,19 @@ def start_scheduler() -> BackgroundScheduler:
             db.close()
     # 16:47 코스피200 선물 외국인 × 미결제 유형(신규 매수·숏커버·신규 매도·매수 청산) → 사장님 텔레그램 (2026-10-14 "매일 분석할 수 있나")
     scheduler.add_job(_futures_daily_job, 'cron', day_of_week='mon-fri', hour=16, minute=47, id='futures_daily', replace_existing=True, max_instances=1)
+
+    def _bottom_mode_job() -> None:
+        from backend.services.bottom_mode import check  # noqa: PLC0415
+        db = SessionLocal()
+        try:
+            logger.info("바닥 모으기: %s", check(db))
+        except Exception as exc:  # noqa: BLE001
+            logger.error("바닥 모으기 실패: %s", exc)
+        finally:
+            db.close()
+    # 16:25 (안 되면 18:15) 200일선 위 종목 비율 35% 아래 첫날 → 바닥 모으기 켜짐·2·3차·정리 알림 (2026-10-15 "알아서 켜 줘")
+    scheduler.add_job(_bottom_mode_job, 'cron', day_of_week='mon-fri', hour=16, minute=25, id='bottom_mode', replace_existing=True, max_instances=1)
+    scheduler.add_job(_bottom_mode_job, 'cron', day_of_week='mon-fri', hour=18, minute=15, id='bottom_mode2', replace_existing=True, max_instances=1)
     # 16:05·18:05 코스피·코스닥 투자자별 순매수 (KIS, 최근 300거래일 덮어쓰기) — 시장 카드 '수급' (2026-10-11)
     scheduler.add_job(_market_flows_job, 'cron', day_of_week='mon-fri', hour='16,18', minute=5, id='market_flows', replace_existing=True, max_instances=1)
 

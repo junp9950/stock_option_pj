@@ -32,6 +32,7 @@ HELP = ("주식 레이더 봇 명령\n"
         "종목토론 알림에 '답장' — 그 글에 댓글(댓글 알림이면 답글)로 달림 · /이름 우라늄 — 댓글 이름 정하기\n"
         "/board — (그룹에서) 이 방을 종목토론·건의사항 알림 전용으로 · /board_off — 해제\n"
         "/주도주 — 주도주(RS 95↑) 상태 · /주도주 끄기 이유 · /주도주 켜기 이유\n"
+        "/바닥 — 바닥 모으기 모드 상태 (200일선 위 종목 비율)\n"
         "/스톱 — 손절가 자동 주문 상태 · /스톱끄기 (오늘 걸린 것도 취소) · /스톱켜기\n"
         "/stop — 알림 끄기")
 
@@ -816,6 +817,9 @@ def poll(db: Session) -> None:
                 send(db, SO.set_on(db, True), cid)
             else:
                 send(db, SO.status(db), cid)
+        elif txt.startswith("/바닥"):        # 바닥 모으기 모드 상태 (2026-10-15)
+            from backend.services import bottom_mode as BM  # noqa: PLC0415
+            send(db, BM.status(db), cid)
         elif txt.startswith("/종베목록"):
             from backend.services import jongbe_check as JC  # noqa: PLC0415
             from backend.db.models import UserJongbe  # noqa: PLC0415
