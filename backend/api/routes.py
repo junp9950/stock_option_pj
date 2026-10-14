@@ -1966,7 +1966,16 @@ def get_index_intraday(symbol: str):
 def get_futures_flow(d: str | None = None, db: Session = Depends(get_db)):
     """코스피200 선물 외국인·기관·개인 순매수(억원 누적)·미결제약정 장중 기록 (5분, 2026-10-13부터)."""
     from backend.collector.futures_flow import day  # noqa: PLC0415
-    return day(db, d)
+    out = day(db, d)
+    try:      # 마감 뒤 유형 (16:47 기록된 날만)
+        from datetime import date as _d  # noqa: PLC0415
+        from backend.services.futures_daily import analyze  # noqa: PLC0415
+        a = analyze(db, _d.fromisoformat(out["date"]))
+        if a and a["d"] == out["date"]:
+            out["kind"] = {"label": a["label"], "meaning": a["meaning"], "streak": a["streak"], "stat": a["stat"]}
+    except Exception:  # noqa: BLE001
+        pass
+    return out
 
 
 @router.get("/crash/now")

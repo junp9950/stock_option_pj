@@ -459,6 +459,18 @@ def start_scheduler() -> BackgroundScheduler:
     # 코스피200 선물 외국인·기관·개인 순매수 + 미결제약정 5분마다 (08:45~15:50) + 16:40 마감 확정치 — 지난 자료가 없어 오늘부터 쌓아 검증 (2026-10-13)
     scheduler.add_job(_futures_flow_job, 'cron', day_of_week='mon-fri', hour='8-15', minute='*/5', id='futures_flow', replace_existing=True, max_instances=1)
     scheduler.add_job(_futures_flow_job, 'cron', day_of_week='mon-fri', hour=16, minute=40, id='futures_flow_close', replace_existing=True, max_instances=1)
+
+    def _futures_daily_job() -> None:
+        from backend.services.futures_daily import daily_job  # noqa: PLC0415
+        db = SessionLocal()
+        try:
+            logger.info("선물 수급 해석: %s", daily_job(db))
+        except Exception as exc:  # noqa: BLE001
+            logger.error("선물 수급 해석 실패: %s", exc)
+        finally:
+            db.close()
+    # 16:47 코스피200 선물 외국인 × 미결제 유형(신규 매수·숏커버·신규 매도·매수 청산) → 사장님 텔레그램 (2026-10-14 "매일 분석할 수 있나")
+    scheduler.add_job(_futures_daily_job, 'cron', day_of_week='mon-fri', hour=16, minute=47, id='futures_daily', replace_existing=True, max_instances=1)
     # 16:05·18:05 코스피·코스닥 투자자별 순매수 (KIS, 최근 300거래일 덮어쓰기) — 시장 카드 '수급' (2026-10-11)
     scheduler.add_job(_market_flows_job, 'cron', day_of_week='mon-fri', hour='16,18', minute=5, id='market_flows', replace_existing=True, max_instances=1)
 
