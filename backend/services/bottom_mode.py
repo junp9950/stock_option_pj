@@ -1,6 +1,7 @@
 """바닥 모으기 모드 (2026-10-15 사용자 "그걸 감지해서 하따 모드로 니가 알아서 켜 주면 안 되나? 손절은 넓게 잡고 바닥에서 모아 가는 식으로").
 
 켜짐: 200일선 위 종목 비율(거래대금 20일 평균 30억↑ 종목)이 35% 아래로 처음 내려간 날(앞 40거래일 동안 35% 아래가 없었을 때).
+  다시 켜짐(10/15): 앞 모드가 끝난 뒤 60거래일 안에 25% 아래로 처음 내려간 날 (2차 투매 — 12년 3번, 모두 +).
 나눠 사기 (각각 그날 후보 10종목 같은 무게, 사장님이 직접 매수 — 자동 매수 아님):
   1차 = 켜진 날 · 2차 = 같은 무게 지수가 켜진 날보다 5% 더 빠진 날 · 3차 = 폭이 바닥에서 5%p 회복한 날 (정리일 전까지만)
 후보: 거래대금 20일 평균 100억↑ 중 최근 20거래일 가장 많이 빠진 10종목 (바닥에선 '강한 종목'이 아니라 '많이 빠진 종목'이 튐).
@@ -20,6 +21,7 @@ from sqlalchemy.orm import Session
 logger = logging.getLogger(__name__)
 KEY = "bottom_mode"
 ON_BELOW = 35.0
+RE_BELOW = 25.0          # 앞 모드가 끝난 뒤 60거래일 안에 이 아래면 다시 켬 (10/15)
 HOLD_DAYS = 20
 STOP_PCT = 0.25
 
@@ -122,12 +124,21 @@ def _step(db: Session, s: dict, b, idx, C, tv20) -> list[str]:
         s["cycle"] = cyc = None
     if cyc is None:
         prev = b.iloc[-41:-1]
-        if b.iloc[-1] < ON_BELOW and len(prev) == 40 and (prev >= ON_BELOW).all():
-            cyc = {"on": today, "exit": str(_nth_after(d, HOLD_DAYS)), "idx0": float(idx.iloc[-1]), "low_b": float(b.iloc[-1]), "tranches": []}
-            t = {"n": 1, "date": today, "why": f"200일선 위 종목 {b.iloc[-1]:.0f}% (35% 아래로 처음)", "items": _picks(db, C, tv20, d)}
+        first = b.iloc[-1] < ON_BELOW and len(prev) == 40 and (prev >= ON_BELOW).all()
+        # 다시 켜기 (2026-10-15 사용자 승인 'C'): 앞 모드가 끝난 뒤 60거래일 안에 폭이 25% 아래로 처음 내려간 날
+        # 12년(bottom_retrig.py): 22-02-15 +11% · 22-09-28 +2% · 26-07-29 +58%(7/28 2차 투매 — 6/26 모드가 7/24에 끝난 직후라 안 켜졌던 것)
+        re = False
+        if not first and s["history"] and b.iloc[-1] < RE_BELOW:
+            ex = date.fromisoformat(s["history"][-1]["exit"])
+            after = b[[x > ex for x in b.index]]
+            re = 1 <= len(after) <= 60 and bool((after.iloc[:-1] >= RE_BELOW).all())
+        if first or re:
+            cyc = {"on": today, "exit": str(_nth_after(d, HOLD_DAYS)), "idx0": float(idx.iloc[-1]), "low_b": float(b.iloc[-1]), "tranches": [], "re": re}
+            t = {"n": 1, "date": today, "why": f"200일선 위 종목 {b.iloc[-1]:.0f}% " + ("(앞 모드가 끝난 뒤 25% 아래 — 다시 켜짐)" if re else "(35% 아래로 처음)"),
+                 "items": _picks(db, C, tv20, d)}
             cyc["tranches"].append(t)
             s["cycle"] = cyc
-            msgs.append("🟣 <b>바닥 모으기 모드 켜짐 (시험 중)</b>\n" + _tranche_text(t, cyc)
+            msgs.append(f"🟣 <b>바닥 모으기 모드 {'다시 ' if re else ''}켜짐 (시험 중)</b>\n" + _tranche_text(t, cyc)
                         + "\n\n2차 = 지수가 오늘보다 5% 더 빠지면 · 3차 = 폭이 바닥에서 5%p 회복하면 — 그때 다시 알려 드립니다")
     elif today > cyc["on"]:
         done = {t["n"] for t in cyc["tranches"]}
@@ -145,7 +156,7 @@ def _step(db: Session, s: dict, b, idx, C, tv20) -> list[str]:
 
 
 _NOW: dict = {"key": None, "v": None}
-STATS = {"n": 10, "avg": 7.3, "win": 8, "worst": -17.8, "best_idx60": 12.5}
+STATS = {"n": 13, "avg": 11.0, "win": 11, "worst": -17.8, "note": "26년 7월 +58% 포함 · 빼면 평균 +7.1%"}      # 다시 켜기 포함 (bottom_retrig.py C)
 
 
 def _trading_count(a: str, b: str) -> int:
@@ -189,7 +200,7 @@ def now(db: Session, demo: str | None = None) -> dict:
         for t in trs:
             for x in t["items"]:
                 x["pnl"] = round((x["now"] / x["close"] - 1) * 100, 1) if x["now"] else None
-        v.update(on=cyc["on"], exit=cyc["exit"], day=_trading_count(cyc["on"], str(b.index[-1])), tranches=trs,
+        v.update(re=bool(cyc.get("re")), on=cyc["on"], exit=cyc["exit"], day=_trading_count(cyc["on"], str(b.index[-1])), tranches=trs,
                  next2={"done": 2 in done, "chg": round(chg, 1), "need": -5.0},
                  next3={"done": 3 in done, "low": round(cyc["low_b"], 1), "now": round(bn, 1), "need": round(cyc["low_b"] + 5, 1)})
     elif st["history"]:

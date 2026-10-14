@@ -2945,7 +2945,7 @@ function bottomHero(v){
   const left=Math.max(0,v.hold-v.day);
   const p2=n2.done?100:Math.max(0,Math.min(100,(-n2.chg)/5*100)), p3=n3.done?100:Math.max(0,Math.min(100,(n3.now-n3.low)/5*100));
   const st=(cls,t,body,bar)=>`<div class="md-st${cls?' done':''}"><b>${t}</b>${body}${bar!=null?`<div class="bar"><i style="width:${bar}%"></i></div>`:''}</div>`;
-  const steps=st(true,'✅ 1차',`${dd(v.on)} 켜진 날 · 폭 35% 아래로`)
+  const steps=st(true,'✅ 1차',`${dd(v.on)} 켜진 날 · 폭 ${v.re?'25% 아래로 (다시)':'35% 아래로'}`)
     +st(n2.done,(n2.done?'✅':'⏳')+' 2차',n2.done?`${dd(tday(2))} 지수가 켜진 날보다 −5%`:`지수가 켜진 날보다 −5% 더 빠지면<br><span class="ts">지금 ${n2.chg>0?'+':''}${n2.chg}%</span>`,n2.done?null:p2)
     +st(n3.done,(n3.done?'✅':'⏳')+' 3차',n3.done?`${dd(tday(3))} 폭이 바닥에서 +5%p (돌아섬)`:`폭이 바닥 ${n3.low}% → ${n3.need}% 되면<br><span class="ts">지금 ${n3.now}%</span>`,n3.done?null:p3)
     +st(false,'⏰ 정리',`${dd(v.exit)} 15:21 종가에 전부 매도<br><span class="ts">${v.day}/${v.hold}거래일째 · ${left}일 남음</span>`,v.day/v.hold*100);
@@ -2957,13 +2957,13 @@ function bottomHero(v){
   const lo=Math.min(...v.recent.map(r=>r.v)), hi=Math.max(...v.recent.map(r=>r.v), v.on_below+5);
   const spark=`<div class="md-spark" title="200일선 위 종목 비율 최근 10거래일">${v.recent.map(r=>`<i class="${r.v===lo?'lo':''}" style="height:${Math.max(4,(r.v-Math.min(lo,20))/(hi-Math.min(lo,20))*100)}%" title="${dd(r.d)} ${r.v}%"></i>`).join('')}</div>`;
   return `<div class="md-h"><b>🟣 바닥 모으기 모드</b><span class="hb-b p">시험 중</span><span class="ts">${dd(v.date)} 장 마감 기준${v.demo?' · ⚠ 화면 시험용 지난 자료':''}</span><button class="btn btn-gray btn-sm" onclick="modeSet(false)">일반 화면 보기</button></div>
-    <div class="md-lead">200일선 위 종목이 <b>${v.recent.find(r=>r.d===v.on)?.v??''}%</b>로 떨어져(12년 하위권) 켜졌습니다. <b>추세 매수는 쉬고</b>, 많이 빠진 종목을 <b>3번 나눠 모은 뒤 ${v.hold}거래일 만에 정리</b>합니다. 진짜 바닥인지는 아무도 모르는 단계라 짧게 먹고 나옵니다.</div>
+    <div class="md-lead">200일선 위 종목이 <b>${v.recent.find(r=>r.d===v.on)?.v??''}%</b>로 떨어져 ${v.re?'<b>다시</b> 켜졌습니다(앞 모드가 끝난 뒤 25% 아래 — 2차 투매).':'켜졌습니다(12년 하위권).'} <b>추세 매수는 쉬고</b>, 많이 빠진 종목을 <b>3번 나눠 모은 뒤 ${v.hold}거래일 만에 정리</b>합니다. 진짜 바닥인지는 아무도 모르는 단계라 짧게 먹고 나옵니다.</div>
     <div class="md-steps">${steps}</div>
     <div class="md-g">
       <div><div class="sig-t">▲ ${last.n}차 매수 후보 <span class="ts">${fresh?'오늘 장 후(넥스트레이드 ~20:00)나 내일 아침에 · 10종목 같은 금액':`${dd(last.date)} 종가 기준 · 그날 못 샀으면 무리하지 말고 다음 차 기다리기`}</span></div>${hd}${last.items.map(row).join('')}${older}</div>
       <div><div class="sig-t">따라 하는 법</div>
         <div class="cr-how"><div>① 이 모드에 쓸 돈을 <b>3등분</b> → 한 차에 1/3, 그 안에서 10종목 같은 금액</div><div>② 사면 <b>산 값 −${v.stop_pct}%에 손절 예약</b> (넓게 — 바닥은 한 번 더 찍는 일이 많음)</div><div>③ <b>${dd(v.exit)} 종가에 전부 매도</b> — 오르든 내리든</div><div>④ 평소 추세 매수 신호는 쉼 (시장 하락장)</div></div>
-        <div class="cr-stat"><b>과거 성적 (12년 ${v.stats.n}번)</b> · 넣은 돈 대비 평균 +${v.stats.avg}% · ${v.stats.n}번 중 ${v.stats.win}번 이익 · 가장 나빴을 때 ${v.stats.worst}%<br><span class="ts">표본이 적어 '시험 중' · 강한 종목이 아니라 많이 빠진 종목이 먼저 튀었음 · 수익 보장 아님</span></div>
+        <div class="cr-stat"><b>과거 성적 (12년 ${v.stats.n}번)</b> · 넣은 돈 대비 평균 +${v.stats.avg}% · ${v.stats.n}번 중 ${v.stats.win}번 이익 · 가장 나빴을 때 ${v.stats.worst}%${v.stats.note?' ('+v.stats.note+')':''}<br><span class="ts">표본이 적어 '시험 중' · 강한 종목이 아니라 많이 빠진 종목이 먼저 튀었음 · 수익 보장 아님</span></div>
         <div class="sig-t" style="margin-top:12px">시장 폭 (200일선 위 종목) <span class="ts">지금 ${v.b200}%</span></div>${spark}
       </div></div>`;
 }
