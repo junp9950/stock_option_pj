@@ -78,6 +78,13 @@ def send(db: Session, msg: str, chat_id: int | str | None = None, html: bool = F
     for c in targets:
         for i in range(0, len(msg), 3900):      # 텔레그램 한 메시지 4096자 제한 (HTML은 짧게 써서 태그가 안 잘리게)
             r = _api("sendMessage", chat_id=c, text=msg[i:i + 3900], disable_web_page_preview=True, **extra)
+            if not r.get("ok"):      # 실패를 조용히 넘기던 것 (2026-10-14 우라늄 댓글 알림이 게시판 방에 안 감) — 기록하고 한 번 더
+                logger.warning("텔레그램 보내기 실패 (…%s): %s", str(c)[-3:], r.get("description") or "응답 없음")
+                import time as _t  # noqa: PLC0415
+                _t.sleep(min(float(((r.get("parameters") or {}).get("retry_after")) or 2), 10))
+                r = _api("sendMessage", chat_id=c, text=msg[i:i + 3900], disable_web_page_preview=True, **extra)
+                if not r.get("ok"):
+                    logger.warning("텔레그램 다시 보내기도 실패 (…%s): %s", str(c)[-3:], r.get("description") or "응답 없음")
             mid = (r.get("result") or {}).get("message_id")
             if mid:
                 sent[str(c)] = mid
@@ -127,7 +134,11 @@ def notify_async(msg: str, author: str = "", ref: dict | None = None, only_me: b
                 # 방마다 그 방 사람이 쓴 글·댓글은 빼고 보냄 (/name 으로 정한 이름. 이름이 없으면 사용자 본인 방만 본인 글을 뺌) — 우라늄도 받게 (2026-10-06)
                 if author and author == names.get(c, ME if c in mine else None):
                     continue
-                sent.update(send(db, msg, c))
+                got = send(db, msg, c)
+                sent.update(got)
+                if not got and names.get(c) == ME:      # 사장님 게시판 방에 못 보냈으면 사장님 개인 방으로라도 (2026-10-14)
+                    for oc in owner_chats(db):
+                        sent.update(send(db, msg, oc))
             if ref and sent:
                 mm = _get(db, "telegram_msgmap", {})
                 for c, mid in sent.items():
