@@ -70,6 +70,46 @@ def _put(db: Session, key: str, value) -> None:
     db.commit()
 
 
+_flushing = False
+OUTBOX_KEY, OUTBOX_MAX_H = "telegram_outbox", 12
+
+
+def _outbox_add(db: Session, chat, text: str, html: bool) -> None:
+    try:
+        box = _get(db, OUTBOX_KEY, []) or []
+        box.append({"c": str(chat), "t": text, "h": bool(html), "at": datetime.now(ZoneInfo("Asia/Seoul")).strftime("%Y-%m-%d %H:%M")})
+        _put(db, OUTBOX_KEY, box[-50:])
+    except Exception as exc:  # noqa: BLE001
+        logger.warning("텔레그램 보관 실패: %s", type(exc).__name__)
+
+
+def flush_outbox(db: Session) -> int:
+    """접속이 돌아왔을 때 보관한 알림을 '늦게 도착' 표시로 보냄 (12시간 넘은 건 버림)."""
+    global _flushing
+    box = _get(db, OUTBOX_KEY, []) or []
+    if not box:
+        return 0
+    now = datetime.now(ZoneInfo("Asia/Seoul")).replace(tzinfo=None)
+    left, n = [], 0
+    _flushing = True
+    try:
+        for x in box:
+            if (now - datetime.strptime(x["at"], "%Y-%m-%d %H:%M")).total_seconds() > OUTBOX_MAX_H * 3600:
+                continue
+            head = f"⏱ 늦게 도착 ({x['at'][5:].replace('-', '/')} 알림 · 그때 텔레그램 접속이 끊겼음)" + chr(10)
+            r = _api("sendMessage", chat_id=x["c"], text=head + x["t"], disable_web_page_preview=True, **({"parse_mode": "HTML"} if x["h"] else {}))
+            if r.get("ok"):
+                n += 1
+            else:
+                left.append(x)
+    finally:
+        _flushing = False
+    _put(db, OUTBOX_KEY, left)
+    if n:
+        logger.info("텔레그램 보관 알림 %d건 늦게 보냄", n)
+    return n
+
+
 def send(db: Session, msg: str, chat_id: int | str | None = None, html: bool = False) -> dict[str, int]:
     """보낸 대화방별 마지막 메시지 id를 돌려준다 (답장으로 댓글 달기 연결용)."""
     targets = [chat_id] if chat_id is not None else list(_get(db, "telegram_chats", {}).keys())
@@ -85,6 +125,8 @@ def send(db: Session, msg: str, chat_id: int | str | None = None, html: bool = F
                 r = _api("sendMessage", chat_id=c, text=msg[i:i + 3900], disable_web_page_preview=True, **extra)
                 if not r.get("ok"):
                     logger.warning("텔레그램 다시 보내기도 실패 (…%s): %s", str(c)[-3:], r.get("description") or "응답 없음")
+                    if not r and not _flushing:      # 접속 자체가 안 됨 → 보관했다가 접속이 돌아오면 늦게라도 (2026-10-14 19:03~19:37 끊김에 우라늄 답글 알림 빠짐)
+                        _outbox_add(db, c, msg[i:i + 3900], html)
             mid = (r.get("result") or {}).get("message_id")
             if mid:
                 sent[str(c)] = mid
@@ -652,6 +694,8 @@ def poll(db: Session) -> None:
         return
     off = _get(db, "telegram_offset", 0)
     res = _api("getUpdates", offset=off, timeout=0)
+    if res.get("ok") and _get(db, OUTBOX_KEY, []):
+        flush_outbox(db)
     ups = res.get("result") or []
     if not ups:
         return
