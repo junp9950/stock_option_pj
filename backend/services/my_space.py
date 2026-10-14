@@ -15,7 +15,7 @@ from pathlib import Path
 from sqlalchemy import text
 from sqlalchemy.orm import Session
 
-ACCTS = {"P": "기본 (15:12 신호 · 종가 체결)", "L": "주도주 (소량)", "S": "보조 (다음 날 시가)", "Z": "비교: 모멘텀 돌파"}
+ACCTS = {"P": "기본 (15:12 신호 · 종가 체결)", "W": "사이트 추천 그대로 (지금 규칙 + 돌파 + 넓은 돌파 · 10/15~)", "L": "주도주 (소량)", "S": "보조 (다음 날 시가)", "Z": "비교: 모멘텀 돌파"}
 
 
 def _names(db: Session, codes) -> dict:

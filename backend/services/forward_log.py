@@ -274,7 +274,9 @@ def _record_day(db, st, day):
     full = _close_scores(db, day)
     sc = full.get("scores", {})
     close_c, close_l = _cands(sc), _cands(sc, lead=True)
-    brk_c = _cands({c: {**v, "buy": True} for c, v in (full.get("brk") or {}).items()})      # 돌파 매수 (2026-10-13) — PB 진단 계좌에서만
+    brk_all = full.get("brk") or {}
+    brk_c = _cands({c: {**v, "buy": True} for c, v in brk_all.items() if not v.get("wide")})      # 돌파 매수 (2026-10-13) — PB 진단 계좌에서만
+    wide_c = _cands({c: {**v, "buy": True} for c, v in brk_all.items() if v.get("wide")})        # 넓은 돌파 (2026-10-15, 이번 장 한정 · 스위치 켜진 날만 들어옴) — W 계좌
     bull = bool(_bull_days(db).get(day, False))
     snap = _load(db, day, "1512")
     if snap is not None and snap.get("config") != CONFIG_HASH:
@@ -291,7 +293,9 @@ def _record_day(db, st, day):
         ("L", plans.get("L", []) if snapshot_bull and lead_on else [], "close", LEAD["slots"], LEAD["risk"]),
         ("Lsh", plans.get("Lsh", []) if snapshot_bull else [], "close", 999, .0005),
         ("Z", momo, "close", CONFIG["slots"], CONFIG["risk"]),
-        ("PB", (close_c + brk_c) if bull else [], "close", CONFIG["slots"], CONFIG["risk"])]     # 지금 규칙 먼저 + 남는 칸 돌파 매수 (X와 비교)
+        ("PB", (close_c + brk_c) if bull else [], "close", CONFIG["slots"], CONFIG["risk"]),     # 지금 규칙 먼저 + 남는 칸 돌파 매수 (X와 비교)
+        # W = 사이트가 지금 추천하는 그대로 (2026-10-15 사용자 "실전 기록도 반영해야지, 아님 새 가상 계좌") — 지금 규칙 → 돌파 → 넓은 돌파 순으로 남는 칸 · 같은 종가
+        ("W", (close_c + brk_c + wide_c) if bull else [], "close", CONFIG["slots"], CONFIG["risk"])]
     codes = set()
     for name, cands, _, _, _ in account_specs:
         a = st.setdefault(name, _new_acct())
@@ -345,7 +349,8 @@ def monthly_text(db: Session, ym: str | None = None) -> str | None:
            f"상위 10 교체율(P vs X 산 종목) 평균 {sum(flips) / len(flips):.2f}" if flips else ""]
     for k, nm in (("P", "P 기본(15:12 신호·종가)"), ("S", "S 보조(종가 신호·다음 날 시가)"), ("X", "X 진단(같은 종가)"),
                   ("L", "L 주도주 실제(0.10%·2종목)"), ("Lsh", "L 주도주 전수 기록"), ("Z", "Z 모멘텀 돌파 비교(20일 고점 돌파·거래 1.9배·+5% · 같은 체결)"),
-                  ("PB", "PB 진단(같은 종가 · 지금 규칙 먼저 + 남는 칸 돌파 매수, 2026-10-13~)")):
+                  ("PB", "PB 진단(같은 종가 · 지금 규칙 먼저 + 남는 칸 돌파 매수, 2026-10-13~)"),
+                  ("W", "W 사이트 추천 그대로(지금 규칙 + 돌파 + 넓은 돌파 · 같은 종가, 2026-10-15~)")):
         a = st.get(k) or {}
         tr = [t for t in a.get("trades", []) if t["d1"][:7] == ym]
         alltr = [t for t in a.get("trades", []) if t["d1"][:7] <= ym]
