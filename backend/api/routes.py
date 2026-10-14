@@ -2415,10 +2415,25 @@ def get_stock_candles(code: str, count: int = 330, tf: str = "1d", ext: int = 0,
                            "where stock_code = :c order by trading_date desc limit :n"), {"c": code, "n": min(count, 600)}).all()
     out = {str(r[0]): {"timestamp": f"{r[0]}T00:00:00.000+09:00", "openPrice": str(r[1]), "highPrice": str(r[2]), "lowPrice": str(r[3]),
                        "closePrice": str(r[4]), "volume": str(int(r[5] or 0))} for r in rows[::-1]}
+    # 오늘(DB에 아직 없는 날) 봉만 붙인다 — 지난 날짜는 DB(KRX 공식 정규장)를 그대로 (2026-10-14: 토스 일봉엔 장 후 넥스트레이드 가격이 섞여
+    # 어제 종가가 560,000이 아니라 565,000으로 덮여 차트 등락률이 +3.9%로 틀렸다 — 목록은 +5.2%)
+    last_db = max(out) if out else ""
     try:
         live = get_toss_candles(code, interval="1d", count=10)
         for c in live.get("candles", []):
-            out[c["timestamp"][:10]] = c
+            if c["timestamp"][:10] > last_db:
+                out[c["timestamp"][:10]] = c
+    except Exception:  # noqa: BLE001
+        pass
+    try:      # 오늘 봉은 정규장 값(네이버 실시간 맨 위 값 — 15:12 알림·목록과 같은 값)이 있으면 그걸로
+        from datetime import datetime as _dt  # noqa: PLC0415
+        from zoneinfo import ZoneInfo as _Z  # noqa: PLC0415
+        from backend.services.naver_live import snapshot  # noqa: PLC0415
+        today = str(_dt.now(_Z("Asia/Seoul")).date())
+        q = snapshot([code], max_age=30).get(code) if today > last_db else None
+        if q and all(q.get(k) for k in ("o", "h", "l", "c")):
+            out[today] = {"timestamp": f"{today}T00:00:00.000+09:00", "openPrice": str(q["o"]), "highPrice": str(q["h"]), "lowPrice": str(q["l"]),
+                          "closePrice": str(q["c"]), "volume": str(int(q.get("v") or 0))}
     except Exception:  # noqa: BLE001
         pass
     return {"code": code, "candles": [out[k] for k in sorted(out)]}

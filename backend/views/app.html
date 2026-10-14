@@ -1302,7 +1302,7 @@ setInterval(()=>{ const k=new Date(new Date().toLocaleString('en-US',{timeZone:'
   const home=document.getElementById('panel-home');
   if(document.visibilityState!=='visible'||!home||!home.classList.contains('active')||wd===0||wd===6||hm<900||hm>1540) return;
   hcSpark(); if(k.getMinutes()%5===0&&window._dashD) loadLive(window._dashD);
-  if(k.getMinutes()%3===0) loadWorkspace();      // 장중 목록·매매 신호 카드도 3분마다 (2026-10-13 새로고침해야만 바뀌던 것)
+  loadWorkspace(); wsLiveTick();      // 장중 목록·매매 신호 카드·열린 차트를 1분마다 같이 (2026-10-14 "퍼센트도 차트랑 같이 바뀌는 게 낫지" — 3분이라 어긋남)
   },60000);
 // 장중(평일 9:00~15:40)에는 지금 가격으로 장세를 다시 판단해 판단 문구·과매도·순환 카드·카드 순서를 바꾼다 (대시보드 본체는 장 마감 데이터) — 2026-10-07
 async function loadLive(d){
@@ -2668,7 +2668,8 @@ async function wsDraw(){
   const g=renderLwChart('ws-chart',c.cd.candles,c.sg?c.sg.items:[],_ws.per,{...wsStopOpt(c),code:_ws.code,tf:'1d'});
   const a=c.sg&&c.sg.active;
   { const L=c.cd.candles, z=L[L.length-1], y=L[L.length-2]; if(z){ const cl=+z.closePrice, ch=y?(cl/+y.closePrice-1)*100:0;
-      document.getElementById('ws-px').innerHTML=`${Math.round(cl).toLocaleString()}<span style="color:${ch>=0?'var(--up)':'var(--down)'}">${ch>=0?'+':''}${ch.toFixed(2)}%</span>`; }
+      document.getElementById('ws-px').innerHTML=`${Math.round(cl).toLocaleString()}<span style="color:${ch>=0?'var(--up)':'var(--down)'}">${ch>=0?'+':''}${ch.toFixed(2)}%</span>`;
+      wsRowPx(_ws.code,cl,ch); }
     const ch=[]; if(g!=null) ch.push(hbChip(g<=4?'g':g>=7?'b':'n',`EMA 5·10·20 간격 ${g.toFixed(1)}%${g<=4?' · 모임':g>=7?' · 벌어짐':''}`));
     const vm=_avwapNote.match(/· (.+?) (\d\d-\d\d) VWAP ([\d,]+) (위|아래)/); if(vm) ch.push(hbChip(vm[4]==='위'?'g':'b',`${vm[1]} ${vm[2]} VWAP ${vm[3]} ${vm[4]}`));
     _patNotes.forEach(t=>ch.push(hbChip(/돌파/.test(t)?'g':/이탈/.test(t)?'b':'n',t)));
@@ -2679,6 +2680,17 @@ async function wsDraw(){
 }
 const WS_PAL=['#3b5bdb','#c2255c','#2b8a3e','#e8590c','#5f3dc4','#0b7285','#a61e4d','#5c940d','#d9480f','#364fc7'];
 function wsAv(code,name){ let h=0; for(const ch of code) h=(h*31+ch.charCodeAt(0))%997; return `<div class="ws-av" style="background:${WS_PAL[h%WS_PAL.length]}">${(name||'?').slice(0,1)}</div>`; }
+// 열린 차트의 일봉만 다시 받아 그림 (신호·종목 정보는 그대로) — 목록 줄 가격도 차트와 같은 값으로
+async function wsLiveTick(){ const code=_ws.code; if(!code||_ws.tf!=='1d') return;
+  const cd=await fetch(`${API}/stock/${code}/candles?count=330`).then(r=>r.ok?r.json():null).catch(()=>null);
+  const c=_ws.cache&&_ws.cache[code]; if(!cd||!cd.candles||!cd.candles.length||_ws.code!==code||!c||_ws.tf!=='1d') return; c.cd=cd;
+  const L=cd.candles, z=L[L.length-1], y=L[L.length-2], cl=+z.closePrice, ch=y?(cl/+y.closePrice-1)*100:0;      // 다시 그리지 않음 — 옮겨 둔 확대·위치 유지
+  document.getElementById('ws-px').innerHTML=`${Math.round(cl).toLocaleString()}<span style="color:${ch>=0?'var(--up)':'var(--down)'}">${ch>=0?'+':''}${ch.toFixed(2)}%</span>`;
+  wsRowPx(code,cl,ch);
+  try{ const g=_lw['ws-chart']; if(g&&g.cs) g.cs.update({time:(z.timestamp||'').slice(0,10),open:+z.openPrice,high:+z.highPrice,low:+z.lowPrice,close:cl}); }catch(e){} }
+function wsRowPx(code,cl,ch){ if(_ws.tab==='track') return;     // 신호 추적 칸은 '진입 뒤 수익'이라 그대로
+  document.querySelectorAll(`#ws-items .ws-item[data-c="${code}"] .ws-px`).forEach(el=>{
+  el.innerHTML=`${Math.round(cl).toLocaleString()}<div style="color:${ch>0?'var(--up)':ch<0?'var(--down)':'var(--muted)'}">${ch>0?'+':''}${ch.toFixed(2)}%</div>`; }); }
 async function loadWorkspace(){
   const d=await fetch(`${API}/workspace/list`).then(r=>r.ok?r.json():null).catch(()=>null);
   if(!d){ document.getElementById('ws-items').innerHTML='<div class="ts" style="padding:10px">목록을 못 불러왔습니다</div>'; return; }
@@ -2687,6 +2699,7 @@ async function loadWorkspace(){
     _ws.tab=['entry','wait','track'].includes(t)?t:(['entry','wait'].find(k=>wsItems(k).length)||'track'); }
   document.getElementById('ws-asof').textContent = d.live ? `장중 ${d.live} 가격` : `${d.as_of} 정규장 종가`;
   renderWsList(); renderSigCard();
+  { const c=_ws.code&&_ws.cache&&_ws.cache[_ws.code]; const L=c&&c.cd&&c.cd.candles; if(d.live&&L&&L.length>1){ const cl=+L[L.length-1].closePrice; wsRowPx(_ws.code,cl,(cl/+L[L.length-2].closePrice-1)*100); } }   // 열린 종목 줄은 차트와 같은 값
   if(!_ws.code){ const L=wsItems(_ws.tab); const f=L[0]||(d.candidates||[])[0]||(d.track||[])[0]; if(f) wsOpen(f.code,f.name); }
 }
 function wsItems(t){ const d=_ws.data||{}; if(t==='track') return d.track||[];
