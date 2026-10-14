@@ -322,7 +322,24 @@ def _stats(trips: list[dict]) -> dict:
             "worst_pct": round(min(t["pct"] for t in trips), 2), "best_pct": round(max(t["pct"] for t in trips), 2)}
 
 
+_an_cache: dict = {}    # owner → (key, 결과) — 거래·설정·시세가 그대로면 다시 계산하지 않음 (2026-10-14 "매매 일지 왜 이렇게 오래 걸리지" — 매번 1.7초, 재시작 뒤 12초)
+
+
 def analyze(db: Session, owner: str) -> dict:
+    import json as _json  # noqa: PLC0415
+    k = db.execute(text("select count(*), max(id), max(updated_at) from trade_executions where owner = :o"), {"o": owner}).first()
+    key = (tuple(str(x) for x in k), db.execute(text("select max(trading_date), count(*) from spot_daily_prices "
+                                                    "where trading_date = (select max(trading_date) from spot_daily_prices)")).first(),
+           _json.dumps(get_cfg(db, owner), sort_keys=True, default=str))
+    hit = _an_cache.get(owner)
+    if hit and hit[0] == key:
+        return hit[1]
+    out = _analyze(db, owner)
+    _an_cache[owner] = (key, out)
+    return out
+
+
+def _analyze(db: Session, owner: str) -> dict:
     ex = db.scalars(select(TradeExecution).where(TradeExecution.owner == owner)
                     .order_by(TradeExecution.trade_date, TradeExecution.id)).all()
     cfg = get_cfg(db, owner)

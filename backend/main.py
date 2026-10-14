@@ -131,10 +131,10 @@ def startup_event() -> None:
     def _warm_journal() -> None:
         _db = SessionLocal()
         try:
+            from backend.services import trade_journal  # noqa: PLC0415
+            trade_journal.warm(_db)          # 매매 일지 먼저 (12초) — 뒤에 두니 재시작 뒤 한참 '여는 중'이었다 (2026-10-14)
             from backend.api.routes import warm_caches  # noqa: PLC0415
             warm_caches(_db)                 # 첫 화면(오늘)·차트 후보를 재시작 직후 바로 데움
-            from backend.services import trade_journal  # noqa: PLC0415
-            trade_journal.warm(_db)
         except Exception as exc:  # noqa: BLE001
             import logging  # noqa: PLC0415
             logging.getLogger(__name__).warning("매매 일지 미리 계산 실패: %s", exc)
