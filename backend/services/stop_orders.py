@@ -408,6 +408,10 @@ def _run(db: Session, phase: str) -> str:
     if phase not in ("baseline", "late") and not is_trading_day(today):
         return "장 없는 날"
     s = _st(db)
+    # 하루만 끄기 (2026-10-15 급락 날 사용자 "오늘 장중에는 손절 안 되게") — 다음 거래일 아침에 저절로 다시 켬
+    if not s["on"] and s.get("off_until") and str(today) > s["off_until"] and phase in ("morning", "retry", "intraday"):
+        s["on"] = True; s.pop("off_until", None)
+        _tell(db, "🛑 손절 자동 주문 다시 켬 (어제 하루만 껐던 것) — 오늘 아침 확정 손절가로 겁니다")
     try:
         msgs = sync(db, s, today)
     except Exception as exc:  # noqa: BLE001
