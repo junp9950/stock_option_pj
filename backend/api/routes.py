@@ -2740,7 +2740,15 @@ def get_stock_chart_signals(code: str, request: Request, db: Session = Depends(g
             return signals(db, code.upper(), us=True)
         except Exception:  # noqa: BLE001
             return {"items": [], "active": None}
-    return signals(db, code, owner=_journal_owner_opt(request, db))
+    r = signals(db, code, owner=_journal_owner_opt(request, db))
+    try:      # 장중 임시 매수 표시 (확정 전) — 장 마감 뒤엔 빈 목록 (2026-10-15)
+        from backend.services.stock_signals import live_marks  # noqa: PLC0415
+        lm = live_marks(db, code)
+        if lm:
+            r = {**r, "items": list(r.get("items", [])) + lm}
+    except Exception:  # noqa: BLE001
+        pass
+    return r
 
 
 @router.get("/journal/holdings")

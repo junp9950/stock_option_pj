@@ -1002,6 +1002,52 @@ def _close_scores(db: Session, latest, live: dict | None = None, frac: float = 1
     return {"date": asof, "scores": out, "live": bool(live), "brk": brk}
 
 
+def live_marks(db: Session, code: str) -> list[dict]:
+    """장중 임시 매수 표시 (2026-10-15 사용자 "장중에 떴다가 확정 봉 뜨면 없애고 확정 봉으로") — 오늘 봉에 '매수 후보'.
+    장중(DB에 오늘 일봉 들어오기 전)에만. 장 마감 뒤 확정 자료가 들어오면 signals()가 오늘 표시를 직접 그리고 이건 안 나옴.
+    목록(오늘 진입)과 같은 기준: 일반 매수·돌파·넓은 돌파·주도주(상승·횡보장) · 반등 매수(급락 날) · 바닥 모으기(켜진 날)."""
+    out = []
+    try:
+        sc = close_scores_now(db)
+        if not sc.get("live"):
+            return []
+        day, at = sc.get("date"), sc.get("at", "")
+        why = []
+        if _bull_days(db).get(_data_latest(db), False):
+            v = (sc.get("scores") or {}).get(code)
+            b = (sc.get("brk") or {}).get(code)
+            if v and v.get("buy"):
+                why.append(("과열 매수 · 수량 절반" if v.get("hot") else "반도체·AI 특별" if v.get("semi") else "종가 매수") + f" · 손절 {v['stop']:,.0f}")
+            elif b:
+                why.append(f"돌파 매수 ({b.get('kind', '')}) · 손절 {b['stop']:,.0f}")
+            elif v and v.get("lead"):
+                why.append(f"🔥 주도주 · 손절 {v['stop']:,.0f}")
+            low = (v or b or {}).get("stop")
+        else:
+            low = None
+        cr = crash_now(db)
+        if cr.get("active") and cr.get("tested") and cr.get("live"):
+            x = next((x for x in cr.get("items", []) if x["code"] == code), None)
+            if x:
+                why.append(f"⚡ 반등 매수 · 손절 {int(x['stop']):,} · {str(cr.get('sell_on', ''))[5:]} 종가 매도"); low = low or x.get("stop")
+        try:
+            from backend.services.bottom_mode import now as _bnow  # noqa: PLC0415
+            bm = _bnow(db)
+            if bm.get("live") and bm.get("active"):
+                t = next((t for t in bm.get("tranches", []) if t["date"] == day and any(x["code"] == code for x in t["items"])), None)
+                if t:
+                    x = next(x for x in t["items"] if x["code"] == code)
+                    why.append(f"🟣 바닥 모으기 {t['n']}차 · 손절 {int(x['stop']):,}"); low = low or x["stop"] / 0.75 * 0.99
+        except Exception:  # noqa: BLE001
+            pass
+        if why:
+            out.append({"date": day, "kind": "live_buy", "pos": "below", "price": float(low) / 0.99 if low else None,
+                        "label": f"매수 후보 (장중 {at} · 15:20쯤 확정) · " + " · ".join(why)})
+    except Exception as exc:  # noqa: BLE001
+        __import__("logging").getLogger(__name__).warning("장중 매수 표시 실패 %s: %s", code, exc)
+    return out
+
+
 _CSL: dict = {"t": 0.0, "v": None}
 
 

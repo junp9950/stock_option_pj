@@ -2714,7 +2714,14 @@ async function wsLiveTick(){ const code=_ws.code; if(!code||_ws.tf!=='1d') retur
   const L=cd.candles, z=L[L.length-1], y=L[L.length-2], cl=+z.closePrice, ch=y?(cl/+y.closePrice-1)*100:0;      // 다시 그리지 않음 — 옮겨 둔 확대·위치 유지
   document.getElementById('ws-px').innerHTML=`${Math.round(cl).toLocaleString()}<span style="color:${ch>=0?'var(--up)':'var(--down)'}">${ch>=0?'+':''}${ch.toFixed(2)}%</span>`;
   wsRowPx(code,cl,ch);
-  try{ const g=_lw['ws-chart']; if(g&&g.cs) g.cs.update({time:(z.timestamp||'').slice(0,10),open:+z.openPrice,high:+z.highPrice,low:+z.lowPrice,close:cl}); }catch(e){} }
+  try{ const g=_lw['ws-chart']; if(g&&g.cs) g.cs.update({time:(z.timestamp||'').slice(0,10),open:+z.openPrice,high:+z.highPrice,low:+z.lowPrice,close:cl}); }catch(e){}
+  // 장중 '매수 후보' 표시도 3분마다 새로 (2026-10-15) — 조건이 깨지면 사라지고, 장 마감 뒤엔 확정 '매수'로
+  wsLiveTick.n=(wsLiveTick.n||0)+1; if(wsLiveTick.n%3) return;
+  const sg=await fetch(`${API}/stock/${code}/chart-signals`).then(r=>r.ok?r.json():null).catch(()=>null);
+  const g=_lw['ws-chart']; if(!sg||!g||!g.cs||_ws.code!==code||!g.mk) return;
+  const lv=(sg.items||[]).filter(x=>x.kind==='live_buy').map(x=>({time:x.date,position:'belowBar',color:'#b392f0',shape:'arrowUp',text:'매수 후보',size:0.9}));
+  const keep=m=>!(m.text==='매수 후보'), srt=a=>a.sort((p,q)=>p.time<q.time?-1:p.time>q.time?1:0);
+  g.mk=srt(g.mk.filter(keep).concat(lv)); g.mkCore=srt((g.mkCore||[]).filter(keep).concat(lv)); chApply(g); }
 function wsRowPx(code,cl,ch){ if(_ws.tab==='track') return;     // 신호 추적 칸은 '진입 뒤 수익'이라 그대로
   document.querySelectorAll(`#ws-items .ws-item[data-c="${code}"] .ws-px`).forEach(el=>{
   el.innerHTML=`${Math.round(cl).toLocaleString()}<div style="color:${ch>0?'var(--up)':ch<0?'var(--down)':'var(--muted)'}">${ch>0?'+':''}${ch.toFixed(2)}%</div>`; }); }
@@ -3483,20 +3490,21 @@ function renderLwChart(cid, allCandles, signals, per, opts){
     const lv=av[av.length-1].value, lc=closes[closes.length-1]; _avwapNote=` · ${lab} ${data[ai].time.slice(5)} VWAP ${fp(lv)} ${lc>=lv?'위 ✓':'아래 ⚠'}`; }
   // 신호 → 화살표 표시 (폰에선 진입·청산·손절·종베 추천·매수매도·위험만 글자)
   const MC={entry:['#58a6ff','arrowUp'],exit:[cv('--bd'),'arrowDown'],exit_bad:['#f0883e','arrowDown'],buy:['#1f6feb','arrowUp'],rest:['#2d9c87','circle'],info:['#8b949e','square'],
-            warn:['#f0883e','arrowDown'],trade_buy:[cv('--strong'),'arrowUp'],trade_sell:['#bc8cff','arrowDown'],wait:['#58a6ff','circle'],near:['#6e7681','circle'],note:['#8b949e','circle'],score:['#d2a8ff','circle'],score_better:['#d2a8ff','arrowUp'],score_keep:['#d2a8ff','circle'],score_add:['#d2a8ff','arrowUp'],score_hold:['#d2a8ff','circle'],dip:['#56d4dd','arrowUp'],lead:['#e8590c','arrowUp'],lead_keep:['#e8590c','circle'],shape:['#6e7681','circle']};
+            warn:['#f0883e','arrowDown'],trade_buy:[cv('--strong'),'arrowUp'],trade_sell:['#bc8cff','arrowDown'],wait:['#58a6ff','circle'],near:['#6e7681','circle'],note:['#8b949e','circle'],score:['#d2a8ff','circle'],score_better:['#d2a8ff','arrowUp'],score_keep:['#d2a8ff','circle'],score_add:['#d2a8ff','arrowUp'],score_hold:['#d2a8ff','circle'],dip:['#56d4dd','arrowUp'],lead:['#e8590c','arrowUp'],lead_keep:['#e8590c','circle'],shape:['#6e7681','circle'],live_buy:['#b392f0','arrowUp']};
   const KEY=['entry','exit','exit_bad','trade_buy','trade_sell'];   // 글자는 사고파는 자리만 · ▼ 주황 조심은 화살표만
   const ts=new Set(data.map(d=>d.time));
   let mk=(signals||[]).filter(sg=>ts.has(sg.date));
   if(small) mk=mk.filter(sg=>sg.kind!=='info');
   const DOT=['near','note','wait','shape'];     // 참고 점: 작게 점만 — 글자는 봉에 올리면 위 정보 줄에 (2026-10-09 "점 뜨는 거 뭐고", 글자 겹침)
   // 기본으로 보이는 것 = 사고파는 자리만 (매수·주도·줍기·진입·매도·손절·내 매매). 나머지(점·네모·조심)는 '참고 표시' 켤 때만 (2026-10-13)
-  const MK_CORE=['score','score_better','score_add','score_hold','score_keep','lead','lead_keep','dip','trade_buy','trade_sell'], _core=new Set();   // 매도 표시(손절·익절·21선)는 참고로 — 매일 손절선·자동 주문이 있어서 (2026-10-13 사용자)
+  const MK_CORE=['score','score_better','score_add','score_hold','score_keep','lead','lead_keep','dip','trade_buy','trade_sell','live_buy'], _core=new Set();   // 매도 표시(손절·익절·21선)는 참고로 — 매일 손절선·자동 주문이 있어서 (2026-10-13 사용자)
   mk=mk.map(sg=>{ const _o=(()=>{ const [col,shape]=MC[sg.kind]||MC.info; const dot=DOT.includes(sg.kind);
     // 차트 위 글자는 사고파는 자리만 (2026-10-13 "조건들이 겹쳐서 보기 쉽지 않다") — 급등봉·눌림·더 사기 같은 참고는 표시만, 이름은 봉에 올리면 위 정보창에
     const showTxt=!dot&&(KEY.includes(sg.kind)||sg.label.startsWith('종가 매수'));
     if(sg.kind==='score') return {time:sg.date,position:'belowBar',color:col,shape:'arrowUp',text:sg.good?'✅매수':'매수',size:sg.good?1.2:1};   // 종가 매수 신호 (점수는 봉에 올리면)
     if(sg.kind==='score_better'||sg.kind==='score_add'||sg.kind==='score_hold'||sg.kind==='score_keep') return {time:sg.date,position:'belowBar',color:MC.score[0],shape:'arrowUp',text:'매수',size:1};   // 들고 있어도 매수 조건이 맞은 날은 똑같이 '매수' (2026-10-13 사용자 "매수 표시를 매번" — 더 사기·보유 판단은 신호 추적에서)
     if(sg.kind==='lead'||sg.kind==='lead_keep') return {time:sg.date,position:'belowBar',color:MC.score[0],shape:'arrowUp',text:'매수',size:1};   // 주도주도 그냥 '매수' (2026-10-14 사용자 "여러 개 뜨면 보기 힘들다") — 주도주인지는 봉에 올리면
+    if(sg.kind==='live_buy') return {time:sg.date,position:'belowBar',color:col,shape:'arrowUp',text:'매수 후보',size:0.9};   // 장중 임시 (확정 봉 들어오면 사라지고 '매수'로) — 2026-10-15
     if(sg.kind==='dip') return {time:sg.date,position:'belowBar',color:col,shape,text:'줍기',size:0.9};      // 급락 날 줍기   // 종가 점수 6·7 — 숫자만 (글자 겹침 방지)
     return {time:sg.date,position:sg.pos==='below'?'belowBar':'aboveBar',color:col,shape,text:showTxt?sg.label:'',size:sg.kind==='entry'?1.6:dot?0.4:1}; })();
     if(MK_CORE.includes(sg.kind)) _core.add(_o); return _o; })
