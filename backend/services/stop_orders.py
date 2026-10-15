@@ -423,7 +423,7 @@ def _run(db: Session, phase: str) -> str:
     out = list(msgs)
     if str(today) >= s["start"] and phase in ("retry", "intraday", "close") and s["orders"].get(str(today)):
         out += _check_refused(s, today)
-    if str(today) >= s["start"] and s["on"] and phase in ("retry", "intraday"):
+    if str(today) >= s["start"] and s["on"] and phase in ("retry", "intraday") and not (s.get("no_stop_until") and str(today) <= s["no_stop_until"]):
         out += _gap_resell(db, s, today)
     if str(today) >= s["start"] and s["on"] and phase in ("morning", "retry", "intraday"):
         day = s["orders"].setdefault(str(today), [])
@@ -445,6 +445,8 @@ def _run(db: Session, phase: str) -> str:
                 stop, src, final = _stop_lot(db, L, today)
                 if stop and src == "관리 탭 손절선":
                     L.update(stop=stop, src=src, final=True)
+            if s.get("no_stop_until") and str(today) <= s["no_stop_until"]:
+                continue      # 하따 구간 손절 안 걸기 (2026-10-15 사용자 "오늘 하락은 하따 줍기니까 기존 손절선 적용하지 말자") — 정해진 날 매도·21선 매도는 그대로
             o = _open_order(s, lot, today)
             if o and (o["trigger"] != L.get("stop") or o["qty"] != L["qty"]):
                 c = M.cancel(L["code"], o["order_no"], o["qty"], o["trigger"], o["limit"])
@@ -515,6 +517,8 @@ def status(db: Session) -> str:
     today = str(_now().date())
     od = [o for o in s["orders"].get(today, []) if o["ok"] and not o.get("done")]
     lines = [f"손절 자동 주문: {'켜짐' if s['on'] else '꺼짐'} · {s['start']}부터 새로 산 것만 · 지정가 = 손절가 −1%"]
+    if s.get("no_stop_until") and today <= s["no_stop_until"]:
+        lines.append(f"⏸ 하따 구간: {s['no_stop_until'][5:]}까지 손절 주문 안 걺 (정해진 날 매도·21일선 매도는 그대로)")
     for L in s["lots"].values():
         tail = "" if L.get("legacy") else (f" · 바닥 모으기 · {str(L.get('exit'))[5:]} 종가 매도" if L.get("mode") == "bottom"
                                             else " · 5거래일째 종가 매도 " + str(_nth_trading_day_after(date.fromisoformat(L["buy"]), 5))[5:] if L.get("mode") == "crash"
