@@ -499,6 +499,18 @@ def start_scheduler() -> BackgroundScheduler:
             logger.error("박스 돌파 기록 실패: %s", exc)
         finally:
             db.close()
+    def _hatta_job() -> None:
+        from backend.services.stock_signals import hatta_log  # noqa: PLC0415
+        db = SessionLocal()
+        try:
+            logger.info("하따 기록: %s", hatta_log(db))
+        except Exception as exc:  # noqa: BLE001
+            logger.error("하따 기록 실패: %s", exc)
+        finally:
+            db.close()
+    # 16:35·18:30 하따 매수(과매도 반등·바닥 모으기) 기록 — 차트 진홍 '하따' 표시용 (2026-10-15)
+    scheduler.add_job(_hatta_job, 'cron', day_of_week='mon-fri', hour=16, minute=35, id='hatta_log', replace_existing=True, max_instances=1)
+    scheduler.add_job(_hatta_job, 'cron', day_of_week='mon-fri', hour=18, minute=30, id='hatta_log2', replace_existing=True, max_instances=1)
     # 16:30·18:25 박스 돌파 확정 목록 기록 (차트 표시·손절 주문용, 2026-10-15)
     scheduler.add_job(_box_job, 'cron', day_of_week='mon-fri', hour=16, minute=30, id='box_signal', replace_existing=True, max_instances=1)
     scheduler.add_job(_box_job, 'cron', day_of_week='mon-fri', hour=18, minute=25, id='box_signal2', replace_existing=True, max_instances=1)

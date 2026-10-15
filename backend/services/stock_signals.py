@@ -274,6 +274,21 @@ def signals(db: Session, code: str, days: int = 260, owner: str | None = None, u
                                                + (f" · {str(_ex)[5:]} 종가 매도" if pos_[d] + _BH < len(df.index) else "")})
                 except Exception as exc:  # noqa: BLE001
                     __import__("logging").getLogger(__name__).warning("박스 돌파 표시 실패 %s: %s", code, exc)
+            # 하따 줍기 매수 표시 (2026-10-15 사용자 "하따 줍기는 빨간·섬뜩한 매수 표시") — 과매도 반등·바닥 모으기 (settings 'hatta_hist')
+            if not us:
+                try:
+                    from backend.services.telegram import _get as _hg  # noqa: PLC0415
+                    for _d, _cs in (_hg(db, "hatta_hist", {}) or {}).items():
+                        _k = _cs.get(code)
+                        if not _k:
+                            continue
+                        _dd = __import__("datetime").date.fromisoformat(_d)
+                        if _dd < start or _dd not in pos_:
+                            continue
+                        _how = "손절 그날 저가 −1% · 5거래일째 종가 매도" if _k.startswith("과매도") else "손절 산 값 −25% · 20거래일 정리"
+                        items.append({"date": _d, "kind": "hatta", "pos": "below", "price": float(L[_dd]), "label": f"하따 매수 · {_k} · {_how}"})
+                except Exception as exc:  # noqa: BLE001
+                    __import__("logging").getLogger(__name__).warning("하따 표시 실패 %s: %s", code, exc)
             prev_on, run_best = False, None
             # 들고 있는 동안 또 뜬 매수 (2026-10-09 팬오션 "비쌀 때 사서 싸게 파는 정석" → "좋은 자리에서 피라미딩할 수도") — 12년(v12s/v12t.py):
             # 첫 매수 +1R↑일 때 같은 크기 더 사고 손절을 새 신호 저가 -1%로 올리면 묶음당 R +1.91/+2.61/+3.61 (그냥 들고 감 +1.98/+2.54/+3.04)
@@ -1084,11 +1099,33 @@ def live_marks(db: Session, code: str) -> list[dict]:
         except Exception:  # noqa: BLE001
             pass
         if why:
-            out.append({"date": day, "kind": "live_buy", "pos": "below", "price": float(low) / 0.99 if low else None,
-                        "label": f"매수 후보 (장중 {at} · 15:20쯤 확정) · " + " · ".join(why)})
+            hat = any(w.startswith(("⚡", "🟣")) for w in why)
+            out.append({"date": day, "kind": "live_buy", "pos": "below", "price": float(low) / 0.99 if low else None, "hatta": hat,
+                        "label": f"{'하따 ' if hat else ''}매수 후보 (장중 {at} · 15:20쯤 확정) · " + " · ".join(why)})
     except Exception as exc:  # noqa: BLE001
         __import__("logging").getLogger(__name__).warning("장중 매수 표시 실패 %s: %s", code, exc)
     return out
+
+
+def hatta_log(db: Session) -> str:
+    """장 마감 뒤 그날 하따 매수(과매도 반등 확정 5개 · 바닥 모으기 그날 차수 후보)를 'hatta_hist'에 (차트 표시용, 2026-10-15)."""
+    from backend.services.telegram import _get, _put  # noqa: PLC0415
+    h = _get(db, "hatta_hist", {}) or {}
+    d = str(_data_latest(db)); add = {}
+    cr = crash_now(db)
+    if cr.get("active") and cr.get("tested") and not cr.get("live") and cr.get("date") == d:
+        add.update({x["code"]: f"과매도 반등 ({cr['kind']})" for x in cr.get("items", [])})
+    try:
+        from backend.services.bottom_mode import now as _bn  # noqa: PLC0415
+        bm = _bn(db)
+        for t in bm.get("tranches", []) if bm.get("active") and not bm.get("live") else []:
+            if t["date"] == d:
+                add.update({x["code"]: f"바닥 모으기 {t['n']}차" for x in t["items"]})
+    except Exception:  # noqa: BLE001
+        pass
+    if add:
+        h[d] = {**(h.get(d) or {}), **add}; _put(db, "hatta_hist", h)
+    return f"{d} 하따 {len(add)}개"
 
 
 _CSL: dict = {"t": 0.0, "v": None}
