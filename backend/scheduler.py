@@ -494,6 +494,18 @@ def start_scheduler() -> BackgroundScheduler:
     scheduler.add_job(_wide_job, 'cron', day_of_week='mon-fri', hour=18, minute=20, id='wide_switch', replace_existing=True, max_instances=1)
     # 16:25 (안 되면 18:15) 200일선 위 종목 비율 35% 아래 첫날 → 바닥 모으기 켜짐·2·3차·정리 알림 (2026-10-15 "알아서 켜 줘")
     scheduler.add_job(_bottom_mode_job, 'cron', day_of_week='mon-fri', hour=16, minute=25, id='bottom_mode', replace_existing=True, max_instances=1)
+
+    def _bottom_live_job() -> None:
+        from backend.services.bottom_mode import live_alert  # noqa: PLC0415
+        db = SessionLocal()
+        try:
+            logger.info("바닥 모으기 장중 판정: %s", live_alert(db))
+        except Exception as exc:  # noqa: BLE001
+            logger.error("바닥 모으기 장중 판정 실패: %s", exc)
+        finally:
+            db.close()
+    # 15:15 장중 판정 예고 — 켜질 날이면 종가 직전에 살 수 있게 (2026-10-15 "장 끝나고 켜 봤자 의미가 있나")
+    scheduler.add_job(_bottom_live_job, 'cron', day_of_week='mon-fri', hour=15, minute=15, id='bottom_live', replace_existing=True, max_instances=1)
     scheduler.add_job(_bottom_mode_job, 'cron', day_of_week='mon-fri', hour=18, minute=15, id='bottom_mode2', replace_existing=True, max_instances=1)
     # 16:05·18:05 코스피·코스닥 투자자별 순매수 (KIS, 최근 300거래일 덮어쓰기) — 시장 카드 '수급' (2026-10-11)
     scheduler.add_job(_market_flows_job, 'cron', day_of_week='mon-fri', hour='16,18', minute=5, id='market_flows', replace_existing=True, max_instances=1)

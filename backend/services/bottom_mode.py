@@ -36,7 +36,18 @@ def _nth_after(d: date, n: int) -> date:
     return d
 
 
+_SER: dict = {"key": None, "v": None}
+
+
 def _series(db: Session):
+    """DB 날짜가 바뀔 때만 다시 읽음 (장중 실시간 판정이 2분마다 부름 · 10/15)."""
+    latest = db.execute(text("select max(trading_date) from spot_daily_prices")).scalar()
+    if _SER["key"] != latest:
+        _SER.update(key=latest, v=_series_load(db))
+    return _SER["v"]
+
+
+def _series_load(db: Session):
     """(날짜 목록, 200일선 위 비율 %, 같은 무게 지수, 종가 표, 거래대금 20일 평균 표) — 최근 ~320거래일."""
     import numpy as np  # noqa: PLC0415
     import pandas as pd  # noqa: PLC0415
@@ -168,9 +179,62 @@ def _trading_count(a: str, b: str) -> int:
     return k
 
 
+_LIVE: dict = {"t": 0.0, "v": None}
+
+
+def _live_series(db: Session):
+    """장중(평일 9:00~15:30, DB에 오늘 일봉 들어오기 전): 실시간 가격을 오늘 줄로 붙인 (b, idx, C, tv20, 시각). 아니면 None.
+    2026-10-15 사용자 "하따 모드는 지금 켜서 데이터 확인하는 게 낫지 않나" — 장 마감 뒤에만 판정하던 것을 장중에도."""
+    import numpy as np  # noqa: PLC0415
+    import pandas as pd  # noqa: PLC0415
+    from datetime import datetime  # noqa: PLC0415
+    from zoneinfo import ZoneInfo  # noqa: PLC0415
+    from backend.utils.dates import is_trading_day  # noqa: PLC0415
+    nw = datetime.now(ZoneInfo("Asia/Seoul"))
+    today = nw.date()
+    b, idx, C, tv20 = _series(db)
+    if not (is_trading_day(today) and (9, 0) <= (nw.hour, nw.minute) <= (15, 40) and b.index[-1] < today):
+        return None
+    from backend.services.naver_live import snapshot  # noqa: PLC0415
+    lv = snapshot(list(C.columns), max_age=60)
+    if len(lv) < len(C.columns) * 0.5:
+        return None
+    row = pd.Series({c: x["c"] for c, x in lv.items()}, dtype=float).reindex(C.columns)
+    C2 = pd.concat([C, row.to_frame(today).T])
+    t2 = pd.concat([tv20, tv20.iloc[[-1]].set_axis([today])])          # 유동성은 어제까지 20일 평균
+    liq = t2.iloc[-1] >= 3e9
+    s200 = C2.iloc[-200:].mean().where(C2.iloc[-200:].count() >= 180)
+    ok = liq & s200.notna() & row.notna()
+    bt = float(((row > s200) & ok).sum() / max(int(ok.sum()), 1) * 100)
+    ch = (row / C.iloc[-1] - 1).where(liq & row.notna()).clip(-.3, .3).mean()
+    b2 = pd.concat([b, pd.Series([bt], index=[today])])
+    i2 = pd.concat([idx, pd.Series([float(idx.iloc[-1]) * (1 + (0 if ch != ch else float(ch)))], index=[today])])
+    return b2, i2, C2, t2, nw.strftime("%H:%M")
+
+
 def now(db: Session, demo: str | None = None) -> dict:
-    """오늘 탭 '바닥 모으기' 화면용 (공개 — 계좌 정보 없음). demo='YYYY-MM-DD' = 그날까지 다시 돌려 본 상태(화면 시험용, 저장 안 함)."""
+    """오늘 탭 '바닥 모으기' 화면용 (공개 — 계좌 정보 없음). demo='YYYY-MM-DD' = 그날까지 다시 돌려 본 상태(화면 시험용, 저장 안 함).
+    장중이면 실시간 가격으로 오늘 판정을 미리 (live · 저장 안 함, 확정은 장 마감 뒤 check)."""
+    import copy  # noqa: PLC0415
+    import time  # noqa: PLC0415
     from backend.services.stock_signals import _data_latest  # noqa: PLC0415
+    if not demo:
+        if _LIVE["v"] is not None and time.time() - _LIVE["t"] < 120:
+            return _LIVE["v"]
+        try:
+            ls = _live_series(db)
+        except Exception as exc:  # noqa: BLE001
+            logger.warning("바닥 모으기 장중 판정 실패: %s", exc)
+            ls = None
+        if ls:
+            b, idx, C, tv20, at = ls
+            st = copy.deepcopy(_get(db))
+            if st.get("last") != str(b.index[-1]):
+                _step(db, st, b, idx, C, tv20)
+            v = _view(st, b, idx, C, None)
+            v.update(live=True, at=at)
+            _LIVE.update(t=time.time(), v=v)
+            return v
     latest = str(_data_latest(db))
     key = (latest, demo)
     if _NOW["key"] == key:
@@ -185,6 +249,12 @@ def now(db: Session, demo: str | None = None) -> dict:
         b, idx = b[:end], idx[:end]
     else:
         st = _get(db)
+    v = _view(st, b, idx, C, demo)
+    _NOW.update(key=key, v=v)
+    return v
+
+
+def _view(st: dict, b, idx, C, demo) -> dict:
     cyc = st["cycle"]
     if cyc and str(b.index[-1]) > cyc["exit"]:
         cyc = None
@@ -205,8 +275,28 @@ def now(db: Session, demo: str | None = None) -> dict:
                  next3={"done": 3 in done, "low": round(cyc["low_b"], 1), "now": round(bn, 1), "need": round(cyc["low_b"] + 5, 1)})
     elif st["history"]:
         v["last"] = st["history"][-1]
-    _NOW.update(key=key, v=v)
     return v
+
+
+def live_alert(db: Session) -> str:
+    """15:15 — 장중 판정으로 오늘 켜짐·2차·3차가 나오면 '종가에 사기' 예고 (확정은 장 마감 뒤)."""
+    from backend.services.telegram import _get as g, _put as p, owner_chats, send  # noqa: PLC0415
+    v = now(db)
+    if not v.get("live") or not v.get("active"):
+        return f"장중 판정 없음 · 폭 {v.get('b200')}%"
+    today = v["date"]
+    fresh = [t for t in v.get("tranches", []) if t["date"] == today]
+    s = g(db, KEY + "_live", {}) or {}
+    if not fresh or s.get("sent") == today:
+        return "보낼 것 없음"
+    for t in fresh:
+        msg = (f"🟣 <b>장중 판정 {v['at']} — 이대로 마감하면 바닥 모으기 {t['n']}차</b>\n" + _tranche_text(t, {"exit": v["exit"]})
+               .replace("오늘 장 후(넥스트레이드 ~20:00)나 내일 아침에 사시면 됩니다", "15:20~15:30 종가 근처에 사시면 검증과 같습니다 (확정은 장 마감 뒤 다시 알림)"))
+        for c in owner_chats(db):
+            send(db, msg, c, html=True)
+    s["sent"] = today
+    p(db, KEY + "_live", s)
+    return f"예고 {len(fresh)}건"
 
 
 def lot_exit(db: Session, code: str, buy: date) -> str | None:

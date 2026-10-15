@@ -342,6 +342,48 @@ def _check_refused(s: dict, today: date) -> list[str]:
     return out
 
 
+def _gap_resell(db: Session, s: dict, today: date) -> list[str]:
+    """갭 하락으로 손절 감시는 발동했는데 지정가(손절가 −1%)가 지금가보다 위라 안 팔리고 걸려만 있는 것 → 취소하고 시장가 매도.
+    2026-10-15 사용자 "장초 갭락으로 매도 주문 실행 안 되면 니가 체크해서 다시 팔아라" (그날 아침 삼화콘덴서·삼성전기·롯데렌탈·주성·대덕을 손으로 처리).
+    정규장 09:00~15:19만 (15:20부터는 종가 단일가). 일부 체결이면 남은 수량만."""
+    from backend.services import meritz as M  # noqa: PLC0415
+    from backend.services.naver_live import snapshot  # noqa: PLC0415
+    hm = _now().hour * 100 + _now().minute
+    if not (900 <= hm < 1520):
+        return []
+    day = s["orders"].get(str(today), [])
+    open_ = [o for o in day if o["ok"] and not o.get("done") and not o.get("market")]
+    if not open_:
+        return []
+    out = []
+    try:
+        hist = {str(x.get("oder_no")): x for x in M.orders_today(today.strftime("%Y%m%d"), "1")}
+        lv = snapshot(sorted({o["code"] for o in open_}), max_age=20)
+    except Exception as exc:  # noqa: BLE001
+        logger.warning("갭 하락 확인 실패: %s", type(exc).__name__)
+        return []
+    for o in open_:
+        h = hist.get(str(o.get("order_no"))) or {}
+        rem = int(float(h.get("ncnt_qty") or 0))
+        p = (lv.get(o["code"]) or {}).get("c")
+        L = s["lots"].get(o["lot"])
+        if not (L and rem > 0 and p and p < o["limit"]):
+            continue
+        c = M.cancel(o["code"], o["order_no"], rem, o["trigger"], o["limit"])
+        if not c["ok"]:
+            out.append(f"⚠ {o['name']} 갭 하락 — 손절 주문 취소 실패 ({c['msg']}) · 직접 확인해 주세요"); continue
+        o["done"] = "취소(갭 하락)"
+        r = M.market_sell(o["code"], rem, L["credit"], L.get("loan_date", ""))
+        day.append({"lot": o["lot"], "code": o["code"], "name": o["name"], "qty": rem, "trigger": 0, "limit": 0, "order_no": r["order_no"], "ok": r["ok"],
+                    "at": _now().strftime("%H:%M"), "msg": r["msg"], "warn": r["warn"], "market": "갭 하락 손절 시장가"})
+        if r["ok"]:
+            L["sell_pending"] = str(today)
+            out.append(f"▼ {o['name']} {rem}주 갭 하락 — 손절가 {o['trigger']:,} 아래({p:,.0f})라 안 팔려 시장가로 다시 매도")
+        else:
+            out.append(f"⚠ {o['name']} 갭 하락 시장가 매도 실패 — {r['warn'] or r['msg']} (직접 팔아 주세요)")
+    return out
+
+
 _RUN_LOCK = __import__("threading").Lock()
 
 
@@ -377,6 +419,8 @@ def _run(db: Session, phase: str) -> str:
     out = list(msgs)
     if str(today) >= s["start"] and phase in ("retry", "intraday", "close") and s["orders"].get(str(today)):
         out += _check_refused(s, today)
+    if str(today) >= s["start"] and s["on"] and phase in ("retry", "intraday"):
+        out += _gap_resell(db, s, today)
     if str(today) >= s["start"] and s["on"] and phase in ("morning", "retry", "intraday"):
         day = s["orders"].setdefault(str(today), [])
         for lot, L in s["lots"].items():
