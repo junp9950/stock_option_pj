@@ -232,8 +232,26 @@ def report(db: Session, force: bool = False) -> str | None:
 
 
 def _positions(db: Session, owner: str = "junp") -> list[dict]:
-    """매매 일지로 지금 보유 수량·평단(이동평균) — 판 만큼 수량만 줄인다."""
+    """지금 보유 수량·평단 — 사장님(junp)은 메리츠 실제 잔고 먼저 (2026-10-15: 매매 일지에 그날 거래가 안 들어가서
+    15:40 점검에 이미 판 종목이 '손절'로 뜸). 메리츠가 안 되면 매매 일지(이동평균, 판 만큼 수량만 줄임)."""
     from sqlalchemy import text  # noqa: PLC0415
+    if owner == "junp":
+        try:
+            from backend.services import meritz as M  # noqa: PLC0415
+            if M.enabled():
+                agg: dict[str, dict] = {}
+                for h in M.holdings():
+                    q = int(h.get("qty") or 0)
+                    if q <= 0:
+                        continue
+                    p = agg.setdefault(h["code"], {"code": h["code"], "name": h.get("name") or h["code"], "qty": 0, "avg": 0.0})
+                    tot = p["qty"] + q
+                    p["avg"] = (p["avg"] * p["qty"] + float(h.get("avg") or 0) * q) / tot
+                    p["qty"] = tot
+                if agg:
+                    return list(agg.values())
+        except Exception as exc:  # noqa: BLE001
+            logger.warning("메리츠 잔고 실패 → 매매 일지로: %s", type(exc).__name__)
     pos: dict[str, dict] = {}
     for code, name, side, qty, price in db.execute(text(
             "select code, name, side, qty, price from trade_executions where owner = :o order by trade_date, seq, id"), {"o": owner}).all():
