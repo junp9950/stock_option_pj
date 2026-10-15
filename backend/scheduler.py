@@ -490,6 +490,18 @@ def start_scheduler() -> BackgroundScheduler:
             logger.error("넓은 돌파 스위치 실패: %s", exc)
         finally:
             db.close()
+    def _box_job() -> None:
+        from backend.services.box_signal import daily_job  # noqa: PLC0415
+        db = SessionLocal()
+        try:
+            logger.info("박스 돌파 기록: %s", daily_job(db))
+        except Exception as exc:  # noqa: BLE001
+            logger.error("박스 돌파 기록 실패: %s", exc)
+        finally:
+            db.close()
+    # 16:30·18:25 박스 돌파 확정 목록 기록 (차트 표시·손절 주문용, 2026-10-15)
+    scheduler.add_job(_box_job, 'cron', day_of_week='mon-fri', hour=16, minute=30, id='box_signal', replace_existing=True, max_instances=1)
+    scheduler.add_job(_box_job, 'cron', day_of_week='mon-fri', hour=18, minute=25, id='box_signal2', replace_existing=True, max_instances=1)
     # 18:20 넓은 돌파(이번 장 한정) 자동 스위치 — 최근 120거래일 끝난 거래 평균 R 부호가 바뀌면 사장님께 알림 (2026-10-15 "AI장 끝나면 니가 꺼라")
     scheduler.add_job(_wide_job, 'cron', day_of_week='mon-fri', hour=18, minute=20, id='wide_switch', replace_existing=True, max_instances=1)
     # 16:25 (안 되면 18:15) 200일선 위 종목 비율 35% 아래 첫날 → 바닥 모으기 켜짐·2·3차·정리 알림 (2026-10-15 "알아서 켜 줘")

@@ -105,6 +105,12 @@ def _stop_for(db: Session, code: str, buy: date, today: date) -> tuple[int | Non
 
 def _stop_lot(db: Session, L: dict, today: date) -> tuple[int | None, str, bool]:
     """바닥 모으기로 산 것은 산 값(평균) −25% — 관리 탭 손절선이 있으면 그게 먼저. 나머지는 _stop_for."""
+    if L.get("mode") == "box" and L.get("box_stop"):      # 박스 돌파 = 박스 하단 −1% (관리 탭 손절선이 있으면 그것)
+        from backend.services.telegram import _get  # noqa: PLC0415
+        for x in _get(db, "user_watchlist", []) or []:
+            if x.get("code") == L["code"] and x.get("kind") == "hold" and (x.get("level") or 0) > 0:
+                return int(x["level"]), "관리 탭 손절선", True
+        return int(L["box_stop"]), "박스 하단 −1%", True
     if L.get("mode") == "bottom":
         from backend.services.bottom_mode import STOP_PCT  # noqa: PLC0415
         from backend.services.telegram import _get  # noqa: PLC0415
@@ -122,6 +128,12 @@ def _mode_for(db: Session, code: str, buy: date) -> str:
         from backend.services.bottom_mode import lot_exit  # noqa: PLC0415
         if lot_exit(db, code, buy):
             return "bottom"
+    except Exception:  # noqa: BLE001
+        pass
+    try:
+        from backend.services.box_signal import lot_info  # noqa: PLC0415
+        if lot_info(db, code, buy):
+            return "box"
     except Exception:  # noqa: BLE001
         pass
     try:
@@ -241,6 +253,10 @@ def sync(db: Session, s: dict, today: date) -> list[str]:
             if mode == "bottom":
                 from backend.services.bottom_mode import lot_exit  # noqa: PLC0415
                 L["exit"] = lot_exit(db, h["code"], buy)
+            elif mode == "box":
+                from backend.services.box_signal import lot_info  # noqa: PLC0415
+                bi = lot_info(db, h["code"], buy) or {}
+                L["exit"], L["box_stop"] = bi.get("exit"), bi.get("stop")
             stop, src, final = _stop_lot(db, L, today)
             L.update(stop=stop, src=src, final=final)
             s["lots"][lot] = L
@@ -473,6 +489,8 @@ def _run(db: Session, phase: str) -> str:
                 out.append(_market_exit(db, s, lot, L, today, "반등 모드 5거래일째 종가"))
             elif L.get("mode") == "bottom" and not L.get("sell_pending") and L.get("exit") and L["exit"] <= str(today):
                 out.append(_market_exit(db, s, lot, L, today, "바닥 모으기 20거래일째 종가"))
+            elif L.get("mode") == "box" and not L.get("sell_pending") and L.get("exit") and L["exit"] <= str(today):
+                out.append(_market_exit(db, s, lot, L, today, "박스 돌파 20거래일째 종가"))
     if str(today) >= s["start"] and phase == "close":
         for lot, L in s["lots"].items():
             if L.get("legacy") or L.get("mode") != "trend" or L.get("sell_pending"):
@@ -509,7 +527,7 @@ def _run(db: Session, phase: str) -> str:
     if out and phase != "baseline":
         head = {"morning": "🛑 오늘 손절 주문 (메리츠 스톱지정가)", "retry": "🛑 손절 주문 다시 걸기", "intraday": "🛑 손절 주문",
                 "close": "🛑 장 마감 · 내일 아침 손절 주문 걸 것", "late": "🛑 시간외 · 내일 아침 손절 주문 걸 것",
-                "preclose": "▼ 정해진 날 종가 매도 (반등 모드·바닥 모으기)"}[phase]
+                "preclose": "▼ 정해진 날 종가 매도 (반등 모드·바닥 모으기·박스 돌파)"}[phase]
         _tell(db, head + "\n" + "\n".join(out) + ("" if s["on"] else "\n(지금 꺼져 있음 — /스톱켜기)"))
     return " / ".join(out) or "변화 없음"
 
@@ -522,7 +540,8 @@ def status(db: Session) -> str:
     if s.get("no_stop_until") and today <= s["no_stop_until"]:
         lines.append(f"⏸ 하따 구간: {s['no_stop_until'][5:]}까지 손절 주문·21일선 매도 안 함 (반등 종목 정해진 날 매도는 그대로)")
     for L in s["lots"].values():
-        tail = "" if L.get("legacy") else (f" · 바닥 모으기 · {str(L.get('exit'))[5:]} 종가 매도" if L.get("mode") == "bottom"
+        tail = "" if L.get("legacy") else (f" · 박스 돌파 · {str(L.get('exit'))[5:]} 종가 매도" if L.get("mode") == "box"
+                                            else f" · 바닥 모으기 · {str(L.get('exit'))[5:]} 종가 매도" if L.get("mode") == "bottom"
                                             else " · 5거래일째 종가 매도 " + str(_nth_trading_day_after(date.fromisoformat(L["buy"]), 5))[5:] if L.get("mode") == "crash"
                                             else " · 21일선 이탈 매도 " + ("대기 중" if L.get("armed") else "(21일선 위 마감 뒤부터)"))
         lines.append((f"· {L['name']} {L['qty']}주 · 손절 {L['stop']:,} ({L['src']})" if L.get("stop") else f"· {L['name']} {L['qty']}주 · 손절가 없음")

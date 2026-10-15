@@ -256,6 +256,24 @@ def signals(db: Session, code: str, days: int = 260, owner: str | None = None, u
                            & (RS >= 70) & (e20 >= e60 * 0.98) & (rk_ > 0) & (rk_ <= 0.15) & bull & wsw).fillna(False) & ~buy_ok
                 buy_ok = buy_ok | wide_ok
             pos_ = {d: k for k, d in enumerate(df.index)}
+            # 박스 돌파 매수 표시 (2026-10-15) — 그날 '돈 들어온 섹터 박스 돌파' 목록에 있던 날 · 상승·횡보장 · 손절 박스 하단 −1%(25%↓) · 20일 보유
+            if not us:
+                try:
+                    from backend.services.box_signal import HOLD as _BH, hist_days as _bhd  # noqa: PLC0415
+                    _bd = _bhd(db, code)
+                    _cmin = C.shift(1).rolling(20).min()
+                    for d in df.index:
+                        if d < start or str(d) not in _bd or not bool(bull.get(d, False)):
+                            continue
+                        _st = float(tick_floor(float(_cmin[d]) * 0.99)) if _cmin[d] == _cmin[d] else None
+                        if not _st or _st >= float(C[d]) or 1 - _st / float(C[d]) > 0.25:
+                            continue
+                        _ex = df.index[min(pos_[d] + _BH, len(df.index) - 1)]
+                        items.append({"date": str(d), "kind": "box", "pos": "below", "price": float(L[d]),
+                                      "label": f"박스 돌파 매수 (돈 들어온 섹터 · {_BH}거래일 보유) · 손절 박스 하단 {fp(_st)} (-{(1 - _st / float(C[d])) * 100:.1f}%)"
+                                               + (f" · {str(_ex)[5:]} 종가 매도" if pos_[d] + _BH < len(df.index) else "")})
+                except Exception as exc:  # noqa: BLE001
+                    __import__("logging").getLogger(__name__).warning("박스 돌파 표시 실패 %s: %s", code, exc)
             prev_on, run_best = False, None
             # 들고 있는 동안 또 뜬 매수 (2026-10-09 팬오션 "비쌀 때 사서 싸게 파는 정석" → "좋은 자리에서 피라미딩할 수도") — 12년(v12s/v12t.py):
             # 첫 매수 +1R↑일 때 같은 크기 더 사고 손절을 새 신호 저가 -1%로 올리면 묶음당 R +1.91/+2.61/+3.61 (그냥 들고 감 +1.98/+2.54/+3.04)
@@ -493,6 +511,23 @@ def _workspace_list(db: Session) -> dict:
         if _bull_days(db).get(_data_latest(db), False):        # 돌파 매수 — 상승·횡보장만, 지금 규칙 다음 칸 (2026-10-13)
             for c_ in sorted(brk, key=lambda c_: -(brk[c_].get("rs") or 0)):
                 add(c_, f"▲ 돌파 매수 ({brk[c_]['kind']})")
+        # 박스 돌파 매수 (2026-10-15 사용자 "매수 신호로 넣어라") — 돈 들어온 섹터 박스 돌파 · 손절 박스 하단 −1% · 20거래일째 종가 매도. 돌파 매수 다음 칸
+        try:
+            from backend.services.box_signal import KIND as _BK, today as _box_today  # noqa: PLC0415
+            _bx = _box_today(db)
+            _rsl = {}
+            try:
+                _rh = rs_hist(db); _rsl = {c: float(a_[-1]) for c, a_ in (_rh.get("rs") or {}).items() if len(a_) and a_[-1] == a_[-1]}
+            except Exception:  # noqa: BLE001
+                pass
+            brk = dict(brk)
+            for x in _bx.get("items", []):
+                if x["code"] in brk or (scores.get(x["code"]) or {}).get("buy"):
+                    continue
+                brk[x["code"]] = {"score": 0, "flags": [], "stop": x["stop"], "risk": x["risk"], "rs": _rsl.get(x["code"]), "kind": _BK, "box": True, "buy": False}
+                add(x["code"], f"▲ 돌파 매수 ({_BK})")
+        except Exception as exc:  # noqa: BLE001
+            __import__("logging").getLogger(__name__).warning("박스 돌파 목록 실패: %s", exc)
         for c_, v_ in sorted(scores.items(), key=lambda kv: (-kv[1]["score"], kv[1]["risk"])):
             if v_.get("hot"):
                 add(c_, "과열 매수 · 수량 절반 (이번 장)")
@@ -1025,6 +1060,14 @@ def live_marks(db: Session, code: str) -> list[dict]:
             low = (v or b or {}).get("stop")
         else:
             low = None
+        if _bull_days(db).get(_data_latest(db), False):
+            try:
+                from backend.services.box_signal import today as _bt  # noqa: PLC0415
+                x = next((x for x in _bt(db).get("items", []) if x["code"] == code), None)
+                if x:
+                    why.append(f"박스 돌파 · 손절 {int(x['stop']):,} · {x['exit'][5:]} 종가 매도"); low = low or x["stop"]
+            except Exception:  # noqa: BLE001
+                pass
         cr = crash_now(db)
         if cr.get("active") and cr.get("tested") and cr.get("live"):
             x = next((x for x in cr.get("items", []) if x["code"] == code), None)

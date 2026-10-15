@@ -51,6 +51,21 @@ def _brk_lines(sc: dict, names: dict, room: int) -> list[str]:
     return out
 
 
+def _box_lines(db: Session) -> list[str]:
+    """박스 돌파 매수 (2026-10-15) — 손절 박스 하단 −1% · 20거래일째 종가 매도 · 손절폭이 넓어 수량은 작게."""
+    try:
+        from backend.services.box_signal import today  # noqa: PLC0415
+        v = today(db)
+    except Exception:  # noqa: BLE001
+        return []
+    if not v.get("items"):
+        return []
+    out = [f"📦 <b>박스 돌파 매수</b> (돈 들어온 섹터 · 손절 박스 하단 −1% · {v['items'][0]['exit'][5:]} 종가 매도)"]
+    for x in v["items"][:6]:
+        out.append(f"· <b>{x['name']}</b> {x['close']:,.0f} · 스탑로스 {x['stop']:,.0f} (-{x['risk'] * 100:.1f}%)" + _tag(x["code"]))
+    return out
+
+
 def text_now(db: Session, k: int = 8) -> str | None:
     from backend.services.stock_signals import close_scores_now, market_breadth  # noqa: PLC0415
     from backend.services.telegram import market_status  # noqa: PLC0415
@@ -109,7 +124,7 @@ def text_now(db: Session, k: int = 8) -> str | None:
     except Exception:  # noqa: BLE001
         pass
     if not rows:
-        bl = _brk_lines(sc, names, 10)
+        bl = _brk_lines(sc, names, 10) + _box_lines(db)
         out.append("매수 신호 (손절폭 8%↓) 종목 없음" + (f" (손절폭 넓어서 뺀 것 {len(wide)}개)" if wide else "") + ("" if bl else " → 쉬기"))
         return "\n".join(out + bl + lead_lines)
     good = [r for r in rows if r[1]["risk"] <= 0.03 and not r[1].get("hot") and not r[1].get("semi")]
@@ -127,6 +142,7 @@ def text_now(db: Session, k: int = 8) -> str | None:
         out.append(f"{'✅' if v['risk'] <= 0.03 and not v.get('hot') and not v.get('semi') else '·'} <b>{names.get(c, c)}</b> RS {v.get('rs') or 0:.0f} · {'이평선 돌파 · ' if v.get('ema') else ''}{'과열 매수(이번 장) · 수량 절반 · ' if v.get('hot') else ''}{'반도체·AI 특별 · 수량 절반 · ' if v.get('semi') else ''}{v['score']}/7 · 스탑로스 {v['stop']:,.0f} (-{v['risk'] * 100:.1f}%)"
                    + (f" · {srk[c][1]} {srk[c][0]}위" if srk.get(c, (99,))[0] <= 8 else " · 섹터 밖") + _sz(c, v) + _tag(c))
     out += _brk_lines(sc, names, max(0, 10 - len(rows)))
+    out += _box_lines(db)
     out += lead_lines
     out.append("파는 법: 사면 바로 스탑로스 예약 (정규장만) · 21일선 아래 종가면 다음 날 아침 정리")
     out.append("<i>수량 = 메리츠 순자산(주식−대출+현금) × 0.5% ÷ (가격 × 손절폭) — 손절 맞으면 계좌 0.5% · 신용이어도 같음</i>")
