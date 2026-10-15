@@ -309,7 +309,7 @@ function openReply(thread,to){
   const old=thread.querySelector('.reply-form textarea');
   if(old){if(to&&!old.value.startsWith('@'))old.value=`@${to} `+old.value;old.focus();return}
   const f=document.createElement('div');f.className='reply-form';
-  f.innerHTML=`<div class="comment-form"><div class="cf-top"><span class="who" data-f="r-author"></span><span class="cf-hint">Enter 등록 · Shift+Enter 줄바꿈</span></div>
+  f.innerHTML=`<div class="comment-form"><div class="cf-top"><span class="who" data-f="r-author"></span><span class="cf-hint">Enter 줄바꿈 · 등록 버튼으로 올리기</span></div>
       <textarea maxlength="1000" placeholder="답글 입력 (사진은 Ctrl+V 또는 📷)" data-f="r-content"></textarea>
       <div class="cf-btns"><button class="cam" data-act="r-photo" title="답글 사진 추가">📷</button><button class="ghost" data-act="r-cancel">취소</button><button data-act="add-reply">등록</button></div></div>
     <div class="previews small" data-f="r-previews"></div>`;
@@ -335,7 +335,7 @@ box.innerHTML=`<div class="item" data-id="${x.id}">
   <div class="comments">
     ${commentsHtml(x.comments||[])}
     <div class="comment-form">
-      <div class="cf-top"><span class="who" data-f="c-author"></span><span class="cf-hint">Enter 등록 · Shift+Enter 줄바꿈</span></div>
+      <div class="cf-top"><span class="who" data-f="c-author"></span><span class="cf-hint">Enter 줄바꿈 · 등록 버튼으로 올리기</span></div>
       <textarea maxlength="1000" placeholder="댓글 입력 (사진은 Ctrl+V 또는 📷)" data-f="c-content"></textarea>
       <div class="cf-btns"><button class="cam" data-act="c-photo" title="댓글 사진 추가">📷</button><button data-act="add-comment">등록</button></div>
     </div>
@@ -456,11 +456,7 @@ document.getElementById('list').addEventListener('click',async e=>{
     else openEditor(el,{text:c.content,images:c.images,max:MAX_COMMENT,onSave:p=>call('PATCH',`${API}/comments/${c.id}`,p)});
   }
 });
-document.getElementById('list').addEventListener('keydown',e=>{
-  if(e.key!=='Enter'||e.shiftKey||e.isComposing)return;
-  if(e.target.matches('[data-f="c-content"]')){e.preventDefault();addComment(e.target.closest('.item'))}
-  if(e.target.matches('[data-f="r-content"]')){e.preventDefault();addReply(e.target.closest('.reply-form'))}
-});
+// Enter = 줄바꿈 · 등록은 '등록' 버튼으로만 (2026-10-15 사용자 "엔터 치면 댓글 안 달리게, 등록 버튼으로만")
 whoToggle(document.querySelector('[data-who="post"]'));
 whoToggle(document.querySelector('[data-who="me"]'));   // 목록 위 '나는' — 즐겨찾기·글쓰기·댓글 이름이 모두 이걸 따라감
 route();
