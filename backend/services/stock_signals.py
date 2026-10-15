@@ -1413,6 +1413,14 @@ def _crash_calc(db: Session, latest, live_on: bool, key) -> dict:
             notes_ready = bool(nq)
         except Exception:  # noqa: BLE001
             rk, notes_ready = {}, False
+        try:      # 신용 매수 불가(메리츠)·거래정지·정리매매도 매수 5개에서 뺌 (2026-10-15 사용자 "신용 안 되는 종목은 뺄 수 있나")
+            from backend.services.stock_flags import get as _flags  # noqa: PLC0415
+            for c_, v_ in _flags(cand[:20]).items():
+                bad = [f for f in v_.get("flags", []) if f in ("신용불가", "거래정지", "정리매매")]
+                if bad and c_ not in rk:
+                    rk[c_] = "⚠ " + ("신용X" if bad[0] == "신용불가" else bad[0])
+        except Exception:  # noqa: BLE001
+            pass
         out["skipped"] = [names.get(c, c) + " " + rk[c] for c in cand[:12] if c in rk]
         cand = [c for c in cand if c not in rk] + [c for c in cand if c in rk]
         for k_, c in enumerate(cand[:12]):
