@@ -477,6 +477,8 @@ def _run(db: Session, phase: str) -> str:
         for lot, L in s["lots"].items():
             if L.get("legacy") or L.get("mode") != "trend" or L.get("sell_pending"):
                 continue
+            if s.get("no_stop_until") and str(today) <= s["no_stop_until"]:
+                continue      # 하따 구간엔 21일선 매도도 멈춤 (2026-10-15 사용자)
             c, e = _close_vs_ema21(L["code"], today)
             if c is None:
                 continue
@@ -518,7 +520,7 @@ def status(db: Session) -> str:
     od = [o for o in s["orders"].get(today, []) if o["ok"] and not o.get("done")]
     lines = [f"손절 자동 주문: {'켜짐' if s['on'] else '꺼짐'} · {s['start']}부터 새로 산 것만 · 지정가 = 손절가 −1%"]
     if s.get("no_stop_until") and today <= s["no_stop_until"]:
-        lines.append(f"⏸ 하따 구간: {s['no_stop_until'][5:]}까지 손절 주문 안 걺 (정해진 날 매도·21일선 매도는 그대로)")
+        lines.append(f"⏸ 하따 구간: {s['no_stop_until'][5:]}까지 손절 주문·21일선 매도 안 함 (반등 종목 정해진 날 매도는 그대로)")
     for L in s["lots"].values():
         tail = "" if L.get("legacy") else (f" · 바닥 모으기 · {str(L.get('exit'))[5:]} 종가 매도" if L.get("mode") == "bottom"
                                             else " · 5거래일째 종가 매도 " + str(_nth_trading_day_after(date.fromisoformat(L["buy"]), 5))[5:] if L.get("mode") == "crash"
