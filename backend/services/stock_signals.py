@@ -1315,8 +1315,9 @@ def _track_rows(db: Session, px: dict) -> list[dict]:
 # 그날 종가에 전날 RS 90↑ · 거래 30억↑ · 그날 시장보다 더 빠진 종목 RS 순 5개 → 손절 = 그날 저가 -1% 예약 · 5거래일째 종가 매도.
 #   첫날 56번: 종목 평균 +1.5% (2014~22 +1.5 / 2023~ +1.4) · 최악 10% -6.7% (손절 없으면 +2.0%지만 최악 10% -17%)
 #   이틀째(첫날 다음 날 또 -2%↓) 10번: +8.1% — 단 2023~ 4번이 대부분, 표본 작음.
-#   사흘째 이상(10일 안 세 번째 급락 날)은 검증 밖 → 참고만.
-CRASH_STATS = {"첫날": "12년 56번 · 종목 평균 +1.5% · 최악 10% −6.7%", "이틀째": "12년 10번 · 종목 평균 +8.1% (최근 4번이 대부분 · 표본 작음)"}
+#   이어지는 급락(10일 안 두 번째 이상 · 그날 −3%↓)도 2026-10-15부터 매수 목록 (crash_cont.py 12년 52번 +2.4%, 첫날과 비슷).
+CRASH_STATS = {"첫날": "12년 56번 · 종목 평균 +1.5% · 최악 10% −6.7%", "이틀째": "12년 10번 · 종목 평균 +8.1% (최근 4번이 대부분 · 표본 작음)",
+               "이어지는 급락": "12년 52번 · 종목 평균 +2.4% · 중앙 −1.5% · 나쁜 10% −3.5% (첫날과 비슷 · 2026-10-15 추가)"}
 _CRASH: dict = {"t": 0, "v": None, "key": None, "busy": False}
 import threading as _threading  # noqa: E402
 _CRASH_LOCK = _threading.Lock()
@@ -1395,7 +1396,7 @@ def _crash_calc(db: Session, latest, live_on: bool, key) -> dict:
         kind = "이어지는 급락"          # 검증 밖 — 오늘 또 -3%↓ 빠진 날만 (10/13 오후 시장이 -1.7%로 회복했는데도 여기로 와서 카드가 '검증 밖'으로 남던 것)
     out = {"active": kind is not None, "kind": kind, "date": asof, "at": at, "live": bool(at), "market": round(m_today * 100, 2),
            "prev_market": round(m_prev * 100, 2), "two": round(float(two.iloc[-1]) * 100, 2), "stats": CRASH_STATS.get(kind or "", ""),
-           "tested": kind in ("첫날", "이틀째"), "items": [], "ref": []}
+           "tested": kind in ("첫날", "이틀째", "이어지는 급락"), "items": [], "ref": []}      # 이어지는 급락도 (2026-10-15 사용자 승인 · crash_cont.py 12년 52번 +2.4%)
     notes_ready = True
     if kind:
         rs_raw = 0.4 * (C / C.shift(63) - 1) + 0.2 * (C / C.shift(126) - 1) + 0.2 * (C / C.shift(189) - 1) + 0.2 * (C / C.shift(252) - 1)
