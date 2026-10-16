@@ -163,7 +163,9 @@ def message(db: Session, day: date | None = None, copy: bool = False) -> str | N
     if not iv:
         out.append(f"기관 {sg(a['inst'])} · 개인 {sg(a['indiv'])}")
     if a["doi"] is not None:
-        out.append(f"미결제 {sg(a['doi'])}계약" + (f" (남은 {a['oi']:,.0f})" if a["oi"] else ""))
+        # 남은 미결제 수 자체는 만기 주기(만기 전 쌓이고 만기 날 줄어듦)라 의미 적음 → 증감 % 로 (2026-10-16)
+        prev = (a["oi"] - a["doi"]) if a["oi"] else None
+        out.append(f"미결제 {sg(a['doi'])}계약" + (f" ({a['doi'] / prev * 100:+.1f}%)" if prev else ""))
     if not copy:
         out.append(f"선물만 보면 {NAMES[a['kind']]} ({a['meaning']})" + (f" · {a['streak']}일 연속" if a["streak"] >= 2 and a["kind"] != "none" else ""))
     if a["basis"] is not None:
