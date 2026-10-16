@@ -126,8 +126,9 @@ def _program(d: date) -> dict:
 NAMES = {"new_long": "신규 매수형", "cover": "숏커버형", "new_short": "신규 매도형", "liq": "매수 청산형", "none": "보통"}
 
 
-def message(db: Session, day: date | None = None) -> str | None:
-    """수급 정리 (외국인 현물·선물·프로그램) — 2026-10-16 사용자 "복붙하면 보기 싫다 · 아이콘 빼고 · 이름은 수급 정리":
+def message(db: Session, day: date | None = None, copy: bool = False) -> str | None:
+    """copy=True = 펨코 복붙용 (2026-10-16 사용자 양식): 제목·해석·통계 줄 없이 숫자만.
+    수급 정리 (외국인 현물·선물·프로그램) — 2026-10-16 사용자 "복붙하면 보기 싫다 · 아이콘 빼고 · 이름은 수급 정리":
     아이콘·굵은 글씨·표 없이 한 줄에 하나, 복사해도 깨지지 않게."""
     a = analyze(db, day)
     if not a:
@@ -139,18 +140,19 @@ def message(db: Session, day: date | None = None) -> str | None:
     sp = {r[0]: (float(r[1] or 0), float(r[2] or 0)) for r in rows if r[1] is not None}
     futs = {k: float(v) for k, v in db.execute(text("select d, foreign_eok from futures_daily where d = any(:ds)"), {"ds": list(sp) or [d]}).all() if v is not None}
     pg = _program(d)
-    out = [f"수급 정리 {d.month}/{d.day} 마감 (코스피 · 억 원)", ""]
+    out = [] if copy else [f"수급 정리 {d.month}/{d.day} 마감 (코스피 · 억 원)", ""]
     out.append("[외국인]")
     if d in sp:
         out.append(f"현물 {sg(sp[d][0])} (코스닥 {sg(sp[d][1])})")
     out.append(f"선물 {sg(a['foreign'])}" + (f" (약 {a['contracts']:+,}계약)" if a["contracts"] is not None else ""))
     if d in sp:
         t = sp[d][0] + a["foreign"]
-        out.append(f"현물+선물 {sg(t)} → {'사는 쪽' if t > 0 else '파는 쪽'}")
+        out.append(f"현물+선물 {sg(t)}" + ("" if copy else f" → {'사는 쪽' if t > 0 else '파는 쪽'}"))
     out += ["", "[선물]", f"기관 {sg(a['inst'])} · 개인 {sg(a['indiv'])}"]
     if a["doi"] is not None:
         out.append(f"미결제 {sg(a['doi'])}계약" + (f" (남은 {a['oi']:,.0f})" if a["oi"] else ""))
-    out.append(f"선물만 보면 {NAMES[a['kind']]} ({a['meaning']})" + (f" · {a['streak']}일 연속" if a["streak"] >= 2 and a["kind"] != "none" else ""))
+    if not copy:
+        out.append(f"선물만 보면 {NAMES[a['kind']]} ({a['meaning']})" + (f" · {a['streak']}일 연속" if a["streak"] >= 2 and a["kind"] != "none" else ""))
     if a["basis"] is not None:
         out.append(f"베이시스 {a['basis']:+.2f} (선물 {a['fut']:,.2f} · 현물 {a['spot']:,.2f})")
     if d in pg:
@@ -171,10 +173,10 @@ def message(db: Session, day: date | None = None) -> str | None:
         if all(k in futs for k in l3):
             s3 = sum(sp[k][0] for k in l3); f3 = sum(futs[k] for k in l3)
             out.append(f"3일 합계 현물 {sg(s3)} + 선물 {sg(f3)} = {sg(s3 + f3)}")
-            if (s3 > 0) != (f3 > 0) and abs(s3) > 1000 and abs(f3) > 1000:
+            if (s3 > 0) != (f3 > 0) and abs(s3) > 1000 and abs(f3) > 1000 and not copy:
                 out.append("현물과 선물 방향이 반대 — 선물 매매는 헤지·차익일 수 있어 선물만으로 롱·숏 판단 금지")
     s = a["stat"]
-    if a["kind"] != "none" and s["n"]:
+    if a["kind"] != "none" and s["n"] and not copy:
         out += ["", f"지난 기록 {NAMES[a['kind']]} {s['n']}번: 다음 날 평균 {s['r1']:+.2f}% · 오른 날 {s['up']}% (전체 {s['base']:+.2f}%) · 참고용"]
     return "\n".join(out)
 
@@ -191,4 +193,7 @@ def daily_job(db: Session) -> str:
         from backend.services.telegram import owner_chats, send  # noqa: PLC0415
         for c in owner_chats(db):
             send(db, msg, c)
+            cp = message(db, today, copy=True)      # 펨코 복붙용 하나 더 (2026-10-16 사용자)
+            if cp:
+                send(db, cp, c)
     return "보냄"
