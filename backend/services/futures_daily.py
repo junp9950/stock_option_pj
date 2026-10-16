@@ -140,7 +140,8 @@ def message(db: Session, day: date | None = None, copy: bool = False) -> str | N
     sp = {r[0]: (float(r[1] or 0), float(r[2] or 0)) for r in rows if r[1] is not None}
     futs = {k: float(v) for k, v in db.execute(text("select d, foreign_eok from futures_daily where d = any(:ds)"), {"ds": list(sp) or [d]}).all() if v is not None}
     pg = _program(d)
-    out = [] if copy else [f"수급 총정리 {d.month}/{d.day} 마감 (코스피 · 억 원)", ""]
+    # 펨코용도 제목 붙임 (2026-10-16 사용자 글 제목 그대로)
+    out = [f"수급 정리 {d.month}/{d.day} 마감 (억 원)", ""] if copy else [f"수급 총정리 {d.month}/{d.day} 마감 (코스피 · 억 원)", ""]
     # 개인·기관 현물 (2026-10-16 사용자 "개인, 기관도 넣어 봐 수급 총정리로") — 기관 안: 금융투자·연기금·투신·보험·사모
     iv = db.execute(text("""select prsn, orgn, scrt, mrbn, ivtr, insu, pe_fund, etc_corp from market_investor_flows where trading_date = :d and market = 'KOSPI'"""), {"d": d}).first()
     ivq = db.execute(text("""select prsn, orgn from market_investor_flows where trading_date = :d and market = 'KOSDAQ'"""), {"d": d}).first()
@@ -187,9 +188,70 @@ def message(db: Session, day: date | None = None, copy: bool = False) -> str | N
         if all(k in futs for k in l3):
             s3 = sum(sp[k][0] for k in l3); f3 = sum(futs[k] for k in l3)
             out.append(f"3일 합계 현물 {sg(s3)} + 선물 {sg(f3)} = {sg(s3 + f3)}")
-            if (s3 > 0) != (f3 > 0) and abs(s3) > 1000 and abs(f3) > 1000 and not copy:
-                out.append("현물과 선물 방향이 반대 — 선물 매매는 헤지·차익일 수 있어 선물만으로 롱·숏 판단 금지")
+    if not copy and d in sp and iv:
+        try:
+            out += ["", "[해석]"] + _comment(db, d, sp[d][0], a["foreign"], iv, pg.get(d))
+        except Exception as exc:  # noqa: BLE001
+            logger.warning("수급 해석 실패: %s", exc)
     return "\n".join(out)
+
+
+def _comment(db: Session, d: date, fs: float, ff: float, iv: list, pg: dict | None) -> list[str]:
+    """사장님용 해석 (2026-10-16 사용자 "내 거는 니 해석도 넣어도 된다") — 그날 무슨 일이었나를 숫자로 설명만.
+    14년 검증(tmp_claude/flowlab): 수급은 같은 날 지수와 상관 0.56이지만 5일·20일 방향 예측력은 없음 → 예측 문구 안 씀."""
+    import numpy as np  # noqa: PLC0415
+    sg = lambda v: f"{v:+,.0f}"  # noqa: E731
+    h = db.execute(text("""select m.trading_date, m.frgn / 100.0, f.foreign_eok from market_investor_flows m join futures_daily f on f.d = m.trading_date
+        where m.market = 'KOSPI' and m.trading_date <= :d order by 1 desc limit 61"""), {"d": d}).all()
+    comb = [float(r[1] or 0) + float(r[2] or 0) for r in h]          # 최신이 앞
+    t = fs + ff
+    out = []
+    lvl = ""
+    if len(comb) >= 30:
+        past = np.array(comb[1:]); zz = (t - past.mean()) / past.std()
+        lvl = "크게 팖" if zz < -1 else "팖" if zz < -0.3 else "크게 삼" if zz > 1 else "삼" if zz > 0.3 else "보통"
+    streak = 0
+    for v in comb:
+        if (v > 0) != (t > 0):
+            break
+        streak += 1
+    out.append(f"외국인 현물+선물 {sg(t)}" + (f" — 지난 60일에 비해 {lvl}" if lvl else "") + (f" · {streak}일 연속 순{'매수' if t > 0 else '매도'}" if streak >= 2 else ""))
+    if (fs > 0) != (ff > 0) and abs(fs) > 1000 and abs(ff) > 1000:
+        out.append(f"현물({sg(fs)})과 선물({sg(ff)}) 방향 반대 — 선물은 헤지·차익일 수 있어 합계로 봄")
+    last5 = comb[:5]
+    if len(last5) >= 3 and t < 0 and min(last5) < t:
+        k = int(np.argmin(last5)); dd = h[k][0]
+        r_ = abs(t / last5[k])
+        out.append(f"최근 5일 가장 크게 판 날({dd.month}/{dd.day} {sg(last5[k])})의 {r_ * 100:.0f}% 수준" + (" — 파는 힘은 줄어듦" if r_ <= 0.3 else ""))
+    elif len(last5) >= 3 and t > 0 and max(last5) > t:
+        k = int(np.argmax(last5)); dd = h[k][0]
+        out.append(f"최근 5일 가장 크게 산 날({dd.month}/{dd.day} {sg(last5[k])})의 {abs(t / last5[k]) * 100:.0f}% 수준")
+    # 기관: 금융투자 현물과 기관 선물이 반대·비슷한 크기면 차익·헤지 짝 → 방향을 건 기관 = 투신·사모·보험·연기금
+    sec, inst_f = iv[2], None
+    try:
+        inst_f = float(db.execute(text("select inst_eok from futures_daily where d = :d"), {"d": d}).scalar() or 0)
+    except Exception:  # noqa: BLE001
+        pass
+    real = iv[3] + iv[4] + iv[5] + iv[6]
+    if inst_f is not None and (sec > 0) != (inst_f > 0) and abs(sec) > 2000 and min(abs(sec), abs(inst_f)) / max(abs(sec), abs(inst_f)) > 0.5:
+        out.append(f"기관: 금융투자 현물 {sg(sec)} ↔ 기관 선물 {sg(inst_f)}는 차익·헤지 짝으로 보임 → 방향을 건 기관(투신·사모·보험·연기금) {sg(real)}")
+    elif abs(real) > 2000:
+        out.append(f"기관: 투신·사모·보험·연기금 합 {sg(real)}")
+    try:
+        pf = float(db.execute(text("select indiv_eok from futures_daily where d = :d"), {"d": d}).scalar() or 0)
+        if (iv[0] > 0) == (pf > 0) and abs(iv[0]) > 2000:
+            out.append(f"개인: 현물·선물 모두 {'삼' if iv[0] > 0 else '팖'} ({sg(iv[0])} · {sg(pf)})" + ("" if iv[0] > 0 else " — 반대매매·손절 물량 섞였을 수 있음"))
+    except Exception:  # noqa: BLE001
+        pass
+    if abs(iv[7]) > 3000:
+        out.append(f"기타법인 {sg(iv[7])} — 자사주 매입 등 회사 자금이 크게 {'받음' if iv[7] > 0 else '팖'}")
+    if pg:
+        nb = pg["nb"] - pg["ns"]
+        if abs(nb) > 2000:
+            out.append(f"프로그램 비차익 {sg(nb)} — 바스켓(지수 통째로) {'매수' if nb > 0 else '매도'}" +
+                       (" · 외국인 현물과 방향이 달라 종목을 골라 사고판 날" if (nb > 0) != (fs > 0) and abs(fs) > 2000 else ""))
+    out.append("※ 14년 검증: 수급은 그날 설명용 — 5일·20일 방향 예측력은 없음")
+    return out
 
 
 def daily_job(db: Session) -> str:
