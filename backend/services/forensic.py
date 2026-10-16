@@ -31,7 +31,7 @@ KST = ZoneInfo("Asia/Seoul")
 API = "https://opendart.fss.or.kr/api/"
 VIEW = "https://dart.fss.or.kr/dsaf001/main.do?rcpNo="
 TTL = 6 * 3600                 # 모은 자료 6시간 재사용 (공시는 하루 몇 번 안 바뀜)
-VERSION = 5                    # 모으는 방식 바꾸면 올림 → 옛 캐시 무시 (2: 가격대 · 3: 정기보고서 따로·등급 · 4: 못 믿을 PER 가격대 뺌)
+VERSION = 6                    # 모으는 방식 바꾸면 올림 → 옛 캐시 무시 (2: 가격대 · 3: 정기보고서 따로·등급 · 4: 못 믿을 PER 가격대 뺌)
 CLAUDE = "/home/junp/.local/bin/claude"
 WORKDIR = Path("/home/junp/tmp_claude/review_cli")
 _locks: dict[str, threading.Lock] = {}
@@ -963,6 +963,8 @@ def _grade(d: dict) -> dict:
             limited = f"엔터({ind})"
     except Exception:  # noqa: BLE001
         pass
+    if limited.startswith("제약·바이오"):     # 2026-10-17 사용자 "바이오는 싹 다 빼라, 어차피 안 본다" — 등급 안 매김
+        return {"grade": "제외", "score": None, "items": items, "limited": limited, "excluded": True}
     if limited and total >= 75:
         g = "A-"
     return {"grade": g, "score": total, "items": items, "limited": limited}

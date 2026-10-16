@@ -3828,7 +3828,8 @@ function fzRender(){
     <div class="sv-recent" style="margin-top:8px;align-items:center"><span class="ts">기준 보고서</span>${P.map(p=>`<a class="sv-chip" style="text-decoration:none" href="https://dart.fss.or.kr/dsaf001/main.do?rcpNo=${p.rcept_no}" target="_blank" rel="noopener">${p.label}${(p.fin||{}).fs==='OFS'?' (별도)':''}</a>`).join('')||'<span class="ts">정기보고서 없음</span>'}</div>
     <div class="fz-warn">자동으로 모은 숫자와 '어디를 열어 볼지'입니다. <b>결론이 아닙니다</b> — 원문으로 확인하기 전에는 '정교한 쓰레기'일 수 있습니다. 매수·매도 추천은 하지 않습니다. 가격대는 이 종목의 과거 3년 배수로 계산한 구간[추정]입니다.</div>`;
   // 종합 등급 (2026-10-17 사용자 "비중실어서 점수 매겨라 S A+ A A- B+ B- B") — 위험이 적을수록 높음, 매수 추천 아님
-  if(d.grade){ const G=d.grade, I=G.items||[];
+  if(d.grade&&d.grade.excluded) h+=`<div style="margin-top:16px"><div class="bx-h"><b>종합 등급</b></div><span class="ts">제약·바이오(${fzEsc(d.grade.limited)})는 등급을 매기지 않습니다 — 임상·허가 위험이 공시 숫자로 안 잡혀서 보지 않기로 함</span></div>`;
+  else if(d.grade){ const G=d.grade, I=G.items||[];
     h+=`<div style="margin-top:16px"><div class="bx-h"><b>종합 등급</b><span class="ts">문서 비중대로 100점 · 위험이 적을수록 높음 · 기계 규칙 점수라 매수 추천 아님 · AI 초안은 따로 등급을 매김</span></div>
       <div style="display:flex;gap:18px;align-items:center;flex-wrap:wrap;margin:6px 0 10px"><div style="font-size:44px;font-weight:800;color:var(--strong);line-height:1">${G.grade}</div>
         <div><div style="font-size:20px;font-weight:700;color:var(--strong)">${G.score}점 <span class="ts">/ 100</span></div><div class="ts">S 90↑ · A+ 85 · A 80 · A- 75 · B+ 70 · B 65 · B- 60 · C+ 55 · C 50 · C- 45 · D</div></div></div>
