@@ -2805,6 +2805,68 @@ def get_stock_disclosures(code: str):
     return disclosures(code)
 
 
+# ── 포렌식 탭 (2026-10-17 사용자 '사업보고서 포렌식 분석 프롬프트' PDF) ──
+def _fz_code(code: str) -> str:
+    import re as _re  # noqa: PLC0415
+    if not _re.fullmatch(r"[0-9A-Z]{6}", code or ""):
+        raise HTTPException(400, "종목 코드가 이상합니다")
+    return code
+
+
+@router.get("/forensic/{code}")
+def get_forensic(code: str, request: Request, refresh: int = 0, db: Session = Depends(get_db)):
+    """DART 정기·주요사항·지분 공시 + 수급 세부를 모아 단계별 재료와 모순 후보. 6시간 재사용, 다시 모으기는 로그인(junp)만."""
+    _fz_code(code)
+    from backend.services import forensic  # noqa: PLC0415
+    if refresh and _journal_owner_opt(request, db) != "junp":
+        refresh = 0
+    try:
+        return forensic.get(db, code, bool(refresh))
+    except ValueError as exc:
+        raise HTTPException(404, str(exc)) from exc
+
+
+class FzNoteIn(BaseModel):
+    name: str = Field("", max_length=80)
+    verdict: str | None = Field(None, max_length=20)
+    checks: dict = {}
+    checkpoints: str = Field("", max_length=4000)
+    memo: str = Field("", max_length=8000)
+
+
+@router.get("/me/forensic")
+def get_me_forensic_list(request: Request, db: Session = Depends(get_db)):
+    o = _me(request, db)
+    from backend.services import forensic  # noqa: PLC0415
+    return {"items": forensic.notes_list(db, o)}
+
+
+@router.get("/me/forensic/{code}")
+def get_me_forensic(code: str, request: Request, db: Session = Depends(get_db)):
+    o = _me(request, db)
+    _fz_code(code)
+    from backend.services import forensic  # noqa: PLC0415
+    return {"note": forensic.note_get(db, o, code), "ai": forensic.ai_latest(db, o, code)}
+
+
+@router.post("/me/forensic/{code}/note")
+def post_me_forensic_note(code: str, body: FzNoteIn, request: Request, db: Session = Depends(get_db)):
+    o = _me(request, db)
+    _fz_code(code)
+    from backend.services import forensic  # noqa: PLC0415
+    checks = {str(k)[:20]: bool(v) for k, v in list((body.checks or {}).items())[:30]}
+    return forensic.note_save(db, o, code, body.name.strip(), body.verdict, checks, body.checkpoints.strip(), body.memo.strip())
+
+
+@router.post("/me/forensic/{code}/ai")
+def post_me_forensic_ai(code: str, body: FzNoteIn, request: Request, db: Session = Depends(get_db)):
+    """AI 초안 (서버 claude -p, 도구 끔) — 몇 분 걸림, 끝나면 텔레그램."""
+    o = _me(request, db)
+    _fz_code(code)
+    from backend.services import forensic  # noqa: PLC0415
+    return forensic.ai_start(db, o, code, body.name.strip())
+
+
 @router.get("/stock/{code}/flows")
 def get_stock_flows(code: str, db: Session = Depends(get_db)):
     """종목 탭: 최근 40거래일 투자자별(기관 세부 포함) 순매수 수량 · 외국인 보유율 · 공매도 20일 (토스)."""

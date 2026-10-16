@@ -447,6 +447,19 @@ def start_scheduler() -> BackgroundScheduler:
     scheduler.add_job(lambda: _stop_orders_job("close"), 'cron', day_of_week='mon-fri', hour=15, minute=40, id='stop_close', replace_existing=True, max_instances=1)
     scheduler.add_job(lambda: _stop_orders_job("late"), 'cron', day_of_week='mon-fri', hour=20, minute=10, id='stop_late', replace_existing=True, max_instances=1)
 
+    def _journal_sync_job(phase: str) -> None:
+        # 매매 일지 자동 채우기 (2026-10-17 사용자 "매일 8시 넘으면 확인하는 로직") — 메리츠 체결 → 달력·복기에 바로 보이게
+        from backend.services.journal_sync import run  # noqa: PLC0415
+        db = SessionLocal()
+        try:
+            run(db, phase)
+        except Exception as exc:  # noqa: BLE001
+            logger.error("매매 일지 자동 채우기(%s) 실패: %s", phase, type(exc).__name__)
+        finally:
+            db.close()
+    scheduler.add_job(lambda: _journal_sync_job("evening"), 'cron', day_of_week='mon-fri', hour=20, minute=5, id='journal_sync', replace_existing=True, max_instances=1)
+    scheduler.add_job(lambda: _journal_sync_job("morning"), 'cron', day_of_week='mon-fri', hour=8, minute=5, id='journal_sync_am', replace_existing=True, max_instances=1)
+
     def _futures_flow_job() -> None:
         from backend.collector.futures_flow import snapshot  # noqa: PLC0415
         db = SessionLocal()
