@@ -158,8 +158,9 @@ def message(db: Session, day: date | None = None, copy: bool = False) -> str | N
                 f"금융투자 {sg(iv[2])} · 연기금 {sg(iv[3])} · 투신 {sg(iv[4])} · 보험 {sg(iv[5])} · 사모 {sg(iv[6])}",
                 f"선물 {sg(a['inst'])}", f"현물+선물 {sg(iv[1] + a['inst'])}",
                 "", "[개인]", f"현물 {sg(iv[0])}" + (f" (코스닥 {sg(ivq[0])})" if ivq else ""),
-                f"선물 {sg(a['indiv'])}", f"현물+선물 {sg(iv[0] + a['indiv'])}",
-                "", "[기타법인]", f"현물 {sg(iv[7])}"]      # 자사주 매입 등 — 빼면 현물 합이 0이 안 맞음 (2026-10-16)
+                f"선물 {sg(a['indiv'])}", f"현물+선물 {sg(iv[0] + a['indiv'])}"]
+        if not copy:      # 자사주 매입 등 — 사장님용에만 (복붙용은 빼 달라, 2026-10-16)
+            out += ["", "[기타법인]", f"현물 {sg(iv[7])}"]
     out += ["", "[선물]"]
     if not iv:
         out.append(f"기관 {sg(a['inst'])} · 개인 {sg(a['indiv'])}")
@@ -176,7 +177,7 @@ def message(db: Session, day: date | None = None, copy: bool = False) -> str | N
                 f"차익 매수 {x['ab']:,.0f} · 매도 {x['as']:,.0f} · 순 {sg(x['ab'] - x['as'])}",
                 f"합계 순 {sg(x['nb'] - x['ns'] + x['ab'] - x['as'])}"]
     days = sorted(sp)
-    if len(days) >= 2:
+    if len(days) >= 2 and not copy:      # 최근 5일·3일 합은 사장님용에만 (2026-10-16 "복붙용 말고 따로")
         out += ["", "[최근 5일] 외국인 현물 / 선물 / 합계 / 프로그램"]
         for k in days:
             f_ = futs.get(k)
