@@ -150,16 +150,14 @@ def message(db: Session, day: date | None = None, copy: bool = False) -> str | N
     if d in sp:
         out.append(f"현물 {sg(sp[d][0])} (코스닥 {sg(sp[d][1])})")
     out.append(f"선물 {sg(a['foreign'])}" + (f" (약 {a['contracts']:+,}계약)" if a["contracts"] is not None else ""))
-    if d in sp:
-        t = sp[d][0] + a["foreign"]
-        out.append(f"현물+선물 {sg(t)}" + ("" if copy else f" → {'사는 쪽' if t > 0 else '파는 쪽'}"))
+    # 현물+선물 합 줄은 뺌 (2026-10-16 사용자 "금액만 보면 되는 거 아니가") — 합은 사장님용 최근 5일 표에만
     if iv:
         out += ["", "[기관]", f"현물 {sg(iv[1])}" + (f" (코스닥 {sg(ivq[1])})" if ivq else ""),
                 f"금융투자 {sg(iv[2])} · 연기금 {sg(iv[3])} · 투신 {sg(iv[4])} · 보험 {sg(iv[5])} · 사모 {sg(iv[6])}",
-                f"선물 {sg(a['inst'])}", f"현물+선물 {sg(iv[1] + a['inst'])}",
+                f"선물 {sg(a['inst'])}",
                 "", "[개인]", f"현물 {sg(iv[0])}" + (f" (코스닥 {sg(ivq[0])})" if ivq else ""),
-                f"선물 {sg(a['indiv'])}", f"현물+선물 {sg(iv[0] + a['indiv'])}"]
-        if not copy:      # 자사주 매입 등 — 사장님용에만 (복붙용은 빼 달라, 2026-10-16)
+                f"선물 {sg(a['indiv'])}"]
+        if not copy:      # 자사주 매입 등 — 사장님용에만
             out += ["", "[기타법인]", f"현물 {sg(iv[7])}"]
     out += ["", "[선물]"]
     if not iv:
