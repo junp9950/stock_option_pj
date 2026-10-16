@@ -143,7 +143,8 @@ def message(db: Session, day: date | None = None, copy: bool = False) -> str | N
     # 펨코용도 제목 붙임 (2026-10-16 사용자 글 제목 그대로)
     out = [f"수급 정리 {d.month}/{d.day} 마감 (억 원)", ""] if copy else [f"수급 총정리 {d.month}/{d.day} 마감 (코스피 · 억 원)", ""]
     # 개인·기관 현물 (2026-10-16 사용자 "개인, 기관도 넣어 봐 수급 총정리로") — 기관 안: 금융투자·연기금·투신·보험·사모
-    iv = db.execute(text("""select prsn, orgn, scrt, mrbn, ivtr, insu, pe_fund, etc_corp from market_investor_flows where trading_date = :d and market = 'KOSPI'"""), {"d": d}).first()
+    # KIS 필드: fund = 기금(연기금), mrbn = 종금(종합금융) — 처음에 mrbn을 연기금으로 잘못 씀 (2026-10-16 고침)
+    iv = db.execute(text("""select prsn, orgn, scrt, fund, ivtr, insu, pe_fund, etc_corp from market_investor_flows where trading_date = :d and market = 'KOSPI'"""), {"d": d}).first()
     ivq = db.execute(text("""select prsn, orgn from market_investor_flows where trading_date = :d and market = 'KOSDAQ'"""), {"d": d}).first()
     iv = [float(v or 0) / 100 for v in iv] if iv else None
     ivq = [float(v or 0) / 100 for v in ivq] if ivq else None
