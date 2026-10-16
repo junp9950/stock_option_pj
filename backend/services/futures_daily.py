@@ -100,6 +100,26 @@ def analyze(db: Session, day: date | None = None) -> dict | None:
                      "base": round(float(hist.r1.mean()), 2) if len(hist) else None}}
 
 
+def _spot_lines(db: Session, d: date, fut_today: float) -> list[str]:
+    """외국인 현물(코스피·코스닥, market_investor_flows 백만원 → 억) + 선물 합계 — 2026-10-16 사용자 "롱인지도 모르는 거 아니가 · 현물도 같이 보내 줘"
+    (10/12~15 선물 +3.2조인데 현물 −11.5조 → 선물 순매수만으로는 롱이라 못 함)."""
+    rows = db.execute(text("""select trading_date, sum(case when market = 'KOSPI' then frgn end) / 100.0, sum(case when market = 'KOSDAQ' then frgn end) / 100.0
+        from market_investor_flows where trading_date <= :d group by 1 order by 1 desc limit 4"""), {"d": d}).all()
+    if not rows or rows[0][0] != d or rows[0][1] is None:
+        return []
+    futs = dict(db.execute(text("select d, foreign_eok from futures_daily where d = any(:ds)"), {"ds": [r[0] for r in rows[:3]]}).all())
+    sg = lambda v: f"{v:+,.0f}"  # noqa: E731
+    k, q = float(rows[0][1]), float(rows[0][2] or 0)
+    tot = k + fut_today
+    out = [f"외국인 현물 코스피 {sg(k)}억 · 코스닥 {sg(q)}억 → 코스피 현물+선물 <b>{sg(tot)}억</b> ({'사는 쪽' if tot > 0 else '파는 쪽'})"]
+    if len(rows) >= 3 and all(r[0] in futs for r in rows[:3]):
+        s3 = sum(float(r[1] or 0) for r in rows[:3]); f3 = sum(float(futs[r[0]] or 0) for r in rows[:3])
+        out.append(f"최근 3일 현물 {sg(s3)}억 + 선물 {sg(f3)}억 = {sg(s3 + f3)}억")
+        if (s3 > 0) != (f3 > 0) and abs(s3) > 1000 and abs(f3) > 1000:
+            out.append("※ 현물과 선물 방향이 반대 — 선물 매매는 헤지·차익일 수 있어 그것만으로 롱·숏 판단 금지")
+    return out
+
+
 def message(db: Session, day: date | None = None) -> str | None:
     a = analyze(db, day)
     if not a:
@@ -108,10 +128,14 @@ def message(db: Session, day: date | None = None) -> str | None:
     d = date.fromisoformat(a["d"])
     out = [f"📊 <b>코스피200 선물 수급 — {d.month}/{d.day} 마감</b>",
            f"외국인 {sg(a['foreign'])}억" + (f" (≈{a['contracts']:+,}계약)" if a["contracts"] is not None else "") + f" · 기관 {sg(a['inst'])} · 개인 {sg(a['indiv'])}",
-           (f"미결제 {sg(a['doi'])}계약" if a["doi"] is not None else "미결제 증감 없음") + f" → <b>{a['label']}</b> ({a['meaning']})"]
+           (f"미결제 {sg(a['doi'])}계약" if a["doi"] is not None else "미결제 증감 없음") + f" → 선물만 보면 <b>{a['label']}</b> ({a['meaning']})"]
     if a["streak"] >= 2 and a["kind"] != "none":
         out.append(f"{'⚠️ ' if a['kind'] == 'new_short' else ''}{a['label']} {a['streak']}일 연속")
     out.append(f"최근 3일 외국인 {sg(a['f3'])}억 · 그 전 3일 {sg(a['f3_prev'])}억")
+    try:
+        out += _spot_lines(db, d, a["foreign"])
+    except Exception as exc:  # noqa: BLE001
+        logger.warning("현물 수급 줄 실패: %s", exc)
     if a["basis"] is not None:
         out.append(f"베이시스 {a['basis']:+.2f} (선물 {a['fut']:,.2f} · 현물 {a['spot']:,.2f})")
     s = a["stat"]
