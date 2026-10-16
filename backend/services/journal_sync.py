@@ -8,6 +8,7 @@
 from __future__ import annotations
 
 import logging
+import re
 from collections import Counter
 from datetime import date, timedelta
 
@@ -17,6 +18,16 @@ from sqlalchemy.orm import Session
 logger = logging.getLogger(__name__)
 OWNER = "junp"
 CHAN = {"120": "서버 자동(API)", "157": "앱"}
+
+
+ETF_RE = re.compile(r"^(KODEX|TIGER|SOL|ACE|RISE|PLUS|KIWOOM|HANARO|KOACT|TIME|TIMEFOLIO|1Q|WON|BNK|ITF|마이다스|에셋플러스|파워|히어로즈|KBSTAR|ARIRANG|KOSEF)\b")
+
+
+def sell_tax(side: str, code: str, name: str, amount: float) -> float:
+    """매도 증권거래세 0.20% (2026년부터, 코스피·코스닥 같음). ETF·ETN은 없음. 메리츠 수수료는 0 (2026-10-17 사용자 "하루 수익 74652인데?")."""
+    if side != "매도" or ETF_RE.match(name or "") or not code[:6].isdigit() or "ETN" in (name or ""):
+        return 0.0
+    return round(amount * 0.002)
 
 
 def pool_of(crdt) -> str:
@@ -43,7 +54,7 @@ def _rows(day: date) -> list[dict]:
                           if v)
         # seq 자릿수 맞춤 — 글자 순서 = 주문 순서 (하루 안 매수·매도 짝이 바뀌지 않게, 10/17 'mz98967'이 'mz266154' 뒤로 갔음)
         out.append({"trade_date": day, "seq": f"mz{int(x.get('oder_no') or 0):08d}", "side": side, "code": iscd[1:], "name": x.get("kor_issu_abwr_name") or iscd[1:],
-                    "qty": q, "price": px, "amount": q * px, "fee": 0.0, "kind": "", "tag": "", "memo": memo,
+                    "qty": q, "price": px, "amount": q * px, "fee": sell_tax(side, iscd[1:], x.get("kor_issu_abwr_name") or "", q * px), "kind": "", "tag": "", "memo": memo,
                     "pool": pool_of(x.get("crdt_oder_cls_code"))})
     return out
 
