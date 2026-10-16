@@ -142,7 +142,7 @@ def message(db: Session, day: date | None = None, copy: bool = False) -> str | N
     pg = _program(d)
     out = [] if copy else [f"수급 총정리 {d.month}/{d.day} 마감 (코스피 · 억 원)", ""]
     # 개인·기관 현물 (2026-10-16 사용자 "개인, 기관도 넣어 봐 수급 총정리로") — 기관 안: 금융투자·연기금·투신·보험·사모
-    iv = db.execute(text("""select prsn, orgn, scrt, mrbn, ivtr, insu, pe_fund from market_investor_flows where trading_date = :d and market = 'KOSPI'"""), {"d": d}).first()
+    iv = db.execute(text("""select prsn, orgn, scrt, mrbn, ivtr, insu, pe_fund, etc_corp from market_investor_flows where trading_date = :d and market = 'KOSPI'"""), {"d": d}).first()
     ivq = db.execute(text("""select prsn, orgn from market_investor_flows where trading_date = :d and market = 'KOSDAQ'"""), {"d": d}).first()
     iv = [float(v or 0) / 100 for v in iv] if iv else None
     ivq = [float(v or 0) / 100 for v in ivq] if ivq else None
@@ -158,7 +158,8 @@ def message(db: Session, day: date | None = None, copy: bool = False) -> str | N
                 f"금융투자 {sg(iv[2])} · 연기금 {sg(iv[3])} · 투신 {sg(iv[4])} · 보험 {sg(iv[5])} · 사모 {sg(iv[6])}",
                 f"선물 {sg(a['inst'])}", f"현물+선물 {sg(iv[1] + a['inst'])}",
                 "", "[개인]", f"현물 {sg(iv[0])}" + (f" (코스닥 {sg(ivq[0])})" if ivq else ""),
-                f"선물 {sg(a['indiv'])}", f"현물+선물 {sg(iv[0] + a['indiv'])}"]
+                f"선물 {sg(a['indiv'])}", f"현물+선물 {sg(iv[0] + a['indiv'])}",
+                "", "[기타법인]", f"현물 {sg(iv[7])}"]      # 자사주 매입 등 — 빼면 현물 합이 0이 안 맞음 (2026-10-16)
     out += ["", "[선물]"]
     if not iv:
         out.append(f"기관 {sg(a['inst'])} · 개인 {sg(a['indiv'])}")
