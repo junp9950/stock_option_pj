@@ -341,6 +341,19 @@ def _find_open_sell(code: str, qty: int, today: date) -> str | None:
     return None
 
 
+def _gone(o: dict, today: date) -> bool:
+    """사장님이 앱에서 먼저 취소(또는 정정)해 남은 수량이 없는 주문인지 — 2026-10-16 효성중공업 앱 취소 뒤 1주 매도 →
+    3주 주문 취소가 '취소 가능 수량 없음'으로 계속 실패하고 2주 손절이 안 걸림."""
+    from backend.services import meritz as M  # noqa: PLC0415
+    try:
+        for x in M.orders_today(today.strftime("%Y%m%d"), "1"):
+            if str(x.get("oder_no")) == str(o.get("order_no")):
+                return int(float(x.get("ncnt_qty") or 0)) == 0
+    except Exception:  # noqa: BLE001
+        return False
+    return False
+
+
 def _open_order(s: dict, lot: str, today: date) -> dict | None:
     xs = [o for o in s["orders"].get(str(today), []) if o["lot"] == lot and o["ok"] and not o.get("done")]
     return xs[-1] if xs else None
@@ -474,10 +487,10 @@ def _run(db: Session, phase: str) -> str:
             o = _open_order(s, lot, today)
             if o and (o["trigger"] != L.get("stop") or o["qty"] != L["qty"]):
                 c = M.cancel(L["code"], o["order_no"], o["qty"], o["trigger"], o["limit"])
-                if not c["ok"]:
+                if not c["ok"] and not _gone(o, today):
                     out.append(f"⚠ {L['name']} 기존 손절 주문 취소 실패 — {c['msg']} (직접 확인해 주세요)")
                     continue
-                o["done"] = "취소"
+                o["done"] = "취소" if c["ok"] else "취소(앱에서)"
                 out.append(f"↺ {L['name']} 손절가 바뀜: {o['trigger']:,} → {L.get('stop') or 0:,}")
                 o = None
             if o:
