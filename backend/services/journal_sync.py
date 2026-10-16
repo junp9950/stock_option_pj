@@ -19,6 +19,12 @@ OWNER = "junp"
 CHAN = {"120": "서버 자동(API)", "157": "앱"}
 
 
+def pool_of(crdt) -> str:
+    """메리츠 신용 구분 → 짝 맞추기 묶음: 10 현금 · 21/22 신용 · 31/32 신용(다른 대출) · 그 밖은 모름."""
+    c = str(crdt or "")
+    return {"1": "cash", "2": "cr2", "3": "cr3"}.get(c[:1], "") if len(c) == 2 else ""
+
+
 def _rows(day: date) -> list[dict]:
     from backend.services import meritz  # noqa: PLC0415
     out = []
@@ -35,8 +41,10 @@ def _rows(day: date) -> list[dict]:
         memo = " · ".join(v for v in (f"메리츠 API 체결내역({day.month}/{day.day})", "신용" if credit else "현금", f"주문 {hm}" if hm else "",
                                       CHAN.get(str(x.get("chan_type_cls_code")), ""), "장 전(넥스트레이드)" if hm and hm < "08:59" and CHAN.get(str(x.get("chan_type_cls_code"))) == "앱" else "")
                           if v)
-        out.append({"trade_date": day, "seq": f"mz{x.get('oder_no')}", "side": side, "code": iscd[1:], "name": x.get("kor_issu_abwr_name") or iscd[1:],
-                    "qty": q, "price": px, "amount": q * px, "fee": 0.0, "kind": "", "tag": "", "memo": memo})
+        # seq 자릿수 맞춤 — 글자 순서 = 주문 순서 (하루 안 매수·매도 짝이 바뀌지 않게, 10/17 'mz98967'이 'mz266154' 뒤로 갔음)
+        out.append({"trade_date": day, "seq": f"mz{int(x.get('oder_no') or 0):08d}", "side": side, "code": iscd[1:], "name": x.get("kor_issu_abwr_name") or iscd[1:],
+                    "qty": q, "price": px, "amount": q * px, "fee": 0.0, "kind": "", "tag": "", "memo": memo,
+                    "pool": pool_of(x.get("crdt_oder_cls_code"))})
     return out
 
 

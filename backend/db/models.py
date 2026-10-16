@@ -381,6 +381,7 @@ class TradeExecution(Base, TimestampMixin):
     tag: Mapped[str] = mapped_column(String(40), default="")        # 직접 고른 근거
     memo: Mapped[str] = mapped_column(Text, default="")
     kind: Mapped[str] = mapped_column(String(10), default="")       # 유형을 직접 바꿨을 때만
+    pool: Mapped[str] = mapped_column(String(4), default="")        # 현금 cash / 신용 cr2(21·22) / cr3(31·32) — 메리츠 코드, 매도는 같은 쪽 매수분과 먼저 짝 (2026-10-17)
 
 
 class UserJongbe(Base, TimestampMixin):

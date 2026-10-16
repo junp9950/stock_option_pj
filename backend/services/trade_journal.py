@@ -370,8 +370,12 @@ def _analyze(db: Session, owner: str) -> dict:
         return sum(1 for d in tdays if a < d <= b)
 
     # 같은 날 체결 순서: 증권사 번호가 있으면 번호 순, 없으면 입력 순 (같은 날 매수 → 매도로 짝지음)
-    def order(e):
-        return (e.trade_date, int(e.seq) if e.seq.isdigit() else 10**9 + e.id)
+    def order(e):     # mz = 메리츠 주문번호(자동 채우기, 2026-10-17) — 주문 순서대로
+        if e.seq.isdigit():
+            return (e.trade_date, int(e.seq))
+        if e.seq.startswith("mz") and e.seq[2:].isdigit():
+            return (e.trade_date, 2 * 10**9 + int(e.seq[2:]))
+        return (e.trade_date, 10**9 + e.id)
 
     lots = defaultdict(list)    # code → [[date, qty, price, exec]]
     raw_trips = []
@@ -384,14 +388,21 @@ def _analyze(db: Session, owner: str) -> dict:
             lots[e.code].append([e.trade_date, e.qty, e.price, e])
             continue
         left = e.qty
-        while left > 0 and lots[e.code]:
-            lot = lots[e.code][0]
-            q = min(left, lot[1])
-            raw_trips.append((lot[3], e, q, lot[2]))
-            lot[1] -= q
-            left -= q
-            if lot[1] == 0:
-                lots[e.code].pop(0)
+        # 신용 매도는 같은 종류 신용 매수분을, 현금 매도는 현금분을 먼저 (증권사도 이렇게 짝지음 — 10/16 하이닉스 단타가
+        # 장기 보유 현금분과 짝지어져 −105만으로 잡혔음, 2026-10-17). 같은 쪽이 없거나 모르면 먼저 산 것부터.
+        mine = getattr(e, "pool", "") or ""
+        for same in ((True, False) if mine else (False,)):
+            for lot in list(lots[e.code]):
+                if left <= 0:
+                    break
+                if same and (getattr(lot[3], "pool", "") or "") != mine:
+                    continue
+                q = min(left, lot[1])
+                raw_trips.append((lot[3], e, q, lot[2]))
+                lot[1] -= q
+                left -= q
+                if lot[1] == 0:
+                    lots[e.code] = [x for x in lots[e.code] if x is not lot]
         if left > 0:   # 기록 전부터 갖고 있던 물량: 증권사 매입금액이 있으면 그 평균가를 쓴다
             px = e.broker_cost / e.qty if e.broker_cost else None
             if px:
