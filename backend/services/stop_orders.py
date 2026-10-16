@@ -57,6 +57,12 @@ def _tell(db: Session, msg: str) -> None:
         logger.warning("스톱 알림 실패: %s", type(exc).__name__)
 
 
+def _paused(s: dict, today: date, code: str) -> bool:
+    """하따 구간(no_stop_until)이면 손절을 안 건다 — 단 사장님이 손절선을 따로 준 종목(pause_except)은 건다
+    (2026-10-16 "코써 62000 · 대덕 126000 · 티엘비 37350 · 효중 190만 — 손절 컷 거는 건 필수")."""
+    return bool(s.get("no_stop_until") and str(today) <= s["no_stop_until"] and code not in (s.get("pause_except") or []))
+
+
 def _lot(h: dict) -> str:
     return f"{h['code']}|{'신용' if h['credit'] else '현금'}|{h['loan_date']}"
 
@@ -383,6 +389,8 @@ def _gap_resell(db: Session, s: dict, today: date) -> list[str]:
         rem = int(float(h.get("ncnt_qty") or 0))
         p = (lv.get(o["code"]) or {}).get("c")
         L = s["lots"].get(o["lot"])
+        if _paused(s, today, o["code"]):
+            continue
         if not (L and rem > 0 and p and p < o["limit"]):
             continue
         c = M.cancel(o["code"], o["order_no"], rem, o["trigger"], o["limit"])
@@ -439,7 +447,7 @@ def _run(db: Session, phase: str) -> str:
     out = list(msgs)
     if str(today) >= s["start"] and phase in ("retry", "intraday", "close") and s["orders"].get(str(today)):
         out += _check_refused(s, today)
-    if str(today) >= s["start"] and s["on"] and phase in ("retry", "intraday") and not (s.get("no_stop_until") and str(today) <= s["no_stop_until"]):
+    if str(today) >= s["start"] and s["on"] and phase in ("retry", "intraday"):
         out += _gap_resell(db, s, today)
     if str(today) >= s["start"] and s["on"] and phase in ("morning", "retry", "intraday"):
         day = s["orders"].setdefault(str(today), [])
@@ -461,7 +469,7 @@ def _run(db: Session, phase: str) -> str:
                 stop, src, final = _stop_lot(db, L, today)
                 if stop and src == "관리 탭 손절선":
                     L.update(stop=stop, src=src, final=True)
-            if s.get("no_stop_until") and str(today) <= s["no_stop_until"]:
+            if _paused(s, today, L["code"]):
                 continue      # 하따 구간 손절 안 걸기 (2026-10-15 사용자 "오늘 하락은 하따 줍기니까 기존 손절선 적용하지 말자") — 정해진 날 매도·21선 매도는 그대로
             o = _open_order(s, lot, today)
             if o and (o["trigger"] != L.get("stop") or o["qty"] != L["qty"]):
@@ -538,7 +546,8 @@ def status(db: Session) -> str:
     od = [o for o in s["orders"].get(today, []) if o["ok"] and not o.get("done")]
     lines = [f"손절 자동 주문: {'켜짐' if s['on'] else '꺼짐'} · {s['start']}부터 새로 산 것만 · 지정가 = 손절가 −1%"]
     if s.get("no_stop_until") and today <= s["no_stop_until"]:
-        lines.append(f"⏸ 하따 구간: {s['no_stop_until'][5:]}까지 손절 주문·21일선 매도 안 함 (반등 종목 정해진 날 매도는 그대로)")
+        lines.append(f"⏸ 하따 구간: {s['no_stop_until'][5:]}까지 손절 주문·21일선 매도 안 함 (반등 종목 정해진 날 매도는 그대로)"
+                     + (" · 예외(손절 걸음): " + ", ".join(L["name"] for L in s["lots"].values() if L["code"] in (s.get("pause_except") or [])) if s.get("pause_except") else ""))
     for L in s["lots"].values():
         tail = "" if L.get("legacy") else (f" · 박스 돌파 · {str(L.get('exit'))[5:]} 종가 매도" if L.get("mode") == "box"
                                             else f" · 바닥 모으기 · {str(L.get('exit'))[5:]} 종가 매도" if L.get("mode") == "bottom"
