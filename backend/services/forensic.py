@@ -31,7 +31,7 @@ KST = ZoneInfo("Asia/Seoul")
 API = "https://opendart.fss.or.kr/api/"
 VIEW = "https://dart.fss.or.kr/dsaf001/main.do?rcpNo="
 TTL = 6 * 3600                 # 모은 자료 6시간 재사용 (공시는 하루 몇 번 안 바뀜)
-VERSION = 1                    # 모으는 방식 바꾸면 올림 → 옛 캐시 무시
+VERSION = 3                    # 모으는 방식 바꾸면 올림 → 옛 캐시 무시 (2: 가격대 · 3: 정기보고서 따로·등급)
 CLAUDE = "/home/junp/.local/bin/claude"
 WORKDIR = Path("/home/junp/tmp_claude/review_cli")
 _locks: dict[str, threading.Lock] = {}
@@ -96,9 +96,19 @@ def _periods(corp: str) -> tuple[list[dict], list[dict]]:
         allrows += j.get("list") or []
         if page >= int(j.get("total_page") or 1):
             break
+    periodic: list[dict] = []
+    for page in range(1, 4):       # 정기보고서만 따로 — 삼성전자처럼 공시가 많으면 전체 목록 7쪽 안에 옛 보고서가 안 들어옴 (10/17)
+        try:
+            j = requests.get(API + "list.json", params={"crtfc_key": _key(), "corp_code": corp, "bgn_de": bgn, "pblntf_ty": "A", "page_count": 100,
+                                                        "page_no": page}, timeout=20).json()
+        except Exception:  # noqa: BLE001
+            break
+        periodic += j.get("list") or []
+        if page >= int(j.get("total_page") or 1):
+            break
     reps: dict[tuple, dict] = {}
     fy_m = 12
-    for r in allrows:
+    for r in periodic or allrows:
         nm = re.sub(r"\s+", "", r.get("report_nm") or "")
         m = re.search(r"(사업|반기|분기)보고서\((\d{4})\.(\d{2})\)", nm)
         if not m:
@@ -746,10 +756,192 @@ def get(db: Session, code: str, refresh: bool = False) -> dict:
             if r and r.data.get("v") == VERSION and (datetime.now(KST) - r.built_at).total_seconds() < 60:
                 return r.data
         d = build(code)
+        try:
+            d["bands"] = _bands(db, d)
+        except Exception as exc:  # noqa: BLE001
+            logger.warning("가격대 계산 실패 %s: %s", code, exc)
+        try:
+            d["grade"] = _grade(d)
+        except Exception as exc:  # noqa: BLE001
+            logger.warning("등급 계산 실패 %s: %s", code, exc)
         db.execute(text("""insert into forensic_cache (code, data, built_at) values (:c, cast(:d as jsonb), now())
             on conflict (code) do update set data = excluded.data, built_at = now()"""), {"c": code, "d": json.dumps(d, ensure_ascii=False, default=str)})
         db.commit()
         return d
+
+
+# ── 가격대 (문서 E-3, 2026-10-17 사용자 "왜 목표가 설정을 안해주노?") ─────────────────
+def _bands(db: Session, d: dict) -> dict | None:
+    """과거 3년 PER·PBR 배수 범위 × 지금 이익·순자산 = 하방·적정·리레이팅·극한 가격 구간 [추정].
+    그날까지 공시된 연간 지배순이익·자본만 씀(사업보고서 접수일부터 적용). 주식 수는 지금 값으로 고정(증자·전환 반영 안 됨)."""
+    import numpy as np  # noqa: PLC0415
+    P = d.get("periods") or []
+    sh = (d.get("shares") or {}).get("issued")
+    if not P or not sh:
+        return None
+    ni_by_y, eq_pts = {}, []
+    for p in P:
+        f = p["fin"]
+        if p["kind"] == "사업":
+            for k, yy in (("ytd", p["y"]), ("p1", p["y"] - 1), ("p2", p["y"] - 2)):
+                v = (f.get(k) or {}).get("ni_own") if k != "ytd" else f["ytd"].get("ni_own")
+                v = v if v is not None else (f.get(k) or {}).get("ni")
+                if v is not None and yy not in ni_by_y:
+                    ni_by_y[yy] = v
+        if f["v"].get("equity"):
+            eq_pts.append((p["rcept_dt"], f["v"]["equity"]))
+    # TTM 지배순이익 (지금)
+    lp = P[-1]
+    f = lp["fin"]
+    if lp["kind"] == "사업":
+        ttm = f["ytd"].get("ni_own") if f["ytd"].get("ni_own") is not None else f["ytd"].get("ni")
+    else:
+        y0 = f["ytd"].get("ni_own") if f["ytd"].get("ni_own") is not None else f["ytd"].get("ni")
+        py = f["pytd"].get("ni_own") if f["pytd"].get("ni_own") is not None else f["pytd"].get("ni")
+        prev = ni_by_y.get(lp["y"] - 1)
+        ttm = y0 + prev - py if None not in (y0, py, prev) else None
+    eq_now = f["v"].get("equity")
+    rows = db.execute(text("select trading_date, close_price from spot_daily_prices where stock_code = :c and trading_date >= :a order by 1"),
+                      {"c": d["code"], "a": date.today() - timedelta(days=365 * 3)}).all()
+    if len(rows) < 120:
+        return None
+    ann = sorted((p["rcept_dt"], p["y"]) for p in P if p["kind"] == "사업")
+    per, pbr = [], []
+    for dt, c in rows:
+        ds = dt.strftime("%Y%m%d")
+        known = [y for rd, y in ann if rd and rd <= ds]
+        fy = known[-1] if known else (ann[0][1] - 1 if ann else None)       # 첫 사업보고서 전이면 그 앞 해
+        ni = ni_by_y.get(fy) if fy else None
+        if ni and ni > 0:
+            per.append(c * sh / ni)
+        eqs = [e for rd, e in eq_pts if rd and rd <= ds]
+        if eqs and eqs[-1] > 0:
+            pbr.append(c * sh / eqs[-1])
+    last = float(rows[-1][1])
+    out = {"close": last, "date": str(rows[-1][0]), "shares": sh, "ttm": ttm, "equity": eq_now, "rows": []}
+
+    def band(name, arr, base, unit):
+        if len(arr) < 120 or not base or base <= 0:
+            return None
+        a = np.array(arr)
+        q = {"lo": float(np.percentile(a, 5)), "mid": float(np.median(a)), "hi": float(np.percentile(a, 80)), "max": float(a.max())}
+        now = last * sh / base
+        return {"name": name, "unit": unit, "now": round(now, 1), "pos": round(float((a < now).mean() * 100)),
+                **{k: round(v, 1) for k, v in q.items()}, **{f"px_{k}": round(v * base / sh) for k, v in q.items()}}
+    for b in (band("PER", per, ttm, "배"), band("PBR", pbr, eq_now, "배")):
+        if b:
+            out["rows"].append(b)
+    out["note"] = ("최근 4분기 지배순이익이 적자라 PER 가격대는 못 냄 — PBR만" if not ttm or ttm <= 0 else "")
+    return out if out["rows"] else None
+
+
+# ── 종합 등급 (2026-10-17 사용자 "문서에 나와있는 내용토대로 비중실어서 점수 매겨라 S A+ A A- B+ B- B") ──
+GRADES = [(90, "S"), (85, "A+"), (80, "A"), (75, "A-"), (70, "B+"), (65, "B"), (60, "B-"), (55, "C+"), (50, "C"), (45, "C-"), (0, "D")]
+
+
+def _grade(d: dict) -> dict:
+    """문서 비중대로 100점: 이익의 질 20 · 재무 안정성 15 · 메자닌·희석 15 · 지배구조·대주주 15 · 감사 10 · 실적 추세 10 · 가격대 위치 10 · 인력 5.
+    바이사이드(위험 찾기) 관점이라 위험이 적을수록 높음. 기계 규칙 점수 — 매수 추천 아님, 모르는 항목은 중간값."""
+    F = {f["title"]: f for f in d.get("flags") or []}
+    has = lambda kw: any(kw in t for t in F)  # noqa: E731
+    lv = lambda kw: next((F[t]["level"] for t in F if kw in t), None)  # noqa: E731
+    P = d.get("periods") or []
+    lp = P[-1] if P else None
+    items = []
+
+    def add(name, mx, sc, why):
+        items.append({"name": name, "max": mx, "score": max(0, min(mx, round(sc))), "why": why})
+    # 이익의 질 20
+    q = d.get("quality")
+    if q and q["sni"] > 0:
+        r = q["socf"] / q["sni"]
+        add("이익의 질", 20, 20 if r >= 1 else 16 if r >= 0.8 else 10 if r >= 0.5 else 4, f"3년 영업현금 ÷ 순이익 {r:.2f}배")
+    elif q:
+        add("이익의 질", 20, 2, "3년 합 순손실")
+    else:
+        add("이익의 질", 20, 10, "자료 없음 (중간값)")
+    # 재무 안정성 15
+    v = (lp or {}).get("fin", {}).get("v", {}) if lp else {}
+    dr = v["liab"] / v["equity"] * 100 if v.get("liab") is not None and v.get("equity") and v["equity"] > 0 else None
+    sc = 15 if dr is not None and dr < 50 else 12 if dr is not None and dr < 100 else 7 if dr is not None and dr < 200 else 3 if dr is not None else 7
+    why = [f"부채비율 {dr:.0f}%" if dr is not None else "부채비율 모름"]
+    if has("단기 차입이 현금의 2배"):
+        sc -= 5; why.append("단기차입 > 현금×2")
+    c = lv("영업현금 적자")
+    if c == "⛔":
+        sc = 0; why.append("현금 1년 안 소진 [추정]")
+    elif c == "⚠️":
+        sc = min(sc, 5); why.append("현금 3년 안 소진 [추정]")
+    add("재무 안정성", 15, sc, " · ".join(why))
+    # 메자닌·희석 15
+    sh = (d.get("shares") or {}).get("issued")
+    live = [m for m in d.get("mezz") or [] if m.get("live") and m["kind"] in ("CB", "BW")]
+    pct = sum(m.get("shares") or 0 for m in live) / sh * 100 if sh and live else 0
+    sc = 15 if not live else 12 if pct < 3 else 7 if pct < 10 else 2
+    why = [f"만기 전 CB·BW 잠재 {pct:.1f}%" if live else "만기 전 CB·BW 없음"]
+    for kw, pen, t in (("타법인 증권 취득", 3, "자금이 타법인으로"), ("유상증자 이력", 3, "유상증자 반복·3자 배정"), ("만기 전 사채 취득", 2, "만기 전 사채 취득")):
+        if has(kw):
+            sc -= pen; why.append(t)
+    add("메자닌·희석", 15, sc, " · ".join(why))
+    # 지배구조·대주주 15
+    h = (d.get("holders") or {}).get("total")
+    B0 = d.get("bands") or {}
+    mcap = (B0.get("close") or 0) * (sh or 0)
+    sc = 15 if h and h >= 40 else 12 if h and h >= 30 else 9 if h and h >= 20 else (9 if mcap >= 10e12 else 4) if h else 8
+    why = [f"최대주주+특관 {h:.1f}%" + (" (시총 10조↑ 대형주라 분산이 보통)" if h and h < 20 and mcap >= 10e12 else "") if h else "지분 모름"]
+    for kw, pen, t in (("최대주주 변동", 3, "최대주주 변동"), ("주식담보", 3, "주식담보 계약"), ("지분 감소 보고", 2, "내부자 매도 이어짐"), ("배당·자사주 매입 없음", 2, "흑자인데 환원 없음")):
+        if has(kw):
+            sc -= pen; why.append(t)
+    if (d.get("disc") or {}).get("valueup"):
+        sc += 2; why.append("밸류업 공시 +")
+    add("지배구조·대주주", 15, sc, " · ".join(why))
+    # 감사 10
+    sc, why = 10, []
+    if any(f["level"] == "⛔" and ("감사의견" in f["title"] or "계속기업" in f["title"]) for f in d.get("flags") or []):
+        sc = 0; why.append("비적정·계속기업")
+    if has("감사인이 바뀜"):
+        sc -= 3; why.append("감사인 변경")
+    if has("강조사항"):
+        sc -= 2; why.append("강조사항")
+    add("감사", 10, sc, " · ".join(why) or "적정 · 특이사항 없음")
+    # 실적 추세 10
+    if lp:
+        f = lp["fin"]
+        op, op0 = f["ytd"].get("op"), (f["p1"] if lp["kind"] == "사업" else f["pytd"]).get("op")
+        if has("영업적자 3년"):
+            sc, w = 0, "영업적자 3년 연속"
+        elif op is None:
+            sc, w = 5, "자료 없음"
+        elif op <= 0:
+            sc, w = 2, f"{lp['label']} 누계 영업적자"
+        elif op0 and op0 > 0 and op / op0 - 1 >= 0.1:
+            sc, w = 10, f"누계 영업이익 전년 대비 {(op / op0 - 1) * 100:+.0f}%"
+        elif op0 and op0 > 0:
+            sc, w = 7 if op >= op0 else 5, f"누계 영업이익 전년 대비 {(op / op0 - 1) * 100:+.0f}%"
+        else:
+            sc, w = 8, "흑자 전환"
+        if has("본업 vs 일회성"):
+            sc = min(sc, 3); w += " · 순이익은 일회성"
+        add("실적 추세", 10, sc, w)
+    else:
+        add("실적 추세", 10, 5, "자료 없음")
+    # 가격대 위치 10 (3년 배수 중 지금 자리 — 높을수록 감점)
+    B = d.get("bands")
+    if B and B.get("rows"):
+        pos = sum(r["pos"] for r in B["rows"]) / len(B["rows"])
+        add("가격대 위치", 10, 10 if pos < 30 else 8 if pos < 50 else 6 if pos < 70 else 4 if pos < 90 else 2, f"3년 배수 중 하위 {pos:.0f}% 자리")
+    else:
+        add("가격대 위치", 10, 5, "계산 못 함 (중간값)")
+    # 인력 5
+    ea = [e for e in d.get("employees") or [] if e.get("kind") == "사업" and e.get("n")]
+    if len(ea) >= 2:
+        ch = ea[-1]["n"] / ea[-2]["n"] - 1
+        add("인력", 5, 5 if ch >= 0 else 4 if ch > -0.1 else 2 if ch > -0.2 else 0, f"직원 {ch * 100:+.0f}% (1년)")
+    else:
+        add("인력", 5, 3, "비교 자료 없음")
+    total = sum(i["score"] for i in items)
+    g = next(gr for cut, gr in GRADES if total >= cut)
+    return {"grade": g, "score": total, "items": items}
 
 
 # ── 내 판단 (PART E-5·E-6·F) ─────────────────────────────────────────
@@ -815,7 +1007,7 @@ def _data_text(d: dict) -> str:
                  + (f" · 최대주주+특관 {p['holders']['total']}%" if p.get("holders") else ""))
     for k, title in (("employees", "직원"), ("audit", "감사의견(사업보고서)"), ("mezz", "CB·BW·EB 발행결정 5년"), ("rights", "유상증자 결정 5년"),
                      ("insiders", "임원·주요주주 소유 변동 2년"), ("blocks", "5% 대량보유 3년"), ("payouts", "배당(백만원)·보수·자사주·최대주주 변동·자금 사용"),
-                     ("shares", "주식 총수"), ("holders", "최근 최대주주·특관 지분"), ("flows", "최근 수급 세부 (억 원, KIS) — 평단은 [추정]"), ("disc", "1년 공시 요약")):
+                     ("shares", "주식 총수"), ("holders", "최근 최대주주·특관 지분"), ("flows", "최근 수급 세부 (억 원, KIS) — 평단은 [추정]"), ("disc", "1년 공시 요약"), ("grade", "사이트 규칙 등급 (기계 점수)"), ("bands", "가격대 — 과거 3년 PER·PBR 배수(5%·중앙·80%·최고) × 지금 TTM 지배순이익·자본, 주당 가격 [추정]")):
         v = d.get(k)
         if v:
             L.append(f"[{title}] {json.dumps(v, ensure_ascii=False, default=str)[:6000]}")
@@ -835,12 +1027,16 @@ AI_PROMPT = """너는 한국 상장사 전자공시(DART)를 바이사이드 관
 - 추정·계산값은 [추정], 가설은 [가설]로 표시하고 계산은 식을 보여 준다.
 - 모든 항목에서 긍정 해석과 부정 해석을 둘 다 세운다. "실적 좋음 = 상승"으로 쓰지 않는다. 내부자 매수를 무조건 호재로, 적정 감사의견을 우량의 근거로, 외국인 순매수를 시총 확인 없이 '진짜 외국인'으로 쓰지 않는다.
 - 핵심 질문: "회사는 왜 스스로를 이렇게 보이게 하는가?" 대주주는 지금 주가가 높기를 원하는가, 낮기를 원하는가?
-- 매수·매도 추천, 타점, 목표가 금지. 판정은 [거름] / [관심 종목 등록 – 추적 시작] / [판단 보류 – 추가 자료 필요] 중 하나와 이유만.
+- 매수·매도 추천·타점은 금지. 가격대는 아래 [가격대] 자료(과거 3년 배수 × 지금 이익·순자산)를 근거로 '구간'으로 쓴다. 판정은 [거름] / [관심 종목 등록 – 추적 시작] / [판단 보류 – 추가 자료 필요] 중 하나와 이유만.
 - 정치색으로 해석하지 않는다. 분석에 시간이 들었다고 억지로 좋게 해석하지 않는다.
 - 사이트가 건 '자동 모순 후보'는 기계 규칙이라 틀릴 수 있다. 맞는지 다시 보고 틀리면 틀렸다고 쓴다.
 
 [산출물 형식 — 이것만, 마크다운]
 맨 위 한 줄: "⚠️ 이 글은 AI 초안입니다. 원문으로 검증하기 전까지 '정교한 쓰레기'일 수 있습니다."
+## E-0. 종합 등급
+문서 비중(이익의 질 20 · 재무 안정성 15 · 메자닌·희석 15 · 지배구조·대주주 어심 15 · 감사 10 · 실적 추세 10 · 가격대 위치 10 · 인력·비재무 5, 위험이 적을수록 높음)으로
+네가 직접 100점을 매기고 등급(S 90↑ · A+ 85 · A 80 · A- 75 · B+ 70 · B 65 · B- 60 · C+ 55 · C 50 · C- 45 · D)을 준다. 항목별 점수와 한 줄 근거를 표로.
+[사이트 규칙 등급]과 다르면 왜 다른지 적는다. 등급은 위험 판정이지 매수 추천이 아니다.
 ## E-1. 논증 요약 (한 줄 요약 금지)
 가정 / 근거(출처) / 반론 / 현재 판단 / 판단이 뒤집히는 조건
 ## E-2. 모순 목록
@@ -848,7 +1044,7 @@ AI_PROMPT = """너는 한국 상장사 전자공시(DART)를 바이사이드 관
 (경영진단 원문이 있으면 회사가 든 실적 변동 원인을 인용하고 숫자로 뒷받침되는지, 지난해와 어조가 바뀌었는지 본다)
 ## E-3. 이익의 질 · 운전자본 · 메자닌 · 대주주 유인
 각각 3~6줄. 미래 주식 공급 스케줄(만기 안 지난 CB·BW, 리픽싱 하한 기준 최대 물량 [추정])을 계산한다. 대주주 유인 판정: 올릴 유인 / 누를 유인 / 중립 + 근거.
-## E-4. 수급 — 세 색깔 안에 누가 숨어 있나
+## E-3b. 다섯 가지 가격대\n표: 구간(하방/적정/국내 리레이팅/글로벌 리레이팅/극한) | 가격(시총) 구간 | 전제 조건 | 근거. [가격대] 자료의 배수를 쓰고, 이익이 일회성이면 경상 이익으로 다시 계산해 둘 다 적는다. 리레이팅을 적으면 더 심한 디레이팅 가능성도 적는다. 글로벌 피어 배수는 자료에 없으면 '보고서상 확인 불가'.\n## E-4. 수급 — 세 색깔 안에 누가 숨어 있나
 주체별 누적 순매수·평단 [추정]·승패. 사모·기타법인을 따로 본다. 시총 2,500억 이하면 '외국인'이 한국인 외국계 창구일 수 있음을 적는다.
 ## E-5. 괴리와 해소
 괴리 / 해소 트리거(무엇이 일어나야 닫히나) / 해소 시점 [추정]
@@ -902,7 +1098,7 @@ def _ai_run(rid: int, code: str) -> None:
             try:
                 from backend.services.telegram import SITE, owner_chats, send  # noqa: PLC0415
                 for c in owner_chats(db):
-                    send(db, f"🔍 포렌식 AI 초안 완료 — {d['name']}\n{SITE}/#forensic", c)
+                    send(db, f"🔍 기업 분석 AI 초안 완료 — {d['name']}\n{SITE}/#forensic", c)
             except Exception as exc:  # noqa: BLE001
                 logger.warning("포렌식 알림 실패: %s", type(exc).__name__)
     except Exception as exc:  # noqa: BLE001

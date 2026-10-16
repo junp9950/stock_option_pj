@@ -624,7 +624,7 @@ body[data-hmode] #panel-home .hcard,body[data-hmode] #panel-home .ws-list,body[d
   <span class="mk-seg" role="group" aria-label="시장"><button data-mk="kr" class="on" onclick="switchMarket('kr')">🇰🇷 국장</button><button data-mk="us" onclick="switchMarket('us')">🇺🇸 미장</button></span>
   <div class="tab active" data-t="home" data-m="kr" onclick="switchTab('home')">오늘</div>
   <div class="tab" data-t="stock" data-m="kr" onclick="switchTab('stock')">종목</div>
-  <div class="tab" data-t="forensic" data-m="kr" onclick="switchTab('forensic')">포렌식</div>
+  <div class="tab" data-t="forensic" data-m="kr" onclick="switchTab('forensic')">기업 분석</div>
   <div class="tab" data-t="candidates" data-m="kr" onclick="switchTab('candidates')">차트 후보</div>
   <div class="tab" data-t="calendar" data-m="kr" onclick="switchTab('calendar')">캘린더</div>
   <div class="tab" data-t="sector" data-m="kr" onclick="switchTab('sector')">섹터 흐름</div>
@@ -1138,11 +1138,11 @@ body[data-hmode] #panel-home .hcard,body[data-hmode] #panel-home .ws-list,body[d
 <!-- 포렌식 (2026-10-17 사용자 '사업보고서 포렌식 분석 프롬프트' PDF): DART 공시를 단계별 표로 + 모순 후보(긍정·부정 해석 둘 다) + 내 판단·AI 초안(로그인) -->
 <div id="panel-forensic" class="panel content hbt">
   <section class="bx sv-top">
-    <div class="sv-search"><input id="fz-q" placeholder="🔍 포렌식할 종목 (이름·코드·초성)" autocomplete="off" oninput="fzSearch(this.value)" onkeydown="srKey(event,'fz-sr',fzSearch)"><div id="fz-sr"></div></div>
+    <div class="sv-search"><input id="fz-q" placeholder="🔍 분석할 종목 (이름·코드·초성)" autocomplete="off" oninput="fzSearch(this.value)" onkeydown="srKey(event,'fz-sr',fzSearch)"><div id="fz-sr"></div></div>
     <div id="fz-recent" class="sv-recent"></div>
   </section>
   <div id="fz-intro">
-    <section class="bx"><div class="bx-h"><b>사업보고서 포렌식</b><span class="ts">바이사이드 관점 · 좋은 점이 아니라 위험을 찾는 곳</span></div>
+    <section class="bx"><div class="bx-h"><b>기업 분석</b><span class="ts">사업보고서 포렌식 · 좋은 점이 아니라 위험을 찾는 곳 · 과거 배수로 본 가격대</span></div>
       <p class="bx-s">종목을 고르면 DART 정기보고서(최근 7개 · 사업·반기·분기)와 주요사항·지분 공시, 투자자 세부 수급을 모아 단계별 표로 보여 줍니다.
       자동 규칙에 걸린 <b>모순 후보</b>에는 긍정 해석과 부정 해석을 둘 다 달고, 확인할 원문 위치를 붙입니다. 결론·매수 추천은 하지 않습니다 — 원문을 직접 열어 보는 것이 전제입니다.</p>
       <div id="fz-mine" class="sv-recent"></div></section>
@@ -3753,7 +3753,7 @@ function svHead(){
   const all=window._rotMem; let fam=''; if(all&&all.families) for(const [f,arr] of Object.entries(all.families)){ if(arr.some(x=>x.code===_sv.code)){ fam=f; break; } }
   document.getElementById('sv-head').innerHTML=`<div class="sv-hd"><span class="nm">${_sv.name}</span><span class="ts">${_sv.code}${p.market?' · '+p.market:''}${fam?' · '+fam:''}</span>
     <span class="px">${Math.round(cl).toLocaleString()}</span><span style="color:${svC(ch)};font-weight:700">${ch>=0?'▲':'▼'} ${Math.abs(ch).toFixed(2)}%</span>
-    <span class="ts">${(z.timestamp||'').slice(0,10)} 종가${p.market_cap?' · 시총 '+svWon(p.market_cap):''}</span><button class="btn btn-gray btn-sm" onclick="fzGo('${_sv.code}','${String(_sv.name).replace(/'/g,'')}')" title="DART 공시 포렌식 — 이익의 질·감사·메자닌·대주주·수급 세부">🔍 포렌식</button>${(()=>{ const r=((_sv.disc||{}).items||[]).filter(x=>x.kind==='risk'&&x.date>=new Date(Date.now()-30*864e5).toISOString().slice(0,10).replace(/-/g,'')); return r.length?`<span class="chipx r" title="${r.map(x=>x.title).join(' / ').replace(/"/g,'')}" style="cursor:pointer" onclick="document.getElementById('sv-disc').scrollIntoView({behavior:'smooth',block:'center'})">⚠ 30일 안 위험 공시 ${r.length}건 · ${r[0].title.replace(/\[.*?\]/g,'').slice(0,18)}</span>`:''; })()}</div>`;
+    <span class="ts">${(z.timestamp||'').slice(0,10)} 종가${p.market_cap?' · 시총 '+svWon(p.market_cap):''}</span><button class="btn btn-gray btn-sm" onclick="fzGo('${_sv.code}','${String(_sv.name).replace(/'/g,'')}')" title="기업 분석 — 공시 포렌식(이익의 질·감사·메자닌·대주주·수급 세부)과 가격대">🔍 기업 분석</button>${(()=>{ const r=((_sv.disc||{}).items||[]).filter(x=>x.kind==='risk'&&x.date>=new Date(Date.now()-30*864e5).toISOString().slice(0,10).replace(/-/g,'')); return r.length?`<span class="chipx r" title="${r.map(x=>x.title).join(' / ').replace(/"/g,'')}" style="cursor:pointer" onclick="document.getElementById('sv-disc').scrollIntoView({behavior:'smooth',block:'center'})">⚠ 30일 안 위험 공시 ${r.length}건 · ${r[0].title.replace(/\[.*?\]/g,'').slice(0,18)}</span>`:''; })()}</div>`;
 }
 // 최근 공시 (DART 90일) — 위험(증자·CB·감자·소송 등) 빨강 ⚠ · 좋음(자사주·무증·공급계약 등) 초록 ▲
 function svDisc(){
@@ -3826,13 +3826,34 @@ function fzRender(){
   let h=`<section class="bx"><div class="sv-hd"><span class="nm">${fzEsc(d.name)}</span><span class="ts">${d.code}${mcap?' · 시총 약 '+fzE(mcap)+' [추정: 발행주식×종가]':''} · 모은 시각 ${d.built}</span>
     <span style="margin-left:auto;display:flex;gap:6px;flex-wrap:wrap"><button class="btn btn-gray btn-sm" onclick="svGo('${d.code}','${nm}')">📈 차트·종목 정보</button>${fzAdmin()?`<button class="btn btn-gray btn-sm" onclick="fzOpen('${d.code}','${nm}',1)">↻ 다시 모으기</button>`:''}</span></div>
     <div class="sv-recent" style="margin-top:8px;align-items:center"><span class="ts">기준 보고서</span>${P.map(p=>`<a class="sv-chip" style="text-decoration:none" href="https://dart.fss.or.kr/dsaf001/main.do?rcpNo=${p.rcept_no}" target="_blank" rel="noopener">${p.label}${(p.fin||{}).fs==='OFS'?' (별도)':''}</a>`).join('')||'<span class="ts">정기보고서 없음</span>'}</div>
-    <div class="fz-warn">자동으로 모은 숫자와 '어디를 열어 볼지'입니다. <b>결론이 아닙니다</b> — 원문으로 확인하기 전에는 '정교한 쓰레기'일 수 있습니다. 매수·매도 추천·목표가는 만들지 않습니다.</div></section>`;
+    <div class="fz-warn">자동으로 모은 숫자와 '어디를 열어 볼지'입니다. <b>결론이 아닙니다</b> — 원문으로 확인하기 전에는 '정교한 쓰레기'일 수 있습니다. 매수·매도 추천은 하지 않습니다. 가격대는 이 종목의 과거 3년 배수로 계산한 구간[추정]입니다.</div></section>`;
   // 모순 후보
   const F=d.flags||[];
   h+=`<section class="bx"><div class="bx-h"><b>모순·확인 후보</b><span class="ts">자동 규칙 ${F.length}건 · ⛔ 크게 볼 것 · ⚠️ 확인 · ℹ️ 참고 · 해석은 늘 두 갈래</span></div>
     ${F.length?`<div class="fz-flags">${F.map(f=>`<div class="fz-f ${f.level==='⛔'?'l0':''}"><div class="h"><span>${f.level}</span><b>${fzEsc(f.title)}</b><span class="st">${fzEsc(f.step)}</span></div>
       <div>${fzEsc(f.fact)}</div><div class="ab"><span>A 긍정</span><span>${fzEsc(f.a)}</span><span>B 부정</span><span>${fzEsc(f.b)}</span></div>
       <div class="wh">확인할 곳: ${fzEsc(f.where)}${fzRcp(f.rcp)}</div></div>`).join('')}</div>`:'<span class="ts">자동 규칙에 걸린 것 없음 — 그래도 아래 표와 원문은 직접 보세요.</span>'}</section>`;
+  // 종합 등급 (2026-10-17 사용자 "비중실어서 점수 매겨라 S A+ A A- B+ B- B") — 위험이 적을수록 높음, 매수 추천 아님
+  if(d.grade){ const G=d.grade, I=G.items||[];
+    h+=`<section class="bx"><div class="bx-h"><b>종합 등급</b><span class="ts">문서 비중대로 100점 · 위험이 적을수록 높음 · 기계 규칙 점수라 매수 추천 아님 · AI 초안은 따로 등급을 매김</span></div>
+      <div style="display:flex;gap:18px;align-items:center;flex-wrap:wrap;margin:6px 0 10px"><div style="font-size:44px;font-weight:800;color:var(--strong);line-height:1">${G.grade}</div>
+        <div><div style="font-size:20px;font-weight:700;color:var(--strong)">${G.score}점 <span class="ts">/ 100</span></div><div class="ts">S 90↑ · A+ 85 · A 80 · A- 75 · B+ 70 · B 65 · B- 60 · C+ 55 · C 50 · C- 45 · D</div></div></div>
+      ${fzTable(['항목','점수','근거'],I.map(x=>`<tr><td>${x.name}</td><td><b>${x.score}</b> <span class="ts">/ ${x.max}</span></td><td class="l">${fzEsc(x.why)}</td></tr>`))}</section>`;
+  }
+  // 가격대 (문서 E-3, 2026-10-17 사용자 "왜 목표가 설정을 안해주노?") — 과거 3년 PER·PBR 배수 × 지금 이익·순자산
+  {
+    const B=d.bands;
+    if(B){ const cl=B.close, pc=v=>v?`${fzN(v)} <span class="ts">${fzP((v/cl-1)*100)}</span>`:'-';
+      const mc=v=>v?' <span class="ts">시총 '+fzE(v*B.shares)+'</span>':'';
+      const R=[['하방','lo','5%','내러티브 붕괴 + 메자닌 전환 + 디레이팅 — 3년 중 가장 쌀 때(하위 5%) 배수'],['적정','mid','중앙','지금 이익 × 이 종목이 3년 동안 보통 받던 배수'],
+        ['리레이팅','hi','80%','괴리 해소 — 3년 중 비쌀 때(상위 20%) 배수'],['극한','max','최고','광기·테마 — 3년 최고 배수']];
+      h+=`<section class="bx"><div class="bx-h"><b>가격대</b><span class="ts">문서 E-3 · ${B.date} 종가 ${fzN(cl)}원 기준 · 점이 아니라 구간 [추정]</span></div>
+        ${fzTable(['구간',...B.rows.map(r=>`${r.name} 기준`),'전제'],R.map(([nm,k,pct,why])=>`<tr><td><b>${nm}</b> <span class="ts">${pct}</span></td>${B.rows.map(r=>`<td>${pc(r['px_'+k])}${mc(r['px_'+k])}<br><span class="ts">${r[k]}배</span></td>`).join('')}<td class="l">${why}</td></tr>`))}
+        <p class="ts" style="margin-top:6px">${B.rows.map(r=>`지금 ${r.name} <b>${r.now}배</b> = 3년 중 하위 ${r.pos}% 자리`).join(' · ')}
+          · 기준: 최근 4분기 지배순이익 ${fzE(B.ttm)} · 자본 ${fzE(B.equity)} · 주식 수 ${fzN(B.shares)}주(증자·전환 반영 안 됨)${B.note?' · '+B.note:''}.
+          이익에 일회성(처분이익·지분법 급증)이 섞이면 PER 가격대가 부풀려짐 — 위 STEP 3 영업외를 같이 볼 것. 리레이팅을 기대한다면 하방(디레이팅)도 같은 무게로.</p></section>`;
+    } else h+=`<section class="bx"><div class="bx-h"><b>가격대</b></div><span class="ts">계산할 자료가 모자랍니다 (일봉 3년 · 이익/자본 · 주식 수 중 빠진 것)</span></section>`;
+  }
   // STEP 2 병렬표
   if(P.length){
     const emp=lb=>((d.employees||[]).find(e=>e.label===lb)||{}).n;
@@ -4011,7 +4032,7 @@ function fzGuide(){
   return `<div class="bx-h"><b>분석 순서 안내</b><span class="ts">사용자가 올린 '사업보고서 포렌식 분석 프롬프트'(주채사상 방법론 정리) 요약 · 3단계: 모순 찾기 → 포렌식 검증 → 대주주 어심 읽기</span></div>
     <details><summary>STEP 0~10 핵심 질문 <span class="ts">— 위 표가 어느 단계 재료인지</span></summary><ul class="fz-ul">${S.map(([a,b])=>`<li><b>${a}</b> — ${b}</li>`).join('')}</ul></details>
     <details><summary>사고 패턴 13 <span class="ts">— 비슷한 상황을 만나면 불러 쓰기</span></summary><ul class="fz-ul">${D.map(x=>`<li>${x}</li>`).join('')}</ul></details>
-    <details><summary>흔한 오독과 금지 <span class="ts">— 매수·매도 추천·타점·목표가는 이 탭의 일이 아님</span></summary><ul class="fz-ul">${G.map(x=>`<li>${x}</li>`).join('')}</ul></details>`;
+    <details><summary>흔한 오독과 금지 <span class="ts">— 매수·매도 추천·타점은 이 탭의 일이 아님, 가격대는 점이 아니라 구간</span></summary><ul class="fz-ul">${G.map(x=>`<li>${x}</li>`).join('')}</ul></details>`;
 }
 function svTf(tf){ _sv.tf=tf; svDraw(); }
 function svPer(n){ _sv.per=n; svDraw(); }
