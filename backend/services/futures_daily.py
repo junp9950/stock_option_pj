@@ -104,17 +104,31 @@ def _spot_lines(db: Session, d: date, fut_today: float) -> list[str]:
     """외국인 현물(코스피·코스닥, market_investor_flows 백만원 → 억) + 선물 합계 — 2026-10-16 사용자 "롱인지도 모르는 거 아니가 · 현물도 같이 보내 줘"
     (10/12~15 선물 +3.2조인데 현물 −11.5조 → 선물 순매수만으로는 롱이라 못 함)."""
     rows = db.execute(text("""select trading_date, sum(case when market = 'KOSPI' then frgn end) / 100.0, sum(case when market = 'KOSDAQ' then frgn end) / 100.0
-        from market_investor_flows where trading_date <= :d group by 1 order by 1 desc limit 4"""), {"d": d}).all()
+        from market_investor_flows where trading_date <= :d group by 1 order by 1 desc limit 5"""), {"d": d}).all()
     if not rows or rows[0][0] != d or rows[0][1] is None:
         return []
-    futs = dict(db.execute(text("select d, foreign_eok from futures_daily where d = any(:ds)"), {"ds": [r[0] for r in rows[:3]]}).all())
+    ds = [r[0] for r in rows]
+    futs = dict(db.execute(text("select d, foreign_eok from futures_daily where d = any(:ds)"), {"ds": ds}).all())
+    # 프로그램(코스피, 원 → 억) — 2026-10-16 사용자 "합쳐서 다시 보내 줘, 프로그램까지"
+    prog = {r[0]: (r[1] / 1e8, r[2] / 1e8) for r in db.execute(text(
+        "select trading_date, arbitrage_net_buy, non_arbitrage_net_buy from program_trading_daily where trading_date = any(:ds)"), {"ds": ds}).all()}
     sg = lambda v: f"{v:+,.0f}"  # noqa: E731
     k, q = float(rows[0][1]), float(rows[0][2] or 0)
     tot = k + fut_today
     out = [f"외국인 현물 코스피 {sg(k)}억 · 코스닥 {sg(q)}억 → 코스피 현물+선물 <b>{sg(tot)}억</b> ({'사는 쪽' if tot > 0 else '파는 쪽'})"]
+    if d in prog:
+        a_, n_ = prog[d]
+        out.append(f"프로그램(코스피) 비차익 {sg(n_)}억 · 차익 {sg(a_)}억 = {sg(a_ + n_)}억")
+    tb = ["날짜   현물    선물    합계  프로그램"]
+    for r in rows[::-1]:
+        f_ = futs.get(r[0]); s_ = float(r[1] or 0)
+        p_ = sum(prog[r[0]]) if r[0] in prog else None
+        tb.append(f"{r[0].month:>2}/{r[0].day:<2} {s_:>+7,.0f} " + (f"{float(f_):>+7,.0f} {s_ + float(f_):>+7,.0f}" if f_ is not None else f"{'-':>7} {'-':>7}")
+                  + (f" {p_:>+7,.0f}" if p_ is not None else ""))
+    out.append("<b>외국인 현물·선물 · 프로그램 (억)</b>\n<pre>" + "\n".join(tb) + "</pre>")
     if len(rows) >= 3 and all(r[0] in futs for r in rows[:3]):
         s3 = sum(float(r[1] or 0) for r in rows[:3]); f3 = sum(float(futs[r[0]] or 0) for r in rows[:3])
-        out.append(f"최근 3일 현물 {sg(s3)}억 + 선물 {sg(f3)}억 = {sg(s3 + f3)}억")
+        out.append(f"최근 3일 현물 {sg(s3)}억 + 선물 {sg(f3)}억 = <b>{sg(s3 + f3)}억</b>")
         if (s3 > 0) != (f3 > 0) and abs(s3) > 1000 and abs(f3) > 1000:
             out.append("※ 현물과 선물 방향이 반대 — 선물 매매는 헤지·차익일 수 있어 그것만으로 롱·숏 판단 금지")
     return out
