@@ -3832,6 +3832,7 @@ function fzRender(){
     h+=`<div style="margin-top:16px"><div class="bx-h"><b>종합 등급</b><span class="ts">문서 비중대로 100점 · 위험이 적을수록 높음 · 기계 규칙 점수라 매수 추천 아님 · AI 초안은 따로 등급을 매김</span></div>
       <div style="display:flex;gap:18px;align-items:center;flex-wrap:wrap;margin:6px 0 10px"><div style="font-size:44px;font-weight:800;color:var(--strong);line-height:1">${G.grade}</div>
         <div><div style="font-size:20px;font-weight:700;color:var(--strong)">${G.score}점 <span class="ts">/ 100</span></div><div class="ts">S 90↑ · A+ 85 · A 80 · A- 75 · B+ 70 · B 65 · B- 60 · C+ 55 · C 50 · C- 45 · D</div></div></div>
+      ${G.limited?`<div class="fz-warn" style="margin:0 0 10px">⚠️ <b>분석 제한 업종 — ${fzEsc(G.limited)}</b>: 임상·허가·흥행 같은 핵심 위험은 공시 숫자로 안 잡혀서 등급 상한을 A-로 묶었습니다 (점수는 그대로). 문서 STEP 1: 펀더 분석은 제한적, 차트·매크로 중심 영역.</div>`:''}
       ${fzTable(['항목','점수','근거'],I.map(x=>`<tr><td>${x.name}</td><td><b>${x.score}</b> <span class="ts">/ ${x.max}</span></td><td class="l">${fzEsc(x.why)}</td></tr>`))}</div>`;
   }
   // 가격대 (문서 E-3, 2026-10-17 사용자 "왜 목표가 설정을 안해주노?") — 과거 3년 PER·PBR 배수 × 지금 이익·순자산

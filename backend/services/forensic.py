@@ -31,7 +31,7 @@ KST = ZoneInfo("Asia/Seoul")
 API = "https://opendart.fss.or.kr/api/"
 VIEW = "https://dart.fss.or.kr/dsaf001/main.do?rcpNo="
 TTL = 6 * 3600                 # 모은 자료 6시간 재사용 (공시는 하루 몇 번 안 바뀜)
-VERSION = 4                    # 모으는 방식 바꾸면 올림 → 옛 캐시 무시 (2: 가격대 · 3: 정기보고서 따로·등급 · 4: 못 믿을 PER 가격대 뺌)
+VERSION = 5                    # 모으는 방식 바꾸면 올림 → 옛 캐시 무시 (2: 가격대 · 3: 정기보고서 따로·등급 · 4: 못 믿을 PER 가격대 뺌)
 CLAUDE = "/home/junp/.local/bin/claude"
 WORKDIR = Path("/home/junp/tmp_claude/review_cli")
 _locks: dict[str, threading.Lock] = {}
@@ -952,7 +952,20 @@ def _grade(d: dict) -> dict:
         add("인력", 5, 3, "비교 자료 없음")
     total = sum(i["score"] for i in items)
     g = next(gr for cut, gr in GRADES if total >= cut)
-    return {"grade": g, "score": total, "items": items}
+    # 문서 STEP 1: 바이오·엔터는 "펀더를 아무리 까도 안 나오는" 섹터 — 임상·허가·흥행 위험은 공시 숫자로 안 잡힘 → 등급 상한 A- (2026-10-17 사용자 "바이오는 왤케 높은데")
+    limited = ""
+    try:
+        from backend.services.industry_map import industries  # noqa: PLC0415
+        ind = industries().get(d["code"], "") or ""
+        if any(k in ind for k in ("의약", "의료용 물질", "자연과학 및 공학 연구개발")):      # '기초 의약물질'(휴젤·셀트리온) 포함
+            limited = f"제약·바이오({ind})"
+        elif any(k in ind for k in ("오디오물", "영화", "비디오물", "방송업", "공연")) and "장비" not in ind:   # '통신 및 방송 장비'(삼성전자) 빼기
+            limited = f"엔터({ind})"
+    except Exception:  # noqa: BLE001
+        pass
+    if limited and total >= 75:
+        g = "A-"
+    return {"grade": g, "score": total, "items": items, "limited": limited}
 
 
 # ── 내 판단 (PART E-5·E-6·F) ─────────────────────────────────────────
