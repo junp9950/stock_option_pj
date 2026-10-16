@@ -166,8 +166,7 @@ def message(db: Session, day: date | None = None, copy: bool = False) -> str | N
         # 남은 미결제 수 자체는 만기 주기(만기 전 쌓이고 만기 날 줄어듦)라 의미 적음 → 증감 % 로 (2026-10-16)
         prev = (a["oi"] - a["doi"]) if a["oi"] else None
         out.append(f"미결제 {sg(a['doi'])}계약" + (f" ({a['doi'] / prev * 100:+.1f}%)" if prev else ""))
-    if not copy:
-        out.append(f"선물만 보면 {NAMES[a['kind']]} ({a['meaning']})" + (f" · {a['streak']}일 연속" if a["streak"] >= 2 and a["kind"] != "none" else ""))
+    # '선물만 보면 ○○형'·'지난 기록 다음 날 평균' 줄은 뺌 — 14년 검증에서 확인 안 됨 (2026-10-16 사용자 "의미 없는 건 빼고")
     if a["basis"] is not None:
         out.append(f"베이시스 {a['basis']:+.2f} (선물 {a['fut']:,.2f} · 현물 {a['spot']:,.2f})")
     if d in pg:
@@ -190,9 +189,6 @@ def message(db: Session, day: date | None = None, copy: bool = False) -> str | N
             out.append(f"3일 합계 현물 {sg(s3)} + 선물 {sg(f3)} = {sg(s3 + f3)}")
             if (s3 > 0) != (f3 > 0) and abs(s3) > 1000 and abs(f3) > 1000 and not copy:
                 out.append("현물과 선물 방향이 반대 — 선물 매매는 헤지·차익일 수 있어 선물만으로 롱·숏 판단 금지")
-    s = a["stat"]
-    if a["kind"] != "none" and s["n"] and not copy:
-        out += ["", f"지난 기록 {NAMES[a['kind']]} {s['n']}번: 다음 날 평균 {s['r1']:+.2f}% · 오른 날 {s['up']}% (전체 {s['base']:+.2f}%) · 참고용"]
     return "\n".join(out)
 
 
