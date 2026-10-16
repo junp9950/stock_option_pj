@@ -31,7 +31,7 @@ KST = ZoneInfo("Asia/Seoul")
 API = "https://opendart.fss.or.kr/api/"
 VIEW = "https://dart.fss.or.kr/dsaf001/main.do?rcpNo="
 TTL = 6 * 3600                 # 모은 자료 6시간 재사용 (공시는 하루 몇 번 안 바뀜)
-VERSION = 3                    # 모으는 방식 바꾸면 올림 → 옛 캐시 무시 (2: 가격대 · 3: 정기보고서 따로·등급)
+VERSION = 4                    # 모으는 방식 바꾸면 올림 → 옛 캐시 무시 (2: 가격대 · 3: 정기보고서 따로·등급 · 4: 못 믿을 PER 가격대 뺌)
 CLAUDE = "/home/junp/.local/bin/claude"
 WORKDIR = Path("/home/junp/tmp_claude/review_cli")
 _locks: dict[str, threading.Lock] = {}
@@ -806,7 +806,7 @@ def _bands(db: Session, d: dict) -> dict | None:
     if len(rows) < 120:
         return None
     ann = sorted((p["rcept_dt"], p["y"]) for p in P if p["kind"] == "사업")
-    per, pbr = [], []
+    per, pbr, per_ni = [], [], []
     for dt, c in rows:
         ds = dt.strftime("%Y%m%d")
         known = [y for rd, y in ann if rd and rd <= ds]
@@ -814,6 +814,7 @@ def _bands(db: Session, d: dict) -> dict | None:
         ni = ni_by_y.get(fy) if fy else None
         if ni and ni > 0:
             per.append(c * sh / ni)
+            per_ni.append(ni)
         eqs = [e for rd, e in eq_pts if rd and rd <= ds]
         if eqs and eqs[-1] > 0:
             pbr.append(c * sh / eqs[-1])
@@ -828,10 +829,20 @@ def _bands(db: Session, d: dict) -> dict | None:
         now = last * sh / base
         return {"name": name, "unit": unit, "now": round(now, 1), "pos": round(float((a < now).mean() * 100)),
                 **{k: round(v, 1) for k, v in q.items()}, **{f"px_{k}": round(v * base / sh) for k, v in q.items()}}
-    for b in (band("PER", per, ttm, "배"), band("PBR", pbr, eq_now, "배")):
+    # PER 가격대를 못 믿는 경우 (2026-10-17 저스템: 흑자 전환 7개월치 PER 44~137배 × 이익 3배 → 하방 22,551원 > 지금 15,900원)
+    why_no = ""
+    if not ttm or ttm <= 0:
+        why_no = "최근 4분기 지배순이익이 적자"
+    elif len(per) < 250:
+        why_no = f"흑자였던 기간이 {len(per)}거래일뿐(1년 미만)"
+    elif float(np.median(per)) > 60:
+        why_no = f"3년 PER 중앙값 {float(np.median(per)):.0f}배 — 이익이 너무 작던 때라 의미 없음"
+    elif not 0.5 <= ttm / float(np.median(per_ni)) <= 2:
+        why_no = f"지금 이익이 그 기간 이익의 {ttm / float(np.median(per_ni)):.1f}배로 급변(턴어라운드·사이클)"
+    for b in ((None if why_no else band("PER", per, ttm, "배")), band("PBR", pbr, eq_now, "배")):
         if b:
             out["rows"].append(b)
-    out["note"] = ("최근 4분기 지배순이익이 적자라 PER 가격대는 못 냄 — PBR만" if not ttm or ttm <= 0 else "")
+    out["note"] = f"PER 가격대는 뺌 — {why_no}. PBR만 봄" if why_no else ""
     return out if out["rows"] else None
 
 
