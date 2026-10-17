@@ -70,6 +70,7 @@ def _tech(name: str, code: str) -> dict | None:
     last = c[-1]
     ma = {n: sum(c[-n:]) / n for n in (5, 20, 60, 120)}
     hi52 = max(c[-250:])
+    lo52 = min(c[-250:])
     disp = {n: round(last / ma[n] * 100, 1) for n in ma}
     r = rsi[-1]
     # 설명 (사용자 색약: ▲■▼ 글자로 상태)
@@ -79,7 +80,9 @@ def _tech(name: str, code: str) -> dict | None:
     return {"name": name, "date": d[-1], "close": last, "chg": round((last / c[-2] - 1) * 100, 2), "rsi": round(r, 1), "rsi_txt": rs_t,
             "rsi_hist": [round(x, 1) for x in rsi[-60:] if x is not None], "disp": disp, "disp_txt": d_t,
             "ma": {str(k): round(v, 2) for k, v in ma.items()}, "above": {str(k): last > v for k, v in ma.items()},
-            "from_hi": round((last / hi52 - 1) * 100, 1), "hist": _series(d, c, rsi)}
+            "from_hi": round((last / hi52 - 1) * 100, 1), "from_lo": round((last / lo52 - 1) * 100, 1), "hi52": hi52, "lo52": lo52,
+            "rsi_min60": round(min(x for x in rsi[-60:] if x is not None), 1), "rsi_max60": round(max(x for x in rsi[-60:] if x is not None), 1),
+            "hist": _series(d, c, rsi)}
 
 
 def _series(d: list[str], c: list[float], rsi: list) -> list[dict]:
@@ -124,13 +127,23 @@ def _funds() -> dict | None:
     def pct(k, n):
         return round((z[k] / rows[-1 - n][k] - 1) * 100, 1) if len(rows) > n and rows[-1 - n][k] else None
     hi = max(rows, key=lambda r: r["credit"])
+    for r in rows:
+        r["ratio"] = r["credit"] / r["deposit"] * 100 if r["deposit"] else None
+        r["cap_ratio"] = r["credit"] / r["cap"] * 100 if r["cap"] else None
+
+    def line(k, nm, unit):
+        v = z[k]
+        g = lambda n: (None if len(rows) <= n or rows[-1 - n][k] is None or v is None else round(v - rows[-1 - n][k], 2 if unit == "%" else 0))  # noqa: E731
+        return {"k": k, "name": nm, "unit": unit, "v": round(v, 2) if unit == "%" else v, "d1": g(1), "d5": g(5), "d20": g(20)}
+    table = [line("credit", "신용융자 잔고", "억"), line("deposit", "고객예탁금", "억"), line("unpaid", "미수금", "억"), line("ratio", "신용 ÷ 예탁금", "%"),
+             line("cap_ratio", "신용 ÷ 시가총액", "%"), line("eq_fund", "주식형 펀드", "억"), line("mmf", "MMF", "억"), line("futs", "선물 예수금", "억")]
     return {"date": z["d"], "credit": z["credit"], "deposit": z["deposit"], "unpaid": z["unpaid"], "futs": z["futs"], "eq_fund": z["eq_fund"],
             "mmf": z["mmf"], "lend": z["lend"],
             "credit_ch": {"1": ch("credit", 1), "5": ch("credit", 5), "20": ch("credit", 20)}, "credit_pct": {"5": pct("credit", 5), "20": pct("credit", 20)},
             "deposit_ch": {"1": ch("deposit", 1), "5": ch("deposit", 5), "20": ch("deposit", 20)}, "deposit_pct": {"5": pct("deposit", 5), "20": pct("deposit", 20)},
             "credit_to_deposit": round(z["credit"] / z["deposit"] * 100, 1) if z["deposit"] else None,
             "credit_to_cap": round(z["credit"] / z["cap"] * 100, 2) if z["cap"] else None,
-            "credit_hi": {"d": hi["d"], "v": hi["credit"], "from": round((z["credit"] / hi["credit"] - 1) * 100, 1)},
+            "credit_hi": {"d": hi["d"], "v": hi["credit"], "from": round((z["credit"] / hi["credit"] - 1) * 100, 1)}, "table": table,
             "hist": [{"d": r["d"], "credit": r["credit"], "deposit": r["deposit"], "unpaid": r["unpaid"], "kospi": r["kospi"],
                       "ratio": round(r["credit"] / r["deposit"] * 100, 2) if r["deposit"] else None} for r in rows]}
 
