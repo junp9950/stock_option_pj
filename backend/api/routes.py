@@ -2118,6 +2118,13 @@ def get_market_events(start: date, end: date, db: Session = Depends(get_db)):
     return {"start": str(start), "end": str(end), "items": events(db, start, end)}
 
 
+@router.get("/market/board")
+def get_market_board():
+    """시황 탭 (2026-10-17): 코스피·코스닥 RSI·이격도 + 신용융자·고객예탁금 (KIS, 10분 재사용)."""
+    from backend.services.market_board import board  # noqa: PLC0415
+    return board()
+
+
 @router.get("/market/verdict")
 def get_market_verdict(db: Session = Depends(get_db)):
     """세 탭(오늘·차트 후보·종베) 공통 시장 문구 (2026-10-10 "시장 상승·매매 가능이 맞나?"):

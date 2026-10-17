@@ -136,10 +136,10 @@ select{background:var(--c3);border:1px solid var(--ln);color:var(--bd);padding:6
 @media(max-width:900px){.hd-auth{padding:5px 9px;font-size:11px;margin-left:4px}.hd-nm{display:none}}
 .hb-b.p{background:#7c3aed;color:#fff}
 /* 하따(바닥 모으기·과매도 반등) 모드 화면 (2026-10-15 "모드가 켜지면 오늘 탭 테마가 바뀌면서 그 내용만") */
-body[data-hmode=bottom] #panel-home{--mode:#8b5cf6}body[data-hmode=crash] #panel-home{--mode:#ef4444}
-body[data-hmode] #panel-home{background-image:linear-gradient(180deg,color-mix(in srgb,var(--mode) 16%,transparent),transparent 520px)}
-body[data-hmode] #panel-home .htop,body[data-hmode] #db-more{display:none}body[data-hmode=bottom] #hc-sig:not(.crash){display:none}
-body[data-hmode] #panel-home .hcard,body[data-hmode] #panel-home .ws-list,body[data-hmode] #panel-home .ws-main{border-color:color-mix(in srgb,var(--mode) 55%,var(--line))}
+body[data-hmode=bottom] :is(#panel-home,#panel-trade){--mode:#8b5cf6}body[data-hmode=crash] :is(#panel-home,#panel-trade){--mode:#ef4444}
+body[data-hmode] :is(#panel-home,#panel-trade){background-image:linear-gradient(180deg,color-mix(in srgb,var(--mode) 16%,transparent),transparent 520px)}
+body[data-hmode] :is(#panel-home,#panel-trade) .htop,body[data-hmode] #db-more{display:none}body[data-hmode=bottom] #hc-sig:not(.crash){display:none}
+body[data-hmode] :is(#panel-home,#panel-trade) .hcard,body[data-hmode] :is(#panel-home,#panel-trade) .ws-list,body[data-hmode] :is(#panel-home,#panel-trade) .ws-main{border-color:color-mix(in srgb,var(--mode) 55%,var(--line))}
 .mode-bar[hidden],.mode-hero[hidden]{display:none!important}.mode-hero{margin-bottom:14px;border:2px solid var(--mode,var(--line))!important}.mode-bar{display:flex;align-items:center;gap:10px;flex-wrap:wrap;padding:8px 12px;margin-bottom:10px;border-radius:10px;border:1px dashed #8b5cf6;font-size:13px;color:var(--tx)}
 .md-h{display:flex;align-items:center;gap:10px;flex-wrap:wrap}.md-h>b{font-size:19px;color:var(--tx)}.md-h .btn{margin-left:auto}
 .md-lead{margin:8px 0 12px;font-size:13.5px;color:var(--tx);line-height:1.6}
@@ -148,9 +148,9 @@ body[data-hmode] #panel-home .hcard,body[data-hmode] #panel-home .ws-list,body[d
 .md-st.done{border-color:var(--mode)}.md-st b{display:block;font-size:14px;margin-bottom:2px}.md-st .bar{height:6px;border-radius:3px;background:var(--line2);margin-top:6px;overflow:hidden}.md-st .bar i{display:block;height:100%;background:var(--mode)}
 .md-g{display:grid;grid-template-columns:minmax(0,1.3fr) minmax(0,1fr);gap:22px}
 .md-spark{display:flex;align-items:flex-end;gap:3px;height:44px;margin-top:6px}.md-spark i{flex:1;background:var(--mode);opacity:.75;border-radius:2px 2px 0 0;min-height:2px}.md-spark i.lo{opacity:1}
-@media(max-width:900px){#panel-home>.mode-hero,#panel-home>.mode-bar{order:-2}.md-steps{grid-template-columns:1fr 1fr}.md-g{grid-template-columns:1fr;gap:16px}.md-h>b{font-size:17px}}
+@media(max-width:900px){:is(#panel-home,#panel-trade)>.mode-hero,:is(#panel-home,#panel-trade)>.mode-bar{order:-2}.md-steps{grid-template-columns:1fr 1fr}.md-g{grid-template-columns:1fr;gap:16px}.md-h>b{font-size:17px}}
 .sig-empty{padding:10px 4px;font-size:13px;color:var(--tx)}.sig-how{margin-top:12px;padding-top:10px;border-top:1px solid var(--line2);font-size:12.5px;color:var(--tx);line-height:1.7}
-@media(max-width:900px){#panel-home.active{display:flex;flex-direction:column}#panel-home>.sig-card{order:-1}.sig-g{grid-template-columns:1fr;gap:16px}.sig-r{grid-template-columns:minmax(0,1fr) 70px 70px 52px;font-size:12.5px}}
+@media(max-width:900px){:is(#panel-home,#panel-trade).active{display:flex;flex-direction:column}:is(#panel-home,#panel-trade)>.sig-card{order:-1}.sig-g{grid-template-columns:1fr;gap:16px}.sig-r{grid-template-columns:minmax(0,1fr) 70px 70px 52px;font-size:12.5px}}
 .htop{display:grid;grid-template-columns:minmax(0,1.25fr) minmax(0,1fr);gap:14px;margin-bottom:14px}
 .hc-spark{position:relative;height:92px;margin:2px 0 8px}.hc-spark svg{width:100%;height:100%;display:block}
 .hc-sx{display:flex;justify-content:space-between;font-size:10.5px;color:var(--muted);margin-top:-6px;margin-bottom:10px}
@@ -341,11 +341,11 @@ body[data-hmode] #panel-home .hcard,body[data-hmode] #panel-home .ws-list,body[d
 
 .cp-c1,.cp-c2{display:flex;flex-direction:column;gap:10px}
 /* ── 첫 화면 시안 B (2026-10-11 사용자 고름) — 정돈된 카드 · 색 = 양호 초록 / 중립 흰 / 약화 빨강, ▲■▼ 글자 함께 ── */
-#panel-home,.hbt{--card:var(--bcard);--card2:var(--c2c);--line:var(--c4);--line2:var(--bline2);--text:var(--neu);--body:var(--bd3);--muted:var(--mu3);--up:var(--up2);--down:var(--dn2);
+:is(#panel-home,#panel-trade),.hbt{--card:var(--bcard);--card2:var(--c2c);--line:var(--c4);--line2:var(--bline2);--text:var(--neu);--body:var(--bd3);--muted:var(--mu3);--up:var(--up2);--down:var(--dn2);
   font-family:'Noto Sans KR','Apple SD Gothic Neo','Malgun Gothic','Segoe UI',sans-serif}
-#panel-home .mono,#panel-home .ws-px,#panel-home .hb-num .v,#panel-home .hb-tv,#panel-home .hb-rs,#panel-home .hb-px{font-family:'IBM Plex Mono',ui-monospace,Menlo,monospace;font-variant-numeric:tabular-nums}
-#panel-home .htop{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1.15fr);gap:16px;margin-bottom:16px}
-#panel-home .hcard{background:var(--card);border:0;border-radius:16px;padding:14px 18px}
+:is(#panel-home,#panel-trade) .mono,:is(#panel-home,#panel-trade) .ws-px,:is(#panel-home,#panel-trade) .hb-num .v,:is(#panel-home,#panel-trade) .hb-tv,:is(#panel-home,#panel-trade) .hb-rs,:is(#panel-home,#panel-trade) .hb-px{font-family:'IBM Plex Mono',ui-monospace,Menlo,monospace;font-variant-numeric:tabular-nums}
+:is(#panel-home,#panel-trade) .htop{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1.15fr);gap:16px;margin-bottom:16px}
+:is(#panel-home,#panel-trade) .hcard{background:var(--card);border:0;border-radius:16px;padding:14px 18px}
 .hb-top{display:flex;flex-wrap:wrap;align-items:center;gap:8px 10px;margin-bottom:8px}
 .hb-verdict{font-weight:800;font-size:15px;padding:6px 14px;border-radius:999px}
 .hb-verdict.k-g{background:#2ea043;color:#fff}.hb-verdict.k-n{background:var(--neu);color:var(--neu-on)}.hb-verdict.k-b{background:#da3633;color:#fff}
@@ -363,15 +363,15 @@ body[data-hmode] #panel-home .hcard,body[data-hmode] #panel-home .ws-list,body[d
 .hb-th{display:flex;justify-content:space-between;align-items:center;gap:6px}.hb-th b{font-size:13.5px;color:var(--text)}
 .hb-th .hc-badge{font-size:11px;padding:2px 8px;border-radius:999px}
 .hb-tv{font-size:21px;font-weight:600;color:var(--strong)}.hb-ts{font-size:12px;color:var(--muted);line-height:1.35;word-break:keep-all;overflow-wrap:anywhere}   /* 잘리던 설명 글 줄바꿈 (2026-10-14) */
-#panel-home .ws{gap:16px}
-#panel-home .ws-list,#panel-home .ws-main{background:var(--card);border:0;border-radius:16px;padding:16px}
-#panel-home .ws-main{padding:18px 20px}
-#panel-home .ws-search input{background:var(--sunk);border:1px solid var(--line);border-radius:12px;padding:10px 14px;font-size:14px}
-#panel-home .ws-tabs{gap:6px}#panel-home .ws-tabs button{background:var(--card2);border:0;border-radius:10px;padding:8px 0;font-size:13px}
-#panel-home .ws-tabs button.on{background:var(--neu);color:var(--neu-on);font-weight:700}
-#panel-home .ws-sub{border-top:1px solid var(--line);font-size:12px}
+:is(#panel-home,#panel-trade) .ws{gap:16px}
+:is(#panel-home,#panel-trade) .ws-list,:is(#panel-home,#panel-trade) .ws-main{background:var(--card);border:0;border-radius:16px;padding:16px}
+:is(#panel-home,#panel-trade) .ws-main{padding:18px 20px}
+:is(#panel-home,#panel-trade) .ws-search input{background:var(--sunk);border:1px solid var(--line);border-radius:12px;padding:10px 14px;font-size:14px}
+:is(#panel-home,#panel-trade) .ws-tabs{gap:6px}:is(#panel-home,#panel-trade) .ws-tabs button{background:var(--card2);border:0;border-radius:10px;padding:8px 0;font-size:13px}
+:is(#panel-home,#panel-trade) .ws-tabs button.on{background:var(--neu);color:var(--neu-on);font-weight:700}
+:is(#panel-home,#panel-trade) .ws-sub{border-top:1px solid var(--line);font-size:12px}
 .hb-row{display:grid;grid-template-columns:38px minmax(0,1fr) auto;gap:2px 12px;align-items:center;padding:10px 12px;border-radius:12px;margin:2px 0;cursor:pointer}
-#panel-home .ws-item.hb-row:hover{background:var(--card2)}#panel-home .ws-item.hb-row.on{background:var(--c4);box-shadow:none}
+:is(#panel-home,#panel-trade) .ws-item.hb-row:hover{background:var(--card2)}:is(#panel-home,#panel-trade) .ws-item.hb-row.on{background:var(--c4);box-shadow:none}
 .hb-rs{width:38px;height:38px;border-radius:10px;background:var(--sunk);display:flex;align-items:center;justify-content:center;font-weight:600;color:var(--neu);font-size:14px}
 .hb-rs.lead{background:var(--neu);color:var(--neu-on)}.hb-row .ws-av{width:38px;height:38px;border-radius:10px}
 .hb-main{min-width:0}.hb-nm{display:flex;align-items:center;gap:6px;min-width:0}.hb-nm .n{font-weight:700;color:var(--strong);font-size:14.5px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;min-width:4.5em;flex:0 1 auto}
@@ -380,20 +380,20 @@ body[data-hmode] #panel-home .hcard,body[data-hmode] #panel-home .ws-list,body[d
 .hb-sub{font-size:12px;color:var(--muted);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 .hb-row .ws-px{font-size:14px;color:var(--strong);text-align:right}.hb-row .ws-px div{font-size:12px}
 .ws-head .hb-px{font-size:22px;font-weight:600;color:var(--strong);margin-left:6px}.ws-head .hb-px span{font-size:15px;margin-left:8px}
-#panel-home .ws-head b#ws-name{font-size:22px;font-weight:800;color:var(--strong)}
+:is(#panel-home,#panel-trade) .ws-head b#ws-name{font-size:22px;font-weight:800;color:var(--strong)}
 .hb-sig{display:flex;flex-wrap:wrap;gap:8px;align-items:center;font-size:13px;margin:6px 0 4px}.hb-sig:empty{display:none}
 .hb-chips{display:flex;flex-wrap:wrap;gap:6px;margin:4px 0 8px}.hb-chips span:empty{display:none}.hb-chips>span{display:contents}
 .hb-chip{font-size:12px;padding:2px 10px;border-radius:999px;border:1px solid var(--neu);white-space:nowrap}
 @media(max-width:760px){.hb-chip{white-space:normal;max-width:100%;box-sizing:border-box;line-height:1.45;padding:3px 10px}.ws-ctl{flex-direction:column;align-items:stretch;gap:6px}.ws-ctl .ws-per{flex:none!important;width:100%;min-width:0}}   /* 폰: 긴 모양 칸은 줄바꿈 · 봉 종류 줄과 기간 줄은 각각 한 줄 (2026-10-13 아이폰 칸 안 맞음) */
 .hb-chip.k-g{background:rgba(35,134,54,.18);border-color:#2ea043}.hb-chip.k-b{background:rgba(218,54,51,.18);border-color:#da3633}
-#panel-home .lwleg{background:var(--sunk);border-radius:10px;padding:6px 10px;height:auto;min-height:52px;font-family:'IBM Plex Mono',ui-monospace,monospace;font-size:12px}
-#panel-home .ws>.cm-panel{background:transparent;border:0;padding:0;columns:auto;display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:16px}
-#panel-home .ws>.cm-panel>.cp-c1,#panel-home .ws>.cm-panel>.cp-c2{background:var(--card);border-radius:16px;padding:16px 18px;display:flex;flex-direction:column;gap:12px;margin:0}
-#panel-home .ws>.cm-panel .cp-chips{display:none}
-#panel-home .ws>.cm-panel .cp-state{background:transparent;border:0;padding:0}
-#panel-home .ws>.cm-panel .cp-cards .cp-card{background:var(--sunk);border:0;border-radius:10px;padding:10px 12px}
-#panel-home .ws>.cm-panel .cp-rows{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));column-gap:20px;border-top:0}
-#panel-home .ws>.cm-panel .cp-row{font-size:13px;border-bottom:1px solid var(--line)}
+:is(#panel-home,#panel-trade) .lwleg{background:var(--sunk);border-radius:10px;padding:6px 10px;height:auto;min-height:52px;font-family:'IBM Plex Mono',ui-monospace,monospace;font-size:12px}
+:is(#panel-home,#panel-trade) .ws>.cm-panel{background:transparent;border:0;padding:0;columns:auto;display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:16px}
+:is(#panel-home,#panel-trade) .ws>.cm-panel>.cp-c1,:is(#panel-home,#panel-trade) .ws>.cm-panel>.cp-c2{background:var(--card);border-radius:16px;padding:16px 18px;display:flex;flex-direction:column;gap:12px;margin:0}
+:is(#panel-home,#panel-trade) .ws>.cm-panel .cp-chips{display:none}
+:is(#panel-home,#panel-trade) .ws>.cm-panel .cp-state{background:transparent;border:0;padding:0}
+:is(#panel-home,#panel-trade) .ws>.cm-panel .cp-cards .cp-card{background:var(--sunk);border:0;border-radius:10px;padding:10px 12px}
+:is(#panel-home,#panel-trade) .ws>.cm-panel .cp-rows{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));column-gap:20px;border-top:0}
+:is(#panel-home,#panel-trade) .ws>.cm-panel .cp-row{font-size:13px;border-bottom:1px solid var(--line)}
 /* 매매 일지 보유 종목 차트도 첫 화면과 같은 카드 (2026-10-11) */
 #panel-journal .ws{gap:16px}
 #panel-journal .ws-list,#panel-journal .ws-main{background:var(--card);border:0;border-radius:16px;padding:16px}
@@ -409,10 +409,10 @@ body[data-hmode] #panel-home .hcard,body[data-hmode] #panel-home .ws-list,body[d
 #panel-journal .ws>.cm-panel .cp-cards .cp-card{background:var(--sunk);border:0;border-radius:10px;padding:10px 12px}
 #panel-journal .ws>.cm-panel .cp-rows{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));column-gap:20px;border-top:0}
 #panel-journal .ws>.cm-panel .cp-row{font-size:13px;border-bottom:1px solid var(--line)}
-@media(min-width:901px){#panel-home .lwbox>.lwc{height:var(--hb-ch,clamp(340px,calc(100vh - 560px),640px))}}   /* --hb-ch = 화면 높이에 맞춘 값 (hbFitChart) */
+@media(min-width:901px){:is(#panel-home,#panel-trade) .lwbox>.lwc{height:var(--hb-ch,clamp(340px,calc(100vh - 560px),640px))}}   /* --hb-ch = 화면 높이에 맞춘 값 (hbFitChart) */
 /* 위 영역 납작하게 (2026-10-11 차트 잘림) — 타일 = 1줄째 제목·배지 / 2줄째 값·설명 */
 @media(min-width:901px){
-#panel-home .hcard{padding:12px 16px}
+:is(#panel-home,#panel-trade) .hcard{padding:12px 16px}
 .hb-spark .hc-spark{height:70px}.hb-num .v{font-size:19px;margin:0}.hb-idx{margin-bottom:6px}
 #hc-market{gap:8px}
 .hb-tile{display:grid;grid-template-columns:auto minmax(0,1fr);grid-template-areas:"th th" "tv ts";align-items:baseline;column-gap:10px;row-gap:2px;padding:8px 12px}
@@ -423,9 +423,9 @@ body[data-hmode] #panel-home .hcard,body[data-hmode] #panel-home .ws-list,body[d
 .hb-flows table{width:100%;border-collapse:collapse;font-size:12.5px}.hb-flows th{color:var(--muted);font-weight:500;text-align:right;padding:3px 6px;white-space:nowrap}.hb-flows th:first-child,.hb-flows tbody th{text-align:left;color:var(--text)}
 .hb-flows td{text-align:right;padding:3px 6px;white-space:nowrap}
 .hb-prov{font-weight:700;color:var(--neu);border:1px solid var(--neu);border-radius:999px;padding:0 7px;font-size:11px}.hb-ftg{float:right;display:inline-flex;gap:4px}.hb-ftg button{background:var(--card2);border:0;color:var(--muted);border-radius:8px;padding:2px 9px;font-size:11.5px;cursor:pointer}.hb-ftg button.on{background:var(--neu);color:var(--neu-on);font-weight:700}
-@media(min-width:901px){#panel-home .lwbox{position:relative}#panel-home .lwbox>.lwleg{position:absolute;top:6px;left:8px;z-index:3;background:color-mix(in srgb,var(--sunk) 90%,transparent);pointer-events:none;max-width:calc(100% - 120px);min-height:0}}   /* 봉 정보는 차트 위에 겹쳐서 — 차트 잘림 줄이기 */
-@media(max-width:1100px){#panel-home .htop{grid-template-columns:1fr}}
-@media(max-width:760px){.hb-idx{grid-template-columns:1fr 1fr}.hb-spark{grid-column:1/-1}#hc-market{grid-template-columns:1fr 1fr}#panel-home .ws>.cm-panel{grid-template-columns:1fr}#panel-home .ws>.cm-panel .cp-rows{grid-template-columns:1fr}.hb-sum{margin-left:0}}
+@media(min-width:901px){:is(#panel-home,#panel-trade) .lwbox{position:relative}:is(#panel-home,#panel-trade) .lwbox>.lwleg{position:absolute;top:6px;left:8px;z-index:3;background:color-mix(in srgb,var(--sunk) 90%,transparent);pointer-events:none;max-width:calc(100% - 120px);min-height:0}}   /* 봉 정보는 차트 위에 겹쳐서 — 차트 잘림 줄이기 */
+@media(max-width:1100px){:is(#panel-home,#panel-trade) .htop{grid-template-columns:1fr}}
+@media(max-width:760px){.hb-idx{grid-template-columns:1fr 1fr}.hb-spark{grid-column:1/-1}#hc-market{grid-template-columns:1fr 1fr}:is(#panel-home,#panel-trade) .ws>.cm-panel{grid-template-columns:1fr}:is(#panel-home,#panel-trade) .ws>.cm-panel .cp-rows{grid-template-columns:1fr}.hb-sum{margin-left:0}}
 
 /* ── 다른 탭 시안 B (2026-10-11, 차트 후보부터) — .hbt = 테마 적용 탭 ── */
 .hbt .mono{font-family:'IBM Plex Mono',ui-monospace,Menlo,monospace;font-variant-numeric:tabular-nums}
@@ -593,6 +593,12 @@ body[data-hmode] #panel-home .hcard,body[data-hmode] #panel-home .ws-list,body[d
   .hbt .pb-table td{border:0}.hbt .pb-table tr{background:var(--sunk);border:0}
   .tvs-n b{font-size:15px}
 }
+
+/* 시황 지표 (2026-10-17) */
+#hc-board{margin-bottom:16px}.bd-t{overflow-x:auto}.bd-t table{width:100%;font-size:13px;border-collapse:collapse}.bd-t th{color:var(--mu);font-weight:600;font-size:12px;text-align:left;padding:6px 8px;border-bottom:1px solid var(--ln)}
+.bd-t td{padding:8px;border-bottom:1px solid var(--c3);vertical-align:top;white-space:nowrap}.bd-t td b{color:var(--strong);font-family:'IBM Plex Mono',monospace}
+.bd-f{display:grid;grid-template-columns:repeat(auto-fit,minmax(240px,1fr));gap:10px}.bd-k{background:var(--sunk,var(--c2));border:1px solid var(--ln);border-radius:12px;padding:10px 12px;display:flex;flex-direction:column;gap:3px;font-size:13px;color:var(--tx)}
+.bd-k>b{font-size:20px;color:var(--strong);font-family:'IBM Plex Mono',monospace}.bd-k b{color:var(--strong)}
 </style>
 <script src="https://cdn.jsdelivr.net/npm/chart.js@4/dist/chart.umd.min.js"></script>
 <link rel="preconnect" href="https://fonts.googleapis.com"><link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Noto+Sans+KR:wght@400;500;700;800&family=IBM+Plex+Mono:wght@500;600&display=swap">
@@ -622,7 +628,8 @@ body[data-hmode] #panel-home .hcard,body[data-hmode] #panel-home .ws-list,body[d
 
 <nav class="tabs">
   <span class="mk-seg" role="group" aria-label="시장"><button data-mk="kr" class="on" onclick="switchMarket('kr')">🇰🇷 국장</button><button data-mk="us" onclick="switchMarket('us')">🇺🇸 미장</button></span>
-  <div class="tab active" data-t="home" data-m="kr" onclick="switchTab('home')">오늘</div>
+  <div class="tab active" data-t="home" data-m="kr" onclick="switchTab('home')">시황</div>
+  <div class="tab" data-t="trade" data-m="kr" onclick="switchTab('trade')">매매</div>
   <div class="tab" data-t="stock" data-m="kr" onclick="switchTab('stock')">종목</div>
   <div class="tab" data-t="forensic" data-m="kr" onclick="switchTab('forensic')">기업 분석</div>
   <div class="tab" data-t="candidates" data-m="kr" onclick="switchTab('candidates')">차트 후보</div>
@@ -862,9 +869,22 @@ body[data-hmode] #panel-home .hcard,body[data-hmode] #panel-home .ws-list,body[d
   <!-- 첫 화면 위: '오늘' 카드 + '시장 상태' 카드 (2026-10-09 "깔끔한 대시보드처럼") — 예전 띠·판단 상자는 숨김(아래 코드가 아직 씀) -->
   <section class="hcard mode-hero" id="hc-mode" hidden></section><div class="mode-bar" id="hc-modebar" hidden></div>
   <div class="htop"><section class="hcard" id="hc-today"><div class="ts">불러오는 중…</div></section><section class="hcard" id="hc-market"></section></div>
-  <section class="hcard sig-card" id="hc-sig"><span class="ts">📢 오늘의 매매 신호 불러오는 중… (몇 초)</span></section>
   <div id="db-strip" class="mstrip" style="display:none"></div>
   <div id="db-verdict" style="display:none"></div>
+  <section class="hcard" id="hc-board"><span class="ts">시황 지표 불러오는 중…</span></section>
+  <details id="db-more"><summary>📋 오늘 판단 자세히 — 시장 카드 · 장세별 자리 · 참고 (눌러서 펼치기)</summary>
+  <div id="db-market" style="margin-bottom:12px"></div>
+  <div id="db-top" style="display:grid;grid-template-columns:repeat(auto-fit,minmax(320px,1fr));gap:12px;margin-bottom:6px;align-items:stretch"></div>
+  <div style="font-size:15px;font-weight:700;color:var(--tx);margin:14px 0 8px">🎯 오늘 볼 자리 — 장세에 맞는 순서로 3개</div>
+  <div id="db-rank"></div>
+  <details style="margin-top:14px"><summary style="font-size:15px;font-weight:700;color:var(--tx);cursor:pointer">📎 참고 — 내일 후보 · 관심 종목 선 · 대량거래 · 내 원칙 (눌러서 펼치기)</summary>
+  <div id="db-ref" style="display:grid;grid-template-columns:repeat(auto-fit,minmax(320px,1fr));gap:12px;align-items:start;margin-top:10px"></div></details>
+  </details>
+</div>
+
+<!-- 매매 탭 (2026-10-17 사용자 "오늘 탭에 매수·매도 관련된 건 옆에 탭 하나 파서 넣고") — 매매 신호 카드 + 종목 목록·신호 차트·종목 정보 -->
+<div id="panel-trade" class="panel content">
+  <section class="hcard sig-card" id="hc-sig"><span class="ts">📢 오늘의 매매 신호 불러오는 중… (몇 초)</span></section>
   <div class="ws">
     <div class="ws-list">
       <div class="ws-search"><input id="ws-q" placeholder="🔍 종목 검색 (이름·코드·초성)" autocomplete="off" oninput="wsSearch(this.value)" onkeydown="srKey(event,'ws-sr',wsSearch)"><div id="ws-sr"></div></div>
@@ -885,14 +905,6 @@ body[data-hmode] #panel-home .hcard,body[data-hmode] #panel-home .ws-list,body[d
     </div>
     <aside class="cm-panel" id="ws-panel"></aside>
   </div>
-  <details id="db-more"><summary>📋 오늘 판단 자세히 — 시장 카드 · 장세별 자리 · 참고 (눌러서 펼치기)</summary>
-  <div id="db-market" style="margin-bottom:12px"></div>
-  <div id="db-top" style="display:grid;grid-template-columns:repeat(auto-fit,minmax(320px,1fr));gap:12px;margin-bottom:6px;align-items:stretch"></div>
-  <div style="font-size:15px;font-weight:700;color:var(--tx);margin:14px 0 8px">🎯 오늘 볼 자리 — 장세에 맞는 순서로 3개</div>
-  <div id="db-rank"></div>
-  <details style="margin-top:14px"><summary style="font-size:15px;font-weight:700;color:var(--tx);cursor:pointer">📎 참고 — 내일 후보 · 관심 종목 선 · 대량거래 · 내 원칙 (눌러서 펼치기)</summary>
-  <div id="db-ref" style="display:grid;grid-template-columns:repeat(auto-fit,minmax(320px,1fr));gap:12px;align-items:start;margin-top:10px"></div></details>
-  </details>
 </div>
 
 <div id="panel-account" class="panel content hbt"></div>
@@ -1318,7 +1330,7 @@ async function loadHeader(){
 function switchTab(id) {
   // 실적 개선 탭은 2026-10-04 숨김 (데이터는 📈 실적 표시로 계속 쓴다, /earnings 주소는 그대로)
   // 2026-10-05 사용자 "당분간 차트 후보 보고 매매" → 차트 후보를 첫 탭으로, 종베는 검증 중으로 뒤로
-  const tabs = ['home','stock','forensic','candidates','calendar','sector','journal','account','screener','heatmap','discussion','suggest','us','usstock','usrank','usheat'];
+  const tabs = ['home','trade','stock','forensic','candidates','calendar','sector','journal','account','screener','heatmap','discussion','suggest','us','usstock','usrank','usheat'];
   if(id==='jongbe') id='candidates';   // 종베 탭은 2026-10-11 차트 후보로 합침 (예전 주소 #jongbe도 여기로)
   if(!tabs.includes(id))return;
   _curTab=id; document.body.dataset.tab=id;
@@ -1341,7 +1353,8 @@ function switchTab(id) {
   if(id==='us') usLoad();
   if(id==='usrank') usRankLoad();
   if(id==='usheat') usHeatLoad();
-  if(id==='home'){loadDashboard();loadWorkspace();}
+  if(id==='home'){loadDashboard();loadBoard();}
+  if(id==='trade'){loadWorkspace(); setTimeout(()=>{ try{ hbFitChart(); wsFit(); }catch(e){} },300);}
   if(id==='suggest')document.getElementById('suggest-frame').src='/suggestions';
   if(id==='discussion'&&!document.getElementById('discussion-frame').src)document.getElementById('discussion-frame').src='/discussion';
 }
@@ -1362,10 +1375,11 @@ async function loadDashboard(){
 }
 // 장중 자동 갱신 (2026-10-11 "장중에 지수 그래프가 계속 업데이트 되나?"): 오늘 탭이 보일 때 지수 선 1분마다, 시장 카드·수급·장세는 5분마다
 setInterval(()=>{ const k=new Date(new Date().toLocaleString('en-US',{timeZone:'Asia/Seoul'})), hm=k.getHours()*100+k.getMinutes(), wd=k.getDay();
-  const home=document.getElementById('panel-home');
-  if(document.visibilityState!=='visible'||!home||!home.classList.contains('active')||wd===0||wd===6||hm<900||hm>1540) return;
-  hcSpark(); if(k.getMinutes()%5===0&&window._dashD) loadLive(window._dashD);
-  loadWorkspace(); wsLiveTick();      // 장중 목록·매매 신호 카드·열린 차트를 1분마다 같이 (2026-10-14 "퍼센트도 차트랑 같이 바뀌는 게 낫지" — 3분이라 어긋남)
+  const home=document.getElementById('panel-home'), trade=document.getElementById('panel-trade');
+  const hOn=home&&home.classList.contains('active'), tOn=trade&&trade.classList.contains('active');
+  if(document.visibilityState!=='visible'||!(hOn||tOn)||wd===0||wd===6||hm<900||hm>1540) return;
+  if(hOn){ hcSpark(); if(k.getMinutes()%5===0&&window._dashD) loadLive(window._dashD); }
+  if(tOn){ loadWorkspace(); wsLiveTick(); }      // 장중 목록·매매 신호 카드·열린 차트를 1분마다 같이 (2026-10-14 "퍼센트도 차트랑 같이 바뀌는 게 낫지" — 3분이라 어긋남)
   },60000);
 // 장중(평일 9:00~15:40)에는 지금 가격으로 장세를 다시 판단해 판단 문구·과매도·순환 카드·카드 순서를 바꾼다 (대시보드 본체는 장 마감 데이터) — 2026-10-07
 async function loadLive(d){
@@ -1483,7 +1497,37 @@ async function hcNums(){
 }
 // 폰에서 브라우저를 뒤로 보냈다가 다시 열면 바로 새 숫자 (타이머가 멈춰 있던 동안 낡은 값이 보이던 것)
 document.addEventListener('visibilitychange',()=>{ if(document.visibilityState!=='visible') return;
-  loadHeader(); const home=document.getElementById('panel-home'); if(home&&home.classList.contains('active')){ hcSpark(); if(window._dashD) loadLive(window._dashD); loadWorkspace(); } });
+  loadHeader(); const home=document.getElementById('panel-home'), trade=document.getElementById('panel-trade');
+  if(home&&home.classList.contains('active')){ hcSpark(); if(window._dashD) loadLive(window._dashD); }
+  if(trade&&trade.classList.contains('active')) loadWorkspace(); });
+// ── 시황 지표 (2026-10-17 사용자 "신용 수치 넣고 코스피·코스닥 RSI, 이격도") — 설명만, 매수 규칙 아님 ──
+function bdSpark(vals,w,h){ const v=vals.filter(x=>x!=null); if(v.length<2) return ''; const lo=Math.min(...v), hi=Math.max(...v), r=hi-lo||1;
+  const pts=v.map((x,i)=>`${(i/(v.length-1)*w).toFixed(1)},${(h-2-(x-lo)/r*(h-4)).toFixed(1)}`).join(' ');
+  return `<svg width="${w}" height="${h}" viewBox="0 0 ${w} ${h}" style="display:block"><polyline points="${pts}" fill="none" stroke="var(--b)" stroke-width="1.5"/></svg>`; }
+const bdJo=v=>v==null?'-':(Math.abs(v)>=10000?(v/10000).toFixed(2)+'조':Math.round(v).toLocaleString()+'억');
+const bdCh=v=>v==null?'-':`${v>0?'▲ +':v<0?'▼ −':''}${bdJo(Math.abs(v))}`;
+const bdPc=v=>v==null?'-':`${v>0?'+':''}${v}%`;
+async function loadBoard(){
+  const el=document.getElementById('hc-board'); if(!el) return;
+  const b=await fetch(`${API}/market/board`).then(r=>r.ok?r.json():null).catch(()=>null);
+  if(!b){ el.innerHTML='<span class="ts">시황 지표를 못 불러왔습니다</span>'; return; }
+  const I=b.idx||[], f=b.funds;
+  const st=t=>`<span style="font-weight:700;color:${t.startsWith('▲')?'var(--r)':t.startsWith('▼')?'var(--b)':'var(--tx)'}">${t}</span>`;
+  const idx=I.length?`<div class="bd-t"><table><thead><tr><th>지수</th><th>종가</th><th>RSI(14)</th><th>이격도 5 · 20 · 60 · 120일</th><th>52주 고점 대비</th><th>RSI 60일</th></tr></thead><tbody>${I.map(x=>`<tr>
+      <td><b>${x.name}</b><div class="ts">${x.date.slice(4,6)}/${x.date.slice(6)}</div></td><td><b>${x.close.toLocaleString(undefined,{maximumFractionDigits:2})}</b><div class="ts">${x.chg>0?'+':''}${x.chg}%</div></td>
+      <td><b>${x.rsi}</b><div>${st(x.rsi_txt)}</div></td>
+      <td>${[5,20,60,120].map(n=>`<b>${x.disp[n]}</b>`).join(' · ')}<div>${st(x.disp_txt)}</div><div class="ts">${[5,20,60,120].map(n=>`${n}일선 ${x.above[n]?'위':'아래'}`).join(' · ')}</div></td>
+      <td><b>${x.from_hi}%</b></td><td>${bdSpark(x.rsi_hist,120,32)}</td></tr>`).join('')}</tbody></table></div>
+    <p class="ts" style="margin:6px 0 0">RSI 70↑ 과매수 · 30↓ 과매도 · 이격도 = 종가 ÷ 이동평균 × 100 (20일 106↑ 과열 · 94↓ 침체, 흔히 쓰는 기준) — 설명용, 매수·매도 규칙 아님</p>`:'<span class="ts">지수 지표를 못 받았습니다</span>';
+  const fd=f?`<div class="bd-f">
+      <div class="bd-k"><div class="ts">신용융자 잔고</div><b>${bdJo(f.credit)}</b><div class="ts">하루 ${bdCh(f.credit_ch['1'])} · 5일 ${bdPc(f.credit_pct['5'])} · 20일 ${bdPc(f.credit_pct['20'])}</div>
+        <div class="ts">고점 ${f.credit_hi.d.slice(4,6)}/${f.credit_hi.d.slice(6)} ${bdJo(f.credit_hi.v)} 대비 ${bdPc(f.credit_hi.from)}</div>${bdSpark(f.hist.map(x=>x.credit),220,36)}</div>
+      <div class="bd-k"><div class="ts">고객예탁금</div><b>${bdJo(f.deposit)}</b><div class="ts">하루 ${bdCh(f.deposit_ch['1'])} · 5일 ${bdPc(f.deposit_pct['5'])} · 20일 ${bdPc(f.deposit_pct['20'])}</div>${bdSpark(f.hist.map(x=>x.deposit),220,36)}</div>
+      <div class="bd-k"><div class="ts">비율</div><div>신용 ÷ 예탁금 <b>${f.credit_to_deposit}%</b></div><div>신용 ÷ 시가총액 <b>${f.credit_to_cap}%</b></div>
+        <div>미수금 <b>${bdJo(f.unpaid)}</b></div><div class="ts">주식형 펀드 ${bdJo(f.eq_fund)} · MMF ${bdJo(f.mmf)} · 선물 예수금 ${bdJo(f.futs)}</div></div></div>
+    <p class="ts" style="margin:6px 0 0">${f.date.slice(4,6)}/${f.date.slice(6)} 기준 (증시자금은 하루 늦게 나옴) · 신용이 고점에서 줄고 예탁금이 늘면 빚이 털리고 대기 자금이 들어오는 쪽 — 설명용</p>`:'<span class="ts">증시 자금을 못 받았습니다</span>';
+  el.innerHTML=`<div class="bx-h"><b>시장 지표</b><span class="ts">지수 과열·침체 · 증시 자금 (KIS) · ${b.asof}</span></div>${idx}<div style="font-size:14px;font-weight:700;color:var(--tx);margin:14px 0 6px">증시 자금 — 신용·예탁금</div>${fd}`;
+}
 async function renderDashboard(d, stale, live){
   try{ renderHomeTop(d, live); hcSpark(); }catch(e){ console.error(e); }
   const v=document.getElementById('db-verdict');
@@ -2814,7 +2858,7 @@ function wsStopOpt(c){
 function hbChip(k,t){ return `<span class="hb-chip k-${k}">${{g:'▲',n:'■',b:'▼'}[k]} ${t}</span>`; }
 function wsTab(t){ _ws.tab=t; try{ localStorage.setItem('ws-tab',t); }catch(e){} renderWsList(); }
 function renderWsList(){
-  document.querySelectorAll('#panel-home .ws-tabs button').forEach(b=>{ const n=wsItems(b.dataset.t).length; b.classList.toggle('on',b.dataset.t===_ws.tab); b.innerHTML=`${{entry:'오늘 진입',wait:'대기',track:'신호 추적'}[b.dataset.t]} ${n}`; });
+  document.querySelectorAll('#panel-trade .ws-tabs button').forEach(b=>{ const n=wsItems(b.dataset.t).length; b.classList.toggle('on',b.dataset.t===_ws.tab); b.innerHTML=`${{entry:'오늘 진입',wait:'대기',track:'신호 추적'}[b.dataset.t]} ${n}`; });
   const td=(_ws.data||{}).track_done||{};
   document.getElementById('ws-lane-note').textContent=(WS_LANE[_ws.tab]||'')+(_ws.tab==='track'&&(td.stop||td.exit)?` · 끝난 것: 스탑 ${td.stop||0} · 21선 ${td.exit||0}`:'');
   const L=wsItems(_ws.tab), el=document.getElementById('ws-items');
@@ -3017,7 +3061,7 @@ function bottomHero(v){
       </div></div>`;
 }
 function sigToggle(){ let c=false; try{ c=localStorage.getItem('sig-closed')==='1'; localStorage.setItem('sig-closed',c?'0':'1'); }catch(e){} renderSigCard(); }
-function sigOpen(code,name){ wsOpen(code,name); const el=document.querySelector('#panel-home .ws-main'); if(el) el.scrollIntoView({behavior:'smooth',block:'start'}); }
+function sigOpen(code,name){ wsOpen(code,name); const el=document.querySelector('#panel-trade .ws-main'); if(el) el.scrollIntoView({behavior:'smooth',block:'start'}); }
 // ── 초대 사용자 '내 계좌' (2026-10-13) — 사장님이 초대한 사람만. 로그인 전엔 탭 자체가 안 보임(주소 #account로만 들어옴) ──
 // 한 번에 한 사람만: 관리자(junp)로 로그인돼 있으면 예전에 남은 초대 사용자 로그인은 지운다 (2026-10-13 junp인데 testuser 계좌가 뜸)
 function ptAuth(){ try{ if(localStorage.getItem('jr-owner')==='junp'&&localStorage.getItem('jr-pin')){ localStorage.removeItem('pt-name'); localStorage.removeItem('pt-pin'); return {n:'',p:''}; }
@@ -3165,9 +3209,9 @@ function wsPick(code,name){
 }
 document.addEventListener('click',e=>{ if(!e.target.closest('.ws-search')){ const b=document.getElementById('ws-sr'); if(b) b.classList.remove('on'); } });
 // 목록 칸 높이를 가운데 차트 칸에 맞춤 (PC) — 짧은 목록이 위에 떠 보이지 않게
-function wsFit(){ const m=document.querySelector('#panel-home .ws-main'), l=document.querySelector('#panel-home .ws-list');
+function wsFit(){ const m=document.querySelector('#panel-trade .ws-main'), l=document.querySelector('#panel-trade .ws-list');
   if(!m||!l) return; l.style.height=window.innerWidth>760?m.offsetHeight+'px':''; }
-if(window.ResizeObserver){ const _wsRO=new ResizeObserver(()=>wsFit()); document.addEventListener('DOMContentLoaded',()=>{ const m=document.querySelector('#panel-home .ws-main'); if(m) _wsRO.observe(m); }); }
+if(window.ResizeObserver){ const _wsRO=new ResizeObserver(()=>wsFit()); document.addEventListener('DOMContentLoaded',()=>{ const m=document.querySelector('#panel-trade .ws-main'); if(m) _wsRO.observe(m); }); }
 window.addEventListener('resize',wsFit);
 async function wsOpen(code,name){
   _ws.code=code;
