@@ -135,12 +135,48 @@ def _funds() -> dict | None:
                       "ratio": round(r["credit"] / r["deposit"] * 100, 2) if r["deposit"] else None} for r in rows]}
 
 
-def board() -> dict:
-    hit = _C.get("b")
-    if hit and time.time() - hit[0] < 600:
-        return hit[1]
+FILE = __import__("pathlib").Path(__file__).resolve().parents[2] / "data" / "market_board.json"
+_lock = __import__("threading").Lock()
+
+
+def _build() -> dict:
     out = {"idx": [x for x in (_tech("코스피", "0001"), _tech("코스닥", "1001")) if x], "funds": _funds(),
            "asof": datetime.now().strftime("%m/%d %H:%M")}
     if out["idx"] or out["funds"]:
         _C["b"] = (time.time(), out)
+        try:
+            import json  # noqa: PLC0415
+            FILE.parent.mkdir(parents=True, exist_ok=True)
+            FILE.write_text(json.dumps(out, ensure_ascii=False))
+        except OSError:
+            pass
     return out
+
+
+def board(wait: bool = False) -> dict:
+    """10분 안이면 저장값. 그보다 오래됐으면 저장값을 바로 주고 뒤에서 새로 받음 (2026-10-17 "이거 오래 걸리네" — 처음 열 때 KIS 20번+로 10~15초).
+    서버가 켜질 때·2분마다 미리 계산(routes.warm_caches)에서 wait=True로 채움."""
+    import threading  # noqa: PLC0415
+    hit = _C.get("b")
+    if not hit and FILE.exists():
+        try:
+            import json  # noqa: PLC0415
+            hit = _C["b"] = (FILE.stat().st_mtime, json.loads(FILE.read_text()))
+        except (OSError, ValueError):
+            hit = None
+    if hit and time.time() - hit[0] < 600:
+        return hit[1]
+    if hit and not wait:
+        if _lock.acquire(blocking=False):
+            def _bg():
+                try:
+                    _build()
+                finally:
+                    _lock.release()
+            threading.Thread(target=_bg, daemon=True).start()
+        return hit[1]
+    with _lock:
+        hit = _C.get("b")
+        if hit and time.time() - hit[0] < 600:
+            return hit[1]
+        return _build()

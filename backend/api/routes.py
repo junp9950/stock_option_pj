@@ -2245,6 +2245,7 @@ def warm_caches(db: Session) -> None:
 
     # 맨 먼저: 머리 줄 시장 판단 · 첫 화면 '오늘' 카드 · 목록 — 배포 직후 첫 접속이 10초 넘게 걸리던 것 (2026-10-11)
     steps = [("시장 판단", lambda: get_market_verdict(db=db)), ("오늘 대시보드", lambda: get_dashboard(db=db)), ("오늘 목록", lambda: get_workspace_list(db=db)),
+             ("시황 지표", lambda: __import__("backend.services.market_board", fromlist=["board"]).board(wait=True)),   # 2026-10-17 첫 열기 10~15초
              ("과매도 반등", _crash),             # 장중 6~10초라 2분마다 미리 (2026-10-13)
              ("종베 탭", lambda: get_my_pattern(db=db)), ("차트 창 RS", _rs_tbl), ("지난 날짜 RS", _rs_hist), ("지난 급락 줍기", _dip_hist),
              ("신호 추적", _tracking), ("지수", _index), ("섹터 실시간", _themes),
