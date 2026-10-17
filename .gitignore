@@ -17,3 +17,4 @@ data/server_check.py
 data/earnings_screen/
 data/marcap_cache/
 data/industry_cache/
+data/market_board.json
