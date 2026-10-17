@@ -1488,7 +1488,7 @@ async function hbFut(){ const el=document.getElementById('hb-fut'); if(!el) retu
   const z=R[R.length-1]; if(!z||z.foreign==null){ ln.textContent=''; return; }
   const sg=v=>(v>0?'+':'')+Math.round(v).toLocaleString(), p=R.length>6?R[R.length-7]:null;
   const d30=p&&p.foreign!=null?z.foreign-p.foreign:null;
-  ln.innerHTML=`외인 <b style="color:${z.foreign>=0?'var(--up)':'var(--down)'}">${sg(z.foreign)}억</b>${d30!=null?` <span title="최근 30분 변화">· 30분 ${sg(d30)}</span>`:''}${z.oi_chg!=null?`<br>미결제 ${sg(z.oi_chg)}계약`:''}${f.kind?` · <b title="${f.kind.meaning}${f.kind.stat&&f.kind.stat.n?` · 지난 ${f.kind.stat.n}번 다음 날 평균 ${f.kind.stat.r1>0?'+':''}${f.kind.stat.r1}% (참고, 검증 중)`:''}">${f.kind.label}${f.kind.streak>=2?' '+f.kind.streak+'일째':''}</b>`:''}`;
+  ln.innerHTML=`외인 <b style="color:${z.foreign>=0?'var(--up)':'var(--down)'}">${sg(z.foreign)}억</b>${d30!=null?` <span title="최근 30분 변화">· 30분 ${sg(d30)}</span>`:''}${z.oi_chg!=null?`<br>미결제 ${sg(z.oi_chg)}계약`:''}${f.kind?` · <b title="외국인 기준 추정 — 외국인 순매수·순매도 × 미결제 증감으로 붙인 이름 (${f.kind.meaning}). 누가 청산했는지는 거래소 자료에 안 나옴${f.kind.stat&&f.kind.stat.n?` · 지난 ${f.kind.stat.n}번 다음 날 평균 ${f.kind.stat.r1>0?'+':''}${f.kind.stat.r1}% (참고, 검증 중)`:''}">외인 ${f.kind.label.replace(/형$/,'')} 추정${f.kind.streak>=2?' '+f.kind.streak+'일째':''}</b>`:''}`;
   ln.title=`${f.date.slice(5)} ${z.t} 기준 · 코스피200 선물 순매수(억원, 오늘 누적) 외국인 ${sg(z.foreign)} · 기관 ${sg(z.inst)} · 개인 ${sg(z.indiv)}`+(z.oi!=null?` · 미결제약정 ${Math.round(z.oi).toLocaleString()}계약 (전일 대비 ${sg(z.oi_chg)})`:'');
 }
 async function hcSpark(sym){
