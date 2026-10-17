@@ -27,7 +27,7 @@ def _h(tr: str) -> dict:
 def _index_daily(code: str, n: int = 260) -> list[tuple[str, float]]:
     rows: dict[str, float] = {}
     end = date.today()
-    for _ in range(5):
+    for _ in range(10):
         try:
             r = requests.get(B + "inquire-daily-indexchartprice", headers=_h("FHKUP03500100"), timeout=15, params={
                 "FID_COND_MRKT_DIV_CODE": "U", "FID_INPUT_ISCD": code, "FID_INPUT_DATE_1": (end - timedelta(days=150)).strftime("%Y%m%d"),
@@ -62,7 +62,7 @@ def _rsi(c: list[float], n: int = 14) -> list[float | None]:
 
 
 def _tech(name: str, code: str) -> dict | None:
-    L = _index_daily(code)
+    L = _index_daily(code, 380)
     if len(L) < 130:
         return None
     d, c = [x[0] for x in L], [x[1] for x in L]
@@ -79,22 +79,43 @@ def _tech(name: str, code: str) -> dict | None:
     return {"name": name, "date": d[-1], "close": last, "chg": round((last / c[-2] - 1) * 100, 2), "rsi": round(r, 1), "rsi_txt": rs_t,
             "rsi_hist": [round(x, 1) for x in rsi[-60:] if x is not None], "disp": disp, "disp_txt": d_t,
             "ma": {str(k): round(v, 2) for k, v in ma.items()}, "above": {str(k): last > v for k, v in ma.items()},
-            "from_hi": round((last / hi52 - 1) * 100, 1), "hist": [{"d": a, "c": b} for a, b in L[-120:]]}
+            "from_hi": round((last / hi52 - 1) * 100, 1), "hist": _series(d, c, rsi)}
+
+
+def _series(d: list[str], c: list[float], rsi: list) -> list[dict]:
+    """차트용 1년(250거래일): 종가 · 20/60/120일선 · RSI · 20일 이격도 (2026-10-17 사용자 '누르면 그래프')."""
+    out = []
+    for i in range(max(0, len(c) - 250), len(c)):
+        m = {n: (sum(c[i - n + 1:i + 1]) / n if i + 1 >= n else None) for n in (20, 60, 120)}
+        out.append({"d": d[i], "c": c[i], "ma20": round(m[20], 2) if m[20] else None, "ma60": round(m[60], 2) if m[60] else None,
+                    "ma120": round(m[120], 2) if m[120] else None, "rsi": round(rsi[i], 1) if rsi[i] is not None else None,
+                    "d20": round(c[i] / m[20] * 100, 1) if m[20] else None})
+    return out
 
 
 def _funds() -> dict | None:
-    try:
-        j = requests.get(B + "mktfunds", headers=_h("FHKST649100C0"), params={"FID_INPUT_DATE_1": date.today().strftime("%Y%m%d")}, timeout=15).json()
-    except Exception as exc:  # noqa: BLE001
-        logger.warning("증시자금 실패: %s", type(exc).__name__)
-        return None
-    o = sorted((x for x in j.get("output") or [] if x.get("bsop_date")), key=lambda x: x["bsop_date"])
+    got: dict[str, dict] = {}
+    end = date.today()
+    for _ in range(3):          # 한 번에 100거래일 → 세 번 = 약 1년 (차트용)
+        try:
+            j = requests.get(B + "mktfunds", headers=_h("FHKST649100C0"), params={"FID_INPUT_DATE_1": end.strftime("%Y%m%d")}, timeout=15).json()
+        except Exception as exc:  # noqa: BLE001
+            logger.warning("증시자금 실패: %s", type(exc).__name__)
+            break
+        o0 = [x for x in j.get("output") or [] if x.get("bsop_date") and x["bsop_date"] not in got]
+        if not o0:
+            break
+        for x in o0:
+            got[x["bsop_date"]] = x
+        end = datetime.strptime(min(x["bsop_date"] for x in o0), "%Y%m%d").date() - timedelta(days=1)
+        time.sleep(0.15)
+    o = [got[k] for k in sorted(got)]
     if not o:
         return None
     f = lambda x, k: float(x.get(k) or 0)  # noqa: E731
     rows = [{"d": x["bsop_date"], "credit": f(x, "crdt_loan_rmnd"), "deposit": f(x, "cust_dpmn_amt"), "unpaid": f(x, "uncl_amt"),
              "futs": f(x, "futs_tfam_amt"), "eq_fund": f(x, "sttp_amt"), "mmf": f(x, "mmf_amt"), "lend": f(x, "secu_lend_amt"),
-             "cap": f(x, "hts_avls") / 100} for x in o]          # 억 원 (시총은 백만 원 → 억)
+             "cap": f(x, "hts_avls") / 100, "kospi": f(x, "bstp_nmix_prpr")} for x in o]          # 억 원 (시총은 백만 원 → 억)
     z = rows[-1]
 
     def ch(k, n):
@@ -110,7 +131,8 @@ def _funds() -> dict | None:
             "credit_to_deposit": round(z["credit"] / z["deposit"] * 100, 1) if z["deposit"] else None,
             "credit_to_cap": round(z["credit"] / z["cap"] * 100, 2) if z["cap"] else None,
             "credit_hi": {"d": hi["d"], "v": hi["credit"], "from": round((z["credit"] / hi["credit"] - 1) * 100, 1)},
-            "hist": [{"d": r["d"], "credit": r["credit"], "deposit": r["deposit"], "unpaid": r["unpaid"]} for r in rows]}
+            "hist": [{"d": r["d"], "credit": r["credit"], "deposit": r["deposit"], "unpaid": r["unpaid"], "kospi": r["kospi"],
+                      "ratio": round(r["credit"] / r["deposit"] * 100, 2) if r["deposit"] else None} for r in rows]}
 
 
 def board() -> dict:

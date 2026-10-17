@@ -599,6 +599,9 @@ body[data-hmode] :is(#panel-home,#panel-trade) .hcard,body[data-hmode] :is(#pane
 .bd-t td{padding:8px;border-bottom:1px solid var(--c3);vertical-align:top;white-space:nowrap}.bd-t td b{color:var(--strong);font-family:'IBM Plex Mono',monospace}
 .bd-f{display:grid;grid-template-columns:repeat(auto-fit,minmax(240px,1fr));gap:10px}.bd-k{background:var(--sunk,var(--c2));border:1px solid var(--ln);border-radius:12px;padding:10px 12px;display:flex;flex-direction:column;gap:3px;font-size:13px;color:var(--tx)}
 .bd-k>b{font-size:20px;color:var(--strong);font-family:'IBM Plex Mono',monospace}.bd-k b{color:var(--strong)}
+
+.bd-click{cursor:pointer}.bd-t tr.bd-click:hover td{background:var(--c2)}.bd-k.bd-click:hover{border-color:var(--b)}
+.sitehd .tab.hd-tab{border:1px solid var(--ln);background:var(--card);color:var(--tx);border-radius:999px;padding:6px 12px;font-size:12px;margin-left:8px;border-bottom-width:1px}.sitehd .tab.hd-tab.active{border-color:var(--b);color:var(--strong)}@media(max-width:900px){.sitehd .tab.hd-tab{padding:5px 9px;font-size:11px;margin-left:4px}}
 </style>
 <script src="https://cdn.jsdelivr.net/npm/chart.js@4/dist/chart.umd.min.js"></script>
 <link rel="preconnect" href="https://fonts.googleapis.com"><link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Noto+Sans+KR:wght@400;500;700;800&family=IBM+Plex+Mono:wght@500;600&display=swap">
@@ -611,6 +614,8 @@ body[data-hmode] :is(#panel-home,#panel-trade) .hcard,body[data-hmode] :is(#pane
   <div class="hd-theme" role="group" aria-label="화면 색">
     <button data-th="dark" onclick="setTheme('dark')" title="다크">🌙<span> 다크</span></button><button data-th="light" onclick="setTheme('light')" title="화이트">☀️<span> 화이트</span></button><button data-th="warm" onclick="setTheme('warm')" title="웜 (눈 편한 종이색)">☕<span> 웜</span></button>
   </div>
+  <div class="tab hd-tab" data-t="journal" data-m="kr" data-priv="1" onclick="switchTab('journal')" hidden>🔒 관리</div>
+  <div class="tab hd-tab" data-t="account" onclick="switchTab('account')" hidden>🔒 내 계좌</div>
   <button class="hd-auth" id="hd-auth" onclick="authClick()">로그인</button>
   <button class="btn" id="btn-run-pipeline" onclick="runPipeline()" hidden>▶ 파이프라인 실행</button>
 </header>
@@ -629,14 +634,12 @@ body[data-hmode] :is(#panel-home,#panel-trade) .hcard,body[data-hmode] :is(#pane
 <nav class="tabs">
   <span class="mk-seg" role="group" aria-label="시장"><button data-mk="kr" class="on" onclick="switchMarket('kr')">🇰🇷 국장</button><button data-mk="us" onclick="switchMarket('us')">🇺🇸 미장</button></span>
   <div class="tab active" data-t="home" data-m="kr" onclick="switchTab('home')">시황</div>
+  <div class="tab" data-t="sector" data-m="kr" onclick="switchTab('sector')">섹터 흐름</div>
   <div class="tab" data-t="trade" data-m="kr" onclick="switchTab('trade')">매매</div>
   <div class="tab" data-t="stock" data-m="kr" onclick="switchTab('stock')">종목</div>
   <div class="tab" data-t="forensic" data-m="kr" onclick="switchTab('forensic')">기업 분석</div>
   <div class="tab" data-t="candidates" data-m="kr" onclick="switchTab('candidates')">차트 후보</div>
   <div class="tab" data-t="calendar" data-m="kr" onclick="switchTab('calendar')">캘린더</div>
-  <div class="tab" data-t="sector" data-m="kr" onclick="switchTab('sector')">섹터 흐름</div>
-  <div class="tab" data-t="journal" data-m="kr" data-priv="1" onclick="switchTab('journal')" hidden>🔒 관리</div>
-  <div class="tab" data-t="account" onclick="switchTab('account')" hidden>🔒 내 계좌</div>
   <div class="tab" data-t="screener" data-m="kr" onclick="switchTab('screener')">거래대금</div>
   <div class="tab" data-t="heatmap" data-m="kr" onclick="switchTab('heatmap')">히트맵</div>
   <div class="tab" data-t="us" data-m="us" onclick="switchTab('us')" hidden>미장 오늘</div>
@@ -1204,6 +1207,9 @@ body[data-hmode] :is(#panel-home,#panel-trade) .hcard,body[data-hmode] :is(#pane
 </div>
 
 <!-- 캔들차트 모달 (토스증권 실시간) -->
+<div class="modal-bg" id="bd-modal-bg" onclick="if(event.target===this)bdClose()"><div class="modal" style="max-width:1100px;width:96vw">
+  <div style="display:flex;justify-content:space-between;align-items:center;gap:8px;margin-bottom:8px"><b id="bd-title" style="font-size:16px;color:var(--strong)"></b><button class="btn btn-gray btn-sm" onclick="bdClose()">닫기</button></div>
+  <div class="ts" id="bd-note" style="margin-bottom:6px"></div><div id="bd-charts"></div></div></div>
 <div class="modal-bg" id="chart-modal-bg" onclick="if(event.target===this)closeChartModal()">
   <div class="modal cm-wide">
     <span class="close-btn" onclick="closeChartModal()">✕</span>
@@ -1507,26 +1513,61 @@ function bdSpark(vals,w,h){ const v=vals.filter(x=>x!=null); if(v.length<2) retu
 const bdJo=v=>v==null?'-':(Math.abs(v)>=10000?(v/10000).toFixed(2)+'조':Math.round(v).toLocaleString()+'억');
 const bdCh=v=>v==null?'-':`${v>0?'▲ +':v<0?'▼ −':''}${bdJo(Math.abs(v))}`;
 const bdPc=v=>v==null?'-':`${v>0?'+':''}${v}%`;
+// 시장 지표 누르면 큰 차트 (2026-10-17 사용자 "이런 거 눌렀을 때 다 그래프가 떴으면")
+let _bd=null, _bdCharts=[];
+function bdClose(){ document.getElementById('bd-modal-bg').classList.remove('show'); _bdCharts.forEach(c=>{ try{c.remove();}catch(e){} }); _bdCharts=[]; }
+const bdT=d=>`${d.slice(0,4)}-${d.slice(4,6)}-${d.slice(6)}`;
+function bdChart(el,h,series){
+  const C=LightweightCharts.createChart(el,{height:h,width:el.clientWidth,layout:{background:{color:'transparent'},textColor:cv('--mu'),fontSize:11},
+    grid:{vertLines:{color:cv('--c3')},horzLines:{color:cv('--c3')}},rightPriceScale:{borderColor:cv('--ln')},leftPriceScale:{visible:series.some(x=>x.left),borderColor:cv('--ln')},
+    timeScale:{borderColor:cv('--ln')},crosshair:{mode:0}});
+  series.forEach(x=>{ const ls=C.addLineSeries({color:x.color,lineWidth:x.w||2,lineStyle:x.dash?2:0,priceLineVisible:false,lastValueVisible:true,title:x.title||'',priceScaleId:x.left?'left':'right'});
+    ls.setData(x.data.filter(p=>p.value!=null)); (x.lines||[]).forEach(l=>ls.createPriceLine({price:l[0],color:l[1],lineWidth:1,lineStyle:2,axisLabelVisible:true,title:l[2]||''})); });
+  C.timeScale().fitContent(); _bdCharts.push(C); return C;
+}
+function bdSync(){ _bdCharts.forEach(a=>a.timeScale().subscribeVisibleLogicalRangeChange(r=>{ if(!r) return; _bdCharts.forEach(b=>{ if(b!==a) b.timeScale().setVisibleLogicalRange(r); }); })); }
+function bdOpen(key){
+  if(!_bd) return; bdClose(); document.getElementById('bd-modal-bg').classList.add('show');
+  const box=document.getElementById('bd-charts'); box.innerHTML='';
+  const mk=(h,label)=>{ const d=document.createElement('div'); d.innerHTML=`<div class="ts" style="margin:8px 0 2px">${label}</div>`; const c=document.createElement('div'); d.appendChild(c); box.appendChild(d); return [c,h]; };
+  const R=cv('--r'), Bc=cv('--b'), M=cv('--mu'), O=cv('--o'), G=cv('--g'), P=cv('--p');
+  if(key==='idx0'||key==='idx1'){ const x=_bd.idx[+key.slice(3)], H=x.hist;
+    document.getElementById('bd-title').textContent=`${x.name} — 1년`; document.getElementById('bd-note').textContent='위: 종가와 20·60·120일선 · 가운데: RSI(14) 70 과매수/30 과매도 · 아래: 20일 이격도 106 과열/94 침체 — 끌면 셋이 같이 움직임';
+    let [a,h]=mk(320,'종가 · 이동평균'); bdChart(a,h,[{data:H.map(p=>({time:bdT(p.d),value:p.c})),color:cv('--tx'),title:x.name},{data:H.map(p=>({time:bdT(p.d),value:p.ma20})),color:O,w:1,title:'20일'},
+      {data:H.map(p=>({time:bdT(p.d),value:p.ma60})),color:G,w:1,title:'60일'},{data:H.map(p=>({time:bdT(p.d),value:p.ma120})),color:P,w:1,title:'120일'}]);
+    [a,h]=mk(150,'RSI(14)'); bdChart(a,h,[{data:H.map(p=>({time:bdT(p.d),value:p.rsi})),color:Bc,title:'RSI',lines:[[70,R,'70'],[30,Bc,'30']]}]);
+    [a,h]=mk(150,'20일 이격도'); bdChart(a,h,[{data:H.map(p=>({time:bdT(p.d),value:p.d20})),color:O,title:'이격도',lines:[[106,R,'106'],[100,M,''],[94,Bc,'94']]}]);
+    bdSync(); return; }
+  const F=_bd.funds; if(!F) return; const H=F.hist, ks={data:H.map(p=>({time:bdT(p.d),value:p.kospi})),color:M,w:1,title:'코스피',left:true,dash:true};
+  if(key==='credit'){ document.getElementById('bd-title').textContent='신용융자 잔고 — 1년 (억 원)'; document.getElementById('bd-note').textContent='오른쪽 = 신용융자 잔고 · 왼쪽 점선 = 코스피 · 하루 늦게 나옴';
+    const [a,h]=mk(380,''); bdChart(a,h,[ks,{data:H.map(p=>({time:bdT(p.d),value:p.credit})),color:R,title:'신용'}]); }
+  else if(key==='deposit'){ document.getElementById('bd-title').textContent='고객예탁금 — 1년 (억 원)'; document.getElementById('bd-note').textContent='오른쪽 = 고객예탁금 · 왼쪽 점선 = 코스피';
+    const [a,h]=mk(380,''); bdChart(a,h,[ks,{data:H.map(p=>({time:bdT(p.d),value:p.deposit})),color:Bc,title:'예탁금'}]); }
+  else { document.getElementById('bd-title').textContent='신용 ÷ 예탁금 · 미수금 — 1년'; document.getElementById('bd-note').textContent='위: 신용 ÷ 고객예탁금(%) · 아래: 미수금(억 원) — 미수가 갑자기 늘면 반대매매 물량 주의';
+    let [a,h]=mk(240,'신용 ÷ 예탁금 (%)'); bdChart(a,h,[ks,{data:H.map(p=>({time:bdT(p.d),value:p.ratio})),color:O,title:'%'}]);
+    [a,h]=mk(180,'미수금 (억 원)'); bdChart(a,h,[{data:H.map(p=>({time:bdT(p.d),value:p.unpaid})),color:R,title:'미수금'}]); bdSync(); }
+}
 async function loadBoard(){
   const el=document.getElementById('hc-board'); if(!el) return;
   const b=await fetch(`${API}/market/board`).then(r=>r.ok?r.json():null).catch(()=>null);
   if(!b){ el.innerHTML='<span class="ts">시황 지표를 못 불러왔습니다</span>'; return; }
+  _bd=b;
   const I=b.idx||[], f=b.funds;
   const st=t=>`<span style="font-weight:700;color:${t.startsWith('▲')?'var(--r)':t.startsWith('▼')?'var(--b)':'var(--tx)'}">${t}</span>`;
-  const idx=I.length?`<div class="bd-t"><table><thead><tr><th>지수</th><th>종가</th><th>RSI(14)</th><th>이격도 5 · 20 · 60 · 120일</th><th>52주 고점 대비</th><th>RSI 60일</th></tr></thead><tbody>${I.map(x=>`<tr>
+  const idx=I.length?`<div class="bd-t"><table><thead><tr><th>지수</th><th>종가</th><th>RSI(14)</th><th>이격도 5 · 20 · 60 · 120일</th><th>52주 고점 대비</th><th>RSI 60일</th></tr></thead><tbody>${I.map((x,ix)=>`<tr class="bd-click" onclick="bdOpen('idx${ix}')" title="눌러서 1년 차트">
       <td><b>${x.name}</b><div class="ts">${x.date.slice(4,6)}/${x.date.slice(6)}</div></td><td><b>${x.close.toLocaleString(undefined,{maximumFractionDigits:2})}</b><div class="ts">${x.chg>0?'+':''}${x.chg}%</div></td>
       <td><b>${x.rsi}</b><div>${st(x.rsi_txt)}</div></td>
       <td>${[5,20,60,120].map(n=>`<b>${x.disp[n]}</b>`).join(' · ')}<div>${st(x.disp_txt)}</div><div class="ts">${[5,20,60,120].map(n=>`${n}일선 ${x.above[n]?'위':'아래'}`).join(' · ')}</div></td>
       <td><b>${x.from_hi}%</b></td><td>${bdSpark(x.rsi_hist,120,32)}</td></tr>`).join('')}</tbody></table></div>
     <p class="ts" style="margin:6px 0 0">RSI 70↑ 과매수 · 30↓ 과매도 · 이격도 = 종가 ÷ 이동평균 × 100 (20일 106↑ 과열 · 94↓ 침체, 흔히 쓰는 기준) — 설명용, 매수·매도 규칙 아님</p>`:'<span class="ts">지수 지표를 못 받았습니다</span>';
   const fd=f?`<div class="bd-f">
-      <div class="bd-k"><div class="ts">신용융자 잔고</div><b>${bdJo(f.credit)}</b><div class="ts">하루 ${bdCh(f.credit_ch['1'])} · 5일 ${bdPc(f.credit_pct['5'])} · 20일 ${bdPc(f.credit_pct['20'])}</div>
+      <div class="bd-k bd-click" onclick="bdOpen('credit')" title="눌러서 1년 차트"><div class="ts">신용융자 잔고 📈</div><b>${bdJo(f.credit)}</b><div class="ts">하루 ${bdCh(f.credit_ch['1'])} · 5일 ${bdPc(f.credit_pct['5'])} · 20일 ${bdPc(f.credit_pct['20'])}</div>
         <div class="ts">고점 ${f.credit_hi.d.slice(4,6)}/${f.credit_hi.d.slice(6)} ${bdJo(f.credit_hi.v)} 대비 ${bdPc(f.credit_hi.from)}</div>${bdSpark(f.hist.map(x=>x.credit),220,36)}</div>
-      <div class="bd-k"><div class="ts">고객예탁금</div><b>${bdJo(f.deposit)}</b><div class="ts">하루 ${bdCh(f.deposit_ch['1'])} · 5일 ${bdPc(f.deposit_pct['5'])} · 20일 ${bdPc(f.deposit_pct['20'])}</div>${bdSpark(f.hist.map(x=>x.deposit),220,36)}</div>
-      <div class="bd-k"><div class="ts">비율</div><div>신용 ÷ 예탁금 <b>${f.credit_to_deposit}%</b></div><div>신용 ÷ 시가총액 <b>${f.credit_to_cap}%</b></div>
+      <div class="bd-k bd-click" onclick="bdOpen('deposit')" title="눌러서 1년 차트"><div class="ts">고객예탁금 📈</div><b>${bdJo(f.deposit)}</b><div class="ts">하루 ${bdCh(f.deposit_ch['1'])} · 5일 ${bdPc(f.deposit_pct['5'])} · 20일 ${bdPc(f.deposit_pct['20'])}</div>${bdSpark(f.hist.map(x=>x.deposit),220,36)}</div>
+      <div class="bd-k bd-click" onclick="bdOpen('ratio')" title="눌러서 1년 차트"><div class="ts">비율 · 미수금 📈</div><div>신용 ÷ 예탁금 <b>${f.credit_to_deposit}%</b></div><div>신용 ÷ 시가총액 <b>${f.credit_to_cap}%</b></div>
         <div>미수금 <b>${bdJo(f.unpaid)}</b></div><div class="ts">주식형 펀드 ${bdJo(f.eq_fund)} · MMF ${bdJo(f.mmf)} · 선물 예수금 ${bdJo(f.futs)}</div></div></div>
     <p class="ts" style="margin:6px 0 0">${f.date.slice(4,6)}/${f.date.slice(6)} 기준 (증시자금은 하루 늦게 나옴) · 신용이 고점에서 줄고 예탁금이 늘면 빚이 털리고 대기 자금이 들어오는 쪽 — 설명용</p>`:'<span class="ts">증시 자금을 못 받았습니다</span>';
-  el.innerHTML=`<div class="bx-h"><b>시장 지표</b><span class="ts">지수 과열·침체 · 증시 자금 (KIS) · ${b.asof}</span></div>${idx}<div style="font-size:14px;font-weight:700;color:var(--tx);margin:14px 0 6px">증시 자금 — 신용·예탁금</div>${fd}`;
+  el.innerHTML=`<div class="bx-h"><b>시장 지표</b><span class="ts">지수 과열·침체 · 증시 자금 (KIS) · ${b.asof} · 줄이나 칸을 누르면 1년 차트</span></div>${idx}<div style="font-size:14px;font-weight:700;color:var(--tx);margin:14px 0 6px">증시 자금 — 신용·예탁금</div>${fd}`;
 }
 async function renderDashboard(d, stale, live){
   try{ renderHomeTop(d, live); hcSpark(); }catch(e){ console.error(e); }
