@@ -602,6 +602,12 @@ body[data-hmode] :is(#panel-home,#panel-trade) .hcard,body[data-hmode] :is(#pane
 
 .bd-click{cursor:pointer}.bd-t tr.bd-click:hover td{background:var(--c2)}.bd-k.bd-click:hover{border-color:var(--b)}
 .sitehd .tab.hd-tab{border:1px solid var(--ln);background:var(--card);color:var(--tx);border-radius:999px;padding:6px 12px;font-size:12px;margin-left:8px;border-bottom-width:1px}.sitehd .tab.hd-tab.active{border-color:var(--b);color:var(--strong)}@media(max-width:900px){.sitehd .tab.hd-tab{padding:5px 9px;font-size:11px;margin-left:4px}}
+
+.hb-tech{display:flex;flex-direction:column;gap:2px;margin:2px 0 10px;padding-top:8px;border-top:1px solid var(--c3)}
+.hb-techr{display:grid;grid-template-columns:56px auto auto minmax(0,1fr) 92px;gap:4px 14px;align-items:center;font-size:13px;color:var(--tx);padding:5px 6px;border-radius:8px}
+.hb-techr:hover{background:var(--c2)}.hb-techr b{color:var(--strong);font-family:'IBM Plex Mono',monospace}.hb-techr .nm{font-family:inherit}.hb-techr .sp{justify-self:end}
+.bd-st{font-weight:700;margin-left:4px;color:var(--tx)}.bd-st.up{color:var(--r)}.bd-st.dn{color:var(--b)}
+@media(max-width:760px){#hb-deposit{grid-column:1/-1}.hb-techr{grid-template-columns:52px auto auto;font-size:12px}.hb-techr .ts,.hb-techr .sp{display:none}}
 </style>
 <script src="https://cdn.jsdelivr.net/npm/chart.js@4/dist/chart.umd.min.js"></script>
 <link rel="preconnect" href="https://fonts.googleapis.com"><link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Noto+Sans+KR:wght@400;500;700;800&family=IBM+Plex+Mono:wght@500;600&display=swap">
@@ -874,7 +880,6 @@ body[data-hmode] :is(#panel-home,#panel-trade) .hcard,body[data-hmode] :is(#pane
   <div class="htop"><section class="hcard" id="hc-today"><div class="ts">불러오는 중…</div></section><section class="hcard" id="hc-market"></section></div>
   <div id="db-strip" class="mstrip" style="display:none"></div>
   <div id="db-verdict" style="display:none"></div>
-  <section class="hcard" id="hc-board"><span class="ts">시황 지표 불러오는 중…</span></section>
   <details id="db-more"><summary>📋 오늘 판단 자세히 — 시장 카드 · 장세별 자리 · 참고 (눌러서 펼치기)</summary>
   <div id="db-market" style="margin-bottom:12px"></div>
   <div id="db-top" style="display:grid;grid-template-columns:repeat(auto-fit,minmax(320px,1fr));gap:12px;margin-bottom:6px;align-items:stretch"></div>
@@ -1444,7 +1449,8 @@ function renderHomeTop(d, live){
   const when=live?`장중 ${live.as_of}`:`${(d.as_of||'').slice(5).replace('-','/')} 마감 기준`;
   // 시안 B (2026-10-11): 근거 6개 = 큰 타일, 판정·주의·요약은 왼쪽 카드 맨 위
   const FT=hbFlowsHTML(FL);
-  document.getElementById('hc-market').innerHTML=FT+rows.map(r=>`<div class="hb-tile k-${r.k}" title="${r.t} — ${r.sub}"><div class="hb-th"><b>${r.t}</b><span class="hc-badge ${B[r.k][0]}">${r.bt||B[r.k][1]}</span></div><div class="hb-tv">${r.v}</div><div class="hb-ts">${r.sub}</div></div>`).join('');
+  document.getElementById('hc-market').innerHTML=FT+rows.map(r=>`<div class="hb-tile k-${r.k}" title="${r.t} — ${r.sub}"><div class="hb-th"><b>${r.t}</b><span class="hc-badge ${B[r.k][0]}">${r.bt||B[r.k][1]}</span></div><div class="hb-tv">${r.v}</div><div class="hb-ts">${r.sub}</div></div>`).join('')
+    +`<div class="hb-tile k-n bd-click" id="hb-credit" onclick="bdOpen('credit')" title="눌러서 1년 차트"></div><div class="hb-tile k-n bd-click" id="hb-deposit" onclick="bdOpen('deposit')" title="눌러서 1년 차트"></div>`;   // 신용·예탁금 타일 (2026-10-17 시황 정리)
   const ix=k=>{ const x=it[k]; if(!x) return ''; const c=x.pct>=0?'var(--up)':'var(--down)';
     return `<div class="hb-num" style="cursor:pointer" onclick="openIndexChart('${k==='코스피'?'KOSPI':'KOSDAQ'}','${k}')"><div class="l">${k}${x.status==='OPEN'?' · 장중':''}</div><div class="v">${x.close}</div><div class="s mono" style="color:${c}">${sg(x.pct)}%</div></div>`; };
   const st=d.sectors_today||{}, pill=(x,c)=>`<span class="hc-pill ${c}" style="cursor:pointer" onclick="openFamilyModal('${x.family}')" title="눌러서 종목 보기 · 20일 순위 ${x.rank||'-'}위 (10일 전 ${x.rank_10ago||'-'}위)">${x.family} <b style="color:${x.chg>=0?'var(--up)':'var(--down)'}">${sg(x.chg)}%</b></span>`;
@@ -1452,8 +1458,9 @@ function renderHomeTop(d, live){
   document.getElementById('hc-today').innerHTML=`<div class="hb-top"><span class="hb-verdict k-${vk}">${{g:'▲',n:'■',b:'▼'}[vk]} ${vt}</span>${cau?`<span class="hb-cau">${cau.replace(' → ',' · ')}</span>`:''}<span class="hb-sum">근거 ${rows.length}개 중 ${good}개 양호 · ${when}</span></div>
     <div class="hb-idx"><div class="hb-spark"><span class="hc-tg"><button data-s="KOSPI" onclick="hcSpark('KOSPI')">코스피</button><button data-s="FUT" onclick="hcSpark('FUT')">코200선물</button><button data-s="KOSDAQ" onclick="hcSpark('KOSDAQ')">코스닥</button></span><div class="hc-spark" id="hc-spark"></div><div class="hc-sx" id="hc-sx"></div></div>
     ${ix('코스피')}<div class="hb-num" id="hb-fut" style="cursor:pointer" onclick="openIndexChart('FUT','코스피200 선물')" title="눌러서 일봉 차트"><div class="l">코200선물</div><div class="v">-</div><div class="s mono">&nbsp;</div></div>${ix('코스닥')}${br.adv_pct!=null?`<div class="hb-num"><div class="l">오른 종목</div><div class="v">${br.adv_pct}%</div><div class="s" style="color:var(--muted);font-size:12px">조용한 종목 뺌</div></div>`:''}</div>
+    <div class="hb-tech" id="hb-tech"></div>
     ${(st.strong||[]).length?`<div class="hb-flow"><span class="k">강함</span>${st.strong.map(x=>pill(x,'up')).join('')}<span class="k">약함</span>${(st.weak||[]).map(x=>pill(x,'dn')).join('')}</div>`:''}`;      // 종베·스윙 장세 문구는 뺌 (2026-10-11: 추세 매수 '매매 가능'과 헷갈림) — '오늘 판단 자세히'에 그대로 있음
-  hbFitChart();
+  hbFitChart(); bdTiles();
 }
 // '오늘' 카드 지수 하루 선 (SVG) — 전일 종가 점선 · 위면 빨강, 아래면 파랑
 let _hcSym='KOSPI';
@@ -1539,8 +1546,10 @@ function bdOpen(key){
     [a,h]=mk(150,'20일 이격도'); bdChart(a,h,[{data:H.map(p=>({time:bdT(p.d),value:p.d20})),color:O,title:'이격도',lines:[[106,R,'106'],[100,M,''],[94,Bc,'94']]}]);
     bdSync(); return; }
   const F=_bd.funds; if(!F) return; const H=F.hist, ks={data:H.map(p=>({time:bdT(p.d),value:p.kospi})),color:M,w:1,title:'코스피',left:true,dash:true};
-  if(key==='credit'){ document.getElementById('bd-title').textContent='신용융자 잔고 — 1년 (억 원)'; document.getElementById('bd-note').textContent='오른쪽 = 신용융자 잔고 · 왼쪽 점선 = 코스피 · 하루 늦게 나옴';
-    const [a,h]=mk(380,''); bdChart(a,h,[ks,{data:H.map(p=>({time:bdT(p.d),value:p.credit})),color:R,title:'신용'}]); }
+  if(key==='credit'){ document.getElementById('bd-title').textContent='신용융자 잔고 — 1년'; document.getElementById('bd-note').textContent='위: 신용융자 잔고(억 원, 오른쪽) · 코스피(왼쪽 점선) · 가운데: 신용 ÷ 예탁금(%) · 아래: 미수금(억 원, 갑자기 늘면 반대매매 물량 주의) · 하루 늦게 나옴';
+    let [a,h]=mk(300,'신용융자 잔고'); bdChart(a,h,[ks,{data:H.map(p=>({time:bdT(p.d),value:p.credit})),color:R,title:'신용'}]);
+    [a,h]=mk(140,'신용 ÷ 예탁금 (%)'); bdChart(a,h,[{data:H.map(p=>({time:bdT(p.d),value:p.ratio})),color:O,title:'%'}]);
+    [a,h]=mk(140,'미수금 (억 원)'); bdChart(a,h,[{data:H.map(p=>({time:bdT(p.d),value:p.unpaid})),color:P,title:'미수금'}]); bdSync(); }
   else if(key==='deposit'){ document.getElementById('bd-title').textContent='고객예탁금 — 1년 (억 원)'; document.getElementById('bd-note').textContent='오른쪽 = 고객예탁금 · 왼쪽 점선 = 코스피';
     const [a,h]=mk(380,''); bdChart(a,h,[ks,{data:H.map(p=>({time:bdT(p.d),value:p.deposit})),color:Bc,title:'예탁금'}]); }
   else { document.getElementById('bd-title').textContent='신용 ÷ 예탁금 · 미수금 — 1년'; document.getElementById('bd-note').textContent='위: 신용 ÷ 고객예탁금(%) · 아래: 미수금(억 원) — 미수가 갑자기 늘면 반대매매 물량 주의';
@@ -1548,26 +1557,21 @@ function bdOpen(key){
     [a,h]=mk(180,'미수금 (억 원)'); bdChart(a,h,[{data:H.map(p=>({time:bdT(p.d),value:p.unpaid})),color:R,title:'미수금'}]); bdSync(); }
 }
 async function loadBoard(){
-  const el=document.getElementById('hc-board'); if(!el) return;
   const b=await fetch(`${API}/market/board`).then(r=>r.ok?r.json():null).catch(()=>null);
-  if(!b){ el.innerHTML='<span class="ts">시황 지표를 못 불러왔습니다</span>'; return; }
-  _bd=b;
-  const I=b.idx||[], f=b.funds;
-  const st=t=>`<span style="font-weight:700;color:${t.startsWith('▲')?'var(--r)':t.startsWith('▼')?'var(--b)':'var(--tx)'}">${t}</span>`;
-  const idx=I.length?`<div class="bd-t"><table><thead><tr><th>지수</th><th>종가</th><th>RSI(14)</th><th>이격도 5 · 20 · 60 · 120일</th><th>52주 고점 대비</th><th>RSI 60일</th></tr></thead><tbody>${I.map((x,ix)=>`<tr class="bd-click" onclick="bdOpen('idx${ix}')" title="눌러서 1년 차트">
-      <td><b>${x.name}</b><div class="ts">${x.date.slice(4,6)}/${x.date.slice(6)}</div></td><td><b>${x.close.toLocaleString(undefined,{maximumFractionDigits:2})}</b><div class="ts">${x.chg>0?'+':''}${x.chg}%</div></td>
-      <td><b>${x.rsi}</b><div>${st(x.rsi_txt)}</div></td>
-      <td>${[5,20,60,120].map(n=>`<b>${x.disp[n]}</b>`).join(' · ')}<div>${st(x.disp_txt)}</div><div class="ts">${[5,20,60,120].map(n=>`${n}일선 ${x.above[n]?'위':'아래'}`).join(' · ')}</div></td>
-      <td><b>${x.from_hi}%</b></td><td>${bdSpark(x.rsi_hist,120,32)}</td></tr>`).join('')}</tbody></table></div>
-    <p class="ts" style="margin:6px 0 0">RSI 70↑ 과매수 · 30↓ 과매도 · 이격도 = 종가 ÷ 이동평균 × 100 (20일 106↑ 과열 · 94↓ 침체, 흔히 쓰는 기준) — 설명용, 매수·매도 규칙 아님</p>`:'<span class="ts">지수 지표를 못 받았습니다</span>';
-  const fd=f?`<div class="bd-f">
-      <div class="bd-k bd-click" onclick="bdOpen('credit')" title="눌러서 1년 차트"><div class="ts">신용융자 잔고 📈</div><b>${bdJo(f.credit)}</b><div class="ts">하루 ${bdCh(f.credit_ch['1'])} · 5일 ${bdPc(f.credit_pct['5'])} · 20일 ${bdPc(f.credit_pct['20'])}</div>
-        <div class="ts">고점 ${f.credit_hi.d.slice(4,6)}/${f.credit_hi.d.slice(6)} ${bdJo(f.credit_hi.v)} 대비 ${bdPc(f.credit_hi.from)}</div>${bdSpark(f.hist.map(x=>x.credit),220,36)}</div>
-      <div class="bd-k bd-click" onclick="bdOpen('deposit')" title="눌러서 1년 차트"><div class="ts">고객예탁금 📈</div><b>${bdJo(f.deposit)}</b><div class="ts">하루 ${bdCh(f.deposit_ch['1'])} · 5일 ${bdPc(f.deposit_pct['5'])} · 20일 ${bdPc(f.deposit_pct['20'])}</div>${bdSpark(f.hist.map(x=>x.deposit),220,36)}</div>
-      <div class="bd-k bd-click" onclick="bdOpen('ratio')" title="눌러서 1년 차트"><div class="ts">비율 · 미수금 📈</div><div>신용 ÷ 예탁금 <b>${f.credit_to_deposit}%</b></div><div>신용 ÷ 시가총액 <b>${f.credit_to_cap}%</b></div>
-        <div>미수금 <b>${bdJo(f.unpaid)}</b></div><div class="ts">주식형 펀드 ${bdJo(f.eq_fund)} · MMF ${bdJo(f.mmf)} · 선물 예수금 ${bdJo(f.futs)}</div></div></div>
-    <p class="ts" style="margin:6px 0 0">${f.date.slice(4,6)}/${f.date.slice(6)} 기준 (증시자금은 하루 늦게 나옴) · 신용이 고점에서 줄고 예탁금이 늘면 빚이 털리고 대기 자금이 들어오는 쪽 — 설명용</p>`:'<span class="ts">증시 자금을 못 받았습니다</span>';
-  el.innerHTML=`<div class="bx-h"><b>시장 지표</b><span class="ts">지수 과열·침체 · 증시 자금 (KIS) · ${b.asof} · 줄이나 칸을 누르면 1년 차트</span></div>${idx}<div style="font-size:14px;font-weight:700;color:var(--tx);margin:14px 0 6px">증시 자금 — 신용·예탁금</div>${fd}`;
+  if(b){ _bd=b; bdTiles(); }
+}
+// 시황 정리 (2026-10-17 "겹치는 내용·빈 공간 이쁘게"): RSI·이격도는 왼쪽 카드 지수 밑, 신용·예탁금은 오른쪽 타일 — 누르면 1년 차트
+function bdTiles(){ const b=_bd; if(!b) return;
+  const st=t=>`<span class="bd-st ${t.startsWith('▲')?'up':t.startsWith('▼')?'dn':''}">${t.replace(/\(.*\)/,'')}</span>`;
+  const t=document.getElementById('hb-tech');
+  if(t) t.innerHTML=(b.idx||[]).map((x,ix)=>`<div class="hb-techr bd-click" onclick="bdOpen('idx${ix}')" title="눌러서 1년 차트 — 종가·이평·RSI·이격도">
+      <b class="nm">${x.name}</b><span>RSI <b>${x.rsi}</b> ${st(x.rsi_txt)}</span><span>20일 이격 <b>${x.disp[20]}</b> ${st(x.disp_txt)}</span>
+      <span class="ts">60일 ${x.disp[60]} · 120일 ${x.disp[120]} · 52주 고점 ${x.from_hi}%</span><span class="sp">${bdSpark(x.rsi_hist,90,22)}</span></div>`).join('')
+      +(b.idx&&b.idx.length?`<div class="ts" style="margin-top:2px">RSI 70↑ 과매수 · 30↓ 과매도 · 이격도 = 종가÷이평×100 (20일 106↑ 과열 · 94↓ 침체) · 설명용 · 줄을 누르면 1년 차트</div>`:'');
+  const f=b.funds, c=document.getElementById('hb-credit'), dp=document.getElementById('hb-deposit'), dd=f?`${f.date.slice(4,6)}/${f.date.slice(6)}`:'';
+  const bdg=v=>v==null?'':`<span class="hc-badge n">5일 ${bdPc(v)}</span>`;
+  if(f&&c) c.innerHTML=`<div class="hb-th"><b>신용융자 📈</b>${bdg(f.credit_pct['5'])}</div><div class="hb-tv">${bdJo(f.credit)}</div><div class="hb-ts">하루 ${bdCh(f.credit_ch['1'])} · 고점 대비 ${bdPc(f.credit_hi.from)} · 미수 ${bdJo(f.unpaid)} · ${dd}</div>`;
+  if(f&&dp) dp.innerHTML=`<div class="hb-th"><b>고객예탁금 📈</b>${bdg(f.deposit_pct['5'])}</div><div class="hb-tv">${bdJo(f.deposit)}</div><div class="hb-ts">하루 ${bdCh(f.deposit_ch['1'])} · 20일 ${bdPc(f.deposit_pct['20'])} · 신용÷예탁 ${f.credit_to_deposit}% · ${dd}</div>`;
 }
 async function renderDashboard(d, stale, live){
   try{ renderHomeTop(d, live); hcSpark(); }catch(e){ console.error(e); }
